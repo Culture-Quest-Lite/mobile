@@ -42,30 +42,33 @@ const buttonShadowStyle = {
   elevation: 6,
 } as const;
 
-export default function LoginScreen() {
+export default function RegisterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const isCompactScreen = height <= 760;
-  const heroHeight = isCompactScreen ? 208 : 255;
-  const heroTopPadding = insets.top + (isCompactScreen ? 16 : 24);
-  const heroBottomPadding = isCompactScreen ? 28 : 56;
-  const logoSize = isCompactScreen ? 132 : 176;
-  const cardTopPadding = isCompactScreen ? 20 : 28;
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const isCompactScreen = height <= 820;
+  const heroHeight = isCompactScreen ? 190 : 235;
+  const heroTopPadding = insets.top + (isCompactScreen ? 14 : 20);
+  const heroBottomPadding = isCompactScreen ? 24 : 48;
+  const logoSize = isCompactScreen ? 124 : 160;
+  const cardTopPadding = isCompactScreen ? 18 : 28;
   const cardBottomPadding = Math.max(
-    insets.bottom + (isCompactScreen ? 16 : 20),
-    isCompactScreen ? 20 : 28,
+    insets.bottom + (isCompactScreen ? 14 : 18),
+    isCompactScreen ? 18 : 24,
   );
   const titleSize = isCompactScreen ? 27 : 31;
-  const sectionTopMargin = isCompactScreen ? 20 : 28;
+  const sectionTopMargin = isCompactScreen ? 16 : 24;
   const fieldHeightClassName = isCompactScreen
-    ? "h-11 rounded-xl"
-    : "h-12 rounded-xl";
+    ? "h-10 rounded-xl"
+    : "h-11 rounded-xl";
   const buttonHeightClassName = isCompactScreen ? "h-12" : "h-[52px]";
-  const formGapClassName = isCompactScreen ? "gap-3" : "gap-4";
-  const footerGapClassName = isCompactScreen ? "gap-3 pt-4" : "gap-4 pt-6";
+  const formGapClassName = isCompactScreen ? "gap-3" : "gap-3.5";
+  const footerGapClassName = isCompactScreen ? "gap-3 pt-4" : "gap-4 pt-5";
+  const buttonTopPaddingClassName = isCompactScreen ? "pt-0" : "pt-1";
 
   return (
     <SafeAreaView
@@ -112,22 +115,33 @@ export default function LoginScreen() {
                   className="font-extrabold text-[#EB489B]"
                   style={{ fontSize: titleSize }}
                 >
-                  Đăng nhập
+                  Đăng ký
                 </Text>
                 <Text className="text-[12px] text-[#8E869A]">
-                  Nhập tài khoản của bạn để đăng nhập
+                  Tạo tài khoản để bắt đầu hành trình
                 </Text>
               </View>
 
               <View style={{ marginTop: sectionTopMargin }}>
                 <View className={formGapClassName}>
                   <AuthInput
+                    autoCapitalize="words"
+                    autoComplete="name"
+                    className="gap-1.5"
+                    inputClassName={fieldHeightClassName}
+                    label="Họ và tên"
+                    placeholder="Nguyễn Văn A"
+                    textContentType="name"
+                    value={fullName}
+                    onChangeText={setFullName}
+                  />
+                  <AuthInput
                     autoCapitalize="none"
                     autoComplete="email"
                     className="gap-1.5"
                     inputClassName={fieldHeightClassName}
                     keyboardType="email-address"
-                    label="Username"
+                    label="Email"
                     placeholder="nguyenvana@gmail.com"
                     textContentType="emailAddress"
                     value={email}
@@ -141,20 +155,26 @@ export default function LoginScreen() {
                     label="Password"
                     placeholder="........"
                     secureTextEntry
-                    textContentType="password"
+                    textContentType="newPassword"
                     value={password}
                     onChangeText={setPassword}
                   />
-
-                  <Pressable>
-                    <Text className="text-[12px] font-medium text-[#8E869A]">
-                      Bạn quên mật khẩu?
-                    </Text>
-                  </Pressable>
+                  <AuthInput
+                    autoCapitalize="none"
+                    autoComplete="password-new"
+                    className="gap-1.5"
+                    inputClassName={fieldHeightClassName}
+                    label="Nhập lại password"
+                    placeholder="........"
+                    secureTextEntry
+                    textContentType="password"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                  />
 
                   <Pressable
                     onPress={() => router.replace("/home")}
-                    className="rounded-[18px]"
+                    className={`${buttonTopPaddingClassName} rounded-[18px]`}
                     style={buttonShadowStyle}
                   >
                     <LinearGradient
@@ -165,7 +185,7 @@ export default function LoginScreen() {
                       className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
                     >
                       <Text className="text-[15px] font-extrabold text-white">
-                        Đăng nhập
+                        Tạo tài khoản
                       </Text>
                     </LinearGradient>
                   </Pressable>
@@ -175,24 +195,23 @@ export default function LoginScreen() {
                   <View className="flex-row items-center justify-center gap-3">
                     <View className="h-px flex-1 bg-[#F0E8F4]" />
                     <Text className="text-[11px] font-medium text-[#AA9FB0]">
-                      Hoặc đăng nhập với
+                      Hoặc đăng ký với
                     </Text>
                     <View className="h-px flex-1 bg-[#F0E8F4]" />
                   </View>
 
                   <View className="flex-row justify-center gap-3.5">
                     <SocialAuthButton accentColor="#EA4335" label="G" />
-
                     <SocialAuthButton accentColor="#1877F2" label="f" />
                   </View>
 
                   <View className="flex-row items-center justify-center gap-1.5">
                     <Text className="text-[12px] text-[#8E869A]">
-                      Bạn chưa có tài khoản?
+                      Bạn đã có tài khoản?
                     </Text>
-                    <Pressable onPress={() => router.push("./register")}>
+                    <Pressable onPress={() => router.push("/login")}>
                       <Text className="text-[12px] font-extrabold text-[#F58752]">
-                        Đăng ký
+                        Đăng nhập
                       </Text>
                     </Pressable>
                   </View>
