@@ -1,10 +1,8 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { AppScreen } from '@/components/ui/app-screen';
 import { SectionCard } from '@/components/ui/section-card';
 import { ThemedText } from '@/components/themed-text';
-import { Radius, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
 
 const STRUCTURE_ITEMS = [
   'src/app only contains Expo Router files',
@@ -14,15 +12,13 @@ const STRUCTURE_ITEMS = [
 ];
 
 export default function HomeScreen() {
-  const theme = useTheme();
-
   return (
     <AppScreen>
-      <View style={styles.hero}>
-        <ThemedText type="title" style={styles.title}>
+      <View className="gap-2">
+        <ThemedText className="text-[40px] font-semibold leading-[44px]">
           Culture Quest Lite
         </ThemedText>
-        <ThemedText themeColor="textSecondary" style={styles.subtitle}>
+        <ThemedText themeColor="textSecondary" className="text-base leading-6">
           Expo Router scaffold refactored from the default starter into a feature-based project
           structure.
         </ThemedText>
@@ -32,14 +28,7 @@ export default function HomeScreen() {
         title="Current foundation"
         description="This screen confirms the project now follows a clean Expo layout that is easier to grow.">
         {STRUCTURE_ITEMS.map((item) => (
-          <View
-            key={item}
-            style={[
-              styles.pill,
-              {
-                backgroundColor: theme.backgroundSelected,
-              },
-            ]}>
+          <View key={item} className="rounded-[14px] bg-[#E9DCC5] px-4 py-2 dark:bg-[#353E34]">
             <ThemedText>{item}</ThemedText>
           </View>
         ))}
@@ -55,22 +44,3 @@ export default function HomeScreen() {
     </AppScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  hero: {
-    gap: Spacing.two,
-  },
-  title: {
-    fontSize: 40,
-    lineHeight: 44,
-  },
-  subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  pill: {
-    borderRadius: Radius.medium,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-});

@@ -4,7 +4,7 @@ import { Text } from 'react-native';
 import { useTheme } from '@/hooks/use-theme';
 
 const TAB_ICONS = {
-  index: '🧭',
+  home: '🧭',
   quests: '🏛️',
   profile: '👤',
 } as const;
@@ -27,7 +27,7 @@ export default function TabsLayout() {
         ),
       })}>
       <Tabs.Screen
-        name="index"
+        name="home"
         options={{
           title: 'Home',
           tabBarLabel: 'Home',

@@ -1,47 +1,46 @@
 import { type PropsWithChildren } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+import { ScrollView, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-
 type AppScreenProps = PropsWithChildren<{
+  className?: string;
+  contentClassName?: string;
   contentStyle?: StyleProp<ViewStyle>;
   scroll?: boolean;
   style?: StyleProp<ViewStyle>;
 }>;
 
-export function AppScreen({ children, contentStyle, scroll = true, style }: AppScreenProps) {
-  const theme = useTheme();
+const rootClassName = 'flex-1 bg-[#F7F3EA] dark:bg-[#171A17]';
+const contentClassName = 'flex-1 gap-4 p-6';
+
+export function AppScreen({
+  children,
+  className,
+  contentClassName: innerClassName,
+  contentStyle,
+  scroll = true,
+  style,
+}: AppScreenProps) {
+  const mergedRootClassName = `${rootClassName} ${className ?? ''}`.trim();
+  const mergedContentClassName = `${contentClassName} ${innerClassName ?? ''}`.trim();
 
   if (!scroll) {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }, style]}>
-        <View style={[styles.content, contentStyle]}>{children}</View>
+      <SafeAreaView className={mergedRootClassName} style={style}>
+        <View className={mergedContentClassName} style={contentStyle}>
+          {children}
+        </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }, style]}>
-      <ScrollView contentContainerStyle={[styles.content, contentStyle]}>{children}</ScrollView>
+    <SafeAreaView className={mergedRootClassName} style={style}>
+      <ScrollView className="flex-1" contentContainerStyle={{ flexGrow: 1 }}>
+        <View className={mergedContentClassName} style={contentStyle}>
+          {children}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  content: {
-    flexGrow: 1,
-    padding: Spacing.four,
-    gap: Spacing.three,
-  },
-});

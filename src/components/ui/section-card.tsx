@@ -1,60 +1,36 @@
 import { type PropsWithChildren } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Radius, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
 
 type SectionCardProps = PropsWithChildren<{
+  className?: string;
+  contentClassName?: string;
   description?: string;
   title: string;
 }>;
 
-export function SectionCard({ children, description, title }: SectionCardProps) {
-  const theme = useTheme();
-
+export function SectionCard({
+  children,
+  className,
+  contentClassName,
+  description,
+  title,
+}: SectionCardProps) {
   return (
     <View
-      style={[
-        styles.card,
-        {
-          backgroundColor: theme.surface,
-          borderColor: theme.border,
-        },
-      ]}>
-      <View style={styles.header}>
-        <ThemedText type="subtitle" style={styles.title}>
+      className={`gap-4 rounded-[22px] border border-[#D7C6A8] bg-white p-6 dark:border-[#465143] dark:bg-[#20241F] ${className ?? ''}`.trim()}>
+      <View className="gap-1">
+        <ThemedText className="text-2xl font-semibold leading-[30px]">
           {title}
         </ThemedText>
         {description ? (
-          <ThemedText themeColor="textSecondary" style={styles.description}>
+          <ThemedText themeColor="textSecondary" className="leading-[22px]">
             {description}
           </ThemedText>
         ) : null}
       </View>
-      <View style={styles.content}>{children}</View>
+      <View className={`gap-2 ${contentClassName ?? ''}`.trim()}>{children}</View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    borderWidth: 1,
-    borderRadius: Radius.large,
-    padding: Spacing.four,
-    gap: Spacing.three,
-  },
-  header: {
-    gap: Spacing.one,
-  },
-  title: {
-    fontSize: 24,
-    lineHeight: 30,
-  },
-  description: {
-    lineHeight: 22,
-  },
-  content: {
-    gap: Spacing.two,
-  },
-});
