@@ -71,11 +71,11 @@ const TAB_CONFIG: Record<VisibleTabName, TabConfig> = {
   },
   saved: {
     icon: {
-      ios: "map",
-      android: "map",
-      web: "map",
+      ios: 'map.fill',
+      android: 'map',
+      web: 'map',
     },
-    label: "Hành trình",
+    label: 'Hành trình',
   },
 };
 
@@ -237,7 +237,13 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="saved"
         options={{
-          title: "Đã lưu",
+          title: 'Hành trình',
+        }}
+      />
+      <Tabs.Screen
+        name="route"
+        options={{
+          href: null,
         }}
       />
       <Tabs.Screen
