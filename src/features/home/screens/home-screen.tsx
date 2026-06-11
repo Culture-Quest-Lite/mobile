@@ -3,8 +3,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { SymbolView } from "expo-symbols";
 import { type ComponentProps, useEffect, useRef, useState } from "react";
 import {
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
   Pressable,
   ScrollView,
   Text,
@@ -99,12 +97,20 @@ type NearbyPlaceCard = {
   title: string;
 };
 
-type MissionCard = {
-  icon: SymbolName;
-  iconBackground: string;
-  label: string;
-  reward: string;
+type CommunityBoardTab = "community" | "friends";
+
+type CommunityBoardEntry = {
+  avatarUri: string;
+  name: string;
+  points: string;
   subtitle: string;
+};
+
+type CommunityBoard = {
+  entries: CommunityBoardEntry[];
+  summaryLabel: string;
+  summaryNote: string;
+  totalPoints: string;
 };
 
 type NearbyCategoryCard = {
@@ -143,11 +149,9 @@ type ActiveJourneyCard = {
 };
 
 type VoucherMerchant = {
-  background: string;
   label: string;
   logoUri: string;
   logoScale: number;
-  ring: string;
 };
 
 const nearbyPlaces: NearbyPlaceCard[] = [
@@ -292,44 +296,34 @@ const activeJourney: ActiveJourneyCard | null = {
 
 const voucherMerchants: VoucherMerchant[] = [
   {
-    background: "#FFFFFF",
     label: "Starbucks",
     logoUri:
       "https://i.pinimg.com/1200x/55/4b/62/554b62cd21881bd0143923b21231cd6f.jpg",
-    logoScale: 1.16,
-    ring: "#E5F7F0",
+    logoScale: 0.92,
   },
   {
-    background: "#FFFFFF",
     label: "McDonald's",
     logoUri:
       "https://i.pinimg.com/736x/87/69/4b/87694b29884c0d0db10c0f27d2795e9e.jpg",
     logoScale: 0.94,
-    ring: "#FFE7E1",
   },
   {
-    background: "#FFFFFF",
     label: "Burger King",
     logoUri:
       "https://i.pinimg.com/736x/59/93/c4/5993c45ee0410544471f909835b8516c.jpg",
     logoScale: 0.94,
-    ring: "#FFF0E3",
   },
   {
-    background: "#FFFFFF",
     label: "KFC",
     logoUri:
       "https://i.pinimg.com/1200x/aa/92/89/aa9289de1ed2865bccd7c7457f246482.jpg",
-    logoScale: 0.98,
-    ring: "#FCE6EC",
+    logoScale: 0.94,
   },
   {
-    background: "#FFFFFF",
     label: "Highlands",
     logoUri:
       "https://i.pinimg.com/1200x/9e/d3/65/9ed3653a9eb6cad4d9eef5d1999a1e25.jpg",
-    logoScale: 0.98,
-    ring: "#F8E5E0",
+    logoScale: 0.94,
   },
 ];
 
@@ -421,39 +415,87 @@ function JourneyProgressRing({ progress }: { progress: number }) {
   );
 }
 
-const missions: MissionCard[] = [
-  {
-    icon: {
-      ios: "figure.walk",
-      android: "directions_walk",
-      web: "directions_walk",
-    },
-    iconBackground: "#FFE9E3",
-    label: "Săn dấu ấn Chợ Lớn",
-    reward: "+120 XP",
-    subtitle: "Còn 2 checkpoint để mở huy hiệu",
+const communityTabs = [
+  { key: "community", label: "Cộng đồng" },
+  { key: "friends", label: "Bạn bè" },
+] as const satisfies readonly { key: CommunityBoardTab; label: string }[];
+
+const communityRankRingColors = ["#F7B500", "#C9D4E5", "#FF8A00"] as const;
+const communityRankBadgeColors = ["#F7B500", "#9AACBF", "#FF8A00"] as const;
+
+const communityRowShadowStyle = {
+  shadowColor: "rgba(15, 23, 42, 0.08)",
+  shadowOpacity: 1,
+  shadowRadius: 10,
+  shadowOffset: {
+    width: 0,
+    height: 4,
   },
-  {
-    icon: { ios: "paintbrush", android: "brush", web: "brush" },
-    iconBackground: "#FDEFD9",
-    label: "Bảo tàng Mỹ thuật",
-    reward: "+80 XP",
-    subtitle: "Hoàn thành trước 18:00 hôm nay",
+  elevation: 2,
+} as const;
+
+const communityBoards: Record<CommunityBoardTab, CommunityBoard> = {
+  community: {
+    totalPoints: "1250",
+    summaryLabel: "Bạn đang xếp hạng 24",
+    summaryNote: "Còn 80 XP để vượt hạng 23",
+    entries: [
+      {
+        avatarUri: "https://i.pravatar.cc/120?img=12",
+        name: "Minh",
+        points: "+980",
+        subtitle: "Hoàn thành 3 route",
+      },
+      {
+        avatarUri:
+          "https://i.pinimg.com/1200x/90/49/99/904999c3351c262c0f1265677effaecc.jpg",
+        name: "Lan",
+        points: "+760",
+        subtitle: "Check-in 15 hotspot",
+      },
+      {
+        avatarUri:
+          "https://i.pinimg.com/736x/16/8a/09/168a0975cc55e880883cbf95a22e04a5.jpg",
+        name: "Huy",
+        points: "+500",
+        subtitle: "Nhận 500 XP",
+      },
+    ],
   },
-  {
-    icon: { ios: "music.note", android: "music_note", web: "music_note" },
-    iconBackground: "#E6F7F4",
-    label: "Đêm nhạc dân gian",
-    reward: "+160 XP",
-    subtitle: "Thưởng thêm khi check-in đúng giờ",
+  friends: {
+    totalPoints: "910",
+    summaryLabel: "Bạn đang đứng đầu nhóm bạn",
+    summaryNote: "Giữ thêm 40 XP để không bị vượt",
+    entries: [
+      {
+        avatarUri:
+          "https://i.pinimg.com/736x/c7/47/c4/c747c4b1178ff71cf7bebad4c7b06cef.jpg",
+        name: "Trâm",
+        points: "+860",
+        subtitle: "Hoàn thành 2 tuyến di sản",
+      },
+      {
+        avatarUri: "https://i.pravatar.cc/120?img=58",
+        name: "Khoa",
+        points: "+690",
+        subtitle: "Mở 11 câu chuyện văn hóa",
+      },
+      {
+        avatarUri: "https://i.pravatar.cc/120?img=5",
+        name: "An",
+        points: "+540",
+        subtitle: "Check-in 4 điểm mới hôm nay",
+      },
+    ],
   },
-];
+};
 
 export default function HomeScreen() {
   const { width } = useWindowDimensions();
-  const routeCarouselRef = useRef<ScrollView>(null);
   const activeRouteIndexRef = useRef(0);
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
+  const [activeCommunityTab, setActiveCommunityTab] =
+    useState<CommunityBoardTab>("community");
   const routeCardLeftInset = 20;
   const routeCardRightInset = 16;
   const routeCardWidth = Math.max(
@@ -461,40 +503,22 @@ export default function HomeScreen() {
     264,
   );
   const nearbyRouteCardWidth = Math.min(Math.max(width * 0.64, 220), 252);
-  const routePageWidth = width;
-  const routeSnapInterval = routePageWidth;
   const nearbyPlaceCardWidth = Math.min(Math.max(width * 0.4, 156), 170);
   const nearbyPlaceImageHeight = Math.round(nearbyPlaceCardWidth * 0.8);
   const voucherMerchantCircleSize = Math.min(Math.max(width * 0.2, 76), 86);
-  const voucherMerchantInnerSize = Math.round(voucherMerchantCircleSize * 0.78);
+  const voucherMerchantLogoSize = Math.round(voucherMerchantCircleSize * 0.88);
   const voucherMerchantItemWidth = voucherMerchantCircleSize + 14;
   const activeJourneyProgress = activeJourney
     ? Math.min(Math.max(activeJourney.progress, 0), 100)
     : 0;
-
-  const handleRouteSnap = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const nextIndex = Math.round(
-      event.nativeEvent.contentOffset.x / routeSnapInterval,
-    );
-    const boundedIndex = Math.min(
-      Math.max(nextIndex, 0),
-      featuredRoutes.length - 1,
-    );
-
-    activeRouteIndexRef.current = boundedIndex;
-    setActiveRouteIndex(boundedIndex);
-  };
+  const activeCommunityBoard = communityBoards[activeCommunityTab];
+  const activeFeaturedRoute = featuredRoutes[activeRouteIndex];
 
   useEffect(() => {
     const intervalId = setInterval(() => {
       const nextIndex =
         (activeRouteIndexRef.current + 1) % featuredRoutes.length;
 
-      routeCarouselRef.current?.scrollTo({
-        x: nextIndex * routeSnapInterval,
-        y: 0,
-        animated: true,
-      });
       activeRouteIndexRef.current = nextIndex;
       setActiveRouteIndex(nextIndex);
     }, 3600);
@@ -502,7 +526,7 @@ export default function HomeScreen() {
     return () => {
       clearInterval(intervalId);
     };
-  }, [routeSnapInterval]);
+  }, []);
 
   return (
     <SafeAreaView
@@ -511,10 +535,10 @@ export default function HomeScreen() {
     >
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 32 }}
+        contentContainerStyle={{ paddingBottom: 0 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-6 px-5 pb-8 pt-1">
+        <View className="gap-6 px-5 pt-1">
           <View className="flex-row items-center justify-between">
             <View className="flex-1 flex-row items-center gap-3.5 pr-3">
               <View className="relative">
@@ -603,119 +627,105 @@ export default function HomeScreen() {
           </View>
 
           <View className="gap-4">
-            <Text className="text-[24px] font-extrabold text-[#2B2233]">
+            <Text className="text-[20px] font-extrabold text-[#2B2233]">
               Tuyến nổi bật
             </Text>
 
-            <ScrollView
-              ref={routeCarouselRef}
+            <View
+              className="items-start"
               style={{
-                width,
                 marginHorizontal: -20,
+                width,
+                paddingLeft: routeCardLeftInset,
               }}
-              horizontal
-              pagingEnabled
-              bounces={false}
-              decelerationRate="fast"
-              disableIntervalMomentum
-              snapToAlignment="start"
-              snapToInterval={routeSnapInterval}
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={handleRouteSnap}
             >
-              {featuredRoutes.map((route) => (
-                <View
-                  key={route.title}
-                  className="items-start"
-                  style={{
-                    width: routePageWidth,
-                    paddingLeft: routeCardLeftInset,
-                  }}
-                >
-                  <View
-                    className="overflow-hidden rounded-[30px] bg-[#2B2233]"
-                    style={[
-                      heroShadowStyle,
-                      {
-                        width: routeCardWidth,
-                      },
-                    ]}
-                  >
-                    <Image
-                      source={route.imageUri}
-                      contentFit="cover"
-                      transition={220}
-                      cachePolicy="memory-disk"
-                      style={{ height: 210, width: "100%" }}
-                    />
+              <View
+                key={activeFeaturedRoute.title}
+                className="overflow-hidden rounded-[30px] bg-[#2B2233]"
+                style={[
+                  heroShadowStyle,
+                  {
+                    width: routeCardWidth,
+                  },
+                ]}
+              >
+                <Image
+                  source={activeFeaturedRoute.imageUri}
+                  contentFit="cover"
+                  transition={220}
+                  cachePolicy="memory-disk"
+                  style={{ height: 210, width: "100%" }}
+                />
 
-                    <LinearGradient
-                      colors={[
-                        "rgba(36, 28, 44, 0.10)",
-                        "rgba(36, 28, 44, 0.38)",
-                        "rgba(36, 28, 44, 0.92)",
-                      ]}
-                      locations={[0, 0.46, 1]}
-                      start={{ x: 0.5, y: 0 }}
-                      end={{ x: 0.5, y: 1 }}
-                      className="absolute inset-0 px-4 py-4"
-                    >
-                      <View className="flex-1 justify-end gap-3">
-                        <View className="flex-row items-start justify-between gap-3">
-                          <View className="max-w-[78%] gap-2">
-                            <View className="gap-1">
-                              <Text className="text-[29px] font-extrabold leading-8 text-white">
-                                {route.title}
+                <LinearGradient
+                  colors={[
+                    "rgba(36, 28, 44, 0.10)",
+                    "rgba(36, 28, 44, 0.38)",
+                    "rgba(36, 28, 44, 0.92)",
+                  ]}
+                  locations={[0, 0.46, 1]}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                  className="absolute inset-0 px-4 py-4"
+                >
+                  <View className="flex-1 justify-end gap-3">
+                    <View className="flex-row items-start justify-between gap-3">
+                      <View className="max-w-[78%] gap-2">
+                        <View className="gap-1">
+                          <Text className="text-[29px] font-extrabold leading-8 text-white">
+                            {activeFeaturedRoute.title}
+                          </Text>
+                        </View>
+                        <View className="gap-3">
+                          <View className="flex-row flex-wrap gap-2">
+                            <View className="rounded-full bg-white/18 px-3 py-1.5">
+                              <Text className="text-[12px] font-bold text-white">
+                                {activeFeaturedRoute.stops}
                               </Text>
                             </View>
-                            <View className="gap-3">
-                              <View className="flex-row flex-wrap gap-2">
-                                <View className="rounded-full bg-white/18 px-3 py-1.5">
-                                  <Text className="text-[12px] font-bold text-white">
-                                    {route.stops}
-                                  </Text>
-                                </View>
-                                <View className="rounded-full bg-white/18 px-3 py-1.5">
-                                  <Text className="text-[12px] font-bold text-white">
-                                    {route.distance}
-                                  </Text>
-                                </View>
-                                <View className="rounded-full bg-white/18 px-3 py-1.5">
-                                  <Text className="text-[12px] font-bold text-white">
-                                    {route.duration}
-                                  </Text>
-                                </View>
-                              </View>
-
-                              <View className="flex-row items-end">
-                                <Pressable className="rounded-full bg-white/92 px-4 py-2.5">
-                                  <Text className="text-[14px] font-extrabold text-[#D9587F]">
-                                    Xem route
-                                  </Text>
-                                </Pressable>
-                              </View>
+                            <View className="rounded-full bg-white/18 px-3 py-1.5">
+                              <Text className="text-[12px] font-bold text-white">
+                                {activeFeaturedRoute.distance}
+                              </Text>
+                            </View>
+                            <View className="rounded-full bg-white/18 px-3 py-1.5">
+                              <Text className="text-[12px] font-bold text-white">
+                                {activeFeaturedRoute.duration}
+                              </Text>
                             </View>
                           </View>
 
-                          <View className="h-12 w-12 items-center justify-center rounded-2xl bg-white/16">
-                            <SymbolView
-                              name={{ ios: "map", android: "map", web: "map" }}
-                              size={22}
-                              tintColor="#FFFFFF"
-                            />
+                          <View className="flex-row items-end">
+                            <Pressable className="rounded-full bg-white/92 px-4 py-2.5">
+                              <Text className="text-[14px] font-extrabold text-[#D9587F]">
+                                Xem route
+                              </Text>
+                            </Pressable>
                           </View>
                         </View>
                       </View>
-                    </LinearGradient>
+
+                      <View className="h-12 w-12 items-center justify-center rounded-2xl bg-white/16">
+                        <SymbolView
+                          name={{ ios: "map", android: "map", web: "map" }}
+                          size={22}
+                          tintColor="#FFFFFF"
+                        />
+                      </View>
+                    </View>
                   </View>
-                </View>
-              ))}
-            </ScrollView>
+                </LinearGradient>
+              </View>
+            </View>
 
             <View className="flex-row items-center justify-center gap-2 px-5">
               {featuredRoutes.map((route, index) => (
-                <View
+                <Pressable
                   key={route.title}
+                  onPress={() => {
+                    activeRouteIndexRef.current = index;
+                    setActiveRouteIndex(index);
+                  }}
                   className={`rounded-full ${
                     index === activeRouteIndex
                       ? "h-2.5 w-8 bg-[#EB489B]"
@@ -728,7 +738,7 @@ export default function HomeScreen() {
 
           {activeJourney && !activeJourney.completed ? (
             <View className="gap-3">
-              <Text className="text-[24px] font-extrabold text-[#2B2233]">
+              <Text className="text-[20px] font-extrabold text-[#2B2233]">
                 Tiếp tục hành trình
               </Text>
 
@@ -901,7 +911,7 @@ export default function HomeScreen() {
 
           <View className="gap-4">
             <View className="flex-row items-center justify-between">
-              <Text className="text-[24px] font-extrabold text-[#2B2233]">
+              <Text className="text-[20px] font-extrabold text-[#2B2233]">
                 Địa điểm gần bạn
               </Text>
               <Pressable className="rounded-full bg-[#FFF4EF] px-3.5 py-2">
@@ -1109,7 +1119,7 @@ export default function HomeScreen() {
             <View className="gap-4">
               <View className="flex-row items-start justify-between gap-3">
                 <View className="flex-1">
-                  <Text className="text-[24px] font-extrabold text-[#2B2233]">
+                  <Text className="text-[20px] font-extrabold text-[#2B2233]">
                     Voucher ưu đãi
                   </Text>
                 </View>
@@ -1141,37 +1151,24 @@ export default function HomeScreen() {
                       >
                         <View className="items-center">
                           <View
-                            className="items-center justify-center rounded-full"
+                            className="items-center justify-center"
                             style={{
-                              backgroundColor: merchant.ring,
                               height: voucherMerchantCircleSize,
                               width: voucherMerchantCircleSize,
                             }}
                           >
-                            <View
-                              className="items-center justify-center overflow-hidden rounded-full"
+                            <Image
+                              source={merchant.logoUri}
+                              contentFit="contain"
+                              transition={180}
+                              cachePolicy="memory-disk"
                               style={{
-                                backgroundColor: merchant.background,
-                                height: voucherMerchantInnerSize,
-                                width: voucherMerchantInnerSize,
+                                height:
+                                  voucherMerchantLogoSize * merchant.logoScale,
+                                width:
+                                  voucherMerchantLogoSize * merchant.logoScale,
                               }}
-                            >
-                              <Image
-                                source={merchant.logoUri}
-                                contentFit="cover"
-                                transition={180}
-                                cachePolicy="memory-disk"
-                                style={{
-                                  borderRadius: 999,
-                                  height:
-                                    voucherMerchantInnerSize *
-                                    merchant.logoScale,
-                                  width:
-                                    voucherMerchantInnerSize *
-                                    merchant.logoScale,
-                                }}
-                              />
-                            </View>
+                            />
                           </View>
 
                           <Text
@@ -1190,52 +1187,210 @@ export default function HomeScreen() {
           </View>
 
           <View
-            className="gap-4 rounded-[28px] bg-[#FFF8FC] p-4"
+            className="overflow-hidden rounded-[28px] bg-white"
             style={cardShadowStyle}
           >
-            <View className="flex-row items-center justify-between">
-              <Text className="text-[24px] font-extrabold text-[#2B2233]">
-                Nhiệm vụ nổi bật
-              </Text>
-              <Pressable>
-                <Text className="text-[14px] font-bold text-[#F58752]">
-                  Xem tất cả
-                </Text>
-              </Pressable>
-            </View>
-
-            <View className="gap-3">
-              {missions.map((item) => (
-                <View
-                  key={item.label}
-                  className="flex-row items-center rounded-[22px] bg-white px-3 py-3.5"
-                >
-                  <View
-                    className="mr-3 h-12 w-12 items-center justify-center rounded-full"
-                    style={{ backgroundColor: item.iconBackground }}
-                  >
+            <View className="px-4 pb-4 pt-4">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center gap-2.5">
+                  <View className="h-7 w-7 items-center justify-center rounded-full bg-[#FFF1D6]">
                     <SymbolView
-                      name={item.icon}
-                      size={22}
-                      tintColor="#3D3446"
+                      name={{
+                        ios: "trophy.fill",
+                        android: "emoji_events",
+                        web: "emoji_events",
+                      }}
+                      size={15}
+                      tintColor="#C98A10"
                     />
+                  </View>
+                  <Text className="text-[20px] font-extrabold text-[#1F2940]">
+                    Cộng đồng hôm nay
+                  </Text>
+                </View>
+
+                <Text className="text-[11px] font-bold uppercase tracking-[0.3px] text-[#FF6F95]">
+                  BXH
+                </Text>
+              </View>
+
+              <View className="mt-4 flex-row items-end justify-between border-b border-[#F3E7ED]">
+                <View className="flex-row">
+                  {communityTabs.map((tab) => {
+                    const isActive = activeCommunityTab === tab.key;
+
+                    return (
+                      <Pressable
+                        key={tab.key}
+                        className="mr-6 pb-3"
+                        onPress={() => {
+                          setActiveCommunityTab(tab.key);
+                        }}
+                      >
+                        <Text
+                          className={`text-[12px] font-bold ${
+                            isActive ? "text-[#FF5F87]" : "text-[#7D7281]"
+                          }`}
+                        >
+                          {tab.label}
+                        </Text>
+                        <View
+                          className={`mt-2 h-[2.5px] rounded-full ${
+                            isActive ? "bg-[#FF5F87]" : "bg-transparent"
+                          }`}
+                        />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <View className="mb-3 flex-row items-center">
+                  <SymbolView
+                    name={{
+                      ios: "chart.line.uptrend.xyaxis",
+                      android: "show_chart",
+                      web: "show_chart",
+                    }}
+                    size={12}
+                    tintColor="#7D7281"
+                  />
+                  <Text className="ml-1 text-[10px] font-semibold text-[#7D7281]">
+                    Live
+                  </Text>
+                </View>
+              </View>
+
+              <View className="mt-4 gap-3">
+                <LinearGradient
+                  colors={["#FFF6F9", "#FFF1F5"]}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  className="flex-row items-center rounded-[22px] border border-[#F9E2EA] px-3.5 py-3.5"
+                >
+                  <View className="mr-3 h-12 w-12 items-center justify-center rounded-full bg-[#FFE8F0]">
+                    <Text className="text-[11px] font-black text-[#FF5F87]">
+                      #{activeCommunityTab === "community" ? "24" : "01"}
+                    </Text>
                   </View>
 
                   <View className="flex-1 pr-3">
-                    <Text className="text-[16px] font-extrabold text-[#2B2233]">
-                      {item.label}
+                    <Text className="text-[13px] font-extrabold text-[#1F2940]">
+                      {activeCommunityBoard.summaryLabel}
                     </Text>
-                    <Text className="mt-1 text-[12px] leading-4 text-[#8E869A]">
-                      {item.subtitle}
+                    <Text className="mt-0.5 text-[10px] leading-4 text-[#9B8D9A]">
+                      {activeCommunityBoard.summaryNote}
                     </Text>
                   </View>
 
-                  <Text className="text-[17px] font-extrabold text-[#2B2233]">
-                    {item.reward}
-                  </Text>
+                  <View className="flex-row items-center rounded-full border border-[#F8D8E3] bg-white px-3 py-1.5">
+                    <SymbolView
+                      name={{
+                        ios: "star.fill",
+                        android: "star",
+                        web: "star",
+                      }}
+                      size={12}
+                      tintColor="#FF5F87"
+                    />
+                    <Text className="ml-1 text-[11px] font-extrabold text-[#1F2940]">
+                      {activeCommunityBoard.totalPoints}
+                    </Text>
+                  </View>
+                </LinearGradient>
+
+                <View className="gap-3">
+                  {activeCommunityBoard.entries.map((entry, index) => (
+                    <View
+                      key={`${activeCommunityTab}-${entry.name}`}
+                      className="flex-row items-center rounded-[24px] border border-[#EEF1F4] bg-white px-3.5 py-3"
+                      style={communityRowShadowStyle}
+                    >
+                      <View
+                        className="relative mr-3.5 h-[54px] w-[54px] items-center justify-center"
+                      >
+                        <View
+                          className="items-center justify-center rounded-full bg-white"
+                          style={{
+                            borderColor:
+                              communityRankRingColors[
+                                Math.min(index, communityRankRingColors.length - 1)
+                              ],
+                            borderWidth: 2.5,
+                            height: 46,
+                            width: 46,
+                          }}
+                        >
+                          <View className="h-[38px] w-[38px] overflow-hidden rounded-full bg-[#F3F4F6]">
+                            <Image
+                              source={entry.avatarUri}
+                              contentFit="cover"
+                              transition={180}
+                              cachePolicy="memory-disk"
+                              style={{ height: "100%", width: "100%" }}
+                            />
+                          </View>
+                        </View>
+
+                        <View
+                          className="absolute bottom-0 right-0 h-6 w-6 items-center justify-center rounded-full border-[2px] border-white"
+                          style={{
+                            backgroundColor:
+                              communityRankBadgeColors[
+                                Math.min(index, communityRankBadgeColors.length - 1)
+                              ],
+                          }}
+                        >
+                          <Text className="text-[12px] font-black text-white">
+                            {index + 1}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View className="flex-1 pr-3">
+                        <Text className="text-[14px] font-extrabold text-[#1F2940]">
+                          {entry.name}
+                        </Text>
+                        <Text className="mt-0.5 text-[11px] leading-4 text-[#8F8290]">
+                          {entry.subtitle}
+                        </Text>
+                      </View>
+
+                      <View className="flex-row items-center rounded-full border border-[#F4DCE5] bg-white px-3 py-1.5">
+                        <SymbolView
+                          name={{
+                            ios: "star.fill",
+                            android: "star",
+                            web: "star",
+                          }}
+                          size={11}
+                          tintColor="#FF5F87"
+                        />
+                        <Text className="ml-1 text-[11px] font-extrabold text-[#1F2940]">
+                          {entry.points}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
                 </View>
-              ))}
+              </View>
             </View>
+
+            <Pressable className="border-t border-[#F3E7ED] px-4 py-3">
+              <View className="flex-row items-center justify-center">
+                <SymbolView
+                  name={{
+                    ios: "list.number",
+                    android: "leaderboard",
+                    web: "leaderboard",
+                  }}
+                  size={13}
+                  tintColor="#FF5F87"
+                />
+                <Text className="ml-1.5 text-[12px] font-bold text-[#FF5F87]">
+                  Xem bảng xếp hạng đầy đủ
+                </Text>
+              </View>
+            </Pressable>
           </View>
         </View>
       </ScrollView>
