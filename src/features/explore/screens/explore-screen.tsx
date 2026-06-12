@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { type Href, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { type ComponentProps, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -223,6 +224,7 @@ function MapPlaceholder() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function ExploreScreen() {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const [activeCategory, setActiveCategory] = useState<string>('Tất cả');
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
@@ -442,7 +444,10 @@ export default function ExploreScreen() {
                           ))}
                         </View>
                         <View className="flex-row items-center justify-between pt-1">
-                          <Pressable className="rounded-full bg-white/90 px-4 py-2.5">
+                          <Pressable
+                            onPress={() => router.push(`/route/${route.id}` as Href)}
+                            className="rounded-full bg-white/90 px-4 py-2.5"
+                          >
                             <Text className="text-[14px] font-extrabold text-[#D9587F]">
                               Xem route
                             </Text>
