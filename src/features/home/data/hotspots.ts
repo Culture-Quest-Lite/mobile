@@ -32,12 +32,12 @@ export const hotspotCollection: HotspotDetail[] = [
       "https://i.pinimg.com/1200x/3b/e6/c7/3be6c7ce77d44c3dfb6723169f24f8d7.jpg",
     ],
     highlights: [
-      "Kien truc Phap co dien ket hop khong gian buu chinh con hoat dong.",
-      "Tran vom cao, san gach co va quay go tao cam giac nhu mot nha ga lich su.",
-      "Rat hop de bat dau route trung tam vi gan Nha tho Duc Ba va duong sach.",
+      "Kiến trúc Pháp cổ điển kết hợp không gian bưu chính còn hoạt động.",
+      "Trần vòm cao, sàn gạch có và quầy gỗ tạo cảm giác như một nhà ga lịch sử.",
+      "ất hợp để bắt đầu route trung tâm vì gần Nhà thờ Đức Bà và đường Sách.",
     ],
     overview:
-      "Icon kien truc cua Sai Gon, noi du khach co the ngam khong gian co dien va bat dau hanh trinh van hoa ngay giua trung tam.",
+      "Icon kiến trúc của Sài Gòn, nơi du khách có thể ngắm không gian cổ điển.",
     routePairing:
       "Ket hop cung Nha tho Duc Ba va Duong sach Nguyen Van Binh trong 90 phut.",
     scheduleLabel: "Mo cua 07:30 - 18:00",
@@ -67,10 +67,10 @@ export const hotspotCollection: HotspotDetail[] = [
       "Rat hop cho route buoi sang ket hop chup anh va ghe quan cafe gan do.",
     ],
     overview:
-      "Nha tho Duc Ba mang den mot diem dung yen binh ngay giua trung tam, noi nhieu du khach tim den de ngam kien truc va cam nhan nhip song thanh pho.",
+      "Nhà thờ Đức Bà mang đến một điểm dừng yên bình ngay giữa trung tâm.",
     routePairing:
-      "Ket hop voi Buu dien Sai Gon va cong vien 30/4 cho mot route 75 phut.",
-    scheduleLabel: "Khuon vien mo ca ngay, gio le tuy lich nha tho",
+      "ết hợp với Bưu điện Sài Gòn và công viên 30/4 cho một route 75 phút.",
+    scheduleLabel: "Khung vien mo ca ngay, gio le tuy lich nha tho",
     story:
       "Cong trinh nay la mot trong nhung bieu tuong lau doi cua Sai Gon. Dung giua quang truong rong, nha tho tao nen mot nhan trung tam ve thi giac, noi du khach co the cham lai mot chut truoc khi tiep tuc route thanh pho.",
     ticketLabel: "Mien phi khuon vien",
@@ -96,11 +96,10 @@ export const hotspotCollection: HotspotDetail[] = [
       "Noi quy tu hoi hoa, dieu khac va chat lieu thi giac cua Viet Nam.",
       "Phu hop cho route nghe thuat va nhung ai muon tham quan cham.",
     ],
-    overview:
-      "Bao tang My thuat la diem dung cho nhung ai muon xem tac pham, ngam khong gian co va doi nhip route thanh mot trai nghiem sau hon.",
+    overview: "Bảo tàng Mỹ thuật là điểm dừng cho những ai muốn xem tác phẩm.",
     routePairing:
-      "Noi tiep rat hop voi Ben Thanh va cac quan cafe co o Nguyen Thai Binh.",
-    scheduleLabel: "Mo cua 08:00 - 17:00",
+      "Nối tiếp rất hợp với Bến Thành và các quán cà phê có ở Nguyễn Thái Bình.",
+    scheduleLabel: "Mở cửa 08:00 - 17:00",
     story:
       "Khong chi la noi trung bay, bao tang con la mot khong gian kien truc dep va day chat lieu thi giac. Nhung hanh lang, cua so va cau thang o day giup trai nghiem nghe thuat tro nen gan gui va rat de nho.",
     ticketLabel: "Ve tham quan tu 30.000d",
@@ -158,25 +157,25 @@ export const hotspotCollection: HotspotDetail[] = [
     reviews: "368",
     reward: "+150",
     slug: "pho-di-bo-nguyen-hue",
-    title: "Pho di bo Nguyen Hue",
-    address: "Nguyen Hue, Ben Nghe, Quan 1, TP. HCM",
-    bestTimeLabel: "18:00 - 20:00 de xem thanh pho len den",
-    district: "Quan 1",
+    title: "Phố đi bộ Nguyễn Huệ",
+    address: "Nguyễn Huệ, Bến Nghé, Quận 1, TP. HCM",
+    bestTimeLabel: "18:00 - 20:00 để xem thành phố lên đèn",
+    district: "Quận 1",
     gallery: [
       "https://i.pinimg.com/1200x/1d/52/c1/1d52c1214361f0cd45c9b89d5a2804b9.jpg",
       "https://i.pinimg.com/1200x/44/85/48/4485485aa286ec2089b6d265211d659a.jpg",
       "https://i.pinimg.com/1200x/c7/e0/4c/c7e04c5e13bc7c8606f68356de303648.jpg",
     ],
     highlights: [
-      "Goc nhin rong, hop cho check-in ban dem va ngam mat tien toa nha.",
-      "Khong khi mo, nhieu nhom ban tre va hoat dong cuoi tuan.",
-      "Tot cho route nhe nhang sau bua toi hay sau khi tham quan trung tam.",
+      "Góc nhìn rộng, hợp cho check-in ban đêm và ngắm mặt tiền toà nhà.",
+      "Không khí mở, nhiều nhóm bạn trẻ và hoạt động cuối tuần.",
+      "Tốt cho route nhẹ nhàng sau bữa tối hoặc sau khi tham quan trung tâm.",
     ],
     overview:
-      "Pho di bo Nguyen Hue la diem dung de ngam nhip song hien dai cua thanh pho, nhat la khi anh den va dong nguoi bat dau day len.",
+      "Phố đi bộ Nguyễn Huệ là điểm dừng để ngắm nhịp sống hiện đại của thành phố.",
     routePairing:
-      "Co the ket hop voi Ben Bach Dang hoac cac quan cafe view cao quanh khu vuc.",
-    scheduleLabel: "Khong gian cong cong mo ca ngay",
+      "Có thể kết hợp với Bến Bạch Đằng hoặc các quán cà phê view cao quanh khu vực.",
+    scheduleLabel: "Không gian cong cong mở cửa mỗi ngày",
     story:
       "Khong gian dai va mo cua pho di bo tao ra mot san khau tu nhien cho thanh pho. Moi khung gio se cho cam giac khac nhau, tu sang som thong thoang den toi muon day anh den va am nhac.",
     ticketLabel: "Mien phi",
@@ -196,7 +195,7 @@ export const hotspotCollection: HotspotDetail[] = [
     reviews: "241",
     reward: "+135",
     slug: "nha-hat-thanh-pho",
-    title: "Nha hat Thanh pho",
+    title: "Nhà hát Thành phố",
     address: "07 Cong truong Lam Son, Ben Nghe, Quan 1, TP. HCM",
     bestTimeLabel: "17:00 - 19:00 de ngam mat tien khi len den",
     district: "Quan 1",
@@ -206,14 +205,14 @@ export const hotspotCollection: HotspotDetail[] = [
       "https://i.pinimg.com/1200x/e2/7d/91/e27d9157f8c0fe1a8eb9358b5e4eac01.jpg",
     ],
     highlights: [
-      "Mat tien kien truc co dien tao diem nhan manh tren truc Dong Khoi.",
-      "Hop cho check-in nhanh hoac ket hop truoc mot buoi xem bieu dien.",
-      "Khong gian xung quanh nhieu khach san, cafe va nha hang.",
+      "Mặt tiền kiến trúc cổ điển tạo điểm nhấn mạnh trên trục Đông Khởi.",
+      "ợp cho check-in nhanh hoặc kết hợp trước một buổi xem biểu diễn.",
+      "Không gian xung quanh nhiều khách sạn, cà phê và nhà hàng.",
     ],
     overview:
-      "Nha hat Thanh pho la diem dung ngan gon nhung day chat thi giac, phu hop cho route can mot diem nhan kien truc thanh lich.",
-    routePairing: "Noi tiep Nguyen Hue, Dong Khoi va Ben Bach Dang rat hop.",
-    scheduleLabel: "Khuon vien ngoai troi mo ca ngay",
+      "Nhà hát Thành phố là điểm dừng ngắn gọn nhưng đầy chất thị giác.",
+    routePairing: "ối tiếp Nguyễn Huệ, Đông Khởi và Bến Bạch Đằng rất hợp.",
+    scheduleLabel: "Khung viên ngoài trời mở cửa mỗi ngày",
     story:
       "Voi mat tien sang trong va vi tri noi bat, Nha hat Thanh pho thuong xuyen xuat hien trong route du lich trung tam. Du chi dung lai ngan, ban van cam duoc tinh nhac tinh va khong khi thi thanh co dien quanh khu vuc nay.",
     ticketLabel: "Mien phi khuon vien, xem show tuy lich",
@@ -233,7 +232,7 @@ export const hotspotCollection: HotspotDetail[] = [
     reviews: "295",
     reward: "+170",
     slug: "dinh-doc-lap",
-    title: "Dinh Doc Lap",
+    title: "Dinh Độc Lập",
     address: "135 Nam Ky Khoi Nghia, Ben Thanh, Quan 1, TP. HCM",
     bestTimeLabel: "08:00 - 10:00 de di tham quan thong thoang",
     district: "Quan 1",
@@ -247,13 +246,12 @@ export const hotspotCollection: HotspotDetail[] = [
       "Noi dung lich su ro net, hop cho nguoi muon trai nghiem sau hon.",
       "Diem dung rat tot neu ban muon mot stop co tinh ke chuyen manh.",
     ],
-    overview:
-      "Dinh Doc Lap mang den trai nghiem lich su ro rang hon, phu hop cho nhung route can mot diem dung co chieu sau va noi dung tham quan cu the.",
+    overview: "Dinh Độc Lập mang den trai nghiem lich su ro rang hon.",
     routePairing:
       "Ket hop Nha tho Duc Ba, Buu dien va cong vien 30/4 thanh route lich su trung tam.",
     scheduleLabel: "Mo cua 08:00 - 15:30",
     story:
-      "Khong gian Dinh Doc Lap giu lai nhieu dau moc quan trong cua lich su hien dai. O day, trai nghiem khong chi den tu kien truc ma con den tu cach khong gian duoc giu gin va ke chuyen qua tung tang, tung phong.",
+      "Khong gian Dinh Độc Lập giu lai nhieu dau moc quan trong cua lich su hien dai. O day, trai nghiem khong chi den tu kien truc ma con den tu cach khong gian duoc giu gin va ke chuyen qua tung tang, tung phong.",
     ticketLabel: "Ve tham quan tu 65.000d",
     tips: [
       "Danh it nhat 75 phut neu muon tham quan ky.",
