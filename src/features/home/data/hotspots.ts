@@ -345,6 +345,114 @@ export const hotspotCollection: HotspotDetail[] = [
     ],
     vibeTags: ["Nghe thuat", "Thu gian", "Sach"],
   },
+  {
+    category: "Lịch sử",
+    distance: "0.4 km",
+    imageUri:
+      "https://i.pinimg.com/1200x/b3/07/e7/b307e7540a1d2c91f96933794c0b681c.jpg",
+    rating: 4.8,
+    reviews: "1.2k",
+    reward: "+80",
+    slug: "ben-thanh",
+    title: "Chợ Bến Thành",
+    address: "Lê Lợi, Phường Bến Thành, Quận 1, TP.HCM",
+    bestTimeLabel: "07:00 - 09:00 để tránh đông và có ánh sáng đẹp",
+    district: "Quận 1",
+    gallery: [
+      "https://i.pinimg.com/1200x/b3/07/e7/b307e7540a1d2c91f96933794c0b681c.jpg",
+      "https://i.pinimg.com/736x/00/17/04/001704938bb7cf0b964b07a6b2eeffc4.jpg",
+      "https://i.pinimg.com/1200x/80/69/f9/8069f9581583a196f9f39bda000b9312.jpg",
+    ],
+    highlights: [
+      "Biểu tượng thương mại Sài Gòn từ thế kỷ 19.",
+      "Giao thoa giữa nhịp sống hiện đại và ký ức chợ truyền thống.",
+      "Điểm bắt đầu lý tưởng cho các tuyến khám phá trung tâm.",
+    ],
+    overview:
+      "Chợ Bến Thành là biểu tượng buôn bán của Sài Gòn, nơi mỗi gian hàng và ô cửa gỗ đều mang một lớp ký ức.",
+    routePairing: "Kết hợp Bưu điện, Nhà thờ Đức Bà và Dinh Độc Lập trong một buổi sáng.",
+    scheduleLabel: "Mở cửa 06:00 - 18:00",
+    story:
+      "Nghe đồn hồ đồng trên mái chợ vang lên, người bán hàng xưa biết giờ đóng cửa. Tiếng rao vẫn vọng trong những ô cửa gỗ — như lời nhắc rằng Sài Gòn luôn bắt đầu từ một góc chợ.",
+    ticketLabel: "Miễn phí vào cổng",
+    tips: [
+      "Đi sáng sớm để tránh nắng và đông người.",
+      "Mang tiền mặt nếu muốn thử đặc sản trong chợ.",
+      "Dừng lại góc chụp ảnh trước tháp đồng hồ.",
+    ],
+    vibeTags: ["Lịch sử", "Ẩm thực", "Check-in"],
+  },
+  {
+    category: "Văn hoá",
+    distance: "3.2 km",
+    imageUri:
+      "https://i.pinimg.com/736x/25/c7/c1/25c7c1671263058c274374435c142b4f.jpg",
+    rating: 4.8,
+    reviews: "654",
+    reward: "+85",
+    slug: "thien-hau",
+    title: "Chùa Bà Thiên Hậu",
+    address: "710 Nguyễn Trãi, Phường 11, Quận 5, TP.HCM",
+    bestTimeLabel: "07:00 - 09:00 hoặc mùng 1, rằm",
+    district: "Quận 5",
+    gallery: [
+      "https://i.pinimg.com/736x/25/c7/c1/25c7c1671263058c274374435c142b4f.jpg",
+    ],
+    highlights: [
+      "Chùa cổ của người Hoa tại Chợ Lớn với kiến trúc tam quan đặc trưng.",
+      "Không gian tâm linh giữa nhịp sống ồn ào của khu phố người Hoa.",
+      "Phù hợp cho tuyến khám phá văn hoá Chợ Lớn.",
+    ],
+    overview:
+      "Ngôi chùa cổ nổi bật với hương khói quanh năm và kiến trúc mang đậm dấu ấn người Hoa.",
+    routePairing: "Kết hợp Chợ Lớn và các hẻm ẩm thực Quận 5 trong 90 phút.",
+    scheduleLabel: "Mở cửa 06:00 - 18:00",
+    story:
+      "Khói hương bay qua mái cong, mang theo lời cầu của người xa xứ. Chùa vẫn đứng im giữa Chợ Lớn ồn ào — như một mảnh ký ức không đổi.",
+    ticketLabel: "Miễn phí",
+    tips: [
+      "Mặc trang phục lịch sự khi vào khuôn viên chùa.",
+      "Nên ghé sáng mùng 1 hoặc rằm để cảm nhận không khí lễ hội.",
+      "Kết hợp thử ẩm thực đường phố xung quanh.",
+    ],
+    vibeTags: ["Chợ Lớn", "Tâm linh", "Văn hoá"],
+  },
+  {
+    category: "Ẩm thực",
+    distance: "3.5 km",
+    imageUri:
+      "https://i.pinimg.com/1200x/b3/07/e7/b307e7540a1d2c91f96933794c0b681c.jpg",
+    rating: 4.7,
+    reviews: "1.1k",
+    reward: "+100",
+    slug: "cho-lon",
+    title: "Chợ Lớn – Khu phố người Hoa",
+    address: "Khu vực Quận 5 & Quận 6, TP.HCM",
+    bestTimeLabel: "16:00 - 20:00 để thưởng thức ẩm thực và chợ đêm",
+    district: "Quận 5",
+    gallery: [
+      "https://i.pinimg.com/1200x/b3/07/e7/b307e7540a1d2c91f96933794c0b681c.jpg",
+      "https://i.pinimg.com/736x/25/c7/c1/25c7c1671263058c274374435c142b4f.jpg",
+    ],
+    highlights: [
+      "Khu phố sầm uất với hội quán, tiệm vàng và ẩm thực đường phố.",
+      "Trải nghiệm văn hoá người Hoa giữa lòng Sài Gòn.",
+      "Nhiều checkpoint ẩm thực và câu chuyện di cư.",
+    ],
+    overview:
+      "Chợ Lớn là thế giới riêng — ẩm thực, tín ngưỡng và thương mại hòa quyện trong từng con hẻm.",
+    routePairing: "Kết hợp Chùa Bà Thiên Hậu và các tuyến săn dấu ấn Chợ Lớn.",
+    scheduleLabel: "Hoạt động cả ngày, sầm uất nhất buổi chiều tối",
+    story:
+      "Tiếng Quảng vang trong hẻm nhỏ, mùi bánh bao nóng hổi từ lò hấm. Chợ Lớn không chỉ là nơi mua bán — mà là cả một thế giới ký ức di cư.",
+    ticketLabel: "Miễn phí",
+    tips: [
+      "Thử bánh bao, hủ tiếu và các món đặc trưng người Hoa.",
+      "Đi bộ chậm trong hẻm để không bỏ lỡ góc chụp đẹp.",
+      "Mang tiền mặt cho các quán nhỏ.",
+    ],
+    vibeTags: ["Chợ Lớn", "Ẩm thực", "Văn hoá"],
+  },
 ];
 
 export function getHotspotBySlug(slug?: string | string[]) {
