@@ -8,6 +8,7 @@ import {
 export type HotspotDetail = NearbyPlaceCard & {
   address: string;
   bestTimeLabel: string;
+  checkinMode?: "always-ready" | "gps";
   district: string;
   gallery: string[];
   highlights: string[];
@@ -20,9 +21,55 @@ export type HotspotDetail = NearbyPlaceCard & {
   vibeTags: string[];
 };
 
+const nearbyPlaceLookup = new Map(
+  nearbyPlaces.map((place) => [place.slug, place] as const),
+);
+
+function getRequiredNearbyPlace(slug: string) {
+  const place = nearbyPlaceLookup.get(slug);
+
+  if (!place) {
+    throw new Error(`Missing nearby place seed for hotspot slug: ${slug}`);
+  }
+
+  return place;
+}
+
 export const hotspotCollection: HotspotDetail[] = [
   {
-    ...nearbyPlaces[0],
+    ...getRequiredNearbyPlace("demo-checkin-story"),
+    address: "Đường Hạnh Phúc, Đồng Văn, Hà Giang",
+    bestTimeLabel:
+      "Tháng 9 - 11 (mùa lúa chín) và tháng 10 - 12 (mùa hoa tam giác mạch)",
+    checkinMode: "always-ready",
+    district: "Đồng Văn",
+    gallery: [
+      "https://i.pinimg.com/736x/24/a2/bc/24a2bc1a4690d4418269ab82feb64415.jpg",
+      "https://i.pinimg.com/736x/3c/3f/8f/3c3f8fe464fa9b0bea4f2d3fc0dffe68.jpg",
+      "https://i.pinimg.com/736x/66/ee/9d/66ee9de813ce7fecd5d159cad2c5b701.jpg",
+    ],
+    highlights: [
+      "Một trong những cung đường đèo đẹp nhất Việt Nam.",
+      "Ngắm toàn cảnh sông Nho Quế xanh ngọc từ trên cao.",
+      "Khung cảnh núi đá hùng vĩ đặc trưng của Cao nguyên đá Đồng Văn.",
+    ],
+    overview:
+      "Đèo Mã Pí Lèng là biểu tượng du lịch của Hà Giang, nằm trên tuyến đường Hạnh Phúc nối Đồng Văn và Mèo Vạc.",
+    routePairing:
+      "Kết hợp tham quan sông Nho Quế, hẻm Tu Sản, phố cổ Đồng Văn và cột cờ Lũng Cú.",
+    scheduleLabel: "Mở cửa cả ngày",
+    story:
+      "Đèo Mã Pí Lèng được mệnh danh là 'vua của các con đèo Việt Nam'. Con đèo dài khoảng 20 km uốn lượn giữa những dãy núi đá tai mèo hùng vĩ của Công viên Địa chất Toàn cầu Cao nguyên đá Đồng Văn. Từ các điểm dừng chân trên đèo, du khách có thể phóng tầm mắt xuống dòng sông Nho Quế xanh biếc và hẻm vực Tu Sản sâu hàng trăm mét – một trong những kỳ quan thiên nhiên nổi bật nhất miền Bắc.",
+    ticketLabel: "Miễn phí tham quan",
+    tips: [
+      "Nên đi vào sáng sớm hoặc chiều muộn để có ánh sáng đẹp.",
+      "Mang áo khoác vì thời tiết trên đèo thường khá lạnh.",
+      "Dừng chân tại các điểm lookout để ngắm sông Nho Quế.",
+    ],
+    vibeTags: ["Hà Giang", "Thiên nhiên", "Phượt", "Check-in", "Núi non"],
+  },
+  {
+    ...getRequiredNearbyPlace("buu-dien-sai-gon"),
     address: "02 Cong xa Paris, Ben Nghe, Quan 1, TP. HCM",
     bestTimeLabel: "08:00 - 10:30 de chup anh dep va it dong",
     district: "Quan 1",
@@ -52,7 +99,7 @@ export const hotspotCollection: HotspotDetail[] = [
     vibeTags: ["Kien truc", "Lich su", "Check-in"],
   },
   {
-    ...nearbyPlaces[1],
+    ...getRequiredNearbyPlace("nha-tho-duc-ba"),
     address: "01 Cong xa Paris, Ben Nghe, Quan 1, TP. HCM",
     bestTimeLabel: "07:00 - 09:00 de co anh dep va khong khi diu",
     district: "Quan 1",
@@ -82,7 +129,7 @@ export const hotspotCollection: HotspotDetail[] = [
     vibeTags: ["Lich su", "Kien truc", "Thu gian"],
   },
   {
-    ...nearbyPlaces[2],
+    ...getRequiredNearbyPlace("bao-tang-my-thuat"),
     address: "97A Pho Duc Chinh, Nguyen Thai Binh, Quan 1, TP. HCM",
     bestTimeLabel: "09:30 - 11:00 de xem tranh va it nhom doan",
     district: "Quan 1",

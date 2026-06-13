@@ -27,6 +27,7 @@ import {
 
 import { addCheckin, useCheckins } from "@/lib/checkin-store";
 import { getRoutesForHotspot, routes, type RouteItem } from "@/lib/demo-data";
+import { HotspotGpsCheckinOverlay } from "../components/hotspot-gps-checkin-overlay";
 import { HiddenStoryUnlockedContent } from "../components/hidden-story-unlocked-content";
 import {
   avatarImageUri,
@@ -764,10 +765,12 @@ function HiddenStoryCheckinSection({
   audioStoryDurationLabel,
   isCheckedIn,
   onCheckinPress,
+  onListenStories,
 }: {
   audioStoryDurationLabel: string;
   isCheckedIn: boolean;
   onCheckinPress: () => void;
+  onListenStories: () => void;
 }) {
   return (
     <View className="gap-3">
@@ -811,6 +814,7 @@ function HiddenStoryCheckinSection({
       {isCheckedIn ? (
         <HiddenStoryUnlockedContent
           audioStoryDurationLabel={audioStoryDurationLabel}
+          onListenStories={onListenStories}
         />
       ) : (
         <LinearGradient
@@ -1323,6 +1327,7 @@ export default function HotspotDetailScreen() {
   const checkins = useCheckins();
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const scrollY = useSharedValue(0);
+  const [isCheckinOverlayVisible, setIsCheckinOverlayVisible] = useState(false);
   const [isStickyCheckinVisible, setIsStickyCheckinVisible] = useState(false);
   const resolvedSlug = Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "");
   const [gallerySelection, setGallerySelection] = useState(() => ({
@@ -1468,6 +1473,24 @@ export default function HotspotDetailScreen() {
   const historicalPreview = getHistoricalPreview(hotspot.story);
   const audioStoryDurationLabel = getAudioStoryDurationLabel(hotspot.story);
   const relatedRoutes = getRelatedRoutesForHotspot(hotspot);
+  const currentHotspotRouteIds = getRouteLookupIds(hotspot);
+  const routeProgressRoute = relatedRoutes.find((route) =>
+    route.hotspotIds.some((routeHotspotId) =>
+      currentHotspotRouteIds.includes(routeHotspotId),
+    ),
+  );
+  const visitedRouteProgressIds = new Set(
+    [...checkins, hotspotCheckinId].flatMap((checkedInHotspotId) => {
+      const checkedInHotspot = getHotspotBySlug(checkedInHotspotId);
+
+      return checkedInHotspot ? getRouteLookupIds(checkedInHotspot) : [];
+    }),
+  );
+  const visitedRouteStopsCount = routeProgressRoute
+    ? routeProgressRoute.hotspotIds.filter((routeHotspotId) =>
+        visitedRouteProgressIds.has(routeHotspotId),
+      ).length
+    : undefined;
   const personalExperienceItems = buildPersonalExperienceItems(
     hotspot,
     galleryPreviewImages,
@@ -1836,7 +1859,10 @@ export default function HotspotDetailScreen() {
               <HiddenStoryCheckinSection
                 audioStoryDurationLabel={audioStoryDurationLabel}
                 isCheckedIn={isCheckedIn}
-                onCheckinPress={() => addCheckin(hotspotCheckinId)}
+                onCheckinPress={() => setIsCheckinOverlayVisible(true)}
+                onListenStories={() =>
+                  router.push(`/hotspot/${hotspot.slug}/stories` as Href)
+                }
               />
             </View>
 
@@ -1905,9 +1931,21 @@ export default function HotspotDetailScreen() {
           <StickyCheckinBar
             bottomInset={insets.bottom}
             isCheckedIn={isCheckedIn}
-            onPress={() => addCheckin(hotspotCheckinId)}
+            onPress={() => setIsCheckinOverlayVisible(true)}
           />
         </Animated.View>
+
+        {isCheckinOverlayVisible ? (
+          <HotspotGpsCheckinOverlay
+            audioStoryDurationLabel={audioStoryDurationLabel}
+            hotspot={hotspot}
+            onClose={() => setIsCheckinOverlayVisible(false)}
+            onSuccess={() => addCheckin(hotspotCheckinId)}
+            rewardXp={rewardXp}
+            totalRouteStopsCount={routeProgressRoute?.hotspotIds.length}
+            visitedRouteStopsCount={visitedRouteStopsCount}
+          />
+        ) : null}
       </SafeAreaView>
     </View>
   );

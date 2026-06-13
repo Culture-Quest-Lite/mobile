@@ -124,6 +124,17 @@ export const featuredRoutes: FeaturedRoute[] = [
 
 export const nearbyPlaces: NearbyPlaceCard[] = [
   {
+    category: "Check-in",
+    distance: "0m",
+    imageUri:
+      "https://i.pinimg.com/736x/5d/bc/7c/5dbc7cf464caf8658403d494664c7dcf.jpg",
+    rating: 5.0,
+    reviews: "12",
+    reward: "+250",
+    slug: "demo-checkin-story",
+    title: "Hà Giang",
+  },
+  {
     category: "Kiến trúc",
     distance: "320m",
     imageUri:

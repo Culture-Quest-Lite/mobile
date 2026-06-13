@@ -35,6 +35,12 @@
             "imageWidth": 76
           }
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Cho phép Culture Quest truy cập vị trí của bạn để xác minh check-in gần hotspot."
+        }
       ]
     ],
     "experiments": {

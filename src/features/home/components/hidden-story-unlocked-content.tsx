@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { SymbolView } from "expo-symbols";
 import { type ComponentProps } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 
@@ -29,8 +29,10 @@ const buttonShadowStyle = {
 
 export function HiddenStoryUnlockedContent({
   audioStoryDurationLabel,
+  onListenStories,
 }: {
   audioStoryDurationLabel: string;
+  onListenStories: () => void;
 }) {
   return (
     <LinearGradient
@@ -67,30 +69,61 @@ export function HiddenStoryUnlockedContent({
         {`Bạn đã check-in tại hotspot này. Audio story ${audioStoryDurationLabel} và bạn kể chuyện độc quyền đã sẵn sàng.`}
       </Text>
 
-      <View className="mt-6 overflow-hidden rounded-full" style={buttonShadowStyle}>
-        <LinearGradient
-          colors={["#34D399", "#16A34A"]}
-          end={{ x: 1, y: 0.5 }}
-          locations={[0, 1]}
-          start={{ x: 0, y: 0.5 }}
-          className="flex-row items-center px-5 py-3.5"
-          style={{ opacity: 0.9 }}
+      <View className="mt-6 w-full flex-row gap-3">
+        <View className="flex-1 overflow-hidden rounded-full" style={buttonShadowStyle}>
+          <LinearGradient
+            colors={["#34D399", "#16A34A"]}
+            end={{ x: 1, y: 0.5 }}
+            locations={[0, 1]}
+            start={{ x: 0, y: 0.5 }}
+            className="flex-row items-center justify-center px-5 py-3.5"
+            style={{ opacity: 0.9 }}
+          >
+            <SymbolView
+              name={
+                {
+                  ios: "checkmark.circle.fill",
+                  android: "check_circle",
+                  web: "check_circle",
+                } as SymbolName
+              }
+              size={15}
+              tintColor="#FFFFFF"
+            />
+            <Text className="ml-2 text-[15px] font-black text-white">
+              Đã check-in
+            </Text>
+          </LinearGradient>
+        </View>
+
+        <Pressable
+          className="flex-1 overflow-hidden rounded-full"
+          onPress={onListenStories}
+          style={buttonShadowStyle}
         >
-          <SymbolView
-            name={
-              {
-                ios: "checkmark.circle.fill",
-                android: "check_circle",
-                web: "check_circle",
-              } as SymbolName
-            }
-            size={15}
-            tintColor="#FFFFFF"
-          />
-          <Text className="ml-2 text-[15px] font-black text-white">
-            Đã check-in
-          </Text>
-        </LinearGradient>
+          <LinearGradient
+            colors={["#EB489B", "#F58752", "#FFC93C"]}
+            end={{ x: 1, y: 0.5 }}
+            locations={[0, 0.58, 1]}
+            start={{ x: 0, y: 0.5 }}
+            className="flex-row items-center justify-center px-5 py-3.5"
+          >
+            <SymbolView
+              name={
+                {
+                  ios: "speaker.wave.2.fill",
+                  android: "volume_up",
+                  web: "volume_up",
+                } as SymbolName
+              }
+              size={15}
+              tintColor="#FFFFFF"
+            />
+            <Text className="ml-2 text-[15px] font-black text-white">
+              Nghe story
+            </Text>
+          </LinearGradient>
+        </Pressable>
       </View>
     </LinearGradient>
   );
