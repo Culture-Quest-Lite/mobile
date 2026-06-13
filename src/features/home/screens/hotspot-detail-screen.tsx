@@ -27,6 +27,8 @@ import {
 
 import { addCheckin, useCheckins } from "@/lib/checkin-store";
 import { getRoutesForHotspot, routes, type RouteItem } from "@/lib/demo-data";
+import { HotspotGpsCheckinOverlay } from "../components/hotspot-gps-checkin-overlay";
+import { HiddenStoryUnlockedContent } from "../components/hidden-story-unlocked-content";
 import {
   avatarImageUri,
   communityBoards,
@@ -763,10 +765,12 @@ function HiddenStoryCheckinSection({
   audioStoryDurationLabel,
   isCheckedIn,
   onCheckinPress,
+  onListenStories,
 }: {
   audioStoryDurationLabel: string;
   isCheckedIn: boolean;
   onCheckinPress: () => void;
+  onListenStories: () => void;
 }) {
   return (
     <View className="gap-3">
@@ -807,69 +811,72 @@ function HiddenStoryCheckinSection({
         </View>
       </View>
 
-      <LinearGradient
-        colors={isCheckedIn ? ["#FFF3F7", "#FFF7EE"] : ["#F3E3D9", "#E8E0E5"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        className="items-center rounded-[30px] px-5 py-8"
-        style={cardShadowStyle}
-      >
+      {isCheckedIn ? (
+        <HiddenStoryUnlockedContent
+          audioStoryDurationLabel={audioStoryDurationLabel}
+          onListenStories={onListenStories}
+        />
+      ) : (
         <LinearGradient
-          colors={isCheckedIn ? ["#F58752", "#EB489B"] : ["#FF6A63", "#D946EF"]}
-          end={{ x: 1, y: 1 }}
+          colors={["#F3E3D9", "#E8E0E5"]}
           start={{ x: 0, y: 0 }}
-          className="h-16 w-16 items-center justify-center rounded-full"
-        >
-          <SymbolView
-            name={{
-              ios: isCheckedIn ? "lock.open.fill" : "lock.fill",
-              android: isCheckedIn ? "lock_open" : "lock",
-              web: isCheckedIn ? "lock_open" : "lock",
-            }}
-            size={22}
-            tintColor="#FFFFFF"
-          />
-        </LinearGradient>
-
-        <Text className="mt-5 text-center text-[20px] font-black text-[#3B2A32]">
-          {isCheckedIn ? "Câu chuyện đã mở khóa" : "Câu chuyện đang chờ bạn"}
-        </Text>
-
-        <Text className="mt-3 max-w-[320px] text-center text-[14px] leading-6 text-[#6A5964]">
-          {isCheckedIn
-            ? `Bạn đã check-in tại hotspot này. Audio story ${audioStoryDurationLabel} và bạn kể chuyện độc quyền đã sẵn sàng.`
-            : "Check-in tại đây để mở khóa đoạn audio và bản kể chuyện độc quyền."}
-        </Text>
-
-        <Pressable
-          className="mt-6 overflow-hidden rounded-full"
-          disabled={isCheckedIn}
-          onPress={onCheckinPress}
-          style={buttonShadowStyle}
+          end={{ x: 1, y: 1 }}
+          className="items-center rounded-[30px] px-5 py-8"
+          style={cardShadowStyle}
         >
           <LinearGradient
-            colors={isCheckedIn ? ["#F7C59A", "#F58752"] : loginGradientColors}
-            end={{ x: 1, y: 0.5 }}
-            locations={[0, 0.58, 1]}
-            start={{ x: 0, y: 0.5 }}
-            className="flex-row items-center px-5 py-3.5"
-            style={{ opacity: isCheckedIn ? 0.9 : 1 }}
+            colors={["#FF6A63", "#D946EF"]}
+            end={{ x: 1, y: 1 }}
+            start={{ x: 0, y: 0 }}
+            className="h-16 w-16 items-center justify-center rounded-full"
           >
             <SymbolView
               name={{
-                ios: isCheckedIn ? "checkmark.circle.fill" : "location.fill",
-                android: isCheckedIn ? "check_circle" : "place",
-                web: isCheckedIn ? "check_circle" : "place",
+                ios: "lock.fill",
+                android: "lock",
+                web: "lock",
               }}
-              size={15}
+              size={22}
               tintColor="#FFFFFF"
             />
-            <Text className="ml-2 text-[15px] font-black text-white">
-              {isCheckedIn ? "Đã check-in" : "Check-in tại đây"}
-            </Text>
           </LinearGradient>
-        </Pressable>
-      </LinearGradient>
+
+          <Text className="mt-5 text-center text-[20px] font-black text-[#3B2A32]">
+            Câu chuyện đang chờ bạn
+          </Text>
+
+          <Text className="mt-3 max-w-[320px] text-center text-[14px] leading-6 text-[#6A5964]">
+            Check-in tại đây để mở khóa đoạn audio và bản kể chuyện độc quyền.
+          </Text>
+
+          <Pressable
+            className="mt-6 overflow-hidden rounded-full"
+            onPress={onCheckinPress}
+            style={buttonShadowStyle}
+          >
+            <LinearGradient
+              colors={loginGradientColors}
+              end={{ x: 1, y: 0.5 }}
+              locations={[0, 0.58, 1]}
+              start={{ x: 0, y: 0.5 }}
+              className="flex-row items-center px-5 py-3.5"
+            >
+              <SymbolView
+                name={{
+                  ios: "location.fill",
+                  android: "place",
+                  web: "place",
+                }}
+                size={15}
+                tintColor="#FFFFFF"
+              />
+              <Text className="ml-2 text-[15px] font-black text-white">
+                Check-in tại đây
+              </Text>
+            </LinearGradient>
+          </Pressable>
+        </LinearGradient>
+      )}
     </View>
   );
 }
@@ -1235,9 +1242,9 @@ function StickyCheckinBar({
           style={buttonShadowStyle}
         >
           <LinearGradient
-            colors={isCheckedIn ? ["#F7C59A", "#F58752"] : loginGradientColors}
+            colors={isCheckedIn ? ["#34D399", "#16A34A"] : loginGradientColors}
             end={{ x: 1, y: 0.5 }}
-            locations={[0, 0.58, 1]}
+            locations={isCheckedIn ? [0, 1] : [0, 0.58, 1]}
             start={{ x: 0, y: 0.5 }}
             className="px-5 py-4"
             style={{ opacity: isCheckedIn ? 0.92 : 1 }}
@@ -1320,6 +1327,7 @@ export default function HotspotDetailScreen() {
   const checkins = useCheckins();
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const scrollY = useSharedValue(0);
+  const [isCheckinOverlayVisible, setIsCheckinOverlayVisible] = useState(false);
   const [isStickyCheckinVisible, setIsStickyCheckinVisible] = useState(false);
   const resolvedSlug = Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "");
   const [gallerySelection, setGallerySelection] = useState(() => ({
@@ -1465,6 +1473,24 @@ export default function HotspotDetailScreen() {
   const historicalPreview = getHistoricalPreview(hotspot.story);
   const audioStoryDurationLabel = getAudioStoryDurationLabel(hotspot.story);
   const relatedRoutes = getRelatedRoutesForHotspot(hotspot);
+  const currentHotspotRouteIds = getRouteLookupIds(hotspot);
+  const routeProgressRoute = relatedRoutes.find((route) =>
+    route.hotspotIds.some((routeHotspotId) =>
+      currentHotspotRouteIds.includes(routeHotspotId),
+    ),
+  );
+  const visitedRouteProgressIds = new Set(
+    [...checkins, hotspotCheckinId].flatMap((checkedInHotspotId) => {
+      const checkedInHotspot = getHotspotBySlug(checkedInHotspotId);
+
+      return checkedInHotspot ? getRouteLookupIds(checkedInHotspot) : [];
+    }),
+  );
+  const visitedRouteStopsCount = routeProgressRoute
+    ? routeProgressRoute.hotspotIds.filter((routeHotspotId) =>
+        visitedRouteProgressIds.has(routeHotspotId),
+      ).length
+    : undefined;
   const personalExperienceItems = buildPersonalExperienceItems(
     hotspot,
     galleryPreviewImages,
@@ -1833,7 +1859,10 @@ export default function HotspotDetailScreen() {
               <HiddenStoryCheckinSection
                 audioStoryDurationLabel={audioStoryDurationLabel}
                 isCheckedIn={isCheckedIn}
-                onCheckinPress={() => addCheckin(hotspotCheckinId)}
+                onCheckinPress={() => setIsCheckinOverlayVisible(true)}
+                onListenStories={() =>
+                  router.push(`/hotspot/${hotspot.slug}/stories` as Href)
+                }
               />
             </View>
 
@@ -1902,9 +1931,21 @@ export default function HotspotDetailScreen() {
           <StickyCheckinBar
             bottomInset={insets.bottom}
             isCheckedIn={isCheckedIn}
-            onPress={() => addCheckin(hotspotCheckinId)}
+            onPress={() => setIsCheckinOverlayVisible(true)}
           />
         </Animated.View>
+
+        {isCheckinOverlayVisible ? (
+          <HotspotGpsCheckinOverlay
+            audioStoryDurationLabel={audioStoryDurationLabel}
+            hotspot={hotspot}
+            onClose={() => setIsCheckinOverlayVisible(false)}
+            onSuccess={() => addCheckin(hotspotCheckinId)}
+            rewardXp={rewardXp}
+            totalRouteStopsCount={routeProgressRoute?.hotspotIds.length}
+            visitedRouteStopsCount={visitedRouteStopsCount}
+          />
+        ) : null}
       </SafeAreaView>
     </View>
   );
