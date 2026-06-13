@@ -15,6 +15,7 @@ import {
   getRouteRating,
   getRouteReviews,
 } from '@/lib/demo-data';
+import { getHotspotDetailHref } from '@/lib/hotspot-navigation';
 
 const cardShadow = {
   shadowColor: 'rgba(28, 45, 80, 0.10)',
@@ -421,7 +422,10 @@ export default function RouteDetailScreen() {
                 return (
                   <Pressable
                     key={stop.id}
-                    onPress={() => router.push(`/hotspot/${stop.id}` as Href)}
+                    onPress={() => {
+                      const href = getHotspotDetailHref(stop.id);
+                      if (href) router.push(href);
+                    }}
                     className="relative flex-row gap-3 pb-4"
                   >
                     <View
@@ -603,7 +607,9 @@ export default function RouteDetailScreen() {
             />
           </Pressable>
           <Pressable
-            onPress={() => router.push(`/checkin/${stops[0]?.id}` as Href)}
+            onPress={() =>
+              router.push(`/checkin/${stops[0]?.id}?routeId=${routeId}` as Href)
+            }
             className="flex-1 overflow-hidden rounded-xl"
             style={glowShadow}
           >
