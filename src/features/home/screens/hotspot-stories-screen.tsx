@@ -1,46 +1,20 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
+import {
+  buildHotspotThemeStories,
+  storyThemeTabs,
+  tagImageByTag,
+  type HotspotThemeStory,
+  type StoryThemeTag,
+} from "../data/hotspot-theme-stories";
 import { getHotspotBySlug } from "../data/hotspots";
-
-const storyHistoryImage = require("../../../../assets/images/tachnenl.png");
-const storyCultureImage = require("../../../../assets/images/tachnen2.png");
-const storyFoodImage = require("../../../../assets/images/tachnen3.png");
-const historyTagImage = require("../../../../assets/images/Jun 13, 2026, 07_55_06 PM.png");
-const cultureTagImage = require("../../../../assets/images/vanhoa.png");
-const foodTagImage = require("../../../../assets/images/amthuc.png");
-const educationTagImage = require("../../../../assets/images/giaoduc.png");
-
-type StoryThemeTag = "history" | "culture" | "food" | "education";
-type StoryThemeCardItem = {
-  cardColors: readonly [string, string];
-  cardHeight: number;
-  id: string;
-  imageBottom: number;
-  imageHeight: number;
-  imageRight: number;
-  imageSource: number;
-  imageWidth: number;
-  tag: StoryThemeTag;
-  textWidth: number;
-  title: string;
-};
-
-const storyThemeTabs: {
-  id: StoryThemeTag;
-  label: string;
-}[] = [
-  { id: "history", label: "Lịch sử" },
-  { id: "culture", label: "Văn hóa" },
-  { id: "food", label: "Ẩm thực" },
-  { id: "education", label: "Giáo dục" },
-];
 
 const cardShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.16)",
@@ -52,66 +26,6 @@ const cardShadowStyle = {
   },
   elevation: 8,
 } as const;
-
-const storyCardBaseLayout = {
-  cardHeight: 138,
-  imageBottom: -50,
-  imageHeight: 246,
-  imageRight: -18,
-  imageWidth: 182,
-  textWidth: 43,
-} as const;
-
-const storyImageByTag: Record<StoryThemeTag, number> = {
-  culture: storyCultureImage,
-  education: storyHistoryImage,
-  food: storyFoodImage,
-  history: storyHistoryImage,
-};
-
-const tagImageByTag: Record<StoryThemeTag, number> = {
-  culture: cultureTagImage,
-  education: educationTagImage,
-  food: foodTagImage,
-  history: historyTagImage,
-};
-
-function buildThemeStoryCards(hotspot: NonNullable<ReturnType<typeof getHotspotBySlug>>): StoryThemeCardItem[] {
-  return [
-    {
-      cardColors: ["#D8E8FF", "#C8DCFF"],
-      ...storyCardBaseLayout,
-      id: `${hotspot.slug}-history-main`,
-      imageSource: storyImageByTag.history,
-      tag: "history",
-      title: `Lịch sử của ${hotspot.title}`,
-    },
-    {
-      cardColors: ["#F8D1DE", "#F2C2D3"],
-      ...storyCardBaseLayout,
-      id: `${hotspot.slug}-culture-main`,
-      imageSource: storyImageByTag.culture,
-      tag: "culture",
-      title: `Văn hóa quanh ${hotspot.title}`,
-    },
-    {
-      cardColors: ["#F8D5C0", "#F3C2A4"],
-      ...storyCardBaseLayout,
-      id: `${hotspot.slug}-food-main`,
-      imageSource: storyImageByTag.food,
-      tag: "food",
-      title: "Ẩm thực nên thử sau khi ghé",
-    },
-    {
-      cardColors: ["#DDD6FF", "#CEC6FF"],
-      ...storyCardBaseLayout,
-      id: `${hotspot.slug}-education-main`,
-      imageSource: storyImageByTag.education,
-      tag: "education",
-      title: "Ghi chú nhanh trước khi đi tiếp",
-    },
-  ];
-}
 
 function ThemeTagChip({
   imageSource,
@@ -160,9 +74,15 @@ function ThemeTagChip({
   );
 }
 
-function StoryCard({ item }: { item: StoryThemeCardItem }) {
+function StoryCard({
+  item,
+  onPress,
+}: {
+  item: HotspotThemeStory;
+  onPress: () => void;
+}) {
   return (
-    <View className="pb-5 pr-9 pt-6">
+    <Pressable className="pb-5 pr-9 pt-6" onPress={onPress}>
       <LinearGradient
         colors={[item.cardColors[0], item.cardColors[1]]}
         end={{ x: 1, y: 0.5 }}
@@ -219,7 +139,7 @@ function StoryCard({ item }: { item: StoryThemeCardItem }) {
           width: item.imageWidth,
         }}
       />
-    </View>
+    </Pressable>
   );
 }
 
@@ -267,7 +187,7 @@ export default function HotspotStoriesScreen() {
     return <NotFoundState />;
   }
 
-  const storyCards = buildThemeStoryCards(hotspot);
+  const storyCards = buildHotspotThemeStories(hotspot);
   const activeStory = storyCards.find((item) => item.tag === activeTag);
   return (
     <View className="flex-1 bg-white">
@@ -329,7 +249,14 @@ export default function HotspotStoriesScreen() {
           }}
           showsVerticalScrollIndicator={false}
         >
-          {activeStory ? <StoryCard item={activeStory} /> : null}
+          {activeStory ? (
+            <StoryCard
+              item={activeStory}
+              onPress={() =>
+                router.push(`/hotspot/${hotspot.slug}/stories/${activeStory.id}` as Href)
+              }
+            />
+          ) : null}
         </ScrollView>
       </SafeAreaView>
     </View>
