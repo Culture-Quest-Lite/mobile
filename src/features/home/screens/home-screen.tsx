@@ -1,16 +1,30 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Linking from "expo-linking";
+import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useRef, useState } from "react";
 import {
+  Platform,
   Pressable,
   ScrollView,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
+import Animated, {
+  Easing,
+  ReduceMotion,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { useAuthSession } from "@/features/auth/hooks/use-auth-session";
 
 import {
   type CommunityBoardTab,
@@ -28,6 +42,7 @@ import {
 import { getHotspotHref } from "../data/hotspots";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
+const guestPreviewLogo = require("../../../../assets/images/logo3.png");
 
 const heroShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.26)",
@@ -182,13 +197,483 @@ const communityRowShadowStyle = {
   elevation: 2,
 } as const;
 
+type GuestLocationMode =
+  | "error"
+  | "loading"
+  | "permission-denied"
+  | "ready"
+  | "services-disabled";
+
+type GuestLocationState = {
+  label: string;
+  mode: GuestLocationMode;
+};
+
+const guestLocationLoadingState: GuestLocationState = {
+  label: "Đang định vị...",
+  mode: "loading",
+};
+
+function formatGuestLocationLabel(
+  address?: Location.LocationGeocodedAddress | null,
+) {
+  if (!address) {
+    return "Vị trí của bạn";
+  }
+
+  const district = address.district?.trim();
+  const subregion = address.subregion?.trim();
+  const city = address.city?.trim();
+  const region = address.region?.trim();
+  const country = address.country?.trim();
+
+  const primary = district || subregion || city || region || country;
+
+  if (!primary) {
+    return "Vị trí của bạn";
+  }
+
+  if (city && primary !== city) {
+    return `${primary}, ${city}`;
+  }
+
+  return primary;
+}
+
+async function resolveGuestLocationState(): Promise<GuestLocationState> {
+  const servicesEnabled = await Location.hasServicesEnabledAsync();
+
+  if (!servicesEnabled) {
+    return {
+      label: "Mở GPS",
+      mode: "services-disabled",
+    };
+  }
+
+  const permission = await Location.getForegroundPermissionsAsync();
+
+  const permissionResponse =
+    permission.granted || !permission.canAskAgain
+      ? permission
+      : await Location.requestForegroundPermissionsAsync();
+
+  if (permissionResponse.status !== "granted") {
+    return {
+      label: "Bật vị trí",
+      mode: "permission-denied",
+    };
+  }
+
+  const lastKnownLocation = await Location.getLastKnownPositionAsync({
+    maxAge: 60_000,
+    requiredAccuracy: 150,
+  });
+
+  const currentLocation =
+    lastKnownLocation ??
+    (await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+      mayShowUserSettingsDialog: Platform.OS === "android",
+    }));
+
+  if (!currentLocation) {
+    return {
+      label: "Thử lại",
+      mode: "error",
+    };
+  }
+
+  if (Platform.OS === "web") {
+    return {
+      label: "Vị trí hiện tại",
+      mode: "ready",
+    };
+  }
+
+  const addresses = await Location.reverseGeocodeAsync({
+    latitude: currentLocation.coords.latitude,
+    longitude: currentLocation.coords.longitude,
+  });
+
+  return {
+    label: formatGuestLocationLabel(addresses[0]),
+    mode: "ready",
+  };
+}
+
+function useGuestLocationPill() {
+  const [locationState, setLocationState] = useState<GuestLocationState>(
+    guestLocationLoadingState,
+  );
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function refreshLocation() {
+      const requestId = ++requestIdRef.current;
+
+      if (isMounted) {
+        setLocationState(guestLocationLoadingState);
+      }
+
+      try {
+        const nextState = await resolveGuestLocationState();
+
+        if (isMounted && requestId === requestIdRef.current) {
+          setLocationState(nextState);
+        }
+      } catch {
+        if (isMounted && requestId === requestIdRef.current) {
+          setLocationState({
+            label: "Thử lại",
+            mode: "error",
+          });
+        }
+      }
+    }
+
+    void refreshLocation();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handlePress = async () => {
+    if (locationState.mode === "permission-denied") {
+      await Linking.openSettings();
+      return;
+    }
+
+    if (locationState.mode === "services-disabled") {
+      if (Platform.OS === "android") {
+        try {
+          await Location.enableNetworkProviderAsync();
+        } catch {
+          await Linking.openSettings();
+          return;
+        }
+      } else {
+        await Linking.openSettings();
+        return;
+      }
+    }
+
+    const requestId = ++requestIdRef.current;
+    setLocationState(guestLocationLoadingState);
+
+    try {
+      const nextState = await resolveGuestLocationState();
+
+      if (requestId === requestIdRef.current) {
+        setLocationState(nextState);
+      }
+    } catch {
+      if (requestId === requestIdRef.current) {
+        setLocationState({
+          label: "Thử lại",
+          mode: "error",
+        });
+      }
+    }
+  };
+
+  return {
+    handlePress,
+    locationState,
+  };
+}
+
+function GuestAccessCard({ onPress }: { onPress: () => void }) {
+  const arrowOffset = useSharedValue(0);
+
+  useEffect(() => {
+    arrowOffset.set(
+      withRepeat(
+        withTiming(10, {
+          duration: 850,
+          easing: Easing.inOut(Easing.quad),
+          reduceMotion: ReduceMotion.System,
+        }),
+        -1,
+        true,
+        undefined,
+        ReduceMotion.System,
+      ),
+    );
+
+    return () => {
+      cancelAnimation(arrowOffset);
+      arrowOffset.set(0);
+    };
+  }, [arrowOffset]);
+
+  const animatedArrowStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateX: arrowOffset.get() }],
+    };
+  });
+
+  return (
+    <View className="gap-3">
+      <Text className="text-[20px] font-extrabold text-[#2B2233]">
+        Mở khóa hành trình của bạn
+      </Text>
+
+      <View
+        className="overflow-hidden rounded-[28px] border border-[#F8D7E3] bg-white"
+        style={cardShadowStyle}
+      >
+        <LinearGradient
+          colors={["#FFF7FB", "#FFF3EC"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          className="absolute inset-0"
+        />
+
+        <View className="gap-5 px-4 py-4">
+          <View className="flex-row items-start gap-4">
+            <View className="flex-1 gap-2">
+              <View className="self-start rounded-full bg-white/90 px-3 py-1">
+                <Text className="text-[10px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
+                  Guest mode
+                </Text>
+              </View>
+
+              <View className="items-center py-1.5">
+                <LinearGradient
+                  colors={gradientColors}
+                  start={{ x: 0, y: 0.2 }}
+                  end={{ x: 1, y: 0.8 }}
+                  className="h-24 w-24 rounded-full p-[2px]"
+                  style={{
+                    shadowColor: "rgba(235, 72, 155, 0.16)",
+                    shadowOpacity: 1,
+                    shadowRadius: 14,
+                    shadowOffset: {
+                      width: 0,
+                      height: 8,
+                    },
+                    elevation: 5,
+                  }}
+                >
+                  <View className="h-full w-full items-center justify-center rounded-full bg-[#FFF1F6]">
+                    <SymbolView
+                      name={{
+                        ios: "lock.fill",
+                        android: "lock",
+                        web: "lock",
+                      }}
+                      size={38}
+                      tintColor="#EB489B"
+                    />
+                  </View>
+                </LinearGradient>
+              </View>
+            </View>
+          </View>
+
+          <View className="flex-row flex-wrap gap-2">
+            <View className="rounded-full bg-white/90 px-3 py-2">
+              <Text className="text-[11px] font-bold text-[#D9587F]">
+                Lưu tiến trình
+              </Text>
+            </View>
+            <View className="rounded-full bg-white/90 px-3 py-2">
+              <Text className="text-[11px] font-bold text-[#D9587F]">
+                Mở khóa story
+              </Text>
+            </View>
+            <View className="rounded-full bg-white/90 px-3 py-2">
+              <Text className="text-[11px] font-bold text-[#D9587F]">
+                Nhận voucher
+              </Text>
+            </View>
+          </View>
+
+          <Pressable
+            onPress={onPress}
+            className="self-center overflow-hidden rounded-[18px]"
+            style={{ minWidth: 282 }}
+          >
+            <LinearGradient
+              colors={gradientColors}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              locations={[0, 0.58, 1]}
+              className="relative items-center justify-center px-5 py-3.5"
+            >
+              <Text className="text-[15px] font-extrabold text-white">
+                Trải nghiệm ngay
+              </Text>
+
+              <View className="absolute right-3 h-9 w-9 items-center justify-center rounded-full bg-white/18">
+                <Animated.View style={animatedArrowStyle}>
+                  <SymbolView
+                    name={{
+                      ios: "arrow.right",
+                      android: "arrow_forward",
+                      web: "arrow_forward",
+                    }}
+                    size={16}
+                    tintColor="#FFFFFF"
+                  />
+                </Animated.View>
+              </View>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function GuestWelcomeHeader({
+  onGreetingPress,
+}: {
+  onGreetingPress: () => void;
+}) {
+  const logoOffset = useSharedValue(0);
+  const { handlePress, locationState } = useGuestLocationPill();
+
+  useEffect(() => {
+    logoOffset.set(
+      withRepeat(
+        withTiming(-8, {
+          duration: 1100,
+          easing: Easing.inOut(Easing.quad),
+          reduceMotion: ReduceMotion.System,
+        }),
+        -1,
+        true,
+        undefined,
+        ReduceMotion.System,
+      ),
+    );
+
+    return () => {
+      cancelAnimation(logoOffset);
+      logoOffset.set(0);
+    };
+  }, [logoOffset]);
+
+  const animatedLogoStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: logoOffset.get() }],
+    };
+  });
+
+  return (
+    <View className="flex-row items-center gap-4 px-1 py-2">
+      <Animated.View style={animatedLogoStyle}>
+        <View className="h-16 w-16 items-center justify-center rounded-full bg-white/95">
+          <Image
+            source={guestPreviewLogo}
+            contentFit="contain"
+            transition={380}
+            style={{ height: 90, width: 90 }}
+          />
+        </View>
+      </Animated.View>
+
+      <View className="flex-1 gap-1">
+        <View className="flex-row items-center justify-between gap-3">
+          <Pressable className="flex-1" hitSlop={8} onPress={onGreetingPress}>
+            <Text className="text-[22px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
+              Xin chào bạn
+            </Text>
+          </Pressable>
+
+          <Pressable
+            className="max-w-[48%] flex-row items-center gap-1.5 rounded-full border border-[#F5D7C7] bg-white px-3 py-2"
+            onPress={() => {
+              void handlePress();
+            }}
+          >
+            <SymbolView
+              name={{
+                ios: "location",
+                android: "my_location",
+                web: "my_location",
+              }}
+              size={14}
+              tintColor="#F58752"
+            />
+            <Text
+              className="text-[11px] font-semibold text-[#8E869A]"
+              numberOfLines={1}
+            >
+              {locationState.label}
+            </Text>
+          </Pressable>
+        </View>
+
+        <View className="flex-row items-center gap-1.5">
+          <SymbolView
+            name={{
+              ios: "star.fill",
+              android: "star",
+              web: "star",
+            }}
+            size={14}
+            tintColor="#F7B500"
+          />
+          <Text className="text-[13px] font-bold text-[#8E869A]">
+            Đăng nhập để lưu hành trình
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function ExplorerHeaderActions() {
+  const { handlePress } = useGuestLocationPill();
+
+  return (
+    <View className="flex-row items-center gap-3">
+      <Pressable
+        className="h-12 w-12 items-center justify-center rounded-full bg-[#FFF4EF]"
+        onPress={() => {
+          void handlePress();
+        }}
+      >
+        <SymbolView
+          name={{
+            ios: "location",
+            android: "my_location",
+            web: "my_location",
+          }}
+          size={20}
+          tintColor="#F58752"
+        />
+      </Pressable>
+
+      <Pressable className="h-12 w-12 items-center justify-center rounded-full bg-[#FFF4EF]">
+        <SymbolView
+          name={{
+            ios: "bell",
+            android: "notifications",
+            web: "notifications",
+          }}
+          size={22}
+          tintColor="#EB489B"
+        />
+      </Pressable>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const router = useRouter();
+  const authSession = useAuthSession();
   const { width } = useWindowDimensions();
   const activeRouteIndexRef = useRef(0);
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
   const [activeCommunityTab, setActiveCommunityTab] =
     useState<CommunityBoardTab>("community");
+  const isGuest = authSession.role === "guest";
   const routeCardLeftInset = 20;
   const routeCardRightInset = 16;
   const routeCardWidth = Math.max(
@@ -202,14 +687,21 @@ export default function HomeScreen() {
   const voucherMerchantLogoSize = Math.round(voucherMerchantCircleSize * 0.88);
   const voucherMerchantItemWidth = voucherMerchantCircleSize + 14;
   const currentJourney =
-    activeJourney && !activeJourney.completed ? activeJourney : null;
+    !isGuest && activeJourney && !activeJourney.completed
+      ? activeJourney
+      : null;
   const activeJourneyProgress = currentJourney
     ? Math.min(Math.max(currentJourney.progress, 0), 100)
     : 0;
   const activeCommunityBoard = communityBoards[activeCommunityTab];
   const activeFeaturedRoute = featuredRoutes[activeRouteIndex];
+  const displayName = authSession.displayName || "Ngọc";
+  const explorerLevel = authSession.level ?? 12;
   const handleOpenHotspots = () => {
     router.push("/hotspots");
+  };
+  const handleOpenRegister = () => {
+    router.push("/login?entry=home");
   };
 
   useEffect(() => {
@@ -237,63 +729,57 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-6 px-5 pt-1">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1 flex-row items-center gap-3.5 pr-3">
-              <View className="relative">
-                <LinearGradient
-                  colors={gradientColors}
-                  end={{ x: 1, y: 0.9 }}
-                  start={{ x: 0, y: 0.1 }}
-                  className="h-16 w-16 rounded-full p-[2px]"
-                >
-                  <View className="flex-1 rounded-full bg-white p-[3px]">
-                    <Image
-                      source={avatarImageUri}
-                      contentFit="cover"
-                      transition={180}
-                      cachePolicy="memory-disk"
-                      style={{ flex: 1, borderRadius: 999 }}
-                    />
+          {isGuest ? (
+            <GuestWelcomeHeader onGreetingPress={handleOpenRegister} />
+          ) : (
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 flex-row items-center gap-3.5 pr-3">
+                <View className="relative">
+                  <LinearGradient
+                    colors={gradientColors}
+                    end={{ x: 1, y: 0.9 }}
+                    start={{ x: 0, y: 0.1 }}
+                    className="h-16 w-16 rounded-full p-[2px]"
+                  >
+                    <View className="flex-1 rounded-full bg-white p-[3px]">
+                      <Image
+                        source={avatarImageUri}
+                        contentFit="cover"
+                        transition={180}
+                        cachePolicy="memory-disk"
+                        style={{ flex: 1, borderRadius: 999 }}
+                      />
+                    </View>
+                  </LinearGradient>
+
+                  <View className="absolute -bottom-1 -right-2 rounded-full border-2 border-white bg-[#b1741e] px-2.5 py-1">
+                    <Text className="text-[10px] font-extrabold text-white">
+                      {`Lv.${explorerLevel}`}
+                    </Text>
                   </View>
-                </LinearGradient>
+                </View>
 
-                <View className="absolute -bottom-1 -right-2 rounded-full border-2 border-white bg-[#b1741e] px-2.5 py-1">
-                  <Text className="text-[10px] font-extrabold text-white">
-                    Lv.12
-                  </Text>
+                <View className="flex-1 gap-1">
+                  <View className="self-start rounded-full bg-[#FFF1F6] px-2.5 py-1">
+                    <Text className="text-[10px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
+                      Explorer
+                    </Text>
+                  </View>
+
+                  <View className="gap-0.5">
+                    <Text className="text-[20px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
+                      {`Chào ${displayName}`}
+                    </Text>
+                    <Text className="text-[13px] leading-5 text-[#8E869A]">
+                      Sẵn sàng khám phá hành trình
+                    </Text>
+                  </View>
                 </View>
               </View>
 
-              <View className="flex-1 gap-1">
-                <View className="self-start rounded-full bg-[#FFF1F6] px-2.5 py-1">
-                  <Text className="text-[10px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
-                    Explorer
-                  </Text>
-                </View>
-
-                <View className="gap-0.5">
-                  <Text className="text-[20px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
-                    Chào Ngọc
-                  </Text>
-                  <Text className="text-[13px] leading-5 text-[#8E869A]">
-                    Sẵn sàng khám phá hành trình hôm nay
-                  </Text>
-                </View>
-              </View>
+              <ExplorerHeaderActions />
             </View>
-
-            <Pressable className="h-12 w-12 items-center justify-center rounded-full bg-[#FFF4EF]">
-              <SymbolView
-                name={{
-                  ios: "bell",
-                  android: "notifications",
-                  web: "notifications",
-                }}
-                size={22}
-                tintColor="#EB489B"
-              />
-            </Pressable>
-          </View>
+          )}
 
           <View className="flex-row items-center gap-3">
             <View className="flex-1 flex-row items-center rounded-[18px] bg-[#FAF7FC] px-4 py-4">
@@ -434,7 +920,9 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {currentJourney ? (
+          {isGuest ? (
+            <GuestAccessCard onPress={handleOpenRegister} />
+          ) : currentJourney ? (
             <View className="gap-3">
               <Text className="text-[20px] font-extrabold text-[#2B2233]">
                 Tiếp tục hành trình

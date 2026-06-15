@@ -1,3 +1,4 @@
+import { type Href, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { SymbolView } from "expo-symbols";
@@ -8,14 +9,15 @@ import {
   ScrollView,
   Text,
   View,
-  type ImageSourcePropType,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const CULTURE_IMAGE = require("../../../../assets/images/vanhoa.png");
-const CUISINE_IMAGE = require("../../../../assets/images/tachnen3.png");
-const HERITAGE_IMAGE = require("../../../../assets/images/tachnen2.png");
-const LEARNING_IMAGE = require("../../../../assets/images/giaoduc.png");
+import {
+  communityPosts,
+  type CommunityPost,
+  type CommunityPostTopic,
+} from "../data/community-demo";
+
 const COMPOSER_AVATAR_URI =
   "https://i.pinimg.com/1200x/02/4a/12/024a1239d1eaac70f5ac7b43a1adb5ea.jpg";
 const PROJECT_WORDMARK = "Culture Quest Lite";
@@ -58,7 +60,7 @@ const pillShadowStyle = {
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type CommunityTabKey = "community" | "following";
-type TopicKey = "all" | "culture" | "art" | "cuisine" | "history";
+type TopicKey = "all" | CommunityPostTopic;
 
 type CommunityTab = {
   key: CommunityTabKey;
@@ -69,28 +71,6 @@ type CommunityTab = {
   stat: string;
   statLabel: string;
   title: string;
-};
-
-type CommunityPost = {
-  id: string;
-  author: string;
-  avatarColors: readonly [string, string];
-  badge: string;
-  caption: string;
-  comments: string;
-  hotScore: string;
-  image: ImageSourcePropType;
-  initials: string;
-  likes: string;
-  location: string;
-  mood: string;
-  topic: Exclude<TopicKey, "all">;
-  role: string;
-  shares: string;
-  isFollowing: boolean;
-  tags: readonly string[];
-  time: string;
-  views: string;
 };
 
 type TopicFilter = {
@@ -220,98 +200,8 @@ const tagPalettes: Record<string, TagPalette> = {
   },
 };
 
-const communityPosts: readonly CommunityPost[] = [
-  {
-    id: "community-post-1",
-    author: "Mai Linh",
-    initials: "ML",
-    role: "Story hunter",
-    time: "14 phút trước",
-    caption:
-      "Vừa hoàn thành route Bảo tàng và sân khấu truyền thống. Góc trưng bày mặt nạ tuồng lên ảnh rất đẹp, ánh đèn vàng khiến cả không gian trông ấm hơn hẳn.",
-    location: "Bảo tàng & sân khấu truyền thống",
-    mood: "Chụp đẹp nhất lúc 16:30 - 17:30",
-    badge: "Xu hướng",
-    hotScore: "59k",
-    views: "30.8k",
-    likes: "10.4k",
-    comments: "234",
-    shares: "14",
-    topic: "culture",
-    isFollowing: true,
-    tags: ["Văn hóa", "Check-in", "Góc đẹp"],
-    image: CULTURE_IMAGE,
-    avatarColors: ["#EB489B", "#F58752"],
-  },
-  {
-    id: "community-post-2",
-    author: "Hà Vy",
-    initials: "HV",
-    role: "Culture guide",
-    time: "1 giờ trước",
-    caption:
-      "Team mình vừa gom một bộ note ngắn về các biểu tượng học thuật và không gian triển lãm. Nếu ai đang làm route dành cho sinh viên thì post này sẽ khá hữu ích.",
-    location: "Không gian triển lãm học thuật",
-    mood: "Phù hợp route nhóm 3-5 người",
-    badge: "Mới cập nhật",
-    hotScore: "18k",
-    views: "12.2k",
-    likes: "3.6k",
-    comments: "86",
-    shares: "09",
-    topic: "art",
-    isFollowing: true,
-    tags: ["Nghệ thuật", "Triển lãm", "Sinh viên"],
-    image: LEARNING_IMAGE,
-    avatarColors: ["#F58752", "#FFC93C"],
-  },
-  {
-    id: "community-post-3",
-    author: "Khánh An",
-    initials: "KA",
-    role: "Meetup host",
-    time: "Hôm nay, 19:30",
-    caption:
-      "Tối nay mình mở meetup ẩm thực và kể chuyện chợ đêm. Route ngắn, đi bộ nhẹ, ưu tiên người mới để cùng mở khoá badge đầu tiên.",
-    location: "Chợ đêm ẩm thực",
-    mood: "Còn 6 chỗ trống trong nhóm",
-    badge: "Meetup nóng",
-    hotScore: "26k",
-    views: "8.7k",
-    likes: "2.4k",
-    comments: "41",
-    shares: "12",
-    topic: "cuisine",
-    isFollowing: false,
-    tags: ["Ẩm thực", "Meetup", "Đi bộ nhẹ"],
-    image: CUISINE_IMAGE,
-    avatarColors: ["#F58752", "#EB489B"],
-  },
-  {
-    id: "community-post-4",
-    author: "Tuấn Kiệt",
-    initials: "TK",
-    role: "Explorer level 9",
-    time: "2 giờ trước",
-    caption:
-      "Cuối tuần này ai có route tham quan kiến trúc Chăm và chụp silhouette đẹp thì cho mình xin lịch trình với. Mình muốn ghép thêm một điểm hoàng hôn gần đó.",
-    location: "Cụm di tích kiến trúc cổ",
-    mood: "Tìm thêm 1-2 người đi cùng",
-    badge: "Cần tư vấn",
-    hotScore: "9.8k",
-    views: "5.4k",
-    likes: "980",
-    comments: "57",
-    shares: "06",
-    topic: "history",
-    isFollowing: false,
-    tags: ["Lịch sử", "Kiến trúc", "Hoàng hôn"],
-    image: HERITAGE_IMAGE,
-    avatarColors: ["#FFC93C", "#F58752"],
-  },
-] as const;
-
 export default function CommunityScreen() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<CommunityTabKey>("community");
   const [activeTopic, setActiveTopic] = useState<TopicKey>("all");
   const activeTopicLabel = useMemo(
@@ -329,6 +219,9 @@ export default function CommunityScreen() {
       ? tabPosts
       : tabPosts.filter((post) => post.topic === activeTopic);
   }, [activeTab, activeTopic]);
+  const openExplorerProfile = (authorId: string) => {
+    router.push(`/community/profile/${authorId}` as Href);
+  };
 
   return (
     <SafeAreaView
@@ -490,7 +383,11 @@ export default function CommunityScreen() {
             <View className="mt-5 gap-4">
               {filteredPosts.length ? (
                 filteredPosts.map((post) => (
-                  <CommunityPostCard key={post.id} post={post} />
+                  <CommunityPostCard
+                    key={post.id}
+                    post={post}
+                    onOpenProfile={openExplorerProfile}
+                  />
                 ))
               ) : (
                 <View className="rounded-[28px] border border-[#F4E0D5] bg-white px-5 py-6">
@@ -553,18 +450,31 @@ function CommunityTabLabel({
   );
 }
 
-function CommunityPostCard({ post }: { post: CommunityPost }) {
+function CommunityPostCard({
+  post,
+  onOpenProfile,
+}: {
+  post: CommunityPost;
+  onOpenProfile: (authorId: string) => void;
+}) {
   return (
     <View
       className="overflow-hidden rounded-[32px] border border-[#F5E4EB] bg-white px-4 pb-4 pt-4"
       style={cardShadowStyle}
     >
-      <View className="flex-row items-start">
-        <AvatarMonogram
-          colors={post.avatarColors}
-          initials={post.initials}
-          size={52}
-        />
+      <Pressable
+        onPress={() => {
+          onOpenProfile(post.authorId);
+        }}
+        className="flex-row items-start"
+      >
+        <View className="rounded-[20px]">
+          <AvatarMonogram
+            colors={post.avatarColors}
+            initials={post.initials}
+            size={52}
+          />
+        </View>
 
         <View className="ml-3.5 flex-1 pr-3">
           <View className="flex-row items-center gap-1.5">
@@ -592,7 +502,7 @@ function CommunityPostCard({ post }: { post: CommunityPost }) {
           </Text>
         </View>
 
-        <Pressable className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF5F8]">
+        <View className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF5F8]">
           <SymbolView
             name={{
               ios: "ellipsis",
@@ -602,8 +512,8 @@ function CommunityPostCard({ post }: { post: CommunityPost }) {
             size={16}
             tintColor="#B15F82"
           />
-        </Pressable>
-      </View>
+        </View>
+      </Pressable>
 
       <Text className="mt-4 text-[14px] leading-6 text-[#33293A]">
         {post.caption}
