@@ -15,6 +15,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="community/profile/[id]" />
         <Stack.Screen name="route/[id]" />
         <Stack.Screen name="checkin/[id]" />
         <Stack.Screen name="hotspot/[slug]" />

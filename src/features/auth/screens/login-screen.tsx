@@ -1,6 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { SymbolView } from "expo-symbols";
+import { useEffect, useState } from "react";
 import {
   Image,
   KeyboardAvoidingView,
@@ -14,9 +15,19 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import Animated, {
+  Easing,
+  ReduceMotion,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 
 import { AuthInput } from "@/features/auth/components/auth-input";
 import { SocialAuthButton } from "@/features/auth/components/social-auth-button";
+import { signInAsExplorer } from "@/features/auth/hooks/use-auth-session";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 
@@ -44,8 +55,10 @@ const buttonShadowStyle = {
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { entry } = useLocalSearchParams<{ entry?: string }>();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
+  const logoFloat = useSharedValue(0);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const isCompactScreen = height <= 760;
@@ -66,6 +79,44 @@ export default function LoginScreen() {
   const buttonHeightClassName = isCompactScreen ? "h-12" : "h-[52px]";
   const formGapClassName = isCompactScreen ? "gap-3" : "gap-4";
   const footerGapClassName = isCompactScreen ? "gap-3 pt-4" : "gap-4 pt-6";
+  const backButtonTop = insets.top + (isCompactScreen ? 10 : 12);
+
+  useEffect(() => {
+    if (entry !== "home") {
+      router.replace("/home");
+    }
+  }, [entry, router]);
+
+  useEffect(() => {
+    logoFloat.set(
+      withRepeat(
+        withTiming(-6, {
+          duration: 1250,
+          easing: Easing.inOut(Easing.quad),
+          reduceMotion: ReduceMotion.System,
+        }),
+        -1,
+        true,
+        undefined,
+        ReduceMotion.System,
+      ),
+    );
+
+    return () => {
+      cancelAnimation(logoFloat);
+      logoFloat.set(0);
+    };
+  }, [logoFloat]);
+
+  const animatedLogoStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: logoFloat.get() }],
+    };
+  });
+
+  if (entry !== "home") {
+    return null;
+  }
 
   return (
     <SafeAreaView
@@ -89,11 +140,29 @@ export default function LoginScreen() {
               paddingTop: heroTopPadding,
             }}
           >
-            <Image
-              source={require("../../../../assets/images/logo2.png")}
-              style={{ height: logoSize, width: logoSize }}
-              resizeMode="contain"
-            />
+            <Pressable
+              onPress={() => router.replace("/home")}
+              className="absolute left-6 h-11 w-11 items-center justify-center rounded-full bg-white/18"
+              style={{ top: backButtonTop }}
+            >
+              <SymbolView
+                name={{
+                  ios: "chevron.left",
+                  android: "arrow_back",
+                  web: "arrow_back",
+                }}
+                size={18}
+                tintColor="#FFFFFF"
+              />
+            </Pressable>
+
+            <Animated.View style={animatedLogoStyle}>
+              <Image
+                source={require("../../../../assets/images/logo2.png")}
+                style={{ height: logoSize, width: logoSize }}
+                resizeMode="contain"
+              />
+            </Animated.View>
           </LinearGradient>
 
           <View
@@ -153,7 +222,10 @@ export default function LoginScreen() {
                   </Pressable>
 
                   <Pressable
-                    onPress={() => router.replace("/home")}
+                    onPress={() => {
+                      signInAsExplorer();
+                      router.replace("/home");
+                    }}
                     className="rounded-[18px]"
                     style={buttonShadowStyle}
                   >
@@ -190,7 +262,7 @@ export default function LoginScreen() {
                     <Text className="text-[12px] text-[#8E869A]">
                       Bạn chưa có tài khoản?
                     </Text>
-                    <Pressable onPress={() => router.push("./register")}>
+                    <Pressable onPress={() => router.push("/register?entry=home")}>
                       <Text className="text-[12px] font-extrabold text-[#F58752]">
                         Đăng ký
                       </Text>
