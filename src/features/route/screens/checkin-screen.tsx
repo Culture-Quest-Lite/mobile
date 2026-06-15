@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -38,7 +38,7 @@ const cardShadow = {
 
 // ─── Spinner animation ────────────────────────────────────────────────────────
 function SpinnerRing() {
-  const rotation = useRef(new Animated.Value(0)).current;
+  const [rotation] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     Animated.loop(
@@ -73,7 +73,7 @@ function SpinnerRing() {
 
 // ─── Slow spin ring (idle deco) ───────────────────────────────────────────────
 function SlowSpinRing() {
-  const rotation = useRef(new Animated.Value(0)).current;
+  const [rotation] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     Animated.loop(
@@ -109,8 +109,8 @@ function SlowSpinRing() {
 
 // ─── Ripple pulse ─────────────────────────────────────────────────────────────
 function RipplePulse() {
-  const scale = useRef(new Animated.Value(0.8)).current;
-  const opacity = useRef(new Animated.Value(0.4)).current;
+  const [scale] = useState(() => new Animated.Value(0.8));
+  const [opacity] = useState(() => new Animated.Value(0.4));
 
   useEffect(() => {
     Animated.loop(
@@ -148,9 +148,9 @@ function RipplePulse() {
 
 // ─── Confetti dots (success) ──────────────────────────────────────────────────
 function ConfettiDots() {
-  const anims = useRef(
+  const [anims] = useState(() =>
     Array.from({ length: 12 }, () => new Animated.Value(0)),
-  ).current;
+  );
 
   useEffect(() => {
     Animated.stagger(

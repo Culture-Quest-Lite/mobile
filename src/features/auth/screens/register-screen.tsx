@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   View,
   useWindowDimensions,
@@ -47,6 +48,7 @@ export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const [fullName, setFullName] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -79,147 +81,166 @@ export default function RegisterScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         className="flex-1"
       >
-        <View className="flex-1 bg-white">
-          <LinearGradient
-            colors={gradientColors}
-            end={{ x: 1, y: 0.5 }}
-            locations={[0, 0.58, 1]}
-            start={{ x: 0, y: 0.5 }}
-            className="relative w-full items-center justify-center overflow-hidden px-6"
-            style={{
-              minHeight: heroHeight,
-              paddingBottom: heroBottomPadding,
-              paddingTop: heroTopPadding,
-            }}
-          >
-            <Image
-              source={require("../../../../assets/images/logo2.png")}
-              style={{ height: logoSize, width: logoSize }}
-              resizeMode="contain"
-            />
-          </LinearGradient>
-
-          <View
-            className="-mt-8 flex-1 rounded-t-[34px] bg-white px-6"
-            style={cardShadowStyle}
-          >
-            <View
-              className="w-full max-w-[390px] self-center"
+        <ScrollView
+          className="flex-1 bg-white"
+          contentContainerStyle={{ minHeight: height + insets.top }}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="bg-white">
+            <LinearGradient
+              colors={gradientColors}
+              end={{ x: 1, y: 0.5 }}
+              locations={[0, 0.58, 1]}
+              start={{ x: 0, y: 0.5 }}
+              className="relative w-full items-center justify-center overflow-hidden px-6"
               style={{
-                paddingBottom: cardBottomPadding,
-                paddingTop: cardTopPadding,
+                minHeight: heroHeight,
+                paddingBottom: heroBottomPadding,
+                paddingTop: heroTopPadding,
               }}
             >
-              <View className="items-center gap-1.5">
-                <Text
-                  className="font-extrabold text-[#EB489B]"
-                  style={{ fontSize: titleSize }}
-                >
-                  Đăng ký
-                </Text>
-                <Text className="text-[12px] text-[#8E869A]">
-                  Tạo tài khoản để bắt đầu hành trình
-                </Text>
-              </View>
+              <Image
+                source={require("../../../../assets/images/logo2.png")}
+                style={{ height: logoSize, width: logoSize }}
+                resizeMode="contain"
+              />
+            </LinearGradient>
 
-              <View style={{ marginTop: sectionTopMargin }}>
-                <View className={formGapClassName}>
-                  <AuthInput
-                    autoCapitalize="words"
-                    autoComplete="name"
-                    className="gap-1.5"
-                    inputClassName={fieldHeightClassName}
-                    label="Họ và tên"
-                    placeholder="Nguyễn Văn A"
-                    textContentType="name"
-                    value={fullName}
-                    onChangeText={setFullName}
-                  />
-                  <AuthInput
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    className="gap-1.5"
-                    inputClassName={fieldHeightClassName}
-                    keyboardType="email-address"
-                    label="Email"
-                    placeholder="nguyenvana@gmail.com"
-                    textContentType="emailAddress"
-                    value={email}
-                    onChangeText={setEmail}
-                  />
-                  <AuthInput
-                    autoCapitalize="none"
-                    autoComplete="password"
-                    className="gap-1.5"
-                    inputClassName={fieldHeightClassName}
-                    label="Password"
-                    placeholder="........"
-                    secureTextEntry
-                    textContentType="newPassword"
-                    value={password}
-                    onChangeText={setPassword}
-                  />
-                  <AuthInput
-                    autoCapitalize="none"
-                    autoComplete="password-new"
-                    className="gap-1.5"
-                    inputClassName={fieldHeightClassName}
-                    label="Nhập lại password"
-                    placeholder="........"
-                    secureTextEntry
-                    textContentType="password"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                  />
-
-                  <Pressable
-                    onPress={() => router.replace("/home")}
-                    className={`${buttonTopPaddingClassName} rounded-[18px]`}
-                    style={buttonShadowStyle}
+            <View
+              className="-mt-8 rounded-t-[34px] bg-white px-6"
+              style={cardShadowStyle}
+            >
+              <View
+                className="w-full max-w-[390px] self-center"
+                style={{
+                  paddingBottom: cardBottomPadding,
+                  paddingTop: cardTopPadding,
+                }}
+              >
+                <View className="items-center gap-1.5">
+                  <Text
+                    className="font-extrabold text-[#EB489B]"
+                    style={{ fontSize: titleSize }}
                   >
-                    <LinearGradient
-                      colors={gradientColors}
-                      end={{ x: 1, y: 0.5 }}
-                      locations={[0, 0.58, 1]}
-                      start={{ x: 0, y: 0.5 }}
-                      className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
-                    >
-                      <Text className="text-[15px] font-extrabold text-white">
-                        Tạo tài khoản
-                      </Text>
-                    </LinearGradient>
-                  </Pressable>
+                    Đăng ký
+                  </Text>
+                  <Text className="text-[12px] text-[#8E869A]">
+                    Tạo tài khoản để bắt đầu hành trình
+                  </Text>
                 </View>
 
-                <View className={footerGapClassName}>
-                  <View className="flex-row items-center justify-center gap-3">
-                    <View className="h-px flex-1 bg-[#F0E8F4]" />
-                    <Text className="text-[11px] font-medium text-[#AA9FB0]">
-                      Hoặc đăng ký với
-                    </Text>
-                    <View className="h-px flex-1 bg-[#F0E8F4]" />
-                  </View>
+                <View style={{ marginTop: sectionTopMargin }}>
+                  <View className={formGapClassName}>
+                    <AuthInput
+                      autoCapitalize="words"
+                      autoComplete="name"
+                      className="gap-1.5"
+                      inputClassName={fieldHeightClassName}
+                      label="Họ và tên"
+                      placeholder="Nhập họ và tên của bạn"
+                      textContentType="name"
+                      value={fullName}
+                      onChangeText={setFullName}
+                    />
+                    <AuthInput
+                      autoCapitalize="none"
+                      autoComplete="username"
+                      className="gap-1.5"
+                      inputClassName={fieldHeightClassName}
+                      label="Tên hiển thị"
+                      placeholder="Chọn tên hiển thị"
+                      textContentType="nickname"
+                      value={displayName}
+                      onChangeText={setDisplayName}
+                    />
+                    <AuthInput
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      className="gap-1.5"
+                      inputClassName={fieldHeightClassName}
+                      keyboardType="email-address"
+                      label="Email"
+                      placeholder="Nhập địa chỉ email"
+                      textContentType="emailAddress"
+                      value={email}
+                      onChangeText={setEmail}
+                    />
+                    <AuthInput
+                      autoCapitalize="none"
+                      autoComplete="password"
+                      className="gap-1.5"
+                      inputClassName={fieldHeightClassName}
+                      label="Mật khẩu"
+                      placeholder="Nhập mật khẩu"
+                      secureTextEntry
+                      textContentType="newPassword"
+                      value={password}
+                      onChangeText={setPassword}
+                    />
+                    <AuthInput
+                      autoCapitalize="none"
+                      autoComplete="password-new"
+                      className="gap-1.5"
+                      inputClassName={fieldHeightClassName}
+                      label="Nhập lại mật khẩu"
+                      placeholder="Nhập lại mật khẩu"
+                      secureTextEntry
+                      textContentType="password"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                    />
 
-                  <View className="flex-row justify-center gap-3.5">
-                    <SocialAuthButton accentColor="#EA4335" label="G" />
-                    <SocialAuthButton accentColor="#1877F2" label="f" />
-                  </View>
-
-                  <View className="flex-row items-center justify-center gap-1.5">
-                    <Text className="text-[12px] text-[#8E869A]">
-                      Bạn đã có tài khoản?
-                    </Text>
-                    <Pressable onPress={() => router.push("/login")}>
-                      <Text className="text-[12px] font-extrabold text-[#F58752]">
-                        Đăng nhập
-                      </Text>
+                    <Pressable
+                      onPress={() => router.replace("/home")}
+                      className={`${buttonTopPaddingClassName} rounded-[18px]`}
+                      style={buttonShadowStyle}
+                    >
+                      <LinearGradient
+                        colors={gradientColors}
+                        end={{ x: 1, y: 0.5 }}
+                        locations={[0, 0.58, 1]}
+                        start={{ x: 0, y: 0.5 }}
+                        className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
+                      >
+                        <Text className="text-[15px] font-extrabold text-white">
+                          Tạo tài khoản
+                        </Text>
+                      </LinearGradient>
                     </Pressable>
+                  </View>
+
+                  <View className={footerGapClassName}>
+                    <View className="flex-row items-center justify-center gap-3">
+                      <View className="h-px flex-1 bg-[#F0E8F4]" />
+                      <Text className="text-[11px] font-medium text-[#AA9FB0]">
+                        Hoặc đăng ký với
+                      </Text>
+                      <View className="h-px flex-1 bg-[#F0E8F4]" />
+                    </View>
+
+                    <View className="flex-row justify-center gap-3.5">
+                      <SocialAuthButton accentColor="#EA4335" label="G" />
+                      <SocialAuthButton accentColor="#1877F2" label="f" />
+                    </View>
+
+                    <View className="flex-row items-center justify-center gap-1.5">
+                      <Text className="text-[12px] text-[#8E869A]">
+                        Bạn đã có tài khoản?
+                      </Text>
+                      <Pressable onPress={() => router.push("/login")}>
+                        <Text className="text-[12px] font-extrabold text-[#F58752]">
+                          Đăng nhập
+                        </Text>
+                      </Pressable>
+                    </View>
                   </View>
                 </View>
               </View>
             </View>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

@@ -4,7 +4,6 @@ import { type ComponentProps } from "react";
 import { type ColorValue, Image, Platform, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const PROFILE_LOGO = require("../../../assets/images/logo2.png");
 const HOME_LOGO = require("../../../assets/images/logo3.png");
 const TAB_ACTIVE_COLOR = "#EC4899";
 const TAB_INACTIVE_COLOR = "#8E919A";
@@ -30,9 +29,9 @@ const TAB_ICON_SLOT_SIZE = 32;
 const TAB_CONFIG: Record<VisibleTabName, TabConfig> = {
   bookings: {
     icon: {
-      ios: "doc.text",
-      android: "description",
-      web: "description",
+      ios: "bubble.left.and.bubble.right",
+      android: "forum",
+      web: "forum",
     },
     label: "Cộng đồng",
   },
