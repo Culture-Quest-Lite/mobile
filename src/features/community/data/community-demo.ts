@@ -39,11 +39,14 @@ export type CommunityExplorerProfile = {
   bio: string;
   city: string;
   level: number;
+  checkIns: number;
   followers: number;
   following: number;
   routesCompleted: number;
   streakDays: number;
+  badgeCount: number;
   responseTime: string;
+  isPremium?: boolean;
   avatar?: string;
   cover: string;
   initials: string;
@@ -51,6 +54,7 @@ export type CommunityExplorerProfile = {
   interests: readonly string[];
   badges: readonly string[];
   routeIds: readonly string[];
+  favoriteRouteIds: readonly string[];
 };
 
 export const communityExplorerProfiles: readonly CommunityExplorerProfile[] = [
@@ -63,11 +67,14 @@ export const communityExplorerProfiles: readonly CommunityExplorerProfile[] = [
     bio: "Thích ghép những điểm dừng văn hóa thành hành trình ngắn, dễ đi và nhiều góc ảnh kể được câu chuyện của địa điểm.",
     city: "TP. Hồ Chí Minh",
     level: 14,
+    checkIns: 152,
     followers: 1284,
     following: 196,
     routesCompleted: 28,
     streakDays: 16,
+    badgeCount: 24,
     responseTime: "Phản hồi trong 1 giờ",
+    isPremium: true,
     avatar:
       "https://i.pinimg.com/1200x/30/ea/d0/30ead0739541c7f214f91b37560e038c.jpg",
     cover:
@@ -77,6 +84,7 @@ export const communityExplorerProfiles: readonly CommunityExplorerProfile[] = [
     interests: ["Văn hóa", "Check-in", "Bảo tàng"],
     badges: ["Story curator", "Photo spot hunter", "Weekend route"],
     routeIds: ["vinh-ha-long", "pho-co-dem"],
+    favoriteRouteIds: ["pho-co-dem", "cho-lon"],
   },
   {
     id: "ha-vy",
@@ -88,10 +96,12 @@ export const communityExplorerProfiles: readonly CommunityExplorerProfile[] = [
     bio: "Ưu tiên những route dễ phối hợp theo nhóm 3-5 người, có checklist rõ ràng và nội dung súc tích để ai mới tham gia cũng theo được.",
     city: "Thủ Đức",
     level: 11,
+    checkIns: 108,
     followers: 842,
     following: 152,
     routesCompleted: 19,
     streakDays: 9,
+    badgeCount: 17,
     responseTime: "Phản hồi trong ngày",
     avatar: "https://i.pravatar.cc/160?img=58",
     cover:
@@ -101,6 +111,7 @@ export const communityExplorerProfiles: readonly CommunityExplorerProfile[] = [
     interests: ["Nghệ thuật", "Triển lãm", "Sinh viên"],
     badges: ["Campus planner", "Exhibit note", "Quick briefing"],
     routeIds: ["mui-ne", "vinh-ha-long"],
+    favoriteRouteIds: ["vinh-ha-long"],
   },
   {
     id: "khanh-an",
@@ -111,10 +122,12 @@ export const communityExplorerProfiles: readonly CommunityExplorerProfile[] = [
     bio: "Mình hay lên lịch route buổi tối với quãng đi bộ nhẹ, có nhiều điểm dừng kể chuyện và chỗ để cả nhóm ngồi trao đổi nhanh.",
     city: "Quận 1",
     level: 10,
+    checkIns: 91,
     followers: 697,
     following: 233,
     routesCompleted: 17,
     streakDays: 11,
+    badgeCount: 14,
     responseTime: "Phản hồi trong 30 phút",
     avatar: "https://i.pravatar.cc/160?img=5",
     cover:
@@ -124,6 +137,7 @@ export const communityExplorerProfiles: readonly CommunityExplorerProfile[] = [
     interests: ["Ẩm thực", "Meetup", "Đi bộ nhẹ"],
     badges: ["Warm host", "Night route", "Newbie friendly"],
     routeIds: ["pho-co-dem", "cho-lon"],
+    favoriteRouteIds: ["cho-lon", "pho-co-dem"],
   },
   {
     id: "tuan-kiet",
@@ -134,10 +148,12 @@ export const communityExplorerProfiles: readonly CommunityExplorerProfile[] = [
     bio: "Hay ghép route lịch sử với các điểm chụp silhouette lúc chiều muộn, phù hợp cho nhóm 2-3 người thích đi chậm và chụp nhiều.",
     city: "Quận 5",
     level: 9,
+    checkIns: 73,
     followers: 514,
     following: 188,
     routesCompleted: 13,
     streakDays: 7,
+    badgeCount: 11,
     responseTime: "Thường online buổi tối",
     avatar: "https://i.pravatar.cc/160?img=20",
     cover:
@@ -147,6 +163,7 @@ export const communityExplorerProfiles: readonly CommunityExplorerProfile[] = [
     interests: ["Lịch sử", "Kiến trúc", "Hoàng hôn"],
     badges: ["Sunset scout", "Architecture walk", "Slow explorer"],
     routeIds: ["cho-lon", "mui-ne"],
+    favoriteRouteIds: ["mui-ne"],
   },
 ] as const;
 
