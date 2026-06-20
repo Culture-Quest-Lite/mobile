@@ -8,6 +8,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useProfile } from '../hooks/use-profile';
 import type { ProfileBadge, ProfilePost } from '../types';
+import {
+  resetAuthSessionToGuest,
+  useAuthSession,
+} from '@/features/auth/hooks/use-auth-session';
 import type { RouteItem } from '@/lib/demo-data';
 
 type Tab = 'posts' | 'routes';
@@ -86,8 +90,15 @@ function XPBar({
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const authSession = useAuthSession();
   const { profile, posts, userRoutes } = useProfile();
   const [tab, setTab] = useState<Tab>('posts');
+  const isAuthenticated = authSession.isAuthenticated;
+
+  const handleLogout = () => {
+    resetAuthSessionToGuest();
+    router.replace('/home');
+  };
 
   if (!profile) {
     return (
@@ -298,6 +309,28 @@ export default function ProfileScreen() {
               </View>
             )}
           </View>
+
+          {isAuthenticated ? (
+            <View className="mt-8 border-t border-[#F1E3E8] pb-2 pt-5">
+              <Pressable
+                onPress={handleLogout}
+                className="flex-row items-center justify-center gap-2 py-2"
+              >
+                <SymbolView
+                  name={{
+                    ios: 'rectangle.portrait.and.arrow.right',
+                    android: 'logout',
+                    web: 'logout',
+                  }}
+                  size={16}
+                  tintColor="#FF6B57"
+                />
+                <Text className="text-[16px] font-extrabold text-[#FF6B57]">
+                  Đăng xuất
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>

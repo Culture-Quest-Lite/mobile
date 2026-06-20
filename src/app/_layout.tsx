@@ -3,10 +3,13 @@ import '../global.css';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
+import { warnForInvalidPublicEnv } from '@/constants/env';
 import '@/lib/nativewind';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function RootLayout() {
+  warnForInvalidPublicEnv();
+
   const colorScheme = useColorScheme();
 
   return (
