@@ -26,9 +26,9 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+import { registerWithPassword } from "@/features/auth/api/register";
 import { AuthInput } from "@/features/auth/components/auth-input";
 import { SocialAuthButton } from "@/features/auth/components/social-auth-button";
-import { signInAsExplorer } from "@/features/auth/hooks/use-auth-session";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 
@@ -56,15 +56,25 @@ const buttonShadowStyle = {
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { entry } = useLocalSearchParams<{ entry?: string }>();
+  const params = useLocalSearchParams<{
+    displayName?: string;
+    email?: string;
+    entry?: string;
+    username?: string;
+  }>();
+  const { entry } = params;
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const logoFloat = useSharedValue(0);
-  const [fullName, setFullName] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState(params.username?.trim() ?? "");
+  const [displayName, setDisplayName] = useState(
+    params.displayName?.trim() ?? "",
+  );
+  const [email, setEmail] = useState(params.email?.trim() ?? "");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const isCompactScreen = height <= 820;
   const heroHeight = isCompactScreen ? 190 : 235;
   const heroTopPadding = insets.top + (isCompactScreen ? 14 : 20);
@@ -118,6 +128,70 @@ export default function RegisterScreen() {
       transform: [{ translateY: logoFloat.get() }],
     };
   });
+
+  const handleClearError = () => {
+    if (errorMessage) {
+      setErrorMessage(null);
+    }
+  };
+
+  const handleRegister = async () => {
+    const normalizedUsername = username.trim();
+    const normalizedDisplayName = displayName.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (
+      !normalizedUsername ||
+      !normalizedDisplayName ||
+      !normalizedEmail ||
+      !password.trim() ||
+      !confirmPassword.trim()
+    ) {
+      setErrorMessage("Vui lòng nhập đầy đủ thông tin đăng ký.");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setErrorMessage("Email không đúng định dạng.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMessage("Mật khẩu nhập lại không khớp.");
+      return;
+    }
+
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    try {
+      const registeredUser = await registerWithPassword({
+        displayName: normalizedDisplayName,
+        email: normalizedEmail,
+        password,
+        username: normalizedUsername,
+      });
+
+      router.push({
+        pathname: "./verify-otp",
+        params: {
+          displayName: registeredUser.displayName,
+          email: registeredUser.email,
+          entry: "home",
+          name: (registeredUser.displayName || registeredUser.username).trim(),
+          username: registeredUser.username,
+        },
+      });
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Không thể đăng ký. Vui lòng thử lại.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (entry !== "home") {
     return null;
@@ -203,71 +277,96 @@ export default function RegisterScreen() {
                 <View style={{ marginTop: sectionTopMargin }}>
                   <View className={formGapClassName}>
                     <AuthInput
-                      autoCapitalize="words"
-                      autoComplete="name"
+                      autoCapitalize="none"
+                      autoComplete="username"
+                      autoCorrect={false}
                       className="gap-1.5"
+                      editable={!isSubmitting}
                       inputClassName={fieldHeightClassName}
-                      label="Họ và tên"
-                      placeholder="Nhập họ và tên của bạn"
-                      textContentType="name"
-                      value={fullName}
-                      onChangeText={setFullName}
+                      label="Username"
+                      placeholder="Chọn username"
+                      textContentType="username"
+                      value={username}
+                      onChangeText={(value) => {
+                        setUsername(value);
+                        handleClearError();
+                      }}
                     />
                     <AuthInput
                       autoCapitalize="none"
-                      autoComplete="username"
+                      autoCorrect={false}
                       className="gap-1.5"
+                      editable={!isSubmitting}
                       inputClassName={fieldHeightClassName}
                       label="Tên hiển thị"
                       placeholder="Chọn tên hiển thị"
                       textContentType="nickname"
                       value={displayName}
-                      onChangeText={setDisplayName}
+                      onChangeText={(value) => {
+                        setDisplayName(value);
+                        handleClearError();
+                      }}
                     />
                     <AuthInput
                       autoCapitalize="none"
                       autoComplete="email"
                       className="gap-1.5"
+                      editable={!isSubmitting}
                       inputClassName={fieldHeightClassName}
                       keyboardType="email-address"
                       label="Email"
                       placeholder="Nhập địa chỉ email"
                       textContentType="emailAddress"
                       value={email}
-                      onChangeText={setEmail}
+                      onChangeText={(value) => {
+                        setEmail(value);
+                        handleClearError();
+                      }}
                     />
                     <AuthInput
                       autoCapitalize="none"
                       autoComplete="password"
                       className="gap-1.5"
+                      editable={!isSubmitting}
                       inputClassName={fieldHeightClassName}
                       label="Mật khẩu"
                       placeholder="Nhập mật khẩu"
                       secureTextEntry
                       textContentType="newPassword"
                       value={password}
-                      onChangeText={setPassword}
+                      onChangeText={(value) => {
+                        setPassword(value);
+                        handleClearError();
+                      }}
                     />
                     <AuthInput
                       autoCapitalize="none"
                       autoComplete="password-new"
                       className="gap-1.5"
+                      editable={!isSubmitting}
                       inputClassName={fieldHeightClassName}
                       label="Nhập lại mật khẩu"
+                      onSubmitEditing={() => {
+                        void handleRegister();
+                      }}
                       placeholder="Nhập lại mật khẩu"
+                      returnKeyType="done"
                       secureTextEntry
                       textContentType="password"
                       value={confirmPassword}
-                      onChangeText={setConfirmPassword}
+                      onChangeText={(value) => {
+                        setConfirmPassword(value);
+                        handleClearError();
+                      }}
                     />
 
                     <Pressable
+                      disabled={isSubmitting}
                       onPress={() => {
-                        signInAsExplorer(displayName || fullName);
-                        router.replace("/home");
+                        void handleRegister();
                       }}
                       className={`${buttonTopPaddingClassName} rounded-[18px]`}
-                      style={buttonShadowStyle}
+                      style={[buttonShadowStyle, isSubmitting ? { opacity: 0.78 } : null]}
                     >
                       <LinearGradient
                         colors={gradientColors}
@@ -277,10 +376,16 @@ export default function RegisterScreen() {
                         className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
                       >
                         <Text className="text-[15px] font-extrabold text-white">
-                          Tạo tài khoản
+                          {isSubmitting ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
                         </Text>
                       </LinearGradient>
                     </Pressable>
+
+                    {errorMessage ? (
+                      <Text className="text-[12px] font-medium text-[#D6456C]">
+                        {errorMessage}
+                      </Text>
+                    ) : null}
                   </View>
 
                   <View className={footerGapClassName}>
