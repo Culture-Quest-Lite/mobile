@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -27,10 +28,17 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import { resendOtp } from "@/features/auth/api/resend-otp";
 import { verifyOtp } from "@/features/auth/api/verify-otp";
+import {
+  hasAnyFieldError,
+  validateVerifyOtpForm,
+} from "@/features/auth/utils/validation";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const successGradientColors = ["#22C55E", "#16A34A", "#4ADE80"] as const;
+const disabledButtonColors = ["#E8E2EA", "#E8E2EA", "#E8E2EA"] as const;
+const resendCountdownSeconds = 60;
 
 const cardShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.22)",
@@ -58,7 +66,26 @@ function formatCountdown(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
 
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function maskEmailAddress(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    return "Email của bạn";
+  }
+
+  const [localPart, domain] = normalizedEmail.split("@");
+
+  if (!localPart || !domain) {
+    return normalizedEmail;
+  }
+
+  const visiblePrefixLength = localPart.length <= 2 ? 1 : Math.min(4, localPart.length - 1);
+  const visiblePrefix = localPart.slice(0, visiblePrefixLength);
+
+  return `${visiblePrefix}****@${domain}`;
 }
 
 const hiddenOtpInputStyle = StyleSheet.create({
@@ -86,16 +113,21 @@ export default function VerifyOtpScreen() {
   const { height } = useWindowDimensions();
   const inputRef = useRef<TextInput>(null);
   const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logoFloat = useSharedValue(0);
   const [otpCode, setOtpCode] = useState("");
+  const [didAttemptVerify, setDidAttemptVerify] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isOtpFocused, setIsOtpFocused] = useState(false);
+  const [isOtpInvalid, setIsOtpInvalid] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [resendCountdown, setResendCountdown] = useState(90);
+  const [resendCountdown, setResendCountdown] = useState(resendCountdownSeconds);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const emailValue = email?.trim() ?? "";
-  const normalizedEmail = emailValue || "Email của bạn";
+  const maskedEmail = maskEmailAddress(emailValue);
   const isCompactScreen = height <= 820;
   const heroHeight = isCompactScreen ? 236 : 296;
   const heroTopPadding = insets.top + (isCompactScreen ? 16 : 24);
@@ -107,7 +139,7 @@ export default function VerifyOtpScreen() {
     isCompactScreen ? 10 : 12,
   );
   const sectionTopMargin = isCompactScreen ? 20 : 28;
-  const titleSize = isCompactScreen ? 29 : 33;
+  const titleSize = isCompactScreen ? 27 : 31;
   const backButtonTop = insets.top + (isCompactScreen ? 10 : 12);
   const otpBoxSize = isCompactScreen ? 46 : 52;
   const otpBoxRadius = isCompactScreen ? 18 : 20;
@@ -118,8 +150,17 @@ export default function VerifyOtpScreen() {
   const otpBlockTopPadding = isCompactScreen ? 16 : 22;
   const actionGroupTopMargin = isCompactScreen ? 20 : 24;
   const contentBottomLift = isCompactScreen ? 8 : 10;
+  const verifyErrors = validateVerifyOtpForm({
+    email: emailValue,
+    otpCode,
+  });
   const isCodeComplete = otpCode.length === 6;
   const canResendCode = resendCountdown === 0;
+  const clientValidationMessage =
+    didAttemptVerify
+      ? verifyErrors.otpCode ?? verifyErrors.email ?? null
+      : null;
+  const isConfirmDisabled = isSubmitting || hasAnyFieldError(verifyErrors);
 
   useEffect(() => {
     if (entry !== "home") {
@@ -173,6 +214,10 @@ export default function VerifyOtpScreen() {
       if (redirectTimeoutRef.current) {
         clearTimeout(redirectTimeoutRef.current);
       }
+
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -182,16 +227,52 @@ export default function VerifyOtpScreen() {
     };
   });
 
-  const handleResendCode = () => {
-    if (!canResendCode || isSubmitting || successMessage) {
+  const showToast = (message: string) => {
+    setToastMessage(message);
+
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastMessage(null);
+      toastTimeoutRef.current = null;
+    }, 2600);
+  };
+
+  const handleResendCode = async () => {
+    if (!canResendCode || isResending || isSubmitting || successMessage) {
+      return;
+    }
+
+    if (verifyErrors.email) {
+      setErrorMessage(verifyErrors.email);
       return;
     }
 
     console.info("[auth] resend otp requested", {
-      email: normalizedEmail,
+      email: emailValue,
       username,
     });
-    setResendCountdown(90);
+    setErrorMessage(null);
+    setIsResending(true);
+
+    try {
+      const response = await resendOtp({
+        email: emailValue,
+      });
+
+      setResendCountdown(resendCountdownSeconds);
+      showToast(response.message ?? "Mã OTP đã được gửi thành công");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Không thể gửi lại mã OTP. Vui lòng thử lại.",
+      );
+    } finally {
+      setIsResending(false);
+    }
   };
 
   const handleFocusOtpInput = () => {
@@ -206,6 +287,7 @@ export default function VerifyOtpScreen() {
 
   const handleOtpCodeChange = (value: string) => {
     setOtpCode(value.replace(/\D/g, "").slice(0, 6));
+    setIsOtpInvalid(false);
 
     if (errorMessage) {
       setErrorMessage(null);
@@ -213,18 +295,17 @@ export default function VerifyOtpScreen() {
   };
 
   const handleVerifyOtp = async () => {
+    setDidAttemptVerify(true);
+
+    if (hasAnyFieldError(verifyErrors)) {
+      setIsOtpInvalid(Boolean(verifyErrors.otpCode));
+      setErrorMessage(verifyErrors.otpCode ?? verifyErrors.email ?? "Vui lòng kiểm tra lại mã OTP.");
+      return;
+    }
+
     const normalizedOtpCode = otpCode.trim();
 
-    if (!emailValue) {
-      setErrorMessage("Thiếu email để xác thực OTP.");
-      return;
-    }
-
-    if (normalizedOtpCode.length !== 6) {
-      setErrorMessage("Vui lòng nhập đầy đủ 6 số OTP.");
-      return;
-    }
-
+    setIsOtpInvalid(false);
     setErrorMessage(null);
     setIsSubmitting(true);
 
@@ -240,6 +321,7 @@ export default function VerifyOtpScreen() {
         router.replace("/login?entry=home");
       }, 2000);
     } catch (error) {
+      setIsOtpInvalid(true);
       setErrorMessage(
         error instanceof Error
           ? error.message
@@ -346,6 +428,34 @@ export default function VerifyOtpScreen() {
         className="flex-1"
       >
         <View className="flex-1 bg-white">
+          {toastMessage ? (
+            <View
+              pointerEvents="none"
+              className="absolute left-6 right-6 z-20 rounded-2xl bg-[#102A1B] px-4 py-3"
+              style={{
+                shadowColor: "rgba(16, 42, 27, 0.22)",
+                shadowOpacity: 1,
+                shadowRadius: 16,
+                shadowOffset: { width: 0, height: 10 },
+                elevation: 10,
+                top: insets.top + 12,
+              }}
+            >
+              <View className="flex-row items-center gap-3">
+                <View className="h-8 w-8 items-center justify-center rounded-full bg-[#1D7A46]">
+                  <SymbolView
+                    name={{ ios: "checkmark", android: "check", web: "check" }}
+                    size={16}
+                    tintColor="#FFFFFF"
+                  />
+                </View>
+                <Text className="flex-1 text-[12px] font-semibold leading-5 text-white">
+                  {toastMessage}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
           <LinearGradient
             colors={gradientColors}
             end={{ x: 1, y: 0.5 }}
@@ -412,18 +522,18 @@ export default function VerifyOtpScreen() {
                 paddingTop: cardTopPadding,
               }}
             >
-              <View className="items-center gap-2">
+              <View className="items-center gap-1.5">
                 <Text
                   className="font-extrabold text-[#EB489B]"
                   style={{ fontSize: titleSize }}
                 >
                   Xác thực OTP
                 </Text>
-                <Text className="text-center text-[15px] leading-6 text-[#8E869A]">
+                <Text className="text-center text-[12px] leading-5 text-[#8E869A]">
                   Nhập mã gồm 6 số được gửi tới
                 </Text>
-                <Text className="text-center text-[17px] font-bold text-[#322A3D]">
-                  {normalizedEmail}
+                <Text className="text-center text-[12px] font-bold text-[#322A3D]">
+                  {maskedEmail}
                 </Text>
               </View>
 
@@ -444,7 +554,6 @@ export default function VerifyOtpScreen() {
                       autoComplete="one-time-code"
                       blurOnSubmit={false}
                       caretHidden
-                      contextMenuHidden
                       editable={!isSubmitting}
                       inputMode="numeric"
                       keyboardType="number-pad"
@@ -471,20 +580,33 @@ export default function VerifyOtpScreen() {
                           (isOtpFocused && index === otpCode.length) ||
                           (isCodeComplete && index === otpCode.length - 1);
                         const isFilled = Boolean(digit);
+                        const slotShadowStyle = isActiveSlot
+                          ? {
+                              shadowColor: "rgba(235, 72, 155, 0.24)",
+                              shadowOpacity: 1,
+                              shadowRadius: 14,
+                              shadowOffset: { width: 0, height: 8 },
+                              elevation: 5,
+                            }
+                          : null;
 
                         return (
                           <View
                             key={index}
                             className="items-center justify-center border bg-[#FAF7FC]"
                             style={{
-                              borderColor: isActiveSlot
-                                ? "#EB489B"
-                                : isFilled
-                                  ? "#F7B0C9"
-                                  : "#ECE4F1",
+                              backgroundColor: isActiveSlot ? "#FFFFFF" : "#FAF7FC",
+                              borderColor: isOtpInvalid
+                                ? "#D6456C"
+                                : isActiveSlot
+                                  ? "#EB489B"
+                                  : isFilled
+                                    ? "#F7B0C9"
+                                    : "#ECE4F1",
                               borderRadius: otpBoxRadius,
                               height: otpBoxSize,
                               width: otpBoxSize,
+                              ...(slotShadowStyle ?? {}),
                             }}
                           >
                             <Text className="text-[20px] font-extrabold text-[#322A3D]">
@@ -499,36 +621,43 @@ export default function VerifyOtpScreen() {
 
                 <View className="pb-1" style={{ marginTop: actionGroupTopMargin }}>
                   <Pressable
-                    disabled={!isCodeComplete || isSubmitting}
+                    disabled={isConfirmDisabled}
                     onPress={() => {
                       void handleVerifyOtp();
                     }}
                     className="rounded-[18px]"
                     style={[
-                      buttonShadowStyle,
-                      isSubmitting ? { opacity: 0.82 } : null,
+                      isConfirmDisabled ? null : buttonShadowStyle,
+                      isSubmitting ? { opacity: 0.9 } : null,
                     ]}
                   >
                     <LinearGradient
                       colors={
-                        isCodeComplete && !isSubmitting
-                          ? gradientColors
-                          : (["#F5D6E4", "#EECFB5", "#F3E0A4"] as const)
+                        isConfirmDisabled
+                          ? disabledButtonColors
+                          : gradientColors
                       }
                       end={{ x: 1, y: 0.5 }}
                       locations={[0, 0.58, 1]}
                       start={{ x: 0, y: 0.5 }}
-                      className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
+                      className={`${buttonHeightClassName} flex-row items-center justify-center gap-2 rounded-[18px]`}
                     >
-                      <Text className="text-[15px] font-extrabold text-white">
+                      {isSubmitting ? (
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      ) : null}
+                      <Text
+                        className={`text-[15px] font-extrabold ${
+                          isConfirmDisabled ? "text-[#9F95A7]" : "text-white"
+                        }`}
+                      >
                         {isSubmitting ? "Đang xác thực..." : "Xác nhận OTP"}
                       </Text>
                     </LinearGradient>
                   </Pressable>
 
-                  {errorMessage ? (
-                    <Text className="mt-3 text-center text-[14px] font-semibold leading-6 text-[#D6456C]">
-                      {errorMessage}
+                  {errorMessage || clientValidationMessage ? (
+                    <Text className="mt-3 text-center text-[12px] font-medium leading-5 text-[#D6456C]">
+                      {errorMessage ?? clientValidationMessage}
                     </Text>
                   ) : null}
 
@@ -536,25 +665,33 @@ export default function VerifyOtpScreen() {
                     className="items-center gap-2"
                     style={{ marginTop: helperTopMargin }}
                   >
-                    <View className="flex-row items-center justify-center gap-1.5">
-                      <Text className="text-[15px] text-[#8E869A]">
-                        Chưa nhận được?
-                      </Text>
-                      <Pressable
-                        disabled={!canResendCode}
-                        onPress={handleResendCode}
-                      >
-                        <Text
-                          className={`text-[15px] font-extrabold ${
-                            canResendCode ? "text-[#EB489B]" : "text-[#C6B6C6]"
-                          }`}
-                        >
-                          {canResendCode
-                            ? "Gửi lại mã"
-                            : `Gửi lại mã sau ${formatCountdown(resendCountdown)}`}
+                    {canResendCode ? (
+                      <View className="flex-row items-center justify-center gap-1.5">
+                        <Text className="text-[12px] text-[#8E869A]">
+                          Không nhận được mã?
                         </Text>
-                      </Pressable>
-                    </View>
+                        <Pressable
+                          disabled={isResending || isSubmitting}
+                          onPress={() => {
+                            void handleResendCode();
+                          }}
+                        >
+                          <Text
+                            className={`text-[12px] font-extrabold ${
+                              isResending || isSubmitting
+                                ? "text-[#C6B6C6]"
+                                : "text-[#EB489B]"
+                            }`}
+                          >
+                            {isResending ? "Đang gửi lại..." : "Gửi lại mã"}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Text className="text-[12px] font-medium text-[#8E869A]">
+                        {`Gửi lại mã sau ${formatCountdown(resendCountdown)}`}
+                      </Text>
+                    )}
 
                     <Pressable
                       onPress={() =>
@@ -569,7 +706,7 @@ export default function VerifyOtpScreen() {
                         })
                       }
                     >
-                      <Text className="text-[15px] font-extrabold text-[#F58752]">
+                      <Text className="text-[12px] font-extrabold text-[#F58752]">
                         Quay lại đăng ký
                       </Text>
                     </Pressable>

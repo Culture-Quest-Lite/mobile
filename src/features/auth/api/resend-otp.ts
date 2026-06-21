@@ -2,29 +2,24 @@ import { Platform } from "react-native";
 
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 
-export type VerifyOtpRequest = {
+export type ResendOtpRequest = {
   email: string;
-  otpCode: string;
 };
 
-export type VerifyOtpResponse = {
-  message: string;
+export type ResendOtpResponse = {
+  message: string | null;
 };
 
-function resolveVerifyOtpUrl() {
+function resolveResendOtpUrl() {
   if (PublicEnv.apiBaseUrl.trim()) {
-    return buildApiUrl("/api/auth/verify-otp");
+    return buildApiUrl("/api/auth/resend-otp");
   }
 
-  return "http://13.158.40.56:8080/api/auth/verify-otp";
+  return "http://13.158.40.56:8080/api/auth/resend-otp";
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function isVerifyOtpResponse(value: unknown): value is VerifyOtpResponse {
-  return isObject(value) && typeof value.message === "string";
 }
 
 function serializeError(error: unknown) {
@@ -68,10 +63,6 @@ async function parseResponseBody(response: Response) {
 }
 
 function getErrorMessage(body: unknown, status: number) {
-  if (status === 400) {
-    return "Mã OTP không chính xác. Vui lòng thử lại.";
-  }
-
   if (isObject(body)) {
     for (const key of ["message", "error", "detail", "title"]) {
       const candidate = body[key];
@@ -86,36 +77,49 @@ function getErrorMessage(body: unknown, status: number) {
     return body.trim();
   }
 
-  return `Xác thực OTP thất bại (${status}).`;
+  if (status === 400) {
+    return "Không thể gửi lại mã OTP.";
+  }
+
+  return `Gửi lại mã OTP thất bại (${status}).`;
 }
 
-function getConnectionErrorMessage(verifyOtpUrl: string) {
-  if (Platform.OS === "android" && verifyOtpUrl.startsWith("http://")) {
+function getConnectionErrorMessage(resendOtpUrl: string) {
+  if (Platform.OS === "android" && resendOtpUrl.startsWith("http://")) {
     return "Android đang chặn kết nối HTTP tới API. Hãy dùng HTTPS hoặc rebuild Android dev client sau khi bật cleartext traffic.";
   }
 
-  return "Không thể kết nối đến máy chủ xác thực OTP.";
+  return "Không thể kết nối đến máy chủ gửi lại OTP.";
 }
 
-export async function verifyOtp({
+function getSuccessMessage(body: unknown) {
+  if (isObject(body) && typeof body.message === "string" && body.message.trim()) {
+    return body.message.trim();
+  }
+
+  if (typeof body === "string" && body.trim()) {
+    return body.trim();
+  }
+
+  return null;
+}
+
+export async function resendOtp({
   email,
-  otpCode,
-}: VerifyOtpRequest): Promise<VerifyOtpResponse> {
-  const verifyOtpUrl = resolveVerifyOtpUrl();
+}: ResendOtpRequest): Promise<ResendOtpResponse> {
+  const resendOtpUrl = resolveResendOtpUrl();
   let response: Response;
 
-  console.info("[auth] verify otp request started", {
+  console.info("[auth] resend otp request started", {
     email,
-    otpLength: otpCode.length,
     platform: Platform.OS,
-    url: verifyOtpUrl,
+    url: resendOtpUrl,
   });
 
   try {
-    response = await fetch(verifyOtpUrl, {
+    response = await fetch(resendOtpUrl, {
       body: JSON.stringify({
         email,
-        otpCode,
       }),
       headers: {
         Accept: "application/json",
@@ -124,43 +128,39 @@ export async function verifyOtp({
       method: "POST",
     });
   } catch (error) {
-    console.warn("[auth] verify otp network failure", {
+    console.warn("[auth] resend otp network failure", {
       error: serializeError(error),
       platform: Platform.OS,
-      url: verifyOtpUrl,
+      url: resendOtpUrl,
     });
-    throw new Error(getConnectionErrorMessage(verifyOtpUrl));
+    throw new Error(getConnectionErrorMessage(resendOtpUrl));
   }
 
   const responseBody = await parseResponseBody(response);
 
-  console.info("[auth] verify otp response received", {
+  console.info("[auth] resend otp response received", {
     ok: response.ok,
     status: response.status,
-    url: verifyOtpUrl,
+    url: resendOtpUrl,
   });
 
   if (!response.ok) {
-    console.warn("[auth] verify otp rejected", {
+    console.warn("[auth] resend otp rejected", {
       body: summarizeBody(responseBody),
       status: response.status,
-      url: verifyOtpUrl,
+      url: resendOtpUrl,
     });
     throw new Error(getErrorMessage(responseBody, response.status));
   }
 
-  if (!isVerifyOtpResponse(responseBody)) {
-    console.warn("[auth] verify otp invalid payload", {
-      body: summarizeBody(responseBody),
-      url: verifyOtpUrl,
-    });
-    throw new Error("API xác thực OTP trả về dữ liệu không đúng định dạng.");
-  }
+  const message = getSuccessMessage(responseBody);
 
-  console.info("[auth] verify otp succeeded", {
-    message: responseBody.message,
-    url: verifyOtpUrl,
+  console.info("[auth] resend otp succeeded", {
+    message,
+    url: resendOtpUrl,
   });
 
-  return responseBody;
+  return {
+    message,
+  };
 }

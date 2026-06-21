@@ -2,29 +2,24 @@ import { Platform } from "react-native";
 
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 
-export type VerifyOtpRequest = {
+export type ForgotPasswordRequest = {
   email: string;
-  otpCode: string;
 };
 
-export type VerifyOtpResponse = {
-  message: string;
+export type ForgotPasswordResponse = {
+  message: string | null;
 };
 
-function resolveVerifyOtpUrl() {
+function resolveForgotPasswordUrl() {
   if (PublicEnv.apiBaseUrl.trim()) {
-    return buildApiUrl("/api/auth/verify-otp");
+    return buildApiUrl("/api/auth/forgot-password");
   }
 
-  return "http://13.158.40.56:8080/api/auth/verify-otp";
+  return "http://13.158.40.56:8080/api/auth/forgot-password";
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function isVerifyOtpResponse(value: unknown): value is VerifyOtpResponse {
-  return isObject(value) && typeof value.message === "string";
 }
 
 function serializeError(error: unknown) {
@@ -68,8 +63,8 @@ async function parseResponseBody(response: Response) {
 }
 
 function getErrorMessage(body: unknown, status: number) {
-  if (status === 400) {
-    return "Mã OTP không chính xác. Vui lòng thử lại.";
+  if (status === 500) {
+    return "Máy chủ khôi phục mật khẩu đang gặp lỗi. Vui lòng thử lại sau.";
   }
 
   if (isObject(body)) {
@@ -86,36 +81,53 @@ function getErrorMessage(body: unknown, status: number) {
     return body.trim();
   }
 
-  return `Xác thực OTP thất bại (${status}).`;
+  if (status === 404) {
+    return "Email không tồn tại trong hệ thống.";
+  }
+
+  if (status === 400) {
+    return "Không thể gửi email khôi phục.";
+  }
+
+  return `Gửi email khôi phục thất bại (${status}).`;
 }
 
-function getConnectionErrorMessage(verifyOtpUrl: string) {
-  if (Platform.OS === "android" && verifyOtpUrl.startsWith("http://")) {
+function getConnectionErrorMessage(forgotPasswordUrl: string) {
+  if (Platform.OS === "android" && forgotPasswordUrl.startsWith("http://")) {
     return "Android đang chặn kết nối HTTP tới API. Hãy dùng HTTPS hoặc rebuild Android dev client sau khi bật cleartext traffic.";
   }
 
-  return "Không thể kết nối đến máy chủ xác thực OTP.";
+  return "Không thể kết nối đến máy chủ khôi phục mật khẩu.";
 }
 
-export async function verifyOtp({
+function getSuccessMessage(body: unknown) {
+  if (isObject(body) && typeof body.message === "string" && body.message.trim()) {
+    return body.message.trim();
+  }
+
+  if (typeof body === "string" && body.trim()) {
+    return body.trim();
+  }
+
+  return null;
+}
+
+export async function forgotPassword({
   email,
-  otpCode,
-}: VerifyOtpRequest): Promise<VerifyOtpResponse> {
-  const verifyOtpUrl = resolveVerifyOtpUrl();
+}: ForgotPasswordRequest): Promise<ForgotPasswordResponse> {
+  const forgotPasswordUrl = resolveForgotPasswordUrl();
   let response: Response;
 
-  console.info("[auth] verify otp request started", {
+  console.info("[auth] forgot password request started", {
     email,
-    otpLength: otpCode.length,
     platform: Platform.OS,
-    url: verifyOtpUrl,
+    url: forgotPasswordUrl,
   });
 
   try {
-    response = await fetch(verifyOtpUrl, {
+    response = await fetch(forgotPasswordUrl, {
       body: JSON.stringify({
         email,
-        otpCode,
       }),
       headers: {
         Accept: "application/json",
@@ -124,43 +136,39 @@ export async function verifyOtp({
       method: "POST",
     });
   } catch (error) {
-    console.warn("[auth] verify otp network failure", {
+    console.warn("[auth] forgot password network failure", {
       error: serializeError(error),
       platform: Platform.OS,
-      url: verifyOtpUrl,
+      url: forgotPasswordUrl,
     });
-    throw new Error(getConnectionErrorMessage(verifyOtpUrl));
+    throw new Error(getConnectionErrorMessage(forgotPasswordUrl));
   }
 
   const responseBody = await parseResponseBody(response);
 
-  console.info("[auth] verify otp response received", {
+  console.info("[auth] forgot password response received", {
     ok: response.ok,
     status: response.status,
-    url: verifyOtpUrl,
+    url: forgotPasswordUrl,
   });
 
   if (!response.ok) {
-    console.warn("[auth] verify otp rejected", {
+    console.info("[auth] forgot password rejected", {
       body: summarizeBody(responseBody),
       status: response.status,
-      url: verifyOtpUrl,
+      url: forgotPasswordUrl,
     });
     throw new Error(getErrorMessage(responseBody, response.status));
   }
 
-  if (!isVerifyOtpResponse(responseBody)) {
-    console.warn("[auth] verify otp invalid payload", {
-      body: summarizeBody(responseBody),
-      url: verifyOtpUrl,
-    });
-    throw new Error("API xác thực OTP trả về dữ liệu không đúng định dạng.");
-  }
+  const message = getSuccessMessage(responseBody);
 
-  console.info("[auth] verify otp succeeded", {
-    message: responseBody.message,
-    url: verifyOtpUrl,
+  console.info("[auth] forgot password succeeded", {
+    message,
+    url: forgotPasswordUrl,
   });
 
-  return responseBody;
+  return {
+    message,
+  };
 }
