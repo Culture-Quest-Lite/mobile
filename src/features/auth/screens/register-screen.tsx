@@ -29,6 +29,10 @@ import Animated, {
 import { registerWithPassword } from "@/features/auth/api/register";
 import { AuthInput } from "@/features/auth/components/auth-input";
 import { SocialAuthButton } from "@/features/auth/components/social-auth-button";
+import {
+  hasAnyFieldError,
+  validateRegisterForm,
+} from "@/features/auth/utils/validation";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 
@@ -73,8 +77,16 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState(params.email?.trim() ?? "");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [didAttemptSubmit, setDidAttemptSubmit] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [touchedFields, setTouchedFields] = useState({
+    confirmPassword: false,
+    displayName: false,
+    email: false,
+    password: false,
+    username: false,
+  });
   const isCompactScreen = height <= 820;
   const heroHeight = isCompactScreen ? 190 : 235;
   const heroTopPadding = insets.top + (isCompactScreen ? 14 : 20);
@@ -95,6 +107,28 @@ export default function RegisterScreen() {
   const footerGapClassName = isCompactScreen ? "gap-3 pt-4" : "gap-4 pt-5";
   const buttonTopPaddingClassName = isCompactScreen ? "pt-0" : "pt-1";
   const backButtonTop = insets.top + (isCompactScreen ? 10 : 12);
+  const registerErrors = validateRegisterForm({
+    confirmPassword,
+    displayName,
+    email,
+    password,
+    username,
+  });
+  const usernameError =
+    touchedFields.username || didAttemptSubmit ? registerErrors.username ?? null : null;
+  const displayNameError =
+    touchedFields.displayName || didAttemptSubmit
+      ? registerErrors.displayName ?? null
+      : null;
+  const emailError =
+    touchedFields.email || didAttemptSubmit ? registerErrors.email ?? null : null;
+  const passwordError =
+    touchedFields.password || didAttemptSubmit ? registerErrors.password ?? null : null;
+  const confirmPasswordError =
+    touchedFields.confirmPassword || didAttemptSubmit
+      ? registerErrors.confirmPassword ?? null
+      : null;
+  const isSubmitDisabled = isSubmitting || hasAnyFieldError(registerErrors);
 
   useEffect(() => {
     if (entry !== "home") {
@@ -136,30 +170,18 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
+    setDidAttemptSubmit(true);
+
+    if (hasAnyFieldError(registerErrors)) {
+      console.warn("[auth] register blocked by client validation", {
+        errors: registerErrors,
+      });
+      return;
+    }
+
     const normalizedUsername = username.trim();
     const normalizedDisplayName = displayName.trim();
     const normalizedEmail = email.trim().toLowerCase();
-
-    if (
-      !normalizedUsername ||
-      !normalizedDisplayName ||
-      !normalizedEmail ||
-      !password.trim() ||
-      !confirmPassword.trim()
-    ) {
-      setErrorMessage("Vui lòng nhập đầy đủ thông tin đăng ký.");
-      return;
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      setErrorMessage("Email không đúng định dạng.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setErrorMessage("Mật khẩu nhập lại không khớp.");
-      return;
-    }
 
     setErrorMessage(null);
     setIsSubmitting(true);
@@ -191,6 +213,21 @@ export default function RegisterScreen() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const markFieldTouched = (
+    field: "confirmPassword" | "displayName" | "email" | "password" | "username",
+  ) => {
+    setTouchedFields((currentValue) => {
+      if (currentValue[field]) {
+        return currentValue;
+      }
+
+      return {
+        ...currentValue,
+        [field]: true,
+      };
+    });
   };
 
   if (entry !== "home") {
@@ -282,11 +319,13 @@ export default function RegisterScreen() {
                       autoCorrect={false}
                       className="gap-1.5"
                       editable={!isSubmitting}
+                      errorMessage={usernameError}
                       inputClassName={fieldHeightClassName}
                       label="Username"
                       placeholder="Chọn username"
                       textContentType="username"
                       value={username}
+                      onBlur={() => markFieldTouched("username")}
                       onChangeText={(value) => {
                         setUsername(value);
                         handleClearError();
@@ -297,11 +336,13 @@ export default function RegisterScreen() {
                       autoCorrect={false}
                       className="gap-1.5"
                       editable={!isSubmitting}
+                      errorMessage={displayNameError}
                       inputClassName={fieldHeightClassName}
                       label="Tên hiển thị"
                       placeholder="Chọn tên hiển thị"
                       textContentType="nickname"
                       value={displayName}
+                      onBlur={() => markFieldTouched("displayName")}
                       onChangeText={(value) => {
                         setDisplayName(value);
                         handleClearError();
@@ -312,12 +353,14 @@ export default function RegisterScreen() {
                       autoComplete="email"
                       className="gap-1.5"
                       editable={!isSubmitting}
+                      errorMessage={emailError}
                       inputClassName={fieldHeightClassName}
                       keyboardType="email-address"
                       label="Email"
                       placeholder="Nhập địa chỉ email"
                       textContentType="emailAddress"
                       value={email}
+                      onBlur={() => markFieldTouched("email")}
                       onChangeText={(value) => {
                         setEmail(value);
                         handleClearError();
@@ -328,12 +371,14 @@ export default function RegisterScreen() {
                       autoComplete="password"
                       className="gap-1.5"
                       editable={!isSubmitting}
+                      errorMessage={passwordError}
                       inputClassName={fieldHeightClassName}
                       label="Mật khẩu"
                       placeholder="Nhập mật khẩu"
                       secureTextEntry
                       textContentType="newPassword"
                       value={password}
+                      onBlur={() => markFieldTouched("password")}
                       onChangeText={(value) => {
                         setPassword(value);
                         handleClearError();
@@ -344,6 +389,7 @@ export default function RegisterScreen() {
                       autoComplete="password-new"
                       className="gap-1.5"
                       editable={!isSubmitting}
+                      errorMessage={confirmPasswordError}
                       inputClassName={fieldHeightClassName}
                       label="Nhập lại mật khẩu"
                       onSubmitEditing={() => {
@@ -354,6 +400,7 @@ export default function RegisterScreen() {
                       secureTextEntry
                       textContentType="password"
                       value={confirmPassword}
+                      onBlur={() => markFieldTouched("confirmPassword")}
                       onChangeText={(value) => {
                         setConfirmPassword(value);
                         handleClearError();
@@ -361,12 +408,15 @@ export default function RegisterScreen() {
                     />
 
                     <Pressable
-                      disabled={isSubmitting}
+                      disabled={isSubmitDisabled}
                       onPress={() => {
                         void handleRegister();
                       }}
                       className={`${buttonTopPaddingClassName} rounded-[18px]`}
-                      style={[buttonShadowStyle, isSubmitting ? { opacity: 0.78 } : null]}
+                      style={[
+                        isSubmitDisabled ? null : buttonShadowStyle,
+                        isSubmitDisabled ? { opacity: 0.72 } : null,
+                      ]}
                     >
                       <LinearGradient
                         colors={gradientColors}

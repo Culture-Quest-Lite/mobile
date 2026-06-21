@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import { loginWithPassword } from "@/features/auth/api/login";
+import { refreshAccessToken } from "@/features/auth/api/refresh-token";
 
 export type AuthRole = "guest" | "explorer";
 
@@ -30,8 +31,11 @@ const guestSession: AuthSession = {
   username: null,
 };
 
+const ACCESS_TOKEN_REFRESH_BUFFER_MS = 30 * 1000;
+
 let authSession = guestSession;
 const listeners = new Set<() => void>();
+let refreshSessionPromise: Promise<AuthSession> | null = null;
 
 function emitChange() {
   listeners.forEach((listener) => {
@@ -97,6 +101,61 @@ function createExplorerSession({
   };
 }
 
+function hasExpired(timestamp: number | null, bufferMs = 0) {
+  return timestamp !== null && Date.now() >= timestamp - bufferMs;
+}
+
+function getRefreshSessionErrorMessage() {
+  return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
+}
+
+async function refreshAuthSessionInternal() {
+  const currentSession = authSession;
+
+  if (!currentSession.isAuthenticated || !currentSession.refreshToken) {
+    throw new Error(getRefreshSessionErrorMessage());
+  }
+
+  if (hasExpired(currentSession.refreshExpiresAt)) {
+    resetAuthSessionToGuest();
+    throw new Error(getRefreshSessionErrorMessage());
+  }
+
+  try {
+    const response = await refreshAccessToken({
+      refreshToken: currentSession.refreshToken,
+    });
+    const now = Date.now();
+    const refreshedSession = createExplorerSession({
+      accessToken: response.accessToken,
+      expiresAt: now + response.expiresIn * 1000,
+      name: currentSession.username ?? currentSession.displayName,
+      refreshExpiresAt: now + response.refreshExpiresIn * 1000,
+      refreshToken: response.refreshToken,
+      tokenType: response.tokenType,
+    });
+
+    if (
+      authSession.refreshToken !== currentSession.refreshToken ||
+      authSession.username !== currentSession.username
+    ) {
+      return authSession;
+    }
+
+    setAuthSession(refreshedSession);
+    return refreshedSession;
+  } catch (error) {
+    if (
+      authSession.refreshToken === currentSession.refreshToken &&
+      authSession.username === currentSession.username
+    ) {
+      resetAuthSessionToGuest();
+    }
+
+    throw error;
+  }
+}
+
 export function useAuthSession() {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
@@ -131,8 +190,48 @@ export function signInAsExplorer(name?: string) {
   );
 }
 
+export async function refreshAuthSession() {
+  if (!refreshSessionPromise) {
+    refreshSessionPromise = refreshAuthSessionInternal()
+      .catch((error) => {
+        console.warn("[auth] refresh session failed", {
+          error:
+            error instanceof Error
+              ? { message: error.message, name: error.name, stack: error.stack }
+              : error,
+        });
+        throw error;
+      })
+      .finally(() => {
+        refreshSessionPromise = null;
+      });
+  }
+
+  return refreshSessionPromise;
+}
+
 export function getAccessToken() {
   return authSession.accessToken;
+}
+
+export async function getValidAccessToken() {
+  if (!authSession.isAuthenticated) {
+    return null;
+  }
+
+  if (
+    authSession.accessToken &&
+    !hasExpired(authSession.expiresAt, ACCESS_TOKEN_REFRESH_BUFFER_MS)
+  ) {
+    return authSession.accessToken;
+  }
+
+  if (!authSession.refreshToken) {
+    return hasExpired(authSession.expiresAt) ? null : authSession.accessToken;
+  }
+
+  const refreshedSession = await refreshAuthSession();
+  return refreshedSession.accessToken;
 }
 
 export function resetAuthSessionToGuest() {
