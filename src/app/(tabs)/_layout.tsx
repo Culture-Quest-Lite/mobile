@@ -1,8 +1,10 @@
-import { Tabs } from "expo-router";
+import { Tabs, usePathname } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { type ComponentProps } from "react";
 import { type ColorValue, Image, Platform, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { useAuthSession } from "@/features/auth/hooks/use-auth-session";
 
 const HOME_LOGO = require("../../../assets/images/logo3.png");
 const TAB_ACTIVE_COLOR = "#EC4899";
@@ -160,10 +162,14 @@ function renderTabLabel(
 }
 
 export default function TabsLayout() {
+  const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const bottomInset = Platform.OS === "ios" ? insets.bottom : 0;
   const tabBarBottomPadding = Platform.OS === "ios" ? bottomInset + 23 : 23;
   const tabBarHeight = Platform.OS === "ios" ? 54 + tabBarBottomPadding : 77;
+  const shouldHideTabBarForGuestProfile =
+    !authSession.isAuthenticated && pathname === "/profile";
 
   return (
     <Tabs
@@ -195,23 +201,27 @@ export default function TabsLayout() {
             ? ({ color, focused }) => renderTabLabel(tab.label, focused, color)
             : undefined,
           tabBarLabelPosition: "below-icon",
-          tabBarStyle: {
-            backgroundColor: "#FFFFFF",
-            borderTopColor: "#E8EDF4",
-            borderTopWidth: 1,
-            elevation: 0,
-            height: tabBarHeight,
-            paddingBottom: tabBarBottomPadding,
-            paddingHorizontal: 6,
-            paddingTop: 6,
-            shadowColor: "#1F2A37",
-            shadowOffset: {
-              width: 0,
-              height: -4,
-            },
-            shadowOpacity: 0.04,
-            shadowRadius: 10,
-          },
+          tabBarStyle: shouldHideTabBarForGuestProfile
+            ? {
+                display: "none",
+              }
+            : {
+                backgroundColor: "#FFFFFF",
+                borderTopColor: "#E8EDF4",
+                borderTopWidth: 1,
+                elevation: 0,
+                height: tabBarHeight,
+                paddingBottom: tabBarBottomPadding,
+                paddingHorizontal: 6,
+                paddingTop: 6,
+                shadowColor: "#1F2A37",
+                shadowOffset: {
+                  width: 0,
+                  height: -4,
+                },
+                shadowOpacity: 0.04,
+                shadowRadius: 10,
+              },
         };
       }}
     >

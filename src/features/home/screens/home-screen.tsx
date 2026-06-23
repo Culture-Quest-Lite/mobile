@@ -24,9 +24,14 @@ import Animated, {
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useAuthSession } from "@/features/auth/hooks/use-auth-session";
-
 import {
+  getValidAccessToken,
+  useAuthSession,
+} from "@/features/auth/hooks/use-auth-session";
+
+import { getActiveTagNames } from "../api/get-tags";
+import {
+  type NearbyCategoryCard,
   type CommunityBoardTab,
   type RouteDifficulty,
   activeJourney,
@@ -43,6 +48,121 @@ import { getHotspotHref } from "../data/hotspots";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const guestPreviewLogo = require("../../../../assets/images/logo3.png");
+
+const themeCategoryPresets: Record<
+  string,
+  Omit<NearbyCategoryCard, "label">
+> = {
+  am_thuc: {
+    accent: "#C96A00",
+    background: "#FFE7CC",
+    icon: { ios: "fork.knife", android: "restaurant", web: "restaurant" },
+  },
+  check_in: {
+    accent: "#2563EB",
+    background: "#DCEBFF",
+    icon: { ios: "camera.fill", android: "photo_camera", web: "photo_camera" },
+  },
+  di_san: {
+    accent: "#7C3AED",
+    background: "#EEE4FF",
+    icon: {
+      ios: "building.columns.fill",
+      android: "account_balance",
+      web: "account_balance",
+    },
+  },
+  giao_duc: {
+    accent: "#2563EB",
+    background: "#DCEBFF",
+    icon: { ios: "book.closed.fill", android: "menu_book", web: "menu_book" },
+  },
+  kien_truc: {
+    accent: "#B83280",
+    background: "#FFD7EA",
+    icon: { ios: "building.2.fill", android: "architecture", web: "architecture" },
+  },
+  lich_su: {
+    accent: "#D95C22",
+    background: "#FFE4D3",
+    icon: { ios: "clock.arrow.circlepath", android: "history", web: "history" },
+  },
+  nghe_thuat: {
+    accent: "#0D8C7D",
+    background: "#D9F7F1",
+    icon: { ios: "paintpalette.fill", android: "palette", web: "palette" },
+  },
+  thien_nhien: {
+    accent: "#2F855A",
+    background: "#DCFCE7",
+    icon: { ios: "leaf.fill", android: "park", web: "park" },
+  },
+  van_hoa: {
+    accent: "#B45309",
+    background: "#FFF1D6",
+    icon: { ios: "theatermasks.fill", android: "theater_comedy", web: "theater_comedy" },
+  },
+};
+
+function normalizeTagName(tagName: string) {
+  return tagName
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function resolveThemeCategoryPreset(
+  tagName: string,
+  index: number,
+): Omit<NearbyCategoryCard, "label"> {
+  const normalizedTagName = normalizeTagName(tagName);
+
+  if (normalizedTagName.includes("di san")) {
+    return themeCategoryPresets.di_san;
+  }
+
+  if (normalizedTagName.includes("van hoa")) {
+    return themeCategoryPresets.van_hoa;
+  }
+
+  if (normalizedTagName.includes("lich su")) {
+    return themeCategoryPresets.lich_su;
+  }
+
+  if (normalizedTagName.includes("kien truc")) {
+    return themeCategoryPresets.kien_truc;
+  }
+
+  if (normalizedTagName.includes("thien nhien")) {
+    return themeCategoryPresets.thien_nhien;
+  }
+
+  if (normalizedTagName.includes("nghe thuat")) {
+    return themeCategoryPresets.nghe_thuat;
+  }
+
+  if (normalizedTagName.includes("am thuc")) {
+    return themeCategoryPresets.am_thuc;
+  }
+
+  if (normalizedTagName.includes("giao duc")) {
+    return themeCategoryPresets.giao_duc;
+  }
+
+  if (normalizedTagName.includes("check in")) {
+    return themeCategoryPresets.check_in;
+  }
+
+  return nearbyCategories[index % nearbyCategories.length];
+}
+
+function mapTagNamesToNearbyCategories(tagNames: string[]) {
+  return tagNames.map((tagName, index) => ({
+    ...resolveThemeCategoryPreset(tagName, index),
+    label: tagName,
+  }));
+}
 
 const heroShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.26)",
@@ -671,6 +791,7 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const activeRouteIndexRef = useRef(0);
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
+  const [themeCategories, setThemeCategories] = useState(() => nearbyCategories);
   const [activeCommunityTab, setActiveCommunityTab] =
     useState<CommunityBoardTab>("community");
   const isGuest = authSession.role === "guest";
@@ -717,6 +838,46 @@ export default function HomeScreen() {
       clearInterval(intervalId);
     };
   }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadThemeCategories() {
+      if (!authSession.isAuthenticated) {
+        setThemeCategories(nearbyCategories);
+        return;
+      }
+
+      try {
+        const accessToken = await getValidAccessToken();
+
+        if (!isActive || !accessToken) {
+          return;
+        }
+
+        const tagNames = await getActiveTagNames({
+          accessToken,
+          tokenType: authSession.tokenType,
+        });
+
+        if (!isActive || tagNames.length === 0) {
+          return;
+        }
+
+        setThemeCategories(mapTagNamesToNearbyCategories(tagNames));
+      } catch (error) {
+        console.warn("[home] load theme categories failed", {
+          error: error instanceof Error ? error.message : error,
+        });
+      }
+    }
+
+    void loadThemeCategories();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.isAuthenticated, authSession.tokenType]);
 
   return (
     <SafeAreaView
@@ -1193,11 +1354,11 @@ export default function HomeScreen() {
               contentContainerStyle={{ paddingRight: 12 }}
               showsHorizontalScrollIndicator={false}
             >
-              {nearbyCategories.map((item, index) => (
+              {themeCategories.map((item, index) => (
                 <Pressable
-                  key={item.label}
+                  key={`${item.label}-${index}`}
                   className={
-                    index === nearbyCategories.length - 1 ? "" : "mr-3.5"
+                    index === themeCategories.length - 1 ? "" : "mr-3.5"
                   }
                 >
                   <View
