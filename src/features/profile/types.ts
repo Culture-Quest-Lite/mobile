@@ -13,6 +13,7 @@ export type Profile = {
   cover: string | null;
   followers: number;
   following: number;
+  totalPosts: number;
   routeIds: string[];
   savedHotspotSlugs: string[];
   role: string | null;

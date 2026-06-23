@@ -18,6 +18,7 @@ type GetMeResponse = {
   email: string;
   displayName: string;
   avatarUrl: string | null;
+  backgroundUrl: string | null;
   totalXp: number;
   totalPoints: number;
   autoPlayAudio: boolean;
@@ -26,6 +27,9 @@ type GetMeResponse = {
   levelName: string | null;
   role: string;
   createdAt: string;
+  totalFollowers: number;
+  totalFollowing: number;
+  totalPosts: number;
 };
 
 function resolveUpdateMeUrl() {
@@ -55,6 +59,7 @@ function isGetMeResponse(value: unknown): value is GetMeResponse {
     typeof value.email === "string" &&
     typeof value.displayName === "string" &&
     isNullableString(value.avatarUrl) &&
+    isNullableString(value.backgroundUrl) &&
     typeof value.totalXp === "number" &&
     typeof value.totalPoints === "number" &&
     typeof value.autoPlayAudio === "boolean" &&
@@ -62,7 +67,10 @@ function isGetMeResponse(value: unknown): value is GetMeResponse {
     typeof value.status === "string" &&
     isNullableString(value.levelName) &&
     typeof value.role === "string" &&
-    typeof value.createdAt === "string"
+    typeof value.createdAt === "string" &&
+    typeof value.totalFollowers === "number" &&
+    typeof value.totalFollowing === "number" &&
+    typeof value.totalPosts === "number"
   );
 }
 
@@ -154,12 +162,12 @@ function mapGetMeResponseToProfile(response: GetMeResponse): Profile {
   return {
     autoPlayAudio: response.autoPlayAudio,
     avatar: response.avatarUrl,
-    cover: null,
+    cover: response.backgroundUrl,
     createdAt: response.createdAt,
     currentLevelXp: null,
     email: response.email,
-    followers: 0,
-    following: 0,
+    followers: response.totalFollowers,
+    following: response.totalFollowing,
     id: response.userId.toString(),
     isPremium: response.isPremium,
     level: extractLevel(response.levelName),
@@ -171,6 +179,7 @@ function mapGetMeResponseToProfile(response: GetMeResponse): Profile {
     savedHotspotSlugs: [],
     status: response.status,
     totalXp: response.totalXp,
+    totalPosts: response.totalPosts,
     username: normalizedUsername,
     xpToNext: null,
   };

@@ -251,18 +251,13 @@ export default function ProfileScreen() {
   const remainingXp = canShowLevelProgress
     ? Math.max(xpToNext - currentLevelXp, 0)
     : 0;
-  const showAudienceStats = profile.followers > 0 || profile.following > 0;
-  const statItems = showAudienceStats
-    ? [
-        { label: "Người theo dõi", value: profile.followers },
-        { label: "Đang theo dõi", value: profile.following },
-        { label: "Bài viết", value: posts.length },
-      ]
-    : [
-        { label: "Tổng điểm", value: profile.points },
-        { label: "Tổng XP", value: profile.totalXp },
-        { label: "Bài viết", value: posts.length },
-      ];
+  const postCount =
+    typeof profile.totalPosts === "number" ? profile.totalPosts : posts.length;
+  const statItems = [
+    { label: "Người theo dõi", value: profile.followers },
+    { label: "Đang theo dõi", value: profile.following },
+    { label: "Bài viết", value: postCount },
+  ];
   const badgeLabel =
     levelNumber !== null
       ? levelNumber.toString()
@@ -495,8 +490,7 @@ function GuestProfileScreen({
   screenWidth: number;
 }) {
   const cardInnerWidth = Math.max(screenWidth - 80, 220);
-  const heroArtWidth = Math.min(Math.max(cardInnerWidth * 0.44, 128), 156);
-  const heroTextWidth = Math.min(Math.max(cardInnerWidth * 0.6, 164), 188);
+  const heroArtWidth = Math.min(Math.max(cardInnerWidth * 0.38, 116), 142);
 
   return (
     <SafeAreaView
@@ -574,8 +568,8 @@ function GuestProfileScreen({
 
         <View className="px-5 pt-5">
           <View
-            className="overflow-hidden rounded-[30px]"
-            style={guestHeroShadow}
+            className="relative rounded-[30px]"
+            style={[guestHeroShadow, { marginBottom: 22, overflow: "visible" }]}
           >
             <LinearGradient
               colors={guestHeroGradientColors}
@@ -583,9 +577,11 @@ function GuestProfileScreen({
               end={{ x: 1, y: 0.9 }}
               locations={[0, 0.56, 1]}
               style={{
-                minHeight: 228,
-                paddingHorizontal: 20,
-                paddingVertical: 20,
+                borderRadius: 30,
+                minHeight: 198,
+                overflow: "hidden",
+                paddingHorizontal: 18,
+                paddingVertical: 18,
               }}
             >
               <View
@@ -593,8 +589,8 @@ function GuestProfileScreen({
                   position: "absolute",
                   top: -48,
                   right: 34,
-                  width: 176,
-                  height: 176,
+                  width: 156,
+                  height: 156,
                   borderRadius: 999,
                   backgroundColor: "rgba(255,255,255,0.10)",
                 }}
@@ -603,9 +599,9 @@ function GuestProfileScreen({
                 style={{
                   position: "absolute",
                   left: -92,
-                  bottom: -118,
-                  width: 236,
-                  height: 236,
+                  bottom: -126,
+                  width: 214,
+                  height: 214,
                   borderRadius: 999,
                   backgroundColor: "rgba(255,255,255,0.12)",
                 }}
@@ -614,11 +610,11 @@ function GuestProfileScreen({
                 style={{
                   position: "absolute",
                   left: -18,
-                  bottom: -52,
-                  width: 178,
-                  height: 178,
+                  bottom: -60,
+                  width: 164,
+                  height: 164,
                   borderRadius: 999,
-                  borderWidth: 18,
+                  borderWidth: 16,
                   borderColor: "rgba(255,255,255,0.12)",
                 }}
               />
@@ -626,53 +622,54 @@ function GuestProfileScreen({
                 style={{
                   position: "absolute",
                   left: 44,
-                  bottom: -28,
-                  width: 102,
-                  height: 102,
+                  bottom: -34,
+                  width: 94,
+                  height: 94,
                   borderRadius: 999,
-                  borderWidth: 12,
+                  borderWidth: 10,
                   borderColor: "rgba(255,255,255,0.16)",
                 }}
               />
 
-              <View style={{ maxWidth: heroTextWidth }} className="gap-3">
-                <View className="self-start rounded-full bg-white/18 px-3 py-1.5">
-                  <Text className="text-[11px] font-extrabold uppercase tracking-[0.8px] text-white">
-                    Chế độ khách
-                  </Text>
-                </View>
-
-                <View className="gap-2">
-                  <Text className="text-[28px] font-black leading-8 text-white">
-                    Chào bạn
-                  </Text>
-                  <Text className="text-[14px] leading-6 text-white/88">
-                    Hãy tham gia Culture Quest để lưu hành trình và mở khóa
-                    những nội dung du lịch đặc sắc.
-                  </Text>
-                </View>
-
+              <View
+                style={{
+                  position: "absolute",
+                  left: 16,
+                  top: 0,
+                  bottom: 0,
+                  width: 178,
+                  justifyContent: "center",
+                  alignItems: "flex-start",
+                  zIndex: 2,
+                }}
+                className="gap-2.5"
+              >
+                <Text className="text-[24px] font-black leading-7 text-white">
+                  Chào bạn
+                </Text>
+                <Text className="text-[12px] leading-5 text-white/90">
+                  Hãy tham gia để trải nghiệm nội dung đặc sắc
+                </Text>
                 <Pressable
                   accessibilityLabel="Đăng ký hoặc đăng nhập"
-                  className="self-start rounded-[18px] border border-white/40 bg-white/14 px-5 py-3"
+                  className="rounded-[16px] border border-[#D94D89] bg-[#FFF1F8] px-3 py-2.5"
                   onPress={onOpenAuth}
+                  style={cardShadow}
                 >
-                  <Text className="text-[15px] font-extrabold text-white">
+                  <Text
+                    className="text-[13px] font-extrabold text-[#D94D89]"
+                    numberOfLines={1}
+                  >
                     Đăng ký / Đăng nhập
                   </Text>
                 </Pressable>
               </View>
-
-              <GuestProfileHeroArt width={heroArtWidth} />
             </LinearGradient>
+
+            <GuestProfileHeroArt width={heroArtWidth} />
           </View>
 
-          <Text className="mt-4 px-1 text-[12px] leading-5 text-[#A6ABB8]">
-            Bạn đang ở chế độ khách. Đăng nhập để đồng bộ điểm thưởng, lịch sử
-            khám phá và mở đầy đủ menu tài khoản.
-          </Text>
-
-          <View className="mt-5 overflow-hidden rounded-[26px] border border-[#F4E0D5] bg-white">
+          <View className="mt-5">
             {GUEST_MENU_ITEMS.map((item, index) => (
               <GuestMenuPreviewRow
                 key={item.label}
@@ -688,16 +685,19 @@ function GuestProfileScreen({
 }
 
 function GuestProfileHeroArt({ width }: { width: number }) {
-  const artWidth = width + 42;
-  const artHeight = Math.round(artWidth * 1.02);
+  const artWidth = Math.round((width + 30) * 2.35);
+  const artHeight = Math.round(artWidth / 1.5);
+  const artRightOffset = Math.round(artWidth * 0.26);
+  const artBottomOffset = Math.round(artHeight * 0.14);
+  const glowSize = Math.round(Math.max(Math.min(artWidth * 0.24, 104), 84));
 
   return (
     <View
       pointerEvents="none"
       style={{
         position: "absolute",
-        right: -18,
-        top: 10,
+        right: -artRightOffset,
+        bottom: -artBottomOffset,
         width: artWidth,
         height: artHeight,
       }}
@@ -705,10 +705,10 @@ function GuestProfileHeroArt({ width }: { width: number }) {
       <View
         className="absolute rounded-full bg-white/16"
         style={{
-          right: 0,
-          top: 0,
-          width: 112,
-          height: 112,
+          right: Math.round(artWidth * 0.15),
+          top: Math.round(artHeight * 0.14),
+          width: glowSize,
+          height: glowSize,
         }}
       />
 
