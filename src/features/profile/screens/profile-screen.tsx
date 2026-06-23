@@ -38,7 +38,30 @@ const cardShadow = {
 
 const heroGradientColors = ["#20476B", "#4F87B2", "#F7F8FC"] as const;
 const avatarFallbackColors = ["#EB489B", "#F58752"] as const;
-
+const guestHeroBannerImage = require("../../../../assets/images/tachnen5.png");
+const guestScreenGradientColors = ["#FFF1F8", "#FFE8F3", "#FFF9FC"] as const;
+const guestHeroGradientColors = ["#F8B5CF", "#F49ABD", "#EB78A4"] as const;
+const guestHeroShadow = {
+  shadowColor: "rgba(185, 77, 132, 0.22)",
+  shadowOpacity: 1,
+  shadowRadius: 32,
+  shadowOffset: { width: 0, height: 22 },
+  elevation: 14,
+} as const;
+const guestPhoneShadow = {
+  shadowColor: "rgba(149, 63, 111, 0.16)",
+  shadowOpacity: 1,
+  shadowRadius: 20,
+  shadowOffset: { width: 0, height: 16 },
+  elevation: 8,
+} as const;
+const guestBackButtonShadow = {
+  shadowColor: "rgba(235, 72, 155, 0.12)",
+  shadowOpacity: 1,
+  shadowRadius: 14,
+  shadowOffset: { width: 0, height: 8 },
+  elevation: 6,
+} as const;
 const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
   {
     key: "posts",
@@ -58,6 +81,45 @@ const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
     key: "liked-hotspots",
     label: "Hotspot đã thích",
     icon: { ios: "heart", android: "favorite_border", web: "favorite_border" },
+  },
+];
+
+const GUEST_MENU_ITEMS: {
+  label: string;
+  icon: SymbolName;
+  value?: string;
+}[] = [
+  {
+    label: "Hợp đồng và Chính sách",
+    icon: { ios: "doc.text", android: "description", web: "description" },
+  },
+  {
+    label: "Điều khoản và Điều kiện",
+    icon: { ios: "checkmark.seal", android: "verified", web: "verified" },
+  },
+  {
+    label: "Chính sách bảo vệ thông tin cá nhân",
+    icon: { ios: "lock.shield", android: "shield", web: "shield" },
+  },
+  {
+    label: "Trung tâm hỗ trợ",
+    icon: { ios: "questionmark.circle", android: "help", web: "help" },
+  },
+  {
+    label: "Hotline hỗ trợ",
+    icon: { ios: "phone", android: "call", web: "call" },
+  },
+  {
+    label: "Góp ý",
+    icon: {
+      ios: "bubble.left.and.bubble.right",
+      android: "feedback",
+      web: "feedback",
+    },
+  },
+  {
+    label: "Về ứng dụng",
+    icon: { ios: "info.circle", android: "info", web: "info" },
   },
 ];
 
@@ -122,6 +184,23 @@ export default function ProfileScreen() {
   const heroHeight = Math.max(Math.min(width * 0.88, 320), 280);
   const avatarSize = 126;
   const profileOverlap = avatarSize * 0.52;
+  const handleOpenAuth = () => {
+    router.push("/login?entry=home" as Href);
+  };
+  const handleBackToHome = () => {
+    router.replace("/home");
+  };
+
+  if (!authSession.isAuthenticated) {
+    return (
+      <GuestProfileScreen
+        bottomInset={insets.bottom}
+        onBackHome={handleBackToHome}
+        onOpenAuth={handleOpenAuth}
+        screenWidth={width}
+      />
+    );
+  }
 
   if (isLoading && !profile) {
     return (
@@ -401,6 +480,306 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function GuestProfileScreen({
+  bottomInset,
+  onBackHome,
+  onOpenAuth,
+  screenWidth,
+}: {
+  bottomInset: number;
+  onBackHome: () => void;
+  onOpenAuth: () => void;
+  screenWidth: number;
+}) {
+  const cardInnerWidth = Math.max(screenWidth - 80, 220);
+  const heroArtWidth = Math.min(Math.max(cardInnerWidth * 0.44, 128), 156);
+  const heroTextWidth = Math.min(Math.max(cardInnerWidth * 0.6, 164), 188);
+
+  return (
+    <SafeAreaView
+      className="flex-1 bg-[#FFF1F8]"
+      edges={["top", "left", "right", "bottom"]}
+    >
+      <View className="absolute inset-0">
+        <LinearGradient
+          colors={guestScreenGradientColors}
+          start={{ x: 0.08, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 260,
+          }}
+        />
+        <View
+          style={{
+            position: "absolute",
+            left: -40,
+            top: 40,
+            width: 176,
+            height: 176,
+            borderRadius: 999,
+            backgroundColor: "rgba(235, 120, 164, 0.12)",
+          }}
+        />
+        <View
+          style={{
+            position: "absolute",
+            right: -32,
+            top: 112,
+            width: 144,
+            height: 144,
+            borderRadius: 999,
+            backgroundColor: "rgba(244, 154, 189, 0.10)",
+          }}
+        />
+      </View>
+
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          paddingBottom: Math.max(bottomInset, 20) + 24,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="flex-row items-center justify-between px-5 pt-3">
+          <Pressable
+            accessibilityLabel="Về trang chủ"
+            className="h-10 w-10 items-center justify-center rounded-[16px] border border-[#F6DFE8] bg-white"
+            onPress={onBackHome}
+            style={guestBackButtonShadow}
+          >
+            <SymbolView
+              name={{
+                ios: "chevron.left",
+                android: "arrow_back",
+                web: "arrow_back",
+              }}
+              size={18}
+              tintColor="#2B2233"
+            />
+          </Pressable>
+
+          <Text className="text-center text-[22px] font-black tracking-[-0.3px] text-[#2B2233]">
+            Cá nhân
+          </Text>
+
+          <View className="h-10 w-10" />
+        </View>
+
+        <View className="px-5 pt-5">
+          <View
+            className="overflow-hidden rounded-[30px]"
+            style={guestHeroShadow}
+          >
+            <LinearGradient
+              colors={guestHeroGradientColors}
+              start={{ x: 0, y: 0.2 }}
+              end={{ x: 1, y: 0.9 }}
+              locations={[0, 0.56, 1]}
+              style={{
+                minHeight: 228,
+                paddingHorizontal: 20,
+                paddingVertical: 20,
+              }}
+            >
+              <View
+                style={{
+                  position: "absolute",
+                  top: -48,
+                  right: 34,
+                  width: 176,
+                  height: 176,
+                  borderRadius: 999,
+                  backgroundColor: "rgba(255,255,255,0.10)",
+                }}
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  left: -92,
+                  bottom: -118,
+                  width: 236,
+                  height: 236,
+                  borderRadius: 999,
+                  backgroundColor: "rgba(255,255,255,0.12)",
+                }}
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  left: -18,
+                  bottom: -52,
+                  width: 178,
+                  height: 178,
+                  borderRadius: 999,
+                  borderWidth: 18,
+                  borderColor: "rgba(255,255,255,0.12)",
+                }}
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  left: 44,
+                  bottom: -28,
+                  width: 102,
+                  height: 102,
+                  borderRadius: 999,
+                  borderWidth: 12,
+                  borderColor: "rgba(255,255,255,0.16)",
+                }}
+              />
+
+              <View style={{ maxWidth: heroTextWidth }} className="gap-3">
+                <View className="self-start rounded-full bg-white/18 px-3 py-1.5">
+                  <Text className="text-[11px] font-extrabold uppercase tracking-[0.8px] text-white">
+                    Chế độ khách
+                  </Text>
+                </View>
+
+                <View className="gap-2">
+                  <Text className="text-[28px] font-black leading-8 text-white">
+                    Chào bạn
+                  </Text>
+                  <Text className="text-[14px] leading-6 text-white/88">
+                    Hãy tham gia Culture Quest để lưu hành trình và mở khóa
+                    những nội dung du lịch đặc sắc.
+                  </Text>
+                </View>
+
+                <Pressable
+                  accessibilityLabel="Đăng ký hoặc đăng nhập"
+                  className="self-start rounded-[18px] border border-white/40 bg-white/14 px-5 py-3"
+                  onPress={onOpenAuth}
+                >
+                  <Text className="text-[15px] font-extrabold text-white">
+                    Đăng ký / Đăng nhập
+                  </Text>
+                </Pressable>
+              </View>
+
+              <GuestProfileHeroArt width={heroArtWidth} />
+            </LinearGradient>
+          </View>
+
+          <Text className="mt-4 px-1 text-[12px] leading-5 text-[#A6ABB8]">
+            Bạn đang ở chế độ khách. Đăng nhập để đồng bộ điểm thưởng, lịch sử
+            khám phá và mở đầy đủ menu tài khoản.
+          </Text>
+
+          <View className="mt-5 overflow-hidden rounded-[26px] border border-[#F4E0D5] bg-white">
+            {GUEST_MENU_ITEMS.map((item, index) => (
+              <GuestMenuPreviewRow
+                key={item.label}
+                item={item}
+                showDivider={index < GUEST_MENU_ITEMS.length - 1}
+              />
+            ))}
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function GuestProfileHeroArt({ width }: { width: number }) {
+  const artWidth = width + 42;
+  const artHeight = Math.round(artWidth * 1.02);
+
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        right: -18,
+        top: 10,
+        width: artWidth,
+        height: artHeight,
+      }}
+    >
+      <View
+        className="absolute rounded-full bg-white/16"
+        style={{
+          right: 0,
+          top: 0,
+          width: 112,
+          height: 112,
+        }}
+      />
+
+      <View
+        style={{
+          position: "absolute",
+          right: 0,
+          bottom: 0,
+          width: artWidth,
+          height: artHeight,
+        }}
+      >
+        <Image
+          source={guestHeroBannerImage}
+          contentFit="contain"
+          transition={180}
+          style={[
+            guestPhoneShadow,
+            {
+              width: artWidth,
+              height: artHeight,
+              backgroundColor: "transparent",
+            },
+          ]}
+        />
+      </View>
+    </View>
+  );
+}
+
+function GuestMenuPreviewRow({
+  item,
+  showDivider,
+}: {
+  item: (typeof GUEST_MENU_ITEMS)[number];
+  showDivider: boolean;
+}) {
+  return (
+    <View
+      className="flex-row items-center gap-3 px-4 py-4"
+      style={
+        showDivider
+          ? {
+              borderBottomColor: "#F7E8E0",
+              borderBottomWidth: 1,
+            }
+          : undefined
+      }
+    >
+      <View className="h-11 w-11 items-center justify-center rounded-full bg-[#FFF5F8]">
+        <SymbolView name={item.icon} size={18} tintColor="#EB489B" />
+      </View>
+
+      <Text className="min-w-0 flex-1 text-[15px] font-semibold leading-5 text-[#2B2233]">
+        {item.label}
+      </Text>
+
+      {item.value ? (
+        <Text className="text-[12px] text-[#A6ABB8]">{item.value}</Text>
+      ) : null}
+
+      <SymbolView
+        name={{
+          ios: "chevron.right",
+          android: "chevron_right",
+          web: "chevron_right",
+        }}
+        size={18}
+        tintColor="#AA9FB0"
+      />
+    </View>
   );
 }
 
