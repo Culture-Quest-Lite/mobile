@@ -2,9 +2,9 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
 import * as Location from "expo-location";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -28,6 +28,7 @@ import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
+import { getMyProfile } from "@/features/profile/api/get-me";
 
 import { getActiveTagNames } from "../api/get-tags";
 import {
@@ -327,6 +328,11 @@ type GuestLocationMode =
 type GuestLocationState = {
   label: string;
   mode: GuestLocationMode;
+};
+
+type ExplorerSummary = {
+  level: number | null;
+  name: string;
 };
 
 const guestLocationLoadingState: GuestLocationState = {
@@ -791,6 +797,9 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const activeRouteIndexRef = useRef(0);
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
+  const [explorerSummary, setExplorerSummary] = useState<ExplorerSummary | null>(
+    null,
+  );
   const [themeCategories, setThemeCategories] = useState(() => nearbyCategories);
   const [activeCommunityTab, setActiveCommunityTab] =
     useState<CommunityBoardTab>("community");
@@ -816,8 +825,12 @@ export default function HomeScreen() {
     : 0;
   const activeCommunityBoard = communityBoards[activeCommunityTab];
   const activeFeaturedRoute = featuredRoutes[activeRouteIndex];
-  const displayName = authSession.displayName || "Ngọc";
-  const explorerLevel = authSession.level ?? 12;
+  const explorerName =
+    explorerSummary?.name.trim() ||
+    authSession.displayName.trim() ||
+    authSession.username?.trim() ||
+    "Ngọc";
+  const explorerLevel = explorerSummary?.level ?? authSession.level ?? 12;
   const handleOpenHotspots = () => {
     router.push("/hotspots");
   };
@@ -879,6 +892,59 @@ export default function HomeScreen() {
     };
   }, [authSession.isAuthenticated, authSession.tokenType]);
 
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      async function loadExplorerSummary() {
+        if (!authSession.isAuthenticated) {
+          if (isActive) {
+            setExplorerSummary(null);
+          }
+          return;
+        }
+
+        try {
+          const accessToken = await getValidAccessToken();
+
+          if (!accessToken || !isActive) {
+            return;
+          }
+
+          const profile = await getMyProfile({
+            accessToken,
+            tokenType: authSession.tokenType,
+          });
+
+          if (!isActive) {
+            return;
+          }
+
+          const resolvedName = profile.name.trim() || profile.username.trim();
+
+          setExplorerSummary({
+            level: profile.level,
+            name: resolvedName || "Ngọc",
+          });
+        } catch (error) {
+          if (!isActive) {
+            return;
+          }
+
+          console.warn("[home] load explorer summary failed", {
+            error: error instanceof Error ? error.message : error,
+          });
+        }
+      }
+
+      void loadExplorerSummary();
+
+      return () => {
+        isActive = false;
+      };
+    }, [authSession.isAuthenticated, authSession.tokenType]),
+  );
+
   return (
     <SafeAreaView
       className="flex-1 bg-white"
@@ -929,7 +995,7 @@ export default function HomeScreen() {
 
                   <View className="gap-0.5">
                     <Text className="text-[20px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
-                      {`Chào ${displayName}`}
+                      {`Chào ${explorerName}`}
                     </Text>
                     <Text className="text-[13px] leading-5 text-[#8E869A]">
                       Sẵn sàng khám phá hành trình

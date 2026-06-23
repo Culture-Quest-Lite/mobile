@@ -22,6 +22,7 @@ const profiles: Profile[] = [
     createdAt: "2026-01-15T09:00:00.000Z",
     followers: 342,
     following: 128,
+    totalPosts: 2,
     isPremium: true,
     role: "EXPLORER",
     routeIds: ["vinh-ha-long", "pho-co-dem"],
