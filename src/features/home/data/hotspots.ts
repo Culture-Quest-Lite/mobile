@@ -9,6 +9,7 @@ export type HotspotDetail = NearbyPlaceCard & {
   address: string;
   bestTimeLabel: string;
   checkinMode?: "always-ready" | "gps";
+  coordinate?: HotspotCoordinate | null;
   district: string;
   gallery: string[];
   highlights: string[];
@@ -21,9 +22,57 @@ export type HotspotDetail = NearbyPlaceCard & {
   vibeTags: string[];
 };
 
+export type HotspotCoordinate = {
+  latitude: number;
+  longitude: number;
+};
+
 const nearbyPlaceLookup = new Map(
   nearbyPlaces.map((place) => [place.slug, place] as const),
 );
+
+const hotspotCoordinatesBySlug: Record<string, HotspotCoordinate> = {
+  "bao-tang-my-thuat": { latitude: 10.7694, longitude: 106.6981 },
+  "buu-dien-sai-gon": { latitude: 10.78012, longitude: 106.69901 },
+  "cho-dam": { latitude: 12.25136, longitude: 109.19063 },
+  "demo-checkin-story": { latitude: 10.77712, longitude: 106.69531 },
+  "dinh-doc-lap": { latitude: 10.77712, longitude: 106.69531 },
+  "duong-sach-nguyen-van-binh": { latitude: 10.78039, longitude: 106.69957 },
+  "nha-hat-thanh-pho": { latitude: 10.77656, longitude: 106.70335 },
+  "nha-tho-duc-ba": { latitude: 10.77972, longitude: 106.69903 },
+  "pho-di-bo-nguyen-hue": { latitude: 10.77274, longitude: 106.70322 },
+};
+
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
+}
+
+function getDistanceMeters(from: HotspotCoordinate, to: HotspotCoordinate) {
+  const earthRadius = 6_371_000;
+  const latitudeDelta = toRadians(to.latitude - from.latitude);
+  const longitudeDelta = toRadians(to.longitude - from.longitude);
+  const fromLatitude = toRadians(from.latitude);
+  const toLatitude = toRadians(to.latitude);
+
+  const a =
+    Math.sin(latitudeDelta / 2) * Math.sin(latitudeDelta / 2) +
+    Math.cos(fromLatitude) *
+      Math.cos(toLatitude) *
+      Math.sin(longitudeDelta / 2) *
+      Math.sin(longitudeDelta / 2);
+
+  return earthRadius * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+function normalizeLookupText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
 
 function getRequiredNearbyPlace(slug: string) {
   const place = nearbyPlaceLookup.get(slug);
@@ -455,14 +504,125 @@ export const hotspotCollection: HotspotDetail[] = [
   },
 ];
 
+export function getHotspotCoordinateBySlug(slug: string) {
+  return hotspotCoordinatesBySlug[slug] ?? null;
+}
+
+export function getNearbyHotspotsFromCoordinate(
+  coordinate: HotspotCoordinate,
+  limit = hotspotCollection.length,
+) {
+  return hotspotCollection
+    .map((hotspot, index) => {
+      const hotspotCoordinate = getHotspotCoordinateBySlug(hotspot.slug);
+
+      return {
+        distanceMeters: hotspotCoordinate
+          ? getDistanceMeters(coordinate, hotspotCoordinate)
+          : null,
+        hotspot,
+        index,
+      };
+    })
+    .sort((left, right) => {
+      if (left.distanceMeters === null && right.distanceMeters === null) {
+        return left.index - right.index;
+      }
+
+      if (left.distanceMeters === null) {
+        return 1;
+      }
+
+      if (right.distanceMeters === null) {
+        return -1;
+      }
+
+      return left.distanceMeters - right.distanceMeters;
+    })
+    .slice(0, limit)
+    .map(({ hotspot }) => hotspot);
+}
+
+export function findMatchingHotspotByNameOrCoordinate({
+  hotspotName,
+  latitude,
+  longitude,
+}: {
+  hotspotName: string;
+  latitude: number;
+  longitude: number;
+}) {
+  const normalizedTargetName = normalizeLookupText(hotspotName);
+  const exactTitleMatch = hotspotCollection.find(
+    (hotspot) => normalizeLookupText(hotspot.title) === normalizedTargetName,
+  );
+
+  if (exactTitleMatch) {
+    return exactTitleMatch;
+  }
+
+  const partialTitleMatch = hotspotCollection.find((hotspot) => {
+    const normalizedTitle = normalizeLookupText(hotspot.title);
+
+    return (
+      normalizedTargetName.includes(normalizedTitle) ||
+      normalizedTitle.includes(normalizedTargetName)
+    );
+  });
+
+  if (partialTitleMatch) {
+    return partialTitleMatch;
+  }
+
+  let closestHotspot: HotspotDetail | null = null;
+  let closestDistanceMeters = Number.POSITIVE_INFINITY;
+
+  hotspotCollection.forEach((hotspot) => {
+    const hotspotCoordinate = getHotspotCoordinateBySlug(hotspot.slug);
+
+    if (!hotspotCoordinate) {
+      return;
+    }
+
+    const distanceMeters = getDistanceMeters(
+      {
+        latitude,
+        longitude,
+      },
+      hotspotCoordinate,
+    );
+
+    if (distanceMeters <= 180 && distanceMeters < closestDistanceMeters) {
+      closestDistanceMeters = distanceMeters;
+      closestHotspot = hotspot;
+    }
+  });
+
+  return closestHotspot;
+}
+
 export function getHotspotBySlug(slug?: string | string[]) {
   const resolvedSlug = Array.isArray(slug) ? slug[0] : slug;
 
   return hotspotCollection.find((item) => item.slug === resolvedSlug);
 }
 
-export function getHotspotHref(slug: string) {
-  return `/hotspot/${slug}` as unknown as Href;
+export function getApiHotspotRouteSlug(hotspotId: number) {
+  return `api-hotspot-${hotspotId}`;
+}
+
+export function getHotspotHref(slug: string, hotspotId?: number | null) {
+  if (hotspotId === null || hotspotId === undefined) {
+    return `/hotspot/${slug}` as unknown as Href;
+  }
+
+  return {
+    params: {
+      hotspotId: `${hotspotId}`,
+      slug,
+    },
+    pathname: "/hotspot/[slug]",
+  } as Href;
 }
 
 export function getHotspotFactItems(hotspot: HotspotDetail): {

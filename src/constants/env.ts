@@ -3,6 +3,8 @@ const keycloakUrl = process.env.EXPO_PUBLIC_KEYCLOAK_URL?.trim() ?? '';
 const keycloakRealm = process.env.EXPO_PUBLIC_KEYCLOAK_REALM?.trim() ?? '';
 const keycloakClientId = process.env.EXPO_PUBLIC_KEYCLOAK_CLIENT_ID?.trim() ?? '';
 const googleRedirectUri = process.env.EXPO_PUBLIC_GOOGLE_REDIRECT_URI?.trim() ?? '';
+const devLatitude = process.env.EXPO_PUBLIC_DEV_LATITUDE?.trim() ?? '';
+const devLongitude = process.env.EXPO_PUBLIC_DEV_LONGITUDE?.trim() ?? '';
 
 function normalizeUrlPart(value: string) {
   return value.endsWith('/') ? value.slice(0, -1) : value;
@@ -22,6 +24,8 @@ const apiBaseUrl = normalizeApiBaseUrl(rawApiBaseUrl);
 
 export const PublicEnv = {
   apiBaseUrl,
+  devLatitude,
+  devLongitude,
   keycloakClientId,
   keycloakRealm,
   keycloakUrl,
@@ -70,6 +74,12 @@ function collectEnvWarnings() {
 
   if (!PublicEnv.googleRedirectUri) {
     warnings.push('EXPO_PUBLIC_GOOGLE_REDIRECT_URI is missing.');
+  }
+
+  if (Boolean(PublicEnv.devLatitude) !== Boolean(PublicEnv.devLongitude)) {
+    warnings.push(
+      'Set both EXPO_PUBLIC_DEV_LATITUDE and EXPO_PUBLIC_DEV_LONGITUDE to enable the dev mock location.',
+    );
   }
 
   return warnings;

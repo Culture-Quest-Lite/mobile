@@ -1,15 +1,29 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { type Href, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SymbolView } from "expo-symbols";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import {
+  getValidAccessToken,
+  useAuthSession,
+} from "@/features/auth/hooks/use-auth-session";
+
+import { getHotspotStories } from "../api/get-hotspot-stories";
+import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
+import {
+  cacheHotspotStories,
+  getCachedHotspotStories,
+} from "../data/hotspot-story-cache";
+import {
   buildHotspotThemeStories,
-  storyThemeTabs,
+  buildHotspotThemeStoriesFromApi,
   tagImageByTag,
   type HotspotThemeStory,
   type StoryThemeTag,
@@ -26,6 +40,69 @@ const cardShadowStyle = {
   },
   elevation: 8,
 } as const;
+
+type StoryThemeTabItem = {
+  id: string;
+  imageSource: number;
+  label: string;
+  tagId: number | null;
+};
+
+const fallbackStoryThemeOrder: StoryThemeTag[] = [
+  "history",
+  "culture",
+  "food",
+  "education",
+];
+
+function getFallbackStoryThemeTag(index: number) {
+  return fallbackStoryThemeOrder[index % fallbackStoryThemeOrder.length] ?? "history";
+}
+
+function resolveHotspotIdParam(value?: string | string[]) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  const parsedValue = Number(rawValue);
+
+  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
+}
+
+function normalizeApiTagId(value?: number | null) {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : null;
+}
+
+function buildStoryThemeTabsFromStories(stories: HotspotThemeStory[]) {
+  const tabsById = new Map<string, StoryThemeTabItem>();
+
+  stories.forEach((story, index) => {
+    const label = story.tagLabel.trim();
+
+    if (!label) {
+      return;
+    }
+
+    const tagId = normalizeApiTagId(story.tagId);
+    const resolvedTag = story.tag ?? getFallbackStoryThemeTag(index);
+    const tabId =
+      tagId !== null
+        ? `tag-${tagId}`
+        : `label-${label.trim().toLowerCase()}`;
+
+    if (tabsById.has(tabId)) {
+      return;
+    }
+
+    tabsById.set(tabId, {
+      id: tabId,
+      imageSource: tagImageByTag[resolvedTag],
+      label,
+      tagId,
+    });
+  });
+
+  return Array.from(tabsById.values());
+}
 
 function ThemeTagChip({
   imageSource,
@@ -148,7 +225,10 @@ function NotFoundState() {
 
   return (
     <View className="flex-1 bg-white">
-      <SafeAreaView className="flex-1" edges={["top", "left", "right", "bottom"]}>
+      <SafeAreaView
+        className="flex-1"
+        edges={["top", "left", "right", "bottom"]}
+      >
         <View className="flex-1 items-center justify-center px-6">
           <View
             className="w-full rounded-[32px] border bg-[#FFF9FD] px-6 py-8"
@@ -158,7 +238,8 @@ function NotFoundState() {
               Không tìm thấy story
             </Text>
             <Text className="mt-3 text-center text-[14px] leading-6 text-[#6F657A]">
-              Hotspot này không còn trong dữ liệu hiện tại hoặc slug chưa hợp lệ.
+              Hotspot này không còn trong dữ liệu hiện tại hoặc slug chưa hợp
+              lệ.
             </Text>
             <Pressable
               className="mt-6 items-center rounded-full bg-[#FFF0F6] px-5 py-3.5"
@@ -175,25 +256,186 @@ function NotFoundState() {
   );
 }
 
+function EmptyStoriesState({ message }: { message: string }) {
+  return (
+    <View
+      className="rounded-[28px] border border-[#F4DCE6] bg-[#FFF9FD] px-5 py-6"
+      style={cardShadowStyle}
+    >
+      <Text className="text-[18px] font-black text-[#2B2233]">
+        Chưa có story phù hợp
+      </Text>
+      <Text className="mt-2 text-[14px] leading-6 text-[#6F657A]">
+        {message}
+      </Text>
+    </View>
+  );
+}
+
 export default function HotspotStoriesScreen() {
   const router = useRouter();
+  const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
-  const { slug } = useLocalSearchParams<{ slug: string }>();
+  const { hotspotId, slug } = useLocalSearchParams<{
+    hotspotId?: string;
+    slug: string;
+  }>();
   const resolvedSlug = Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "");
-  const hotspot = getHotspotBySlug(resolvedSlug);
-  const [activeTag, setActiveTag] = useState<StoryThemeTag>("history");
+  const resolvedHotspotId = resolveHotspotIdParam(hotspotId);
+  const cachedHotspotEntry = getCachedHotspotDetail({
+    hotspotId: resolvedHotspotId,
+    slug: resolvedSlug,
+  });
+  const hotspot = cachedHotspotEntry?.hotspot ?? getHotspotBySlug(resolvedSlug);
+  const cachedStoriesEntry = getCachedHotspotStories({
+    hotspotId: resolvedHotspotId,
+    slug: resolvedSlug,
+  });
+  const [activeTabId, setActiveTabId] = useState("");
+  const [apiStoryCards, setApiStoryCards] = useState<
+    HotspotThemeStory[] | null
+  >(() => cachedStoriesEntry?.stories ?? null);
+  const [isStoriesLoading, setIsStoriesLoading] = useState(
+    () => cachedStoriesEntry === null && resolvedHotspotId !== null,
+  );
+  const [storiesError, setStoriesError] = useState<string | null>(null);
+  const fallbackStoryCards =
+    hotspot && resolvedHotspotId === null ? buildHotspotThemeStories(hotspot) : [];
+  const storyCards = apiStoryCards ?? fallbackStoryCards;
+  const storyDrivenThemeTabs = buildStoryThemeTabsFromStories(storyCards);
+  const resolvedThemeTabs =
+    storyDrivenThemeTabs;
+  const resolvedActiveTab =
+    resolvedThemeTabs.find((tab) => tab.id === activeTabId) ??
+    resolvedThemeTabs[0] ??
+    null;
+  const selectedTagId = resolvedActiveTab?.tagId ?? null;
+
+  useEffect(() => {
+    if (!hotspot) {
+      return;
+    }
+
+    const resolvedHotspot = hotspot;
+    let isActive = true;
+
+    const loadHotspotStories = async () => {
+      const nextCachedStoriesEntry = getCachedHotspotStories({
+        hotspotId: resolvedHotspotId,
+        slug: resolvedSlug,
+      });
+
+      if (nextCachedStoriesEntry) {
+        if (!isActive) {
+          return;
+        }
+
+        setApiStoryCards(nextCachedStoriesEntry.stories);
+        setStoriesError(null);
+      }
+
+      if (resolvedHotspotId === null) {
+        if (!isActive) {
+          return;
+        }
+
+        setApiStoryCards(null);
+        setIsStoriesLoading(false);
+        setStoriesError(null);
+        return;
+      }
+
+      setIsStoriesLoading(nextCachedStoriesEntry === null);
+      setStoriesError(null);
+
+      if (nextCachedStoriesEntry === null) {
+        setApiStoryCards(null);
+      }
+
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const stories = await getHotspotStories({
+          accessToken,
+          hotspotId: resolvedHotspotId,
+          status: "DRAFT",
+          tokenType: authSession.tokenType,
+        });
+        const mappedStories = buildHotspotThemeStoriesFromApi(
+          resolvedHotspot,
+          stories,
+        );
+
+        cacheHotspotStories({
+          hotspotId: resolvedHotspotId,
+          slug: resolvedSlug,
+          stories: mappedStories,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setApiStoryCards(mappedStories);
+      } catch (error) {
+        console.warn("[hotspot-stories] load hotspot stories failed", {
+          error: error instanceof Error ? error.message : error,
+          hotspotId: resolvedHotspotId,
+          slug: resolvedSlug,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        if (nextCachedStoriesEntry === null) {
+          setApiStoryCards(null);
+        }
+        setStoriesError(
+          error instanceof Error
+            ? error.message
+            : "Không tải được story từ API cho hotspot này.",
+        );
+      } finally {
+        if (isActive) {
+          setIsStoriesLoading(false);
+        }
+      }
+    };
+
+    void loadHotspotStories();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    hotspot,
+    resolvedHotspotId,
+    resolvedSlug,
+  ]);
 
   if (!hotspot) {
     return <NotFoundState />;
   }
 
-  const storyCards = buildHotspotThemeStories(hotspot);
-  const activeStory = storyCards.find((item) => item.tag === activeTag);
+  const visibleStories =
+    selectedTagId === null
+      ? storyCards
+      : storyCards.filter(
+          (item) => normalizeApiTagId(item.tagId) === selectedTagId,
+        );
+
   return (
     <View className="flex-1 bg-white">
       <StatusBar style="dark" />
 
-      <SafeAreaView className="flex-1 bg-white" edges={["left", "right", "bottom"]}>
+      <SafeAreaView
+        className="flex-1 bg-white"
+        edges={["left", "right", "bottom"]}
+      >
         <View
           className="border-b border-[#F2E8F7] bg-white px-5"
           style={{ paddingTop: insets.top + 6 }}
@@ -224,19 +466,35 @@ export default function HotspotStoriesScreen() {
 
           <ScrollView
             horizontal
-            contentContainerStyle={{ columnGap: 18, paddingBottom: 4, paddingTop: 4 }}
+            contentContainerStyle={{
+              columnGap: 18,
+              paddingBottom: 4,
+              paddingTop: 4,
+            }}
             showsHorizontalScrollIndicator={false}
           >
-            {storyThemeTabs.map((tab) => (
+            {resolvedThemeTabs.map((tab) => (
               <ThemeTagChip
                 key={tab.id}
-                imageSource={tagImageByTag[tab.id]}
-                isActive={tab.id === activeTag}
+                imageSource={tab.imageSource}
+                isActive={tab.id === resolvedActiveTab?.id}
                 label={tab.label}
-                onPress={() => setActiveTag(tab.id)}
+                onPress={() => setActiveTabId(tab.id)}
               />
             ))}
           </ScrollView>
+
+          {isStoriesLoading ? (
+            <Text className="pb-3 pt-2 text-[12px] font-medium text-[#A897B2]">
+              Đang tải story của hotspot...
+            </Text>
+          ) : null}
+
+          {storiesError ? (
+            <Text className="pb-3 pt-2 text-[12px] font-medium text-[#D97706]">
+              {storiesError}
+            </Text>
+          ) : null}
         </View>
 
         <ScrollView
@@ -249,14 +507,31 @@ export default function HotspotStoriesScreen() {
           }}
           showsVerticalScrollIndicator={false}
         >
-          {activeStory ? (
-            <StoryCard
-              item={activeStory}
-              onPress={() =>
-                router.push(`/hotspot/${hotspot.slug}/stories/${activeStory.id}` as Href)
+          {visibleStories.length > 0 ? (
+            visibleStories.map((story) => (
+              <StoryCard
+                key={story.id}
+                item={story}
+                onPress={() =>
+                  router.push(
+                    resolvedHotspotId !== null
+                      ? (`/hotspot/${hotspot.slug}/stories/${story.id}?hotspotId=${resolvedHotspotId}` as Href)
+                      : (`/hotspot/${hotspot.slug}/stories/${story.id}` as Href),
+                  )
+                }
+              />
+            ))
+          ) : (
+            <EmptyStoriesState
+              message={
+                selectedTagId !== null
+                  ? `Hotspot này chưa có story DRAFT cho tag "${resolvedActiveTab?.label ?? ""}".`
+                  : apiStoryCards !== null
+                    ? "Hotspot này chưa có story DRAFT để hiển thị."
+                    : "Chưa có story phù hợp cho bộ lọc đang chọn."
               }
             />
-          ) : null}
+          )}
         </ScrollView>
       </SafeAreaView>
     </View>
