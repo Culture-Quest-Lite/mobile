@@ -234,8 +234,7 @@ export default function ProfileScreen() {
     );
   }
 
-  const levelNumber =
-    typeof profile.level === "number" ? profile.level : authSession.level;
+  const levelNumber = typeof profile.level === "number" ? profile.level : null;
   const currentLevelXp =
     typeof profile.currentLevelXp === "number" ? profile.currentLevelXp : null;
   const xpToNext =

@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SymbolView } from "expo-symbols";
-import { useState, type ComponentProps } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import {
   Pressable,
   ScrollView,
@@ -25,8 +25,15 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import {
+  getValidAccessToken,
+  useAuthSession,
+} from "@/features/auth/hooks/use-auth-session";
 import { addCheckin, useCheckins } from "@/lib/checkin-store";
 import { getRoutesForHotspot, routes, type RouteItem } from "@/lib/demo-data";
+import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
+import { getHotspotStories } from "../api/get-hotspot-stories";
+import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
 import { HotspotGpsCheckinOverlay } from "../components/hotspot-gps-checkin-overlay";
 import { HiddenStoryUnlockedContent } from "../components/hidden-story-unlocked-content";
 import {
@@ -34,7 +41,17 @@ import {
   communityBoards,
   type CommunityBoardEntry,
 } from "../data/home-screen.mock";
-import { getHotspotBySlug, type HotspotDetail } from "../data/hotspots";
+import { cacheHotspotDetail } from "../data/hotspot-detail-cache";
+import {
+  cacheHotspotStories,
+  getCachedHotspotStories,
+} from "../data/hotspot-story-cache";
+import { buildHotspotThemeStoriesFromApi } from "../data/hotspot-theme-stories";
+import {
+  findMatchingHotspotByNameOrCoordinate,
+  getHotspotBySlug,
+  type HotspotDetail,
+} from "../data/hotspots";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type PersonalExperienceMediaItem = {
@@ -61,6 +78,9 @@ type SummaryStatItem = {
 const loginGradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const screenBackground = "#FFFFFF";
 const panelBackground = "#FFFFFF";
+const defaultRemoteHotspotImageUri =
+  "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
+const meaninglessApiTextValues = new Set(["", "string", "null", "undefined"]);
 
 const heroShadowStyle = {
   shadowColor: "rgba(15, 23, 42, 0.20)",
@@ -117,6 +137,209 @@ const routeCarouselShadowStyle = {
   elevation: 12,
 } as const;
 
+function resolveHotspotIdParam(value?: string | string[]) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  const parsedValue = Number(rawValue);
+
+  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
+}
+
+function readMeaningfulApiText(value?: string | null) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return null;
+  }
+
+  return meaninglessApiTextValues.has(trimmedValue.toLowerCase())
+    ? null
+    : trimmedValue;
+}
+
+function formatApiTimeValue(value?: string | null) {
+  const meaningfulValue = readMeaningfulApiText(value);
+
+  if (!meaningfulValue) {
+    return null;
+  }
+
+  const matchedValue = meaningfulValue.match(/^\d{2}:\d{2}/);
+
+  return matchedValue?.[0] ?? meaningfulValue;
+}
+
+function formatApiTimeWindow(start?: string | null, end?: string | null) {
+  const formattedStart = formatApiTimeValue(start);
+  const formattedEnd = formatApiTimeValue(end);
+
+  if (formattedStart && formattedEnd) {
+    return formattedStart === formattedEnd
+      ? formattedStart
+      : `${formattedStart} - ${formattedEnd}`;
+  }
+
+  return formattedStart ?? formattedEnd;
+}
+
+function resolveRemoteDistrictLabel(address: string, fallbackDistrict?: string) {
+  const segments = address
+    .split(",")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  if (segments.length >= 2) {
+    return segments[segments.length - 2] ?? segments[segments.length - 1]!;
+  }
+
+  if (segments.length === 1) {
+    return segments[0]!;
+  }
+
+  return fallbackDistrict?.trim() || "Đang cập nhật";
+}
+
+function resolveRemoteMediaUris(
+  apiHotspot: NearbyHotspotDto,
+  fallbackHotspot?: HotspotDetail | null,
+) {
+  const remoteMediaUris = [...apiHotspot.medias]
+    .filter((media) => readMeaningfulApiText(media.fileUrl))
+    .sort((left, right) => {
+      const leftOrder = left.displayOrder ?? Number.MAX_SAFE_INTEGER;
+      const rightOrder = right.displayOrder ?? Number.MAX_SAFE_INTEGER;
+
+      return leftOrder - rightOrder;
+    })
+    .map((media) => media.fileUrl.trim());
+
+  if (remoteMediaUris.length > 0) {
+    return remoteMediaUris;
+  }
+
+  const fallbackMediaUris = [
+    fallbackHotspot?.imageUri,
+    ...(fallbackHotspot?.gallery ?? []),
+  ].filter((uri): uri is string => Boolean(readMeaningfulApiText(uri)));
+
+  return fallbackMediaUris.length > 0
+    ? fallbackMediaUris
+    : [defaultRemoteHotspotImageUri];
+}
+
+function buildFallbackTips(
+  overview: string,
+  fallbackHotspot?: HotspotDetail | null,
+) {
+  if (fallbackHotspot?.tips.length) {
+    return fallbackHotspot.tips;
+  }
+
+  return [
+    "Kiểm tra giờ mở cửa trước khi ghé thăm.",
+    "Bật định vị để có thể check-in tại hotspot.",
+    overview,
+  ];
+}
+
+function buildHotspotFromApi({
+  apiHotspot,
+  fallbackHotspot,
+  routeSlug,
+}: {
+  apiHotspot: NearbyHotspotDto;
+  fallbackHotspot?: HotspotDetail | null;
+  routeSlug: string;
+}) {
+  const matchedLocalHotspot =
+    fallbackHotspot ??
+    findMatchingHotspotByNameOrCoordinate({
+      hotspotName: apiHotspot.hotspotName,
+      latitude: apiHotspot.latitude,
+      longitude: apiHotspot.longitude,
+    }) ??
+    null;
+  const tagNames = apiHotspot.tags
+    .map((tag) => readMeaningfulApiText(tag.tagName))
+    .filter((tagName): tagName is string => Boolean(tagName));
+  const category =
+    tagNames[0] ??
+    matchedLocalHotspot?.category ??
+    "Hotspot";
+  const address =
+    readMeaningfulApiText(apiHotspot.address) ??
+    matchedLocalHotspot?.address ??
+    "Địa chỉ đang cập nhật";
+  const imageUris = resolveRemoteMediaUris(apiHotspot, matchedLocalHotspot);
+  const imageUri = imageUris[0] ?? defaultRemoteHotspotImageUri;
+  const gallery = imageUris.slice(1);
+  const overview =
+    readMeaningfulApiText(apiHotspot.description) ??
+    matchedLocalHotspot?.overview ??
+    `Hotspot ${readMeaningfulApiText(apiHotspot.hotspotName) ?? apiHotspot.hotspotId} đang được cập nhật mô tả từ hệ thống.`;
+  const story =
+    readMeaningfulApiText(apiHotspot.historyInformation) ??
+    readMeaningfulApiText(apiHotspot.description) ??
+    matchedLocalHotspot?.story ??
+    overview;
+  const scheduleLabel =
+    formatApiTimeWindow(apiHotspot.openingTime, apiHotspot.closingTime) ??
+    formatApiTimeWindow(apiHotspot.startTime, apiHotspot.endTime) ??
+    matchedLocalHotspot?.scheduleLabel ??
+    "Giờ mở cửa đang cập nhật";
+  const bestTimeLabel =
+    formatApiTimeWindow(apiHotspot.startTime, apiHotspot.endTime) ??
+    matchedLocalHotspot?.bestTimeLabel ??
+    scheduleLabel;
+
+  return {
+    hotspot: {
+      address,
+      bestTimeLabel,
+      category,
+      checkinMode: matchedLocalHotspot?.checkinMode,
+      coordinate: {
+        latitude: apiHotspot.latitude,
+        longitude: apiHotspot.longitude,
+      },
+      distance: matchedLocalHotspot?.distance ?? "Từ API",
+      district: resolveRemoteDistrictLabel(address, matchedLocalHotspot?.district),
+      gallery,
+      highlights: matchedLocalHotspot?.highlights ?? [
+        overview,
+        story,
+        `XP thưởng: +${apiHotspot.xp ?? 0}`,
+      ],
+      imageUri,
+      overview,
+      rating: matchedLocalHotspot?.rating ?? 0,
+      reviews:
+        matchedLocalHotspot?.reviews ?? `${Math.max(0, Math.round(apiHotspot.point ?? 0))}`,
+      reward:
+        matchedLocalHotspot?.reward ??
+        `+${Math.max(0, Math.round(apiHotspot.xp ?? 0))}`,
+      routePairing:
+        matchedLocalHotspot?.routePairing ??
+        "Thông tin gợi ý tuyến đường cho hotspot này đang được cập nhật.",
+      scheduleLabel,
+      slug: matchedLocalHotspot?.slug ?? routeSlug,
+      story,
+      ticketLabel:
+        matchedLocalHotspot?.ticketLabel ?? "Thông tin vé đang được cập nhật.",
+      tips: buildFallbackTips(overview, matchedLocalHotspot),
+      title:
+        readMeaningfulApiText(apiHotspot.hotspotName) ??
+        matchedLocalHotspot?.title ??
+        `Hotspot #${apiHotspot.hotspotId}`,
+      vibeTags: tagNames.length > 0 ? tagNames : (matchedLocalHotspot?.vibeTags ?? [category]),
+    } satisfies HotspotDetail,
+    matchedLocalHotspot,
+  };
+}
+
 function clampNumber(value: number, minimum: number, maximum: number) {
   return Math.min(Math.max(value, minimum), maximum);
 }
@@ -136,6 +359,24 @@ function formatCompactCount(value: number | string) {
   return `${resolvedValue}`;
 }
 
+function buildReviewSummaryLabel({
+  apiHotspot,
+  matchedLocalHotspot,
+}: {
+  apiHotspot: NearbyHotspotDto | null;
+  matchedLocalHotspot?: HotspotDetail | null;
+}) {
+  if (matchedLocalHotspot?.reviews?.trim()) {
+    return `${formatCompactCount(matchedLocalHotspot.reviews)} reviews`;
+  }
+
+  if (apiHotspot?.point !== null && apiHotspot?.point !== undefined) {
+    return `${formatCompactCount(apiHotspot.point)} điểm`;
+  }
+
+  return "Chi tiết từ API";
+}
+
 function getRewardValue(reward: string) {
   const resolvedValue = Number(reward.replace(/\D/g, ""));
 
@@ -144,6 +385,63 @@ function getRewardValue(reward: string) {
   }
 
   return `${resolvedValue}`;
+}
+
+function buildSummaryStats({
+  apiHotspot,
+  hotspot,
+  matchedLocalHotspot,
+  rewardXp,
+}: {
+  apiHotspot: NearbyHotspotDto | null;
+  hotspot: HotspotDetail;
+  matchedLocalHotspot?: HotspotDetail | null;
+  rewardXp: string;
+}): SummaryStatItem[] {
+  const remoteScheduleValue = formatApiTimeWindow(
+    apiHotspot?.openingTime,
+    apiHotspot?.closingTime,
+  );
+  const secondaryValue =
+    matchedLocalHotspot?.distance ?? remoteScheduleValue ?? hotspot.district;
+  const secondaryLabel = matchedLocalHotspot?.distance
+    ? "Distance"
+    : remoteScheduleValue
+      ? "Giờ mở"
+      : "Khu vực";
+
+  return [
+    {
+      icon: {
+        ios: matchedLocalHotspot ? "star.fill" : "chart.bar.fill",
+        android: matchedLocalHotspot ? "star" : "bar_chart",
+        web: matchedLocalHotspot ? "star" : "bar_chart",
+      } as SymbolName,
+      label: matchedLocalHotspot ? "Rating" : "Điểm",
+      value: matchedLocalHotspot
+        ? hotspot.rating.toFixed(1)
+        : `${Math.max(0, Math.round(apiHotspot?.point ?? 0))}`,
+    },
+    {
+      icon: {
+        ios: matchedLocalHotspot ? "location.fill" : "clock.fill",
+        android: matchedLocalHotspot ? "place" : "schedule",
+        web: matchedLocalHotspot ? "place" : "schedule",
+      } as SymbolName,
+      isCompactValue: !matchedLocalHotspot,
+      label: secondaryLabel,
+      value: secondaryValue,
+    },
+    {
+      icon: {
+        ios: "gift.fill",
+        android: "redeem",
+        web: "redeem",
+      } as SymbolName,
+      label: "XP",
+      value: `+${rewardXp}`,
+    },
+  ];
 }
 
 function getBestTimeWindow(bestTimeLabel: string) {
@@ -664,10 +962,12 @@ function LocationInformationSection({
   access,
   address,
   atmosphere,
+  bestTime,
 }: {
   access: string;
   address: string;
   atmosphere: string;
+  bestTime: string;
 }) {
   const items = [
     {
@@ -678,6 +978,15 @@ function LocationInformationSection({
       } as SymbolName,
       label: "Địa điểm",
       value: address,
+    },
+    {
+      icon: {
+        ios: "sun.max.fill",
+        android: "wb_sunny",
+        web: "wb_sunny",
+      } as SymbolName,
+      label: "Giờ đẹp",
+      value: bestTime,
     },
     {
       icon: {
@@ -764,14 +1073,45 @@ function HistoricalInfoSection({ text }: { text: string }) {
 function HiddenStoryCheckinSection({
   audioStoryDurationLabel,
   isCheckedIn,
+  isStoryAvailabilityLoading = false,
+  isStoryAvailable = true,
   onCheckinPress,
   onListenStories,
 }: {
   audioStoryDurationLabel: string;
   isCheckedIn: boolean;
+  isStoryAvailabilityLoading?: boolean;
+  isStoryAvailable?: boolean;
   onCheckinPress: () => void;
   onListenStories: () => void;
 }) {
+  const checkedInContent = isStoryAvailabilityLoading ? (
+    <View className="rounded-[30px] bg-[#F8FBFF] px-5 py-5" style={cardShadowStyle}>
+      <Text className="text-[16px] font-black text-[#2F242C]">
+        Đang tải story hotspot
+      </Text>
+      <Text className="mt-2 text-[14px] leading-6 text-[#5E7486]">
+        App đang gọi API story cho hotspot này để hiển thị đúng nội dung theo
+        từng tag.
+      </Text>
+    </View>
+  ) : isStoryAvailable ? (
+    <HiddenStoryUnlockedContent
+      audioStoryDurationLabel={audioStoryDurationLabel}
+      onListenStories={onListenStories}
+    />
+  ) : (
+    <View className="rounded-[30px] bg-[#F8FBFF] px-5 py-5" style={cardShadowStyle}>
+      <Text className="text-[16px] font-black text-[#2F242C]">
+        Story chuyên đề đang cập nhật
+      </Text>
+      <Text className="mt-2 text-[14px] leading-6 text-[#5E7486]">
+        Hotspot này đã check-in thành công. Nội dung story riêng cho điểm đến
+        này sẽ được bổ sung sau.
+      </Text>
+    </View>
+  );
+
   return (
     <View className="gap-3">
       <View className="flex-row items-center justify-between gap-3">
@@ -812,10 +1152,7 @@ function HiddenStoryCheckinSection({
       </View>
 
       {isCheckedIn ? (
-        <HiddenStoryUnlockedContent
-          audioStoryDurationLabel={audioStoryDurationLabel}
-          onListenStories={onListenStories}
-        />
+        checkedInContent
       ) : (
         <LinearGradient
           colors={["#F3E3D9", "#E8E0E5"]}
@@ -845,9 +1182,11 @@ function HiddenStoryCheckinSection({
             Câu chuyện đang chờ bạn
           </Text>
 
-          <Text className="mt-3 max-w-[320px] text-center text-[14px] leading-6 text-[#6A5964]">
-            Check-in tại đây để mở khóa đoạn audio và bản kể chuyện độc quyền.
-          </Text>
+            <Text className="mt-3 max-w-[320px] text-center text-[14px] leading-6 text-[#6A5964]">
+              {isStoryAvailable
+              ? "Check-in tại đây để mở khóa story hotspot và bản kể chuyện độc quyền."
+              : "Check-in tại đây để ghi nhận điểm đến. Story chuyên đề cho hotspot này đang được cập nhật."}
+            </Text>
 
           <Pressable
             className="mt-6 overflow-hidden rounded-full"
@@ -1320,16 +1659,105 @@ function NotFoundState() {
   );
 }
 
+function LoadingState() {
+  return (
+    <View className="flex-1" style={{ backgroundColor: screenBackground }}>
+      <SafeAreaView
+        className="flex-1"
+        edges={["top", "left", "right", "bottom"]}
+      >
+        <View className="flex-1 items-center justify-center px-6">
+          <View
+            className="w-full rounded-[32px] bg-[#F4F7FB] px-6 py-8"
+            style={[cardShadowStyle, { maxWidth: 360 }]}
+          >
+            <Text className="text-center text-[24px] font-black text-[#1E3245]">
+              Đang tải hotspot
+            </Text>
+            <Text className="mt-3 text-center text-[14px] leading-6 text-[#5E7486]">
+              App đang gọi API chi tiết hotspot theo id để hiển thị dữ liệu mới
+              nhất.
+            </Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+function LoadFailedState({ message }: { message: string }) {
+  const router = useRouter();
+
+  return (
+    <View className="flex-1" style={{ backgroundColor: screenBackground }}>
+      <SafeAreaView
+        className="flex-1"
+        edges={["top", "left", "right", "bottom"]}
+      >
+        <View className="flex-1 items-center justify-center px-6">
+          <View
+            className="w-full rounded-[32px] bg-[#FDF4F4] px-6 py-8"
+            style={[cardShadowStyle, { maxWidth: 360 }]}
+          >
+            <Text className="text-center text-[24px] font-black text-[#7F1D1D]">
+              Không tải được hotspot
+            </Text>
+            <Text className="mt-3 text-center text-[14px] leading-6 text-[#7F1D1D]">
+              {message}
+            </Text>
+            <View className="mt-6 flex-row gap-3">
+              <Pressable
+                className="flex-1 items-center rounded-full bg-[#FDE2E2] px-4 py-3.5"
+                onPress={() => router.back()}
+              >
+                <Text className="text-[13px] font-bold text-[#7F1D1D]">
+                  Quay lại
+                </Text>
+              </Pressable>
+              <Pressable
+                className="flex-1 items-center rounded-full bg-[#7F1D1D] px-4 py-3.5"
+                onPress={() => router.replace("/hotspots")}
+              >
+                <Text className="text-[13px] font-bold text-white">
+                  Danh sách
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
 export default function HotspotDetailScreen() {
   const router = useRouter();
+  const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
   const checkins = useCheckins();
-  const { slug } = useLocalSearchParams<{ slug: string }>();
+  const { hotspotId, slug } = useLocalSearchParams<{
+    hotspotId?: string;
+    slug: string;
+  }>();
   const scrollY = useSharedValue(0);
   const [isCheckinOverlayVisible, setIsCheckinOverlayVisible] = useState(false);
   const [isStickyCheckinVisible, setIsStickyCheckinVisible] = useState(false);
+  const [remoteHotspot, setRemoteHotspot] = useState<NearbyHotspotDto | null>(null);
+  const [remoteHotspotError, setRemoteHotspotError] = useState<string | null>(null);
+  const [isRemoteHotspotLoading, setIsRemoteHotspotLoading] = useState(false);
   const resolvedSlug = Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "");
+  const resolvedHotspotId = resolveHotspotIdParam(hotspotId);
+  const cachedStoriesEntry = getCachedHotspotStories({
+    hotspotId: resolvedHotspotId,
+    slug: resolvedSlug,
+  });
+  const [hasApiStories, setHasApiStories] = useState(
+    () => Boolean(cachedStoriesEntry?.stories.length),
+  );
+  const [isStoryAvailabilityLoading, setIsStoryAvailabilityLoading] = useState(
+    () => cachedStoriesEntry === null && resolvedHotspotId !== null,
+  );
   const [gallerySelection, setGallerySelection] = useState(() => ({
     index: 0,
     slugKey: resolvedSlug,
@@ -1456,9 +1884,166 @@ export default function HotspotDetailScreen() {
     },
   });
 
-  const hotspot = getHotspotBySlug(slug);
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadRemoteHotspot() {
+      if (resolvedHotspotId === null) {
+        setRemoteHotspot(null);
+        setRemoteHotspotError(null);
+        setIsRemoteHotspotLoading(false);
+        return;
+      }
+
+      setIsRemoteHotspotLoading(true);
+      setRemoteHotspotError(null);
+      setRemoteHotspot(null);
+
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const nextRemoteHotspot = await getHotspotByIdApi({
+          accessToken,
+          hotspotId: resolvedHotspotId,
+          tokenType: authSession.tokenType,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteHotspot(nextRemoteHotspot);
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteHotspot(null);
+        setRemoteHotspotError(
+          error instanceof Error
+            ? error.message
+            : "Không tải được chi tiết hotspot từ API.",
+        );
+      } finally {
+        if (isActive) {
+          setIsRemoteHotspotLoading(false);
+        }
+      }
+    }
+
+    void loadRemoteHotspot();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId]);
+
+  const localHotspot = getHotspotBySlug(slug);
+  const remoteHotspotResult = remoteHotspot
+    ? buildHotspotFromApi({
+        apiHotspot: remoteHotspot,
+        fallbackHotspot: localHotspot,
+        routeSlug: resolvedSlug,
+      })
+    : null;
+  const hotspot = remoteHotspotResult?.hotspot ?? localHotspot ?? null;
+  const matchedLocalHotspot =
+    remoteHotspotResult?.matchedLocalHotspot ?? localHotspot ?? null;
+
+  useEffect(() => {
+    if (!hotspot) {
+      return;
+    }
+
+    cacheHotspotDetail({
+      hotspot,
+      hotspotId: resolvedHotspotId,
+      slug: hotspot.slug,
+    });
+  }, [hotspot, resolvedHotspotId]);
+
+  useEffect(() => {
+    if (!hotspot || resolvedHotspotId === null) {
+      return;
+    }
+
+    let isActive = true;
+    const nextCachedStoriesEntry = getCachedHotspotStories({
+      hotspotId: resolvedHotspotId,
+      slug: hotspot.slug,
+    });
+
+    const loadHotspotStoriesAvailability = async () => {
+      setHasApiStories(Boolean(nextCachedStoriesEntry?.stories.length));
+
+      if (nextCachedStoriesEntry === null) {
+        setIsStoryAvailabilityLoading(true);
+      }
+
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const stories = await getHotspotStories({
+          accessToken,
+          hotspotId: resolvedHotspotId,
+          status: "DRAFT",
+          tokenType: authSession.tokenType,
+        });
+        const mappedStories = buildHotspotThemeStoriesFromApi(hotspot, stories);
+
+        cacheHotspotStories({
+          hotspotId: resolvedHotspotId,
+          slug: hotspot.slug,
+          stories: mappedStories,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setHasApiStories(mappedStories.length > 0);
+      } catch (error) {
+        console.warn("[hotspot-detail] load hotspot stories failed", {
+          error: error instanceof Error ? error.message : error,
+          hotspotId: resolvedHotspotId,
+          slug: hotspot.slug,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setHasApiStories(Boolean(nextCachedStoriesEntry?.stories.length));
+      } finally {
+        if (isActive) {
+          setIsStoryAvailabilityLoading(false);
+        }
+      }
+    };
+
+    void loadHotspotStoriesAvailability();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    hotspot,
+    resolvedHotspotId,
+  ]);
 
   if (!hotspot) {
+    if (isRemoteHotspotLoading) {
+      return <LoadingState />;
+    }
+
+    if (remoteHotspotError) {
+      return <LoadFailedState message={remoteHotspotError} />;
+    }
+
     return <NotFoundState />;
   }
 
@@ -1468,10 +2053,16 @@ export default function HotspotDetailScreen() {
   const activeHeroImageUri =
     galleryPreviewImages[activeGalleryIndex] ?? hotspot.imageUri;
   const rewardXp = getRewardValue(hotspot.reward);
+  const canOpenStories =
+    resolvedHotspotId !== null ? hasApiStories : Boolean(matchedLocalHotspot);
   const hotspotCheckinId = hotspot.slug;
   const isCheckedIn = checkins.includes(hotspotCheckinId);
   const historicalPreview = getHistoricalPreview(hotspot.story);
   const audioStoryDurationLabel = getAudioStoryDurationLabel(hotspot.story);
+  const hotspotStoriesHref =
+    resolvedHotspotId !== null
+      ? (`/hotspot/${hotspot.slug}/stories?hotspotId=${resolvedHotspotId}` as Href)
+      : (`/hotspot/${hotspot.slug}/stories` as Href);
   const relatedRoutes = getRelatedRoutesForHotspot(hotspot);
   const currentHotspotRouteIds = getRouteLookupIds(hotspot);
   const routeProgressRoute = relatedRoutes.find((route) =>
@@ -1495,40 +2086,20 @@ export default function HotspotDetailScreen() {
     hotspot,
     galleryPreviewImages,
   );
+  const reviewSummaryLabel = buildReviewSummaryLabel({
+    apiHotspot: remoteHotspot,
+    matchedLocalHotspot,
+  });
   const reviewerPreviewEntries: CommunityBoardEntry[] = [
     ...communityBoards.community.entries,
     ...communityBoards.friends.entries,
   ].slice(0, 3);
-
-  const summaryStats: SummaryStatItem[] = [
-    {
-      icon: {
-        ios: "star.fill",
-        android: "star",
-        web: "star",
-      } as SymbolName,
-      label: "Rating",
-      value: hotspot.rating.toFixed(1),
-    },
-    {
-      icon: {
-        ios: "location.fill",
-        android: "place",
-        web: "place",
-      } as SymbolName,
-      label: "Distance",
-      value: hotspot.distance,
-    },
-    {
-      icon: {
-        ios: "gift.fill",
-        android: "redeem",
-        web: "redeem",
-      } as SymbolName,
-      label: "XP",
-      value: `+${rewardXp}`,
-    },
-  ];
+  const summaryStats = buildSummaryStats({
+    apiHotspot: remoteHotspot,
+    hotspot,
+    matchedLocalHotspot,
+    rewardXp,
+  });
 
   return (
     <View className="flex-1" style={{ backgroundColor: screenBackground }}>
@@ -1805,6 +2376,14 @@ export default function HotspotDetailScreen() {
                 {hotspot.overview}
               </Text>
 
+              {remoteHotspotError && localHotspot ? (
+                <View className="mt-4 rounded-[22px] bg-[#FFF4E8] px-4 py-3">
+                  <Text className="text-[13px] font-bold text-[#B45309]">
+                    {`${remoteHotspotError} Đang hiển thị dữ liệu cục bộ.`}
+                  </Text>
+                </View>
+              ) : null}
+
               <View className="mt-5 flex-row flex-wrap justify-between gap-y-3">
                 {summaryStats.map((item, index) => (
                   <View
@@ -1834,7 +2413,7 @@ export default function HotspotDetailScreen() {
 
                 <View className="rounded-full bg-[#F7EFF6] px-3 py-2">
                   <Text className="text-[11px] font-bold text-[#7E6F82]">
-                    {formatCompactCount(hotspot.reviews)} reviews
+                    {reviewSummaryLabel}
                   </Text>
                 </View>
               </View>
@@ -1850,20 +2429,21 @@ export default function HotspotDetailScreen() {
                 access={`${hotspot.scheduleLabel} · ${hotspot.ticketLabel}`}
                 address={hotspot.address}
                 atmosphere={hotspot.vibeTags.join(" • ")}
+                bestTime={hotspot.bestTimeLabel}
               />
             </View>
 
             <View className="mt-7 gap-5">
               <HistoricalInfoSection text={historicalPreview} />
 
-              <HiddenStoryCheckinSection
-                audioStoryDurationLabel={audioStoryDurationLabel}
-                isCheckedIn={isCheckedIn}
-                onCheckinPress={() => setIsCheckinOverlayVisible(true)}
-                onListenStories={() =>
-                  router.push(`/hotspot/${hotspot.slug}/stories` as Href)
-                }
-              />
+                <HiddenStoryCheckinSection
+                  audioStoryDurationLabel={audioStoryDurationLabel}
+                  isCheckedIn={isCheckedIn}
+                  isStoryAvailabilityLoading={isStoryAvailabilityLoading}
+                  isStoryAvailable={canOpenStories}
+                  onCheckinPress={() => setIsCheckinOverlayVisible(true)}
+                  onListenStories={() => router.push(hotspotStoriesHref)}
+                />
             </View>
 
             <View className="mt-8 gap-5">
@@ -1939,6 +2519,8 @@ export default function HotspotDetailScreen() {
           <HotspotGpsCheckinOverlay
             audioStoryDurationLabel={audioStoryDurationLabel}
             hotspot={hotspot}
+            hotspotId={resolvedHotspotId}
+            isStoryAvailable={canOpenStories}
             onClose={() => setIsCheckinOverlayVisible(false)}
             onSuccess={() => addCheckin(hotspotCheckinId)}
             rewardXp={rewardXp}

@@ -3,11 +3,11 @@ import { Platform } from "react-native";
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 
 type GetTagsRequest = {
-  accessToken: string;
+  accessToken?: string | null;
   tokenType?: string | null;
 };
 
-type TagDto = {
+export type ActiveTagDto = {
   createdAt: string;
   tagId: number;
   tagName: string;
@@ -16,7 +16,7 @@ type TagDto = {
 };
 
 type GetTagsResponse = {
-  content: TagDto[];
+  content: ActiveTagDto[];
 };
 
 function resolveGetTagsUrl() {
@@ -31,7 +31,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isTagDto(value: unknown): value is TagDto {
+function isTagDto(value: unknown): value is ActiveTagDto {
   if (!isObject(value)) {
     return false;
   }
@@ -123,16 +123,33 @@ export async function getActiveTagNames({
   accessToken,
   tokenType,
 }: GetTagsRequest): Promise<string[]> {
+  const tags = await getActiveTags({
+    accessToken,
+    tokenType,
+  });
+
+  return tags.map((item) => item.tagName);
+}
+
+export async function getActiveTags({
+  accessToken,
+  tokenType,
+}: GetTagsRequest): Promise<ActiveTagDto[]> {
   const getTagsUrl = resolveGetTagsUrl();
+  const resolvedAccessToken = accessToken?.trim();
   let response: Response;
 
   try {
     response = await fetch(getTagsUrl, {
       headers: {
         Accept: "application/json",
-        Authorization: `${tokenType ?? "Bearer"} ${accessToken}`,
         "Content-Type": "application/json",
         "X-Client-Type": "mobile",
+        ...(resolvedAccessToken
+          ? {
+              Authorization: `${tokenType ?? "Bearer"} ${resolvedAccessToken}`,
+            }
+          : {}),
       },
       method: "GET",
     });
@@ -164,11 +181,20 @@ export async function getActiveTagNames({
     throw new Error("API chủ đề trả về dữ liệu không đúng định dạng.");
   }
 
-  return Array.from(
-    new Set(
-      responseBody.content
-        .map((item) => item.tagName.trim())
-        .filter(Boolean),
-    ),
-  );
+  const tagsById = new Map<number, ActiveTagDto>();
+
+  responseBody.content.forEach((item) => {
+    const normalizedTagName = item.tagName.trim();
+
+    if (!normalizedTagName || tagsById.has(item.tagId)) {
+      return;
+    }
+
+    tagsById.set(item.tagId, {
+      ...item,
+      tagName: normalizedTagName,
+    });
+  });
+
+  return Array.from(tagsById.values());
 }

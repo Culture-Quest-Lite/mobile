@@ -4,8 +4,10 @@ import { useAuthSession, getValidAccessToken } from "@/features/auth/hooks/use-a
 import { getHotspotBySlug, type HotspotDetail } from "@/features/home/data/hotspots";
 import { routes, type RouteItem } from "@/lib/demo-data";
 
+import { getGamificationLevels } from "../api/get-levels";
 import { getMyProfile } from "../api/get-me";
 import { CURRENT_USER_ID, getProfileById, getProfilePosts } from "../data/profile-demo";
+import { applyLevelProgressToProfile } from "../lib/level-progress";
 import type { Profile, ProfilePost } from "../types";
 
 type UseProfileResult = {
@@ -29,10 +31,6 @@ function mergeProfileWithFallback(
     ...profile,
     avatar: profile.avatar ?? fallbackProfile.avatar,
     cover: profile.cover ?? fallbackProfile.cover,
-    currentLevelXp: profile.currentLevelXp ?? fallbackProfile.currentLevelXp,
-    level: profile.level ?? fallbackProfile.level,
-    levelName: profile.levelName ?? fallbackProfile.levelName,
-    xpToNext: profile.xpToNext ?? fallbackProfile.xpToNext,
   };
 }
 
@@ -66,16 +64,47 @@ export function useProfile(userId?: string): UseProfileResult {
           throw new Error("Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.");
         }
 
-        const nextProfile = await getMyProfile({
-          accessToken,
-          tokenType: authSession.tokenType,
-        });
+        const [profileResult, levelsResult] = await Promise.allSettled([
+          getMyProfile({
+            accessToken,
+            tokenType: authSession.tokenType,
+          }),
+          getGamificationLevels({
+            accessToken,
+            tokenType: authSession.tokenType,
+          }),
+        ]);
+
+        if (profileResult.status !== "fulfilled") {
+          throw profileResult.reason;
+        }
+
+        let resolvedProfile = profileResult.value;
+
+        if (levelsResult.status === "fulfilled") {
+          resolvedProfile = applyLevelProgressToProfile(
+            profileResult.value,
+            levelsResult.value,
+          );
+        } else {
+          const levelError = levelsResult.reason;
+          console.warn("[profile] level progress unavailable", {
+            error:
+              levelError instanceof Error
+                ? {
+                    message: levelError.message,
+                    name: levelError.name,
+                    stack: levelError.stack,
+                  }
+                : levelError,
+          });
+        }
 
         if (!isActive) {
           return;
         }
 
-        setProfile(mergeProfileWithFallback(nextProfile, fallbackProfile));
+        setProfile(mergeProfileWithFallback(resolvedProfile, fallbackProfile));
       } catch (nextError) {
         if (!isActive) {
           return;

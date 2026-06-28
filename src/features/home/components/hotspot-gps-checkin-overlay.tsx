@@ -22,7 +22,23 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import type { HotspotDetail } from "../data/hotspots";
+import {
+  getValidAccessToken,
+  useAuthSession,
+} from "@/features/auth/hooks/use-auth-session";
+import {
+  getDevelopmentLocationOverride,
+  getDeviceCoordinate,
+} from "@/lib/location";
+
+import { createCheckIn, type CheckInResponse } from "../api/post-checkin";
+import { getHotspotStories } from "../api/get-hotspot-stories";
+import { cacheHotspotStories } from "../data/hotspot-story-cache";
+import { buildHotspotThemeStoriesFromApi } from "../data/hotspot-theme-stories";
+import {
+  getHotspotCoordinateBySlug,
+  type HotspotDetail,
+} from "../data/hotspots";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 
@@ -69,18 +85,6 @@ const SUCCESS_SECONDARY_BUTTON_BORDER = "rgba(235, 72, 155, 0.16)";
 const SUCCESS_CHECK_ICON_COLOR = "#22C55E";
 const SUCCESS_CHECK_ICON_BORDER = "rgba(255, 255, 255, 0.92)";
 
-const hotspotCoordinatesBySlug: Record<string, Coordinate> = {
-  "bao-tang-my-thuat": { latitude: 10.7694, longitude: 106.6981 },
-  "buu-dien-sai-gon": { latitude: 10.78012, longitude: 106.69901 },
-  "cho-dam": { latitude: 12.25136, longitude: 109.19063 },
-  "demo-checkin-story": { latitude: 10.77712, longitude: 106.69531 },
-  "dinh-doc-lap": { latitude: 10.77712, longitude: 106.69531 },
-  "duong-sach-nguyen-van-binh": { latitude: 10.78039, longitude: 106.69957 },
-  "nha-hat-thanh-pho": { latitude: 10.77656, longitude: 106.70335 },
-  "nha-tho-duc-ba": { latitude: 10.77972, longitude: 106.69903 },
-  "pho-di-bo-nguyen-hue": { latitude: 10.77274, longitude: 106.70322 },
-};
-
 function isAlwaysReadyHotspot(hotspot: HotspotDetail) {
   return hotspot.checkinMode === "always-ready";
 }
@@ -108,7 +112,7 @@ const buttonShadowStyle = {
 } as const;
 
 function getHotspotCoordinate(hotspot: HotspotDetail) {
-  return hotspotCoordinatesBySlug[hotspot.slug] ?? null;
+  return hotspot.coordinate ?? getHotspotCoordinateBySlug(hotspot.slug);
 }
 
 function toRadians(value: number) {
@@ -322,6 +326,22 @@ function formatDistance(distanceMeters: number | null) {
   }
 
   return `${(distanceMeters / 1000).toFixed(1)}km`;
+}
+
+function formatCheckInTimestamp(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const pad = (part: number) => part.toString().padStart(2, "0");
+
+  return `${pad(date.getHours())}:${pad(date.getMinutes())} ${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
+}
+
+function formatNumericValue(value: number) {
+  return value.toLocaleString("vi-VN");
 }
 
 function buildStatusCopy(
@@ -754,6 +774,8 @@ function SuccessRing() {
 export function HotspotGpsCheckinOverlay({
   audioStoryDurationLabel,
   hotspot,
+  hotspotId,
+  isStoryAvailable = true,
   onClose,
   onSuccess,
   rewardXp,
@@ -762,6 +784,8 @@ export function HotspotGpsCheckinOverlay({
 }: {
   audioStoryDurationLabel: string;
   hotspot: HotspotDetail;
+  hotspotId?: number | null;
+  isStoryAvailable?: boolean;
   onClose: () => void;
   onSuccess: () => void;
   rewardXp: string;
@@ -769,6 +793,7 @@ export function HotspotGpsCheckinOverlay({
   visitedRouteStopsCount?: number;
 }) {
   const router = useRouter();
+  const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
   const [checkinStage, setCheckinStage] = useState<CheckinFlowStage>("verify");
   const [verificationStatus, setVerificationStatus] =
@@ -777,6 +802,62 @@ export function HotspotGpsCheckinOverlay({
   const [currentCoordinate, setCurrentCoordinate] = useState<Coordinate | null>(
     null,
   );
+  const [isStoryPrefetching, setIsStoryPrefetching] = useState(false);
+  const [storyPrefetchError, setStoryPrefetchError] = useState<string | null>(null);
+  const [isSubmittingCheckIn, setIsSubmittingCheckIn] = useState(false);
+  const [checkInError, setCheckInError] = useState<string | null>(null);
+  const [checkInResult, setCheckInResult] = useState<CheckInResponse | null>(null);
+  const storiesHref =
+    typeof hotspotId === "number" && hotspotId > 0
+      ? (`/hotspot/${hotspot.slug}/stories?hotspotId=${hotspotId}` as Href)
+      : (`/hotspot/${hotspot.slug}/stories` as Href);
+
+  const prefetchUnlockedStories = useCallback(async () => {
+    if (!(typeof hotspotId === "number" && hotspotId > 0) || !isStoryAvailable) {
+      return;
+    }
+
+    setIsStoryPrefetching(true);
+    setStoryPrefetchError(null);
+
+    try {
+      const accessToken = authSession.isAuthenticated
+        ? await getValidAccessToken()
+        : null;
+      const stories = await getHotspotStories({
+        accessToken,
+        hotspotId,
+        status: "DRAFT",
+        tokenType: authSession.tokenType,
+      });
+      const mappedStories = buildHotspotThemeStoriesFromApi(hotspot, stories);
+
+      cacheHotspotStories({
+        hotspotId,
+        slug: hotspot.slug,
+        stories: mappedStories,
+      });
+    } catch (error) {
+      console.warn("[checkin] prefetch hotspot stories failed", {
+        error: error instanceof Error ? error.message : error,
+        hotspotId,
+        slug: hotspot.slug,
+      });
+      setStoryPrefetchError(
+        error instanceof Error
+          ? error.message
+          : "Không tải được story từ hệ thống.",
+      );
+    } finally {
+      setIsStoryPrefetching(false);
+    }
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    hotspot,
+    hotspotId,
+    isStoryAvailable,
+  ]);
 
   const verifyCurrentLocation = useCallback(async () => {
     const hotspotCoordinate = getHotspotCoordinate(hotspot);
@@ -799,6 +880,22 @@ export function HotspotGpsCheckinOverlay({
         return;
       }
 
+      const developmentLocation = getDevelopmentLocationOverride();
+
+      if (developmentLocation) {
+        const nextDistanceMeters = getDistanceMeters(
+          developmentLocation,
+          hotspotCoordinate,
+        );
+
+        setCurrentCoordinate(developmentLocation);
+        setDistanceMeters(nextDistanceMeters);
+        setVerificationStatus(
+          nextDistanceMeters <= CHECKIN_RADIUS_METERS ? "ready" : "too-far",
+        );
+        return;
+      }
+
       const permissionResponse =
         await Location.requestForegroundPermissionsAsync();
 
@@ -815,23 +912,20 @@ export function HotspotGpsCheckinOverlay({
         }
       }
 
-      const location =
-        (await Location.getLastKnownPositionAsync({
-          maxAge: 15_000,
-          requiredAccuracy: 80,
-        })) ??
-        (await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        }));
+      const nextCoordinate = await getDeviceCoordinate({
+        accuracy: Location.Accuracy.High,
+        maxAge: 15_000,
+        requiredAccuracy: 80,
+      });
 
-      const nextCoordinate = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      };
-      const nextDistanceMeters = getDistanceMeters(
-        nextCoordinate,
-        hotspotCoordinate,
-      );
+      if (!nextCoordinate) {
+        setVerificationStatus("error");
+        setDistanceMeters(null);
+        setCurrentCoordinate(null);
+        return;
+      }
+
+      const nextDistanceMeters = getDistanceMeters(nextCoordinate, hotspotCoordinate);
 
       setCurrentCoordinate(nextCoordinate);
       setDistanceMeters(nextDistanceMeters);
@@ -845,6 +939,69 @@ export function HotspotGpsCheckinOverlay({
     }
   }, [hotspot]);
 
+  const hotspotCoordinate = getHotspotCoordinate(hotspot);
+
+  const submitCheckIn = useCallback(async () => {
+    if (!authSession.isAuthenticated) {
+      onClose();
+      router.push("/login?entry=home" as Href);
+      return;
+    }
+
+    if (!(typeof hotspotId === "number" && hotspotId > 0)) {
+      setCheckInError("Hotspot này chưa có mã API để gửi check-in.");
+      return;
+    }
+
+    const accessToken = await getValidAccessToken();
+
+    if (!accessToken) {
+      setCheckInError("Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.");
+      return;
+    }
+
+    const requestCoordinate = currentCoordinate ?? hotspotCoordinate;
+
+    if (!requestCoordinate) {
+      setCheckInError("Không xác định được vị trí để gửi check-in.");
+      return;
+    }
+
+    setIsSubmittingCheckIn(true);
+    setCheckInError(null);
+
+    try {
+      const nextCheckInResult = await createCheckIn({
+        accessToken,
+        hotspotId,
+        latitude: requestCoordinate.latitude,
+        longitude: requestCoordinate.longitude,
+        tokenType: authSession.tokenType,
+      });
+
+      setCheckInResult(nextCheckInResult);
+      onSuccess();
+      setCheckinStage("success");
+      void prefetchUnlockedStories();
+    } catch (error) {
+      setCheckInError(
+        error instanceof Error ? error.message : "Không thể hoàn tất check-in.",
+      );
+    } finally {
+      setIsSubmittingCheckIn(false);
+    }
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    currentCoordinate,
+    hotspotCoordinate,
+    hotspotId,
+    onClose,
+    onSuccess,
+    prefetchUnlockedStories,
+    router,
+  ]);
+
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       void verifyCurrentLocation();
@@ -853,7 +1010,6 @@ export function HotspotGpsCheckinOverlay({
     return () => clearTimeout(timeoutId);
   }, [verifyCurrentLocation]);
 
-  const hotspotCoordinate = getHotspotCoordinate(hotspot);
   const verificationCopy = buildStatusCopy(
     verificationStatus,
     distanceMeters,
@@ -864,10 +1020,83 @@ export function HotspotGpsCheckinOverlay({
     typeof visitedRouteStopsCount === "number"
       ? `${visitedRouteStopsCount}/${totalRouteStopsCount} chặng đã ghé`
       : "Đã xác minh tại hotspot này";
+  const parsedRewardXp = Number(rewardXp.replace(/\D/g, ""));
+  const xpEarned =
+    checkInResult?.xpEarned ??
+    (Number.isFinite(parsedRewardXp) ? parsedRewardXp : 0);
+  const pointEarned = checkInResult?.pointEarned ?? null;
+  const checkInMetaLabel = checkInResult
+    ? [
+        `Check-in #${checkInResult.checkInId}`,
+        `Hotspot #${checkInResult.hotspotId}`,
+        formatCheckInTimestamp(checkInResult.checkInAt),
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
   const isSuccessStage = checkinStage === "success";
   const verifyButtonColors = verificationCopy.primaryDisabled
     ? VERIFY_BUTTON_DISABLED_COLORS
     : LOGIN_GRADIENT_COLORS;
+  const isPrimaryActionDisabled =
+    verificationCopy.primaryDisabled || isSubmittingCheckIn;
+  const primaryButtonLabel =
+    verificationStatus === "ready" && isSubmittingCheckIn
+      ? "Đang check-in..."
+      : verificationCopy.primaryLabel;
+  const successRows = [
+    {
+      icon: {
+        ios: "sparkles",
+        android: "auto_awesome",
+        web: "auto_awesome",
+      } as SymbolName,
+      iconBackground: "#FFC93C",
+      label: "Phần thưởng",
+      trailing: `+${formatNumericValue(xpEarned)}`,
+      value: `+${formatNumericValue(xpEarned)} XP`,
+    },
+    ...(pointEarned !== null
+      ? [
+          {
+            icon: {
+              ios: "dollarsign.circle.fill",
+              android: "monetization_on",
+              web: "monetization_on",
+            } as SymbolName,
+            iconBackground: "#F58752",
+            label: "Điểm nhận",
+            trailing: `+${formatNumericValue(pointEarned)}`,
+            value: `+${formatNumericValue(pointEarned)} điểm`,
+          },
+        ]
+      : []),
+    {
+      icon: {
+        ios: "speaker.wave.2.fill",
+        android: "volume_up",
+        web: "volume_up",
+      } as SymbolName,
+      iconBackground: SUCCESS_CHECK_ICON_COLOR,
+      label: "Mở khóa",
+      trailing: "✓",
+      value: `Story hotspot ${audioStoryDurationLabel}`,
+    },
+    {
+      icon: {
+        ios: "map.fill",
+        android: "map",
+        web: "map",
+      } as SymbolName,
+      iconBackground: SUCCESS_CHECK_ICON_COLOR,
+      label: "Tiến độ tuyến",
+      trailing:
+        checkInResult?.userRouteProgressId !== undefined
+          ? `#${checkInResult.userRouteProgressId}`
+          : "✓",
+      value: routeProgressLabel,
+    },
+  ];
 
   return (
     <Modal
@@ -980,45 +1209,13 @@ export function HotspotGpsCheckinOverlay({
                     },
                   ]}
                 >
-                  {[
-                    {
-                      icon: {
-                        ios: "sparkles",
-                        android: "auto_awesome",
-                        web: "auto_awesome",
-                      } as SymbolName,
-                      iconBackground: "#FFC93C",
-                      label: "Phần thưởng",
-                      trailing: `+${rewardXp}`,
-                      value: `+${rewardXp} XP`,
-                    },
-                    {
-                      icon: {
-                        ios: "speaker.wave.2.fill",
-                        android: "volume_up",
-                        web: "volume_up",
-                      } as SymbolName,
-                      iconBackground: SUCCESS_CHECK_ICON_COLOR,
-                      label: "Mở khóa",
-                      trailing: "✓",
-                      value: `Audio story ${audioStoryDurationLabel}`,
-                    },
-                    {
-                      icon: {
-                        ios: "map.fill",
-                        android: "map",
-                        web: "map",
-                      } as SymbolName,
-                      iconBackground: SUCCESS_CHECK_ICON_COLOR,
-                      label: "Tiến độ tuyến",
-                      trailing: "✓",
-                      value: routeProgressLabel,
-                    },
-                  ].map((item, index) => (
+                  {successRows.map((item, index) => (
                     <View
                       key={item.label}
                       className={
-                        index === 2 ? "flex-row items-center" : "mb-3 flex-row items-center"
+                        index === successRows.length - 1
+                          ? "flex-row items-center"
+                          : "mb-3 flex-row items-center"
                       }
                     >
                       <View
@@ -1047,7 +1244,7 @@ export function HotspotGpsCheckinOverlay({
                         className="text-[16px] font-black"
                         style={{
                           color:
-                            item.label === "Phần thưởng"
+                            item.label === "Phần thưởng" || item.label === "Điểm nhận"
                               ? "#F58752"
                               : SUCCESS_CHECK_ICON_COLOR,
                         }}
@@ -1058,37 +1255,59 @@ export function HotspotGpsCheckinOverlay({
                   ))}
                 </View>
 
-                <Pressable
-                  className="mt-8 overflow-hidden rounded-full"
-                  onPress={() => router.push(`/hotspot/${hotspot.slug}/stories` as Href)}
-                  style={buttonShadowStyle}
-                >
-                  <LinearGradient
-                    colors={SUCCESS_PRIMARY_BUTTON_COLORS}
-                    end={{ x: 1, y: 0.5 }}
-                    locations={[0, 0.58, 1]}
-                    start={{ x: 0, y: 0.5 }}
-                    className="flex-row items-center justify-center px-5 py-4"
+                {isStoryAvailable ? (
+                  <Pressable
+                    className="mt-8 overflow-hidden rounded-full"
+                    onPress={() => router.push(storiesHref)}
+                    style={buttonShadowStyle}
                   >
-                    <SymbolView
-                      name={
-                        {
-                          ios: "speaker.wave.2.fill",
-                          android: "volume_up",
-                          web: "volume_up",
-                        } as SymbolName
-                      }
-                      size={16}
-                      tintColor="#FFFFFF"
-                    />
-                    <Text className="ml-2 text-[15px] font-black text-white">
-                      Xem audio story
-                    </Text>
-                  </LinearGradient>
-                </Pressable>
+                    <LinearGradient
+                      colors={SUCCESS_PRIMARY_BUTTON_COLORS}
+                      end={{ x: 1, y: 0.5 }}
+                      locations={[0, 0.58, 1]}
+                      start={{ x: 0, y: 0.5 }}
+                      className="flex-row items-center justify-center px-5 py-4"
+                    >
+                      <SymbolView
+                        name={
+                          {
+                            ios: "speaker.wave.2.fill",
+                            android: "volume_up",
+                            web: "volume_up",
+                          } as SymbolName
+                        }
+                        size={16}
+                        tintColor="#FFFFFF"
+                      />
+                      <Text className="ml-2 text-[15px] font-black text-white">
+                        Xem story hotspot
+                      </Text>
+                    </LinearGradient>
+                  </Pressable>
+                ) : null}
+
+                {isStoryAvailable && isStoryPrefetching ? (
+                  <Text className="mt-4 text-center text-[12px] font-medium text-[#A897B2]">
+                    Đang tải story từ API cho hotspot này...
+                  </Text>
+                ) : null}
+
+                {isStoryAvailable && storyPrefetchError ? (
+                  <Text className="mt-4 text-center text-[12px] font-medium text-[#D97706]">
+                    {storyPrefetchError}
+                  </Text>
+                ) : null}
+
+                {checkInMetaLabel ? (
+                  <Text className="mt-4 text-center text-[12px] font-medium text-[#8E869A]">
+                    {checkInMetaLabel}
+                  </Text>
+                ) : null}
 
                 <Text className="mt-6 text-center text-[12px] leading-5 text-[#8E869A]">
-                  {`Mở khóa +${rewardXp} XP, audio story và đánh giá địa điểm.`}
+                  {isStoryAvailable
+                    ? `Mở khóa +${formatNumericValue(xpEarned)} XP, story hotspot và đánh giá địa điểm.`
+                    : `Mở khóa +${formatNumericValue(xpEarned)} XP và hoàn tất check-in cho địa điểm này.`}
                 </Text>
 
                 <Pressable
@@ -1221,11 +1440,10 @@ export function HotspotGpsCheckinOverlay({
 
                 <Pressable
                   className="mt-6 overflow-hidden rounded-full"
-                  disabled={verificationCopy.primaryDisabled}
+                  disabled={isPrimaryActionDisabled}
                   onPress={() => {
                     if (verificationStatus === "ready") {
-                      onSuccess();
-                      setCheckinStage("success");
+                      void submitCheckIn();
                       return;
                     }
 
@@ -1240,7 +1458,7 @@ export function HotspotGpsCheckinOverlay({
                     start={{ x: 0, y: 0.5 }}
                     className="flex-row items-center justify-center px-5 py-4"
                     style={{
-                      opacity: verificationCopy.primaryDisabled ? 0.84 : 1,
+                      opacity: isPrimaryActionDisabled ? 0.84 : 1,
                     }}
                   >
                     <SymbolView
@@ -1264,13 +1482,19 @@ export function HotspotGpsCheckinOverlay({
                       tintColor="#FFFFFF"
                     />
                     <Text className="ml-2 text-[17px] font-black text-white">
-                      {verificationCopy.primaryLabel}
+                      {primaryButtonLabel}
                     </Text>
                   </LinearGradient>
                 </Pressable>
 
+                {checkInError ? (
+                  <Text className="mt-4 text-center text-[12px] font-medium text-[#D97706]">
+                    {checkInError}
+                  </Text>
+                ) : null}
+
                 <Text className="mt-4 text-center text-[12px] leading-5 text-[#8E869A]">
-                  {`Mở khóa +${rewardXp} XP, audio story và đánh giá địa điểm.`}
+                  {`Mở khóa +${rewardXp} XP, story hotspot và đánh giá địa điểm.`}
                 </Text>
               </View>
             </View>
