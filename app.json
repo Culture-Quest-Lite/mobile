@@ -40,7 +40,9 @@
         {
           "locationWhenInUsePermission": "Cho phép Culture Quest truy cập vị trí của bạn để xác minh check-in gần hotspot."
         }
-      ]
+      ],
+      "expo-audio",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -15,7 +15,7 @@ export type CheckInResponse = {
   checkInId: number;
   hotspotId: number;
   pointEarned: number;
-  userRouteProgressId: number;
+  userRouteProgressId: number | null;
   xpEarned: number;
 };
 
@@ -39,6 +39,14 @@ function readString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+function readNullableNumber(value: unknown) {
+  if (value === null) {
+    return null;
+  }
+
+  return readNumber(value);
+}
+
 function parseCheckInResponse(value: unknown): CheckInResponse | null {
   if (!isObject(value)) {
     return null;
@@ -46,7 +54,7 @@ function parseCheckInResponse(value: unknown): CheckInResponse | null {
 
   const checkInId = readNumber(value.checkInId);
   const hotspotId = readNumber(value.hotspotId);
-  const userRouteProgressId = readNumber(value.userRouteProgressId);
+  const userRouteProgressId = readNullableNumber(value.userRouteProgressId);
   const pointEarned = readNumber(value.pointEarned);
   const xpEarned = readNumber(value.xpEarned);
   const checkInAt = readString(value.checkInAt);
@@ -54,9 +62,9 @@ function parseCheckInResponse(value: unknown): CheckInResponse | null {
   if (
     checkInId === null ||
     hotspotId === null ||
-    userRouteProgressId === null ||
     pointEarned === null ||
     xpEarned === null ||
+    (value.userRouteProgressId !== null && userRouteProgressId === null) ||
     !checkInAt.trim()
   ) {
     return null;
