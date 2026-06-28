@@ -25,12 +25,12 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import { forgotPassword } from "@/features/auth/api/forgot-password";
 import { AuthInput } from "@/features/auth/components/auth-input";
-import { SocialAuthButton } from "@/features/auth/components/social-auth-button";
-import { signInWithPassword } from "@/features/auth/hooks/use-auth-session";
-import { hasAnyFieldError, validateLoginForm } from "@/features/auth/utils/validation";
+import { hasAnyFieldError } from "@/features/auth/utils/validation";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const cardShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.22)",
@@ -54,21 +54,33 @@ const buttonShadowStyle = {
   elevation: 6,
 } as const;
 
-export default function LoginScreen() {
+function validateForgotPasswordForm(email: string) {
+  const errors: { email?: string } = {};
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    errors.email = "Vui lòng nhập email.";
+  } else if (!emailPattern.test(normalizedEmail)) {
+    errors.email = "Email không đúng định dạng.";
+  }
+
+  return errors;
+}
+
+export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const { entry } = useLocalSearchParams<{ entry?: string }>();
+  const { email: emailParam, entry } = useLocalSearchParams<{
+    email?: string;
+    entry?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const logoFloat = useSharedValue(0);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(emailParam?.trim() ?? "");
   const [didAttemptSubmit, setDidAttemptSubmit] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [touchedFields, setTouchedFields] = useState({
-    password: false,
-    username: false,
-  });
+  const [touchedEmail, setTouchedEmail] = useState(false);
   const isCompactScreen = height <= 760;
   const heroHeight = isCompactScreen ? 208 : 255;
   const heroTopPadding = insets.top + (isCompactScreen ? 16 : 24);
@@ -86,17 +98,14 @@ export default function LoginScreen() {
     : "h-12 rounded-xl";
   const buttonHeightClassName = isCompactScreen ? "h-12" : "h-[52px]";
   const formGapClassName = isCompactScreen ? "gap-3" : "gap-4";
-  const footerGapClassName = isCompactScreen ? "gap-3 pt-4" : "gap-4 pt-6";
   const backButtonTop = insets.top + (isCompactScreen ? 10 : 12);
-  const loginErrors = validateLoginForm({
-    password,
-    username,
-  });
-  const usernameError =
-    touchedFields.username || didAttemptSubmit ? loginErrors.username ?? null : null;
-  const passwordError =
-    touchedFields.password || didAttemptSubmit ? loginErrors.password ?? null : null;
-  const isSubmitDisabled = isSubmitting || hasAnyFieldError(loginErrors);
+  const forgotPasswordErrors = validateForgotPasswordForm(email);
+  const emailError =
+    touchedEmail || didAttemptSubmit
+      ? (forgotPasswordErrors.email ?? null)
+      : null;
+  const isSubmitDisabled =
+    isSubmitting || hasAnyFieldError(forgotPasswordErrors);
 
   useEffect(() => {
     if (entry !== "home") {
@@ -131,59 +140,44 @@ export default function LoginScreen() {
     };
   });
 
-  const handleLogin = async () => {
+  const goBackToLogin = () => {
+    router.replace("/login?entry=home");
+  };
+
+  const handleSubmit = async () => {
     setDidAttemptSubmit(true);
 
-    if (hasAnyFieldError(loginErrors)) {
-      console.warn("[auth] login blocked by client validation", {
-        errors: loginErrors,
-      });
+    if (hasAnyFieldError(forgotPasswordErrors)) {
       return;
     }
 
-    const normalizedUsername = username.trim();
+    const normalizedEmail = email.trim().toLowerCase();
 
-    console.info("[auth] login submitted from screen", {
-      username:
-        normalizedUsername.length <= 2
-          ? normalizedUsername
-          : `${normalizedUsername.slice(0, 2)}***${normalizedUsername.slice(-2)}`,
-    });
     setErrorMessage(null);
     setIsSubmitting(true);
 
     try {
-      await signInWithPassword(normalizedUsername, password);
-      console.info("[auth] login navigation to /home");
-      router.replace("/home");
-    } catch (error) {
-      console.warn("[auth] login screen caught error", {
-        error:
-          error instanceof Error
-            ? { message: error.message, name: error.name, stack: error.stack }
-            : error,
+      const response = await forgotPassword({
+        email: normalizedEmail,
       });
+
+      router.replace({
+        pathname: "./forgot-password-success",
+        params: {
+          email: normalizedEmail,
+          entry: "home",
+          message: response.message ?? undefined,
+        },
+      });
+    } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "Không thể đăng nhập. Vui lòng thử lại.",
+          : "Không thể gửi email khôi phục. Vui lòng thử lại.",
       );
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const markFieldTouched = (field: "password" | "username") => {
-    setTouchedFields((currentValue) => {
-      if (currentValue[field]) {
-        return currentValue;
-      }
-
-      return {
-        ...currentValue,
-        [field]: true,
-      };
-    });
   };
 
   if (entry !== "home") {
@@ -213,7 +207,7 @@ export default function LoginScreen() {
             }}
           >
             <Pressable
-              onPress={() => router.replace("/home")}
+              onPress={goBackToLogin}
               className="absolute left-6 h-11 w-11 items-center justify-center rounded-full bg-white/18"
               style={{ top: backButtonTop }}
             >
@@ -253,10 +247,11 @@ export default function LoginScreen() {
                   className="font-extrabold text-[#EB489B]"
                   style={{ fontSize: titleSize }}
                 >
-                  Đăng nhập
+                  Quên mật khẩu
                 </Text>
-                <Text className="text-[12px] text-[#8E869A]">
-                  Nhập tài khoản của bạn để đăng nhập
+                <Text className="text-center text-[12px] leading-5 text-[#8E869A]">
+                  Nhập email bạn đã dùng để đăng ký để tiếp tục khôi phục mật
+                  khẩu
                 </Text>
               </View>
 
@@ -264,62 +259,29 @@ export default function LoginScreen() {
                 <View className={formGapClassName}>
                   <AuthInput
                     autoCapitalize="none"
-                    autoComplete="username"
+                    autoComplete="email"
                     autoCorrect={false}
                     className="gap-1.5"
-                    editable={!isSubmitting}
-                    errorMessage={usernameError}
+                    errorMessage={emailError}
                     inputClassName={fieldHeightClassName}
-                    label="Username"
-                    placeholder="Nhập username"
-                    textContentType="username"
-                    value={username}
-                    onBlur={() => markFieldTouched("username")}
+                    keyboardType="email-address"
+                    label="Email"
+                    placeholder="Nhập địa chỉ email"
+                    textContentType="emailAddress"
+                    value={email}
+                    onBlur={() => setTouchedEmail(true)}
                     onChangeText={(value) => {
-                      setUsername(value);
+                      setEmail(value);
                       if (errorMessage) {
                         setErrorMessage(null);
                       }
                     }}
                   />
-                  <AuthInput
-                    autoCapitalize="none"
-                    autoComplete="password"
-                    className="gap-1.5"
-                    editable={!isSubmitting}
-                    errorMessage={passwordError}
-                    inputClassName={fieldHeightClassName}
-                    label="Password"
-                    onSubmitEditing={() => {
-                      void handleLogin();
-                    }}
-                    placeholder="Nhập mật khẩu"
-                    returnKeyType="done"
-                    secureTextEntry
-                    textContentType="password"
-                    value={password}
-                    onBlur={() => markFieldTouched("password")}
-                    onChangeText={(value) => {
-                      setPassword(value);
-                      if (errorMessage) {
-                        setErrorMessage(null);
-                      }
-                    }}
-                  />
-
-                  <Pressable
-                    className="self-end"
-                    onPress={() => router.push("/forgot-password?entry=home")}
-                  >
-                    <Text className="text-[12px] font-medium text-[#8E869A]">
-                      Bạn quên mật khẩu?
-                    </Text>
-                  </Pressable>
 
                   <Pressable
                     disabled={isSubmitDisabled}
                     onPress={() => {
-                      void handleLogin();
+                      void handleSubmit();
                     }}
                     className="rounded-[18px]"
                     style={[
@@ -335,45 +297,16 @@ export default function LoginScreen() {
                       className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
                     >
                       <Text className="text-[15px] font-extrabold text-white">
-                        {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
+                        {isSubmitting ? "Đang gửi email..." : "Gửi email khôi phục"}
                       </Text>
                     </LinearGradient>
                   </Pressable>
 
                   {errorMessage ? (
-                    <Text className="text-[12px] font-medium text-[#D6456C]">
+                    <Text className="text-[12px] font-medium leading-5 text-[#D6456C]">
                       {errorMessage}
                     </Text>
                   ) : null}
-                </View>
-
-                <View className={footerGapClassName}>
-                  <View className="flex-row items-center justify-center gap-3">
-                    <View className="h-px flex-1 bg-[#F0E8F4]" />
-                    <Text className="text-[11px] font-medium text-[#AA9FB0]">
-                      Hoặc đăng nhập với
-                    </Text>
-                    <View className="h-px flex-1 bg-[#F0E8F4]" />
-                  </View>
-
-                  <View className="flex-row justify-center gap-3.5">
-                    <SocialAuthButton accentColor="#EA4335" label="G" />
-
-                    <SocialAuthButton accentColor="#1877F2" label="f" />
-                  </View>
-
-                  <View className="flex-row items-center justify-center gap-1.5">
-                    <Text className="text-[12px] text-[#8E869A]">
-                      Bạn chưa có tài khoản?
-                    </Text>
-                    <Pressable
-                      onPress={() => router.push("/register?entry=home")}
-                    >
-                      <Text className="text-[12px] font-extrabold text-[#F58752]">
-                        Đăng ký
-                      </Text>
-                    </Pressable>
-                  </View>
                 </View>
               </View>
             </View>

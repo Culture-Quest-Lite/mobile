@@ -66,7 +66,7 @@ export function HiddenStoryUnlockedContent({
       </Text>
 
       <Text className="mt-3 max-w-[320px] text-center text-[14px] leading-6 text-[#6A5964]">
-        {`Bạn đã check-in tại hotspot này. Audio story ${audioStoryDurationLabel} và bạn kể chuyện độc quyền đã sẵn sàng.`}
+        {`Bạn đã check-in tại hotspot này. Story hotspot ${audioStoryDurationLabel} và nội dung độc quyền đã sẵn sàng.`}
       </Text>
 
       <View className="mt-6 w-full flex-row gap-3">
@@ -120,7 +120,7 @@ export function HiddenStoryUnlockedContent({
               tintColor="#FFFFFF"
             />
             <Text className="ml-2 text-[15px] font-black text-white">
-              Nghe story
+              Xem story
             </Text>
           </LinearGradient>
         </Pressable>

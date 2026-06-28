@@ -3,10 +3,13 @@ import '../global.css';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
+import { warnForInvalidPublicEnv } from '@/constants/env';
 import '@/lib/nativewind';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function RootLayout() {
+  warnForInvalidPublicEnv();
+
   const colorScheme = useColorScheme();
 
   return (
@@ -16,6 +19,8 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="community/profile/[id]" />
+        <Stack.Screen name="profile/information" />
+        <Stack.Screen name="profile/menu" />
         <Stack.Screen name="route/[id]" />
         <Stack.Screen name="checkin/[id]" />
         <Stack.Screen name="hotspot/[slug]" />

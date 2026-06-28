@@ -26,9 +26,13 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+import { registerWithPassword } from "@/features/auth/api/register";
 import { AuthInput } from "@/features/auth/components/auth-input";
 import { SocialAuthButton } from "@/features/auth/components/social-auth-button";
-import { signInAsExplorer } from "@/features/auth/hooks/use-auth-session";
+import {
+  hasAnyFieldError,
+  validateRegisterForm,
+} from "@/features/auth/utils/validation";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 
@@ -56,15 +60,33 @@ const buttonShadowStyle = {
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { entry } = useLocalSearchParams<{ entry?: string }>();
+  const params = useLocalSearchParams<{
+    displayName?: string;
+    email?: string;
+    entry?: string;
+    username?: string;
+  }>();
+  const { entry } = params;
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const logoFloat = useSharedValue(0);
-  const [fullName, setFullName] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState(params.username?.trim() ?? "");
+  const [displayName, setDisplayName] = useState(
+    params.displayName?.trim() ?? "",
+  );
+  const [email, setEmail] = useState(params.email?.trim() ?? "");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [didAttemptSubmit, setDidAttemptSubmit] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [touchedFields, setTouchedFields] = useState({
+    confirmPassword: false,
+    displayName: false,
+    email: false,
+    password: false,
+    username: false,
+  });
   const isCompactScreen = height <= 820;
   const heroHeight = isCompactScreen ? 190 : 235;
   const heroTopPadding = insets.top + (isCompactScreen ? 14 : 20);
@@ -85,6 +107,28 @@ export default function RegisterScreen() {
   const footerGapClassName = isCompactScreen ? "gap-3 pt-4" : "gap-4 pt-5";
   const buttonTopPaddingClassName = isCompactScreen ? "pt-0" : "pt-1";
   const backButtonTop = insets.top + (isCompactScreen ? 10 : 12);
+  const registerErrors = validateRegisterForm({
+    confirmPassword,
+    displayName,
+    email,
+    password,
+    username,
+  });
+  const usernameError =
+    touchedFields.username || didAttemptSubmit ? registerErrors.username ?? null : null;
+  const displayNameError =
+    touchedFields.displayName || didAttemptSubmit
+      ? registerErrors.displayName ?? null
+      : null;
+  const emailError =
+    touchedFields.email || didAttemptSubmit ? registerErrors.email ?? null : null;
+  const passwordError =
+    touchedFields.password || didAttemptSubmit ? registerErrors.password ?? null : null;
+  const confirmPasswordError =
+    touchedFields.confirmPassword || didAttemptSubmit
+      ? registerErrors.confirmPassword ?? null
+      : null;
+  const isSubmitDisabled = isSubmitting || hasAnyFieldError(registerErrors);
 
   useEffect(() => {
     if (entry !== "home") {
@@ -118,6 +162,73 @@ export default function RegisterScreen() {
       transform: [{ translateY: logoFloat.get() }],
     };
   });
+
+  const handleClearError = () => {
+    if (errorMessage) {
+      setErrorMessage(null);
+    }
+  };
+
+  const handleRegister = async () => {
+    setDidAttemptSubmit(true);
+
+    if (hasAnyFieldError(registerErrors)) {
+      console.warn("[auth] register blocked by client validation", {
+        errors: registerErrors,
+      });
+      return;
+    }
+
+    const normalizedUsername = username.trim();
+    const normalizedDisplayName = displayName.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    try {
+      const registeredUser = await registerWithPassword({
+        displayName: normalizedDisplayName,
+        email: normalizedEmail,
+        password,
+        username: normalizedUsername,
+      });
+
+      router.push({
+        pathname: "./verify-otp",
+        params: {
+          displayName: registeredUser.displayName,
+          email: registeredUser.email,
+          entry: "home",
+          name: (registeredUser.displayName || registeredUser.username).trim(),
+          username: registeredUser.username,
+        },
+      });
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Không thể đăng ký. Vui lòng thử lại.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const markFieldTouched = (
+    field: "confirmPassword" | "displayName" | "email" | "password" | "username",
+  ) => {
+    setTouchedFields((currentValue) => {
+      if (currentValue[field]) {
+        return currentValue;
+      }
+
+      return {
+        ...currentValue,
+        [field]: true,
+      };
+    });
+  };
 
   if (entry !== "home") {
     return null;
@@ -203,71 +314,109 @@ export default function RegisterScreen() {
                 <View style={{ marginTop: sectionTopMargin }}>
                   <View className={formGapClassName}>
                     <AuthInput
-                      autoCapitalize="words"
-                      autoComplete="name"
+                      autoCapitalize="none"
+                      autoComplete="username"
+                      autoCorrect={false}
                       className="gap-1.5"
+                      editable={!isSubmitting}
+                      errorMessage={usernameError}
                       inputClassName={fieldHeightClassName}
-                      label="Họ và tên"
-                      placeholder="Nhập họ và tên của bạn"
-                      textContentType="name"
-                      value={fullName}
-                      onChangeText={setFullName}
+                      label="Username"
+                      placeholder="Chọn username"
+                      textContentType="username"
+                      value={username}
+                      onBlur={() => markFieldTouched("username")}
+                      onChangeText={(value) => {
+                        setUsername(value);
+                        handleClearError();
+                      }}
                     />
                     <AuthInput
                       autoCapitalize="none"
-                      autoComplete="username"
+                      autoCorrect={false}
                       className="gap-1.5"
+                      editable={!isSubmitting}
+                      errorMessage={displayNameError}
                       inputClassName={fieldHeightClassName}
                       label="Tên hiển thị"
                       placeholder="Chọn tên hiển thị"
                       textContentType="nickname"
                       value={displayName}
-                      onChangeText={setDisplayName}
+                      onBlur={() => markFieldTouched("displayName")}
+                      onChangeText={(value) => {
+                        setDisplayName(value);
+                        handleClearError();
+                      }}
                     />
                     <AuthInput
                       autoCapitalize="none"
                       autoComplete="email"
                       className="gap-1.5"
+                      editable={!isSubmitting}
+                      errorMessage={emailError}
                       inputClassName={fieldHeightClassName}
                       keyboardType="email-address"
                       label="Email"
                       placeholder="Nhập địa chỉ email"
                       textContentType="emailAddress"
                       value={email}
-                      onChangeText={setEmail}
+                      onBlur={() => markFieldTouched("email")}
+                      onChangeText={(value) => {
+                        setEmail(value);
+                        handleClearError();
+                      }}
                     />
                     <AuthInput
                       autoCapitalize="none"
                       autoComplete="password"
                       className="gap-1.5"
+                      editable={!isSubmitting}
+                      errorMessage={passwordError}
                       inputClassName={fieldHeightClassName}
                       label="Mật khẩu"
                       placeholder="Nhập mật khẩu"
                       secureTextEntry
                       textContentType="newPassword"
                       value={password}
-                      onChangeText={setPassword}
+                      onBlur={() => markFieldTouched("password")}
+                      onChangeText={(value) => {
+                        setPassword(value);
+                        handleClearError();
+                      }}
                     />
                     <AuthInput
                       autoCapitalize="none"
                       autoComplete="password-new"
                       className="gap-1.5"
+                      editable={!isSubmitting}
+                      errorMessage={confirmPasswordError}
                       inputClassName={fieldHeightClassName}
                       label="Nhập lại mật khẩu"
+                      onSubmitEditing={() => {
+                        void handleRegister();
+                      }}
                       placeholder="Nhập lại mật khẩu"
+                      returnKeyType="done"
                       secureTextEntry
                       textContentType="password"
                       value={confirmPassword}
-                      onChangeText={setConfirmPassword}
+                      onBlur={() => markFieldTouched("confirmPassword")}
+                      onChangeText={(value) => {
+                        setConfirmPassword(value);
+                        handleClearError();
+                      }}
                     />
 
                     <Pressable
+                      disabled={isSubmitDisabled}
                       onPress={() => {
-                        signInAsExplorer(displayName || fullName);
-                        router.replace("/home");
+                        void handleRegister();
                       }}
                       className={`${buttonTopPaddingClassName} rounded-[18px]`}
-                      style={buttonShadowStyle}
+                      style={[
+                        isSubmitDisabled ? null : buttonShadowStyle,
+                        isSubmitDisabled ? { opacity: 0.72 } : null,
+                      ]}
                     >
                       <LinearGradient
                         colors={gradientColors}
@@ -277,10 +426,16 @@ export default function RegisterScreen() {
                         className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
                       >
                         <Text className="text-[15px] font-extrabold text-white">
-                          Tạo tài khoản
+                          {isSubmitting ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
                         </Text>
                       </LinearGradient>
                     </Pressable>
+
+                    {errorMessage ? (
+                      <Text className="text-[12px] font-medium text-[#D6456C]">
+                        {errorMessage}
+                      </Text>
+                    ) : null}
                   </View>
 
                   <View className={footerGapClassName}>

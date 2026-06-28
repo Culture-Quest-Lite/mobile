@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SymbolView } from "expo-symbols";
-import { useCallback, useState, type ComponentProps } from "react";
+import { useCallback, useEffect, useState, type ComponentProps } from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import Animated, {
   Extrapolation,
@@ -18,6 +18,18 @@ import {
 } from "react-native-safe-area-context";
 
 import {
+  getValidAccessToken,
+  useAuthSession,
+} from "@/features/auth/hooks/use-auth-session";
+
+import { getHotspotStories } from "../api/get-hotspot-stories";
+import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
+import {
+  cacheHotspotStories,
+  getCachedHotspotStories,
+} from "../data/hotspot-story-cache";
+import {
+  buildHotspotThemeStoriesFromApi,
   getHotspotThemeStory,
   type HotspotThemeStory,
   type StoryThemeTag,
@@ -58,6 +70,13 @@ const sheetShadowStyle = {
   },
   elevation: 6,
 } as const;
+
+function resolveHotspotIdParam(value?: string | string[]) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  const parsedValue = Number(rawValue);
+
+  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
+}
 
 function getStoryPalette(tag: StoryThemeTag) {
   switch (tag) {
@@ -121,6 +140,31 @@ function NotFoundState() {
                 Quay lại danh sách
               </Text>
             </Pressable>
+          </View>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+function LoadingState() {
+  return (
+    <View className="flex-1 bg-[#FFF9FD]">
+      <SafeAreaView
+        className="flex-1"
+        edges={["top", "left", "right", "bottom"]}
+      >
+        <View className="flex-1 items-center justify-center px-6">
+          <View
+            className="w-full rounded-[32px] border border-[#F4DCE6] bg-white px-6 py-8"
+            style={[screenShadowStyle, { maxWidth: 360 }]}
+          >
+            <Text className="text-center text-[24px] font-black text-[#2B2233]">
+              Đang tải story
+            </Text>
+            <Text className="mt-3 text-center text-[14px] leading-6 text-[#6F657A]">
+              Hệ thống đang lấy nội dung story thật của hotspot này.
+            </Text>
           </View>
         </View>
       </SafeAreaView>
@@ -349,18 +393,127 @@ function StoryHeroHeader({
 
 export default function HotspotStoryDetailScreen() {
   const router = useRouter();
+  const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
-  const { slug, storyId } = useLocalSearchParams<{
+  const { hotspotId, slug, storyId } = useLocalSearchParams<{
+    hotspotId?: string;
     slug: string;
     storyId: string;
   }>();
   const resolvedSlug = Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "");
+  const resolvedHotspotId = resolveHotspotIdParam(hotspotId);
   const resolvedStoryId = Array.isArray(storyId)
     ? (storyId[0] ?? "")
     : (storyId ?? "");
-  const hotspot = getHotspotBySlug(resolvedSlug);
-  const story = hotspot ? getHotspotThemeStory(hotspot, resolvedStoryId) : null;
+  const cachedHotspotEntry = getCachedHotspotDetail({
+    hotspotId: resolvedHotspotId,
+    slug: resolvedSlug,
+  });
+  const hotspot = cachedHotspotEntry?.hotspot ?? getHotspotBySlug(resolvedSlug);
+  const cachedStoriesEntry = getCachedHotspotStories({
+    hotspotId: resolvedHotspotId,
+    slug: resolvedSlug,
+  });
+  const [apiStoryCards, setApiStoryCards] = useState<HotspotThemeStory[] | null>(
+    () => cachedStoriesEntry?.stories ?? null,
+  );
+  const [isStoriesLoading, setIsStoriesLoading] = useState(
+    () => cachedStoriesEntry === null && resolvedHotspotId !== null,
+  );
+
+  useEffect(() => {
+    if (!hotspot) {
+      return;
+    }
+
+    const resolvedHotspot = hotspot;
+    let isActive = true;
+
+    async function loadHotspotStories() {
+      const nextCachedStoriesEntry = getCachedHotspotStories({
+        hotspotId: resolvedHotspotId,
+        slug: resolvedSlug,
+      });
+
+      if (nextCachedStoriesEntry) {
+        setApiStoryCards(nextCachedStoriesEntry.stories);
+        setIsStoriesLoading(false);
+        return;
+      }
+
+      if (resolvedHotspotId === null) {
+        setApiStoryCards(null);
+        setIsStoriesLoading(false);
+        return;
+      }
+
+      setApiStoryCards(null);
+      setIsStoriesLoading(true);
+
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const stories = await getHotspotStories({
+          accessToken,
+          hotspotId: resolvedHotspotId,
+          status: "DRAFT",
+          tokenType: authSession.tokenType,
+        });
+        const mappedStories = buildHotspotThemeStoriesFromApi(
+          resolvedHotspot,
+          stories,
+        );
+
+        cacheHotspotStories({
+          hotspotId: resolvedHotspotId,
+          slug: resolvedSlug,
+          stories: mappedStories,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setApiStoryCards(mappedStories);
+      } catch (error) {
+        console.warn("[hotspot-story-detail] load hotspot stories failed", {
+          error: error instanceof Error ? error.message : error,
+          hotspotId: resolvedHotspotId,
+          slug: resolvedSlug,
+          storyId: resolvedStoryId,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setApiStoryCards(null);
+      } finally {
+        if (isActive) {
+          setIsStoriesLoading(false);
+        }
+      }
+    }
+
+    void loadHotspotStories();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    hotspot,
+    resolvedHotspotId,
+    resolvedSlug,
+    resolvedStoryId,
+  ]);
+
+  const story =
+    apiStoryCards?.find((item) => item.id === resolvedStoryId) ??
+    (hotspot ? getHotspotThemeStory(hotspot, resolvedStoryId) : null);
   const gallery =
     story?.heroGallery && story.heroGallery.length > 0
       ? story.heroGallery
@@ -428,7 +581,15 @@ export default function HotspotStoryDetailScreen() {
     },
   });
 
-  if (!hotspot || !story || !activeHeroImage) {
+  if (!hotspot) {
+    return <NotFoundState />;
+  }
+
+  if (!story || !activeHeroImage) {
+    if (isStoriesLoading) {
+      return <LoadingState />;
+    }
+
     return <NotFoundState />;
   }
 
@@ -607,7 +768,9 @@ export default function HotspotStoryDetailScreen() {
                       {story.audioTitle}
                     </Text>
                     <Text className="mt-1 text-[13px] leading-5 text-[#7C7286]">
-                      Transcript và player có thể đặt ở đây.
+                      {story.audioUrl
+                        ? "Audio của story này đã được lấy từ API."
+                        : "Transcript và player có thể đặt ở đây."}
                     </Text>
                   </View>
                 </View>
@@ -633,7 +796,7 @@ export default function HotspotStoryDetailScreen() {
                       tintColor="#FFFFFF"
                     />
                     <Text className="ml-2 text-[15px] font-black text-white">
-                      Phát audio
+                      {story.audioUrl ? "Mở audio API" : "Phát audio"}
                     </Text>
                   </LinearGradient>
                 </Pressable>
@@ -715,7 +878,7 @@ export default function HotspotStoryDetailScreen() {
                     className="text-[15px] font-black"
                     style={{ color: palette.accent }}
                   >
-                    Xem video
+                    {story.videoUrl ? "Mở video API" : "Xem video"}
                   </Text>
                 </Pressable>
               </View>

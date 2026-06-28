@@ -1,24 +1,26 @@
-export type ProfileBadge =
-  | 'heritage-master'
-  | 'storyteller'
-  | 'early-bird'
-  | 'photographer'
-  | 'explorer';
-
 export type Profile = {
   id: string;
   name: string;
   username: string;
-  title: string;
-  level: number;
-  xp: number;
-  xpToNext: number;
-  avatar: string;
-  cover: string;
+  email: string | null;
+  points: number;
+  totalXp: number;
+  level: number | null;
+  levelName: string | null;
+  currentLevelXp: number | null;
+  xpToNext: number | null;
+  avatar: string | null;
+  cover: string | null;
   followers: number;
   following: number;
-  badges: ProfileBadge[];
+  totalPosts: number;
   routeIds: string[];
+  savedHotspotSlugs: string[];
+  role: string | null;
+  status: string | null;
+  isPremium: boolean;
+  autoPlayAudio: boolean | null;
+  createdAt: string | null;
 };
 
 export type ProfilePost = {

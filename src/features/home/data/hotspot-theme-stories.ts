@@ -1,3 +1,4 @@
+import type { HotspotStoryDto } from "../api/get-hotspot-stories";
 import type { HotspotDetail } from "./hotspots";
 
 const storyHistoryImage = require("../../../../assets/images/tachnenl.png");
@@ -14,11 +15,12 @@ export type HotspotThemeStory = {
   audioDescription: string;
   audioDurationLabel: string;
   audioTitle: string;
+  audioUrl?: string | null;
   cardColors: readonly [string, string];
   cardHeight: number;
   gallery: string[];
   heroGallery: string[];
-  id: StoryThemeTag;
+  id: string;
   imageBottom: number;
   imageHeight: number;
   imageRight: number;
@@ -26,6 +28,7 @@ export type HotspotThemeStory = {
   imageWidth: number;
   scriptParagraphs: string[];
   summary: string;
+  tagId?: number | null;
   tag: StoryThemeTag;
   tagImageSource: number;
   tagLabel: string;
@@ -35,6 +38,7 @@ export type HotspotThemeStory = {
   videoDurationLabel: string;
   videoPoster: string;
   videoTitle: string;
+  videoUrl?: string | null;
 };
 
 export const storyThemeTabs: {
@@ -69,6 +73,45 @@ export const tagImageByTag: Record<StoryThemeTag, number> = {
   food: foodTagImage,
   history: historyTagImage,
 };
+
+function normalizeLookupText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+export function resolveStoryThemeTag(tagName: string): StoryThemeTag | null {
+  const normalizedTagName = normalizeLookupText(tagName);
+
+  if (normalizedTagName.includes("am thuc")) {
+    return "food";
+  }
+
+  if (normalizedTagName.includes("giao duc")) {
+    return "education";
+  }
+
+  if (
+    normalizedTagName.includes("lich su") ||
+    normalizedTagName.includes("di san")
+  ) {
+    return "history";
+  }
+
+  if (
+    normalizedTagName.includes("van hoa") ||
+    normalizedTagName.includes("nghe thuat") ||
+    normalizedTagName.includes("kien truc") ||
+    normalizedTagName.includes("thien nhien") ||
+    normalizedTagName.includes("check in")
+  ) {
+    return "culture";
+  }
+
+  return null;
+}
 
 type StoryHeroGalleryOverrides = Partial<
   Record<string, Partial<Record<StoryThemeTag, readonly string[]>>>
@@ -174,6 +217,53 @@ function buildScriptParagraphs(hotspot: HotspotDetail, tag: StoryThemeTag) {
         `Khung giờ nên ưu tiên: ${hotspot.bestTimeLabel}. Lịch mở cửa hiện tại: ${hotspot.scheduleLabel}.`,
       ];
   }
+}
+
+function buildSummaryFromContent(content: string) {
+  const normalizedContent = content.replace(/\s+/g, " ").trim();
+
+  if (!normalizedContent) {
+    return null;
+  }
+
+  return normalizedContent.length > 150
+    ? `${normalizedContent.slice(0, 147).trimEnd()}...`
+    : normalizedContent;
+}
+
+function splitApiStoryParagraphs(content: string) {
+  const paragraphs = content
+    .split(/\n\s*\n+/)
+    .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  if (paragraphs.length > 0) {
+    return paragraphs;
+  }
+
+  const normalizedContent = content.replace(/\s+/g, " ").trim();
+
+  return normalizedContent ? [normalizedContent] : [];
+}
+
+function getSortedMediaUrlsByType(story: HotspotStoryDto, mediaType: string) {
+  return [...story.medias]
+    .filter(
+      (media) =>
+        media.mediaType.trim().toUpperCase() === mediaType &&
+        media.fileUrl.trim(),
+    )
+    .sort((left, right) => {
+      const leftOrder = left.displayOrder ?? Number.MAX_SAFE_INTEGER;
+      const rightOrder = right.displayOrder ?? Number.MAX_SAFE_INTEGER;
+
+      if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder;
+      }
+
+      return left.mediaId - right.mediaId;
+    })
+    .map((media) => media.fileUrl.trim());
 }
 
 export function buildHotspotThemeStories(
@@ -284,6 +374,69 @@ export function buildHotspotThemeStories(
       ...storyCardBaseLayout,
     },
   ];
+}
+
+export function buildHotspotThemeStoriesFromApi(
+  hotspot: HotspotDetail,
+  stories: HotspotStoryDto[],
+): HotspotThemeStory[] {
+  const fallbackStoriesByTag = new Map(
+    buildHotspotThemeStories(hotspot).map((story) => [story.tag, story] as const),
+  );
+
+  return [...stories].map((story, index) => {
+    const resolvedTag =
+      resolveStoryThemeTag(story.tag?.tagName ?? "") ??
+      (index % 4 === 0
+        ? "history"
+        : index % 4 === 1
+          ? "culture"
+          : index % 4 === 2
+            ? "food"
+            : "education");
+    const fallbackStory =
+      fallbackStoriesByTag.get(resolvedTag) ??
+      fallbackStoriesByTag.get("history")!;
+    const imageGallery = getSortedMediaUrlsByType(story, "IMAGE");
+    const audioUrl = getSortedMediaUrlsByType(story, "AUDIO")[0] ?? null;
+    const videoUrl = getSortedMediaUrlsByType(story, "VIDEO")[0] ?? null;
+    const nextGallery =
+      imageGallery.length > 0 ? imageGallery : fallbackStory.heroGallery;
+    const nextParagraphs = splitApiStoryParagraphs(story.content);
+    const nextTitle = story.title.trim() || fallbackStory.title;
+    const nextTagLabel = story.tag?.tagName.trim() || fallbackStory.tagLabel;
+    const nextSummary =
+      buildSummaryFromContent(story.content) ?? fallbackStory.summary;
+
+    return {
+      ...fallbackStory,
+      audioDescription: audioUrl
+        ? "Audio gốc của story này đã được lấy từ hệ thống."
+        : fallbackStory.audioDescription,
+      audioDurationLabel: audioUrl
+        ? "Audio API"
+        : getAudioStoryDurationLabel(story.content || hotspot.story),
+      audioTitle: audioUrl ? nextTitle : fallbackStory.audioTitle,
+      audioUrl,
+      gallery: nextGallery,
+      heroGallery: nextGallery,
+      id: String(story.storyId),
+      scriptParagraphs:
+        nextParagraphs.length > 0 ? nextParagraphs : fallbackStory.scriptParagraphs,
+      summary: nextSummary,
+      tagId: story.tag?.tagId ?? null,
+      tag: resolvedTag,
+      tagLabel: nextTagLabel,
+      title: nextTitle,
+      videoDescription: videoUrl
+        ? "Video của story này đã sẵn sàng từ API."
+        : fallbackStory.videoDescription,
+      videoDurationLabel: videoUrl ? "Video API" : fallbackStory.videoDurationLabel,
+      videoPoster: nextGallery[0] ?? fallbackStory.videoPoster,
+      videoTitle: videoUrl ? nextTitle : fallbackStory.videoTitle,
+      videoUrl,
+    };
+  });
 }
 
 export function getHotspotThemeStory(hotspot: HotspotDetail, storyId: string) {
