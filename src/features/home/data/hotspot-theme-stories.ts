@@ -1,4 +1,7 @@
-import type { HotspotStoryDto } from "../api/get-hotspot-stories";
+import type {
+  HotspotStoryDto,
+  HotspotStoryMediaDto,
+} from "../api/get-hotspot-stories";
 import type { HotspotDetail } from "./hotspots";
 
 const storyHistoryImage = require("../../../../assets/images/tachnenl.png");
@@ -246,11 +249,58 @@ function splitApiStoryParagraphs(content: string) {
   return normalizedContent ? [normalizedContent] : [];
 }
 
-function getSortedMediaUrlsByType(story: HotspotStoryDto, mediaType: string) {
+type StoryMediaKind = "image" | "audio" | "video";
+
+const mediaExtensionPatterns: Record<StoryMediaKind, RegExp> = {
+  audio: /\.(aac|flac|m4a|mp3|oga|ogg|wav)(?:$|[?#])/i,
+  image: /\.(avif|bmp|gif|heic|jpeg|jpg|png|svg|webp)(?:$|[?#])/i,
+  video: /\.(m3u8|mov|mp4|m4v|webm)(?:$|[?#])/i,
+};
+
+function resolveStoryMediaKind(media: HotspotStoryMediaDto): StoryMediaKind | null {
+  const normalizedMediaType = media.mediaType.trim().toLowerCase();
+  const normalizedMimeType = media.mimeType.trim().toLowerCase();
+  const normalizedFileName = media.fileName.trim().toLowerCase();
+  const normalizedFileUrl = media.fileUrl.trim().toLowerCase();
+
+  if (
+    normalizedMediaType === "audio" ||
+    normalizedMediaType.startsWith("audio/") ||
+    normalizedMimeType.startsWith("audio/") ||
+    mediaExtensionPatterns.audio.test(normalizedFileName) ||
+    mediaExtensionPatterns.audio.test(normalizedFileUrl)
+  ) {
+    return "audio";
+  }
+
+  if (
+    normalizedMediaType === "video" ||
+    normalizedMediaType.startsWith("video/") ||
+    normalizedMimeType.startsWith("video/") ||
+    mediaExtensionPatterns.video.test(normalizedFileName) ||
+    mediaExtensionPatterns.video.test(normalizedFileUrl)
+  ) {
+    return "video";
+  }
+
+  if (
+    normalizedMediaType === "image" ||
+    normalizedMediaType.startsWith("image/") ||
+    normalizedMimeType.startsWith("image/") ||
+    mediaExtensionPatterns.image.test(normalizedFileName) ||
+    mediaExtensionPatterns.image.test(normalizedFileUrl)
+  ) {
+    return "image";
+  }
+
+  return null;
+}
+
+function getSortedMediaUrlsByKind(story: HotspotStoryDto, mediaKind: StoryMediaKind) {
   return [...story.medias]
     .filter(
       (media) =>
-        media.mediaType.trim().toUpperCase() === mediaType &&
+        resolveStoryMediaKind(media) === mediaKind &&
         media.fileUrl.trim(),
     )
     .sort((left, right) => {
@@ -397,9 +447,9 @@ export function buildHotspotThemeStoriesFromApi(
     const fallbackStory =
       fallbackStoriesByTag.get(resolvedTag) ??
       fallbackStoriesByTag.get("history")!;
-    const imageGallery = getSortedMediaUrlsByType(story, "IMAGE");
-    const audioUrl = getSortedMediaUrlsByType(story, "AUDIO")[0] ?? null;
-    const videoUrl = getSortedMediaUrlsByType(story, "VIDEO")[0] ?? null;
+    const imageGallery = getSortedMediaUrlsByKind(story, "image");
+    const audioUrl = getSortedMediaUrlsByKind(story, "audio")[0] ?? null;
+    const videoUrl = getSortedMediaUrlsByKind(story, "video")[0] ?? null;
     const nextGallery =
       imageGallery.length > 0 ? imageGallery : fallbackStory.heroGallery;
     const nextParagraphs = splitApiStoryParagraphs(story.content);

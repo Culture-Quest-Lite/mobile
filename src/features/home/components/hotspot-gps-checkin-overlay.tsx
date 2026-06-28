@@ -1091,7 +1091,7 @@ export function HotspotGpsCheckinOverlay({
       iconBackground: SUCCESS_CHECK_ICON_COLOR,
       label: "Tiến độ tuyến",
       trailing:
-        checkInResult?.userRouteProgressId !== undefined
+        checkInResult?.userRouteProgressId != null
           ? `#${checkInResult.userRouteProgressId}`
           : "✓",
       value: routeProgressLabel,

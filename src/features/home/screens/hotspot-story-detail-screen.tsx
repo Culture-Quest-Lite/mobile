@@ -1,8 +1,11 @@
+import { useEvent, useEventListener } from "expo";
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SymbolView } from "expo-symbols";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { useCallback, useEffect, useState, type ComponentProps } from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import Animated, {
@@ -76,6 +79,32 @@ function resolveHotspotIdParam(value?: string | string[]) {
   const parsedValue = Number(rawValue);
 
   return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
+}
+
+function isHttpUrl(value?: string | null): value is string {
+  return typeof value === "string" && /^https?:\/\//i.test(value.trim());
+}
+
+function clampNumber(value: number, minimum: number, maximum: number) {
+  return Math.min(Math.max(value, minimum), maximum);
+}
+
+function formatPlaybackTime(totalSeconds: number) {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
+    return "0:00";
+  }
+
+  const roundedSeconds = Math.floor(totalSeconds);
+  const seconds = roundedSeconds % 60;
+  const minutes = Math.floor(roundedSeconds / 60) % 60;
+  const hours = Math.floor(roundedSeconds / 3600);
+  const paddedSeconds = `${seconds}`.padStart(2, "0");
+
+  if (hours > 0) {
+    return `${hours}:${`${minutes}`.padStart(2, "0")}:${paddedSeconds}`;
+  }
+
+  return `${minutes}:${paddedSeconds}`;
 }
 
 function getStoryPalette(tag: StoryThemeTag) {
@@ -580,6 +609,109 @@ export default function HotspotStoryDetailScreen() {
       scrollY.value = event.contentOffset.y;
     },
   });
+  const palette = getStoryPalette(story?.tag ?? "history");
+  const hasAudioUrl = isHttpUrl(story?.audioUrl);
+  const hasVideoUrl = isHttpUrl(story?.videoUrl);
+  const audioSource = hasAudioUrl ? story.audioUrl!.trim() : null;
+  const videoSource = hasVideoUrl ? story.videoUrl!.trim() : null;
+  const audioPlayer = useAudioPlayer(audioSource, {
+    updateInterval: 250,
+  });
+  const audioStatus = useAudioPlayerStatus(audioPlayer);
+  const videoPlayer = useVideoPlayer(videoSource, (player) => {
+    player.loop = false;
+    player.muted = false;
+    player.showNowPlayingNotification = false;
+    player.timeUpdateEventInterval = 0.25;
+  });
+  const videoStatusEvent = useEvent(videoPlayer, "statusChange", {
+    error: undefined,
+    status: videoPlayer.status,
+  });
+  const audioProgress =
+    audioStatus.duration > 0
+      ? clampNumber(audioStatus.currentTime / audioStatus.duration, 0, 1)
+      : 0;
+  const audioCurrentTimeLabel = formatPlaybackTime(audioStatus.currentTime);
+  const audioDurationTimeLabel =
+    audioStatus.duration > 0
+      ? formatPlaybackTime(audioStatus.duration)
+      : story?.audioDurationLabel ?? "0:00";
+  const audioPrimaryActionLabel = !hasAudioUrl
+    ? "Chưa có audio API"
+    : audioStatus.isBuffering
+      ? "Đang tải audio..."
+      : audioStatus.playing
+        ? "Tạm dừng"
+        : audioStatus.didJustFinish
+          ? "Phát lại"
+          : "Phát audio";
+  const videoErrorMessage = videoStatusEvent.error?.message ?? null;
+
+  useEffect(() => {
+    void setAudioModeAsync({
+      interruptionMode: "duckOthers",
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+    });
+  }, []);
+
+  useEventListener(videoPlayer, "playingChange", ({ isPlaying }) => {
+    if (isPlaying) {
+      audioPlayer.pause();
+    }
+  });
+
+  const handleToggleAudioPlayback = useCallback(async () => {
+    if (!hasAudioUrl) {
+      return;
+    }
+
+    videoPlayer.pause();
+
+    if (audioStatus.playing) {
+      audioPlayer.pause();
+      return;
+    }
+
+    if (audioStatus.didJustFinish) {
+      await audioPlayer.seekTo(0);
+    }
+
+    audioPlayer.play();
+  }, [
+    audioPlayer,
+    audioStatus.didJustFinish,
+    audioStatus.playing,
+    hasAudioUrl,
+    videoPlayer,
+  ]);
+
+  const handleSeekAudio = useCallback(
+    async (offsetSeconds: number) => {
+      if (!hasAudioUrl) {
+        return;
+      }
+
+      const rawNextTime = audioStatus.currentTime + offsetSeconds;
+      const nextTime =
+        audioStatus.duration > 0
+          ? clampNumber(rawNextTime, 0, audioStatus.duration)
+          : Math.max(0, rawNextTime);
+
+      await audioPlayer.seekTo(nextTime);
+    },
+    [audioPlayer, audioStatus.currentTime, audioStatus.duration, hasAudioUrl],
+  );
+
+  const handleResetAudio = useCallback(async () => {
+    if (!hasAudioUrl) {
+      return;
+    }
+
+    audioPlayer.pause();
+    await audioPlayer.seekTo(0);
+  }, [audioPlayer, hasAudioUrl]);
 
   if (!hotspot) {
     return <NotFoundState />;
@@ -592,8 +724,6 @@ export default function HotspotStoryDetailScreen() {
 
     return <NotFoundState />;
   }
-
-  const palette = getStoryPalette(story.tag);
 
   return (
     <View className="flex-1 bg-white">
@@ -768,38 +898,113 @@ export default function HotspotStoryDetailScreen() {
                       {story.audioTitle}
                     </Text>
                     <Text className="mt-1 text-[13px] leading-5 text-[#7C7286]">
-                      {story.audioUrl
-                        ? "Audio của story này đã được lấy từ API."
-                        : "Transcript và player có thể đặt ở đây."}
+                      {story.audioDescription}
                     </Text>
                   </View>
                 </View>
 
                 <WaveformPreview accent={palette.accent} />
 
-                <Pressable className="mt-4 overflow-hidden rounded-full">
-                  <LinearGradient
-                    colors={palette.buttonColors}
-                    end={{ x: 1, y: 0.5 }}
-                    start={{ x: 0, y: 0.5 }}
-                    className="flex-row items-center justify-center px-5 py-4"
-                  >
-                    <SymbolView
-                      name={
-                        {
-                          ios: "headphones",
-                          android: "headset",
-                          web: "headset",
-                        } as SymbolName
-                      }
-                      size={16}
-                      tintColor="#FFFFFF"
-                    />
-                    <Text className="ml-2 text-[15px] font-black text-white">
-                      {story.audioUrl ? "Mở audio API" : "Phát audio"}
+                <View className="mt-4 rounded-[24px] bg-white/85 px-4 py-4">
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-[13px] font-bold text-[#5C4D67]">
+                      {audioCurrentTimeLabel}
                     </Text>
-                  </LinearGradient>
-                </Pressable>
+                    <Text className="text-[13px] font-bold text-[#5C4D67]">
+                      {audioDurationTimeLabel}
+                    </Text>
+                  </View>
+
+                  <View className="mt-3 h-2 overflow-hidden rounded-full bg-[#F3D6E3]">
+                    <View
+                      className="h-full rounded-full"
+                      style={{
+                        backgroundColor: palette.accent,
+                        width: `${audioProgress * 100}%`,
+                      }}
+                    />
+                  </View>
+
+                  <View className="mt-4 flex-row items-center justify-between gap-3">
+                    <Pressable
+                      className="min-w-[84px] items-center rounded-full bg-white px-4 py-3"
+                      disabled={!hasAudioUrl}
+                      onPress={() => void handleSeekAudio(-10)}
+                      style={{ opacity: hasAudioUrl ? 1 : 0.52 }}
+                    >
+                      <Text className="text-[13px] font-black text-[#6F657A]">-10s</Text>
+                    </Pressable>
+
+                    <Pressable
+                      className="min-w-[132px] overflow-hidden rounded-full"
+                      disabled={!hasAudioUrl}
+                      onPress={() => void handleToggleAudioPlayback()}
+                      style={{ opacity: hasAudioUrl ? 1 : 0.56 }}
+                    >
+                      <LinearGradient
+                        colors={palette.buttonColors}
+                        end={{ x: 1, y: 0.5 }}
+                        start={{ x: 0, y: 0.5 }}
+                        className="flex-row items-center justify-center px-5 py-4"
+                      >
+                        <SymbolView
+                          name={
+                            audioStatus.playing
+                              ? ({
+                                  ios: "pause.fill",
+                                  android: "pause",
+                                  web: "pause",
+                                } as SymbolName)
+                              : ({
+                                  ios: "play.fill",
+                                  android: "play_arrow",
+                                  web: "play_arrow",
+                                } as SymbolName)
+                          }
+                          size={18}
+                          tintColor="#FFFFFF"
+                        />
+                        <Text className="ml-2 text-[15px] font-black text-white">
+                          {audioPrimaryActionLabel}
+                        </Text>
+                      </LinearGradient>
+                    </Pressable>
+
+                    <Pressable
+                      className="min-w-[84px] items-center rounded-full bg-white px-4 py-3"
+                      disabled={!hasAudioUrl}
+                      onPress={() => void handleSeekAudio(10)}
+                      style={{ opacity: hasAudioUrl ? 1 : 0.52 }}
+                    >
+                      <Text className="text-[13px] font-black text-[#6F657A]">+10s</Text>
+                    </Pressable>
+                  </View>
+
+                  <View className="mt-3 flex-row items-center justify-center">
+                    <Pressable
+                      className="rounded-full px-4 py-2"
+                      disabled={!hasAudioUrl}
+                      onPress={() => void handleResetAudio()}
+                      style={{ opacity: hasAudioUrl ? 1 : 0.52 }}
+                    >
+                      <Text className="text-[13px] font-bold text-[#7C7286]">
+                        Về đầu
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                {!hasAudioUrl ? (
+                  <Text className="mt-4 text-[13px] leading-5 text-[#A16207]">
+                    Story này chưa có file audio từ API, nên phần player chỉ hiển thị khung chờ.
+                  </Text>
+                ) : null}
+
+                {audioStatus.error ? (
+                  <Text className="mt-4 text-[13px] leading-5 text-[#C2410C]">
+                    {audioStatus.error}
+                  </Text>
+                ) : null}
               </LinearGradient>
             </View>
 
@@ -816,71 +1021,98 @@ export default function HotspotStoryDetailScreen() {
 
               <View className="px-5 pb-5">
                 <View className="overflow-hidden rounded-[26px] bg-[#F7EFF6]">
-                  <Image
-                    source={story.videoPoster}
-                    contentFit="cover"
-                    transition={120}
-                    cachePolicy="memory-disk"
-                    style={{ height: 204, width: "100%" }}
-                  />
-                  <LinearGradient
-                    colors={[
-                      "rgba(31, 24, 37, 0.04)",
-                      "rgba(31, 24, 37, 0.62)",
-                    ]}
-                    end={{ x: 0.5, y: 1 }}
-                    start={{ x: 0.5, y: 0 }}
-                    style={{
-                      bottom: 0,
-                      left: 0,
-                      position: "absolute",
-                      right: 0,
-                      top: 0,
-                    }}
-                  />
-                  <View className="absolute left-0 right-0 top-0 items-end px-4 pt-4">
-                    <View className="rounded-full bg-white/90 px-3 py-2">
-                      <Text className="text-[11px] font-black text-[#5F5367]">
+                  {hasVideoUrl ? (
+                    <VideoView
+                      player={videoPlayer}
+                      contentFit="cover"
+                      nativeControls
+                      style={{ height: 204, width: "100%" }}
+                    />
+                  ) : (
+                    <>
+                      <Image
+                        source={story.videoPoster}
+                        contentFit="cover"
+                        transition={120}
+                        cachePolicy="memory-disk"
+                        style={{ height: 204, width: "100%" }}
+                      />
+                      <LinearGradient
+                        colors={[
+                          "rgba(31, 24, 37, 0.04)",
+                          "rgba(31, 24, 37, 0.62)",
+                        ]}
+                        end={{ x: 0.5, y: 1 }}
+                        start={{ x: 0.5, y: 0 }}
+                        style={{
+                          bottom: 0,
+                          left: 0,
+                          position: "absolute",
+                          right: 0,
+                          top: 0,
+                        }}
+                      />
+                      <View className="absolute bottom-0 left-0 right-0 flex-row items-end justify-between px-4 pb-4">
+                        <View className="flex-1 pr-4">
+                          <Text className="text-[18px] font-black text-white">
+                            {story.videoTitle}
+                          </Text>
+                        </View>
+                        <View className="h-14 w-14 items-center justify-center rounded-full bg-white/92">
+                          <SymbolView
+                            name={
+                              {
+                                ios: "play.slash.fill",
+                                android: "block",
+                                web: "block",
+                              } as SymbolName
+                            }
+                            size={22}
+                            tintColor={palette.accent}
+                          />
+                        </View>
+                      </View>
+                    </>
+                  )}
+                </View>
+
+                <View className="mt-4 rounded-[22px] bg-[#FAF5F8] px-4 py-4">
+                  <View className="flex-row items-center justify-between gap-3">
+                    <View className="flex-1">
+                      <Text className="text-[15px] font-black text-[#2B2233]">
+                        {story.videoTitle}
+                      </Text>
+                      <Text className="mt-1 text-[13px] leading-5 text-[#7C7286]">
+                        {hasVideoUrl
+                          ? "Dùng điều khiển ngay trên khung video để phát, tua hoặc phóng to."
+                          : "Story này chưa có file video từ API."}
+                      </Text>
+                    </View>
+                    <View
+                      className="rounded-full px-3 py-2"
+                      style={{ backgroundColor: palette.accentSoft }}
+                    >
+                      <Text
+                        className="text-[11px] font-black"
+                        style={{ color: palette.accent }}
+                      >
                         {story.videoDurationLabel}
                       </Text>
                     </View>
                   </View>
-                  <View className="absolute bottom-0 left-0 right-0 flex-row items-end justify-between px-4 pb-4">
-                    <View className="flex-1 pr-4">
-                      <Text className="text-[18px] font-black text-white">
-                        {story.videoTitle}
-                      </Text>
-                    </View>
-                    <View className="h-14 w-14 items-center justify-center rounded-full bg-white/92">
-                      <SymbolView
-                        name={
-                          {
-                            ios: "play.fill",
-                            android: "play_arrow",
-                            web: "play_arrow",
-                          } as SymbolName
-                        }
-                        size={24}
-                        tintColor={palette.accent}
-                      />
-                    </View>
-                  </View>
-                </View>
 
-                <Pressable
-                  className="mt-4 items-center rounded-full border px-5 py-4"
-                  style={{
-                    backgroundColor: palette.accentSoft,
-                    borderColor: `${palette.accent}22`,
-                  }}
-                >
-                  <Text
-                    className="text-[15px] font-black"
-                    style={{ color: palette.accent }}
-                  >
-                    {story.videoUrl ? "Mở video API" : "Xem video"}
-                  </Text>
-                </Pressable>
+                  {videoStatusEvent.status === "loading" ? (
+                    <Text className="mt-3 text-[13px] leading-5 text-[#7C7286]">
+                      Đang tải dữ liệu video...
+                    </Text>
+                  ) : null}
+
+                  {videoErrorMessage ? (
+                    <Text className="mt-3 text-[13px] leading-5 text-[#C2410C]">
+                      {videoErrorMessage}
+                    </Text>
+                  ) : null}
+                </View>
               </View>
             </View>
           </Animated.View>
