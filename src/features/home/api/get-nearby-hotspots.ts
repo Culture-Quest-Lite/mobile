@@ -92,6 +92,10 @@ function readNullableBoolean(value: unknown) {
   return null;
 }
 
+function hasPublishedStatus(status: string) {
+  return status.trim().toLowerCase() === "publish";
+}
+
 function parseTag(value: unknown): NearbyHotspotTagDto | null {
   if (!isObject(value)) {
     return null;
@@ -316,5 +320,17 @@ export async function getNearbyHotspots({
     throw new Error("API nearby hotspot có phần tử dữ liệu không hợp lệ.");
   }
 
-  return parsedHotspots.filter(isNonNull);
+  const validHotspots = parsedHotspots.filter(isNonNull);
+  const publishedHotspots = validHotspots.filter((hotspot) =>
+    hasPublishedStatus(hotspot.status),
+  );
+
+  if (publishedHotspots.length !== validHotspots.length) {
+    console.info("[home] filtered non-publish nearby hotspots", {
+      filteredCount: validHotspots.length - publishedHotspots.length,
+      url: getNearbyHotspotsUrl,
+    });
+  }
+
+  return publishedHotspots;
 }

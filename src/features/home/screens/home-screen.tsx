@@ -6,6 +6,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -380,10 +381,30 @@ const guestLocationLoadingState: GuestLocationState = {
   mode: "loading",
 };
 
-const defaultNearbySearchDistanceMeters = 1000;
+const defaultNearbySearchDistanceMeters = 20;
+const nearbyDistanceSliderMinimumMeters = 20;
+const nearbyDistanceSliderMaximumMeters = 1000;
+const nearbyDistanceSliderStepMeters = 20;
+const nearbyDistancePresetMeters = [20, 100, 300, 500, 1000] as const;
 const nearbyPlaceFallbackImageUri =
   nearbyPlaces[0]?.imageUri ??
   "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function snapDistanceMeters(value: number) {
+  const snappedValue =
+    Math.round(value / nearbyDistanceSliderStepMeters) *
+    nearbyDistanceSliderStepMeters;
+
+  return clamp(
+    snappedValue,
+    nearbyDistanceSliderMinimumMeters,
+    nearbyDistanceSliderMaximumMeters,
+  );
+}
 
 function toRadians(value: number) {
   return (value * Math.PI) / 180;
@@ -726,11 +747,12 @@ async function resolveNearbyRequestCoordinate(): Promise<{
   };
 }
 
-function useGuestLocationPill() {
+function useGuestLocationPill(onDevelopmentLocationPress?: () => void) {
   const [locationState, setLocationState] = useState<GuestLocationState>(
     guestLocationLoadingState,
   );
   const requestIdRef = useRef(0);
+  const developmentLocation = getDevelopmentLocationOverride();
 
   useEffect(() => {
     let isMounted = true;
@@ -766,6 +788,11 @@ function useGuestLocationPill() {
   }, []);
 
   const handlePress = async () => {
+    if (developmentLocation) {
+      onDevelopmentLocationPress?.();
+      return;
+    }
+
     if (locationState.mode === "permission-denied") {
       await Linking.openSettings();
       return;
@@ -808,6 +835,241 @@ function useGuestLocationPill() {
     handlePress,
     locationState,
   };
+}
+
+type NearbyDistanceSliderProps = {
+  max: number;
+  min: number;
+  onChange: (nextValue: number) => void;
+  value: number;
+};
+
+function NearbyDistanceSlider({
+  max,
+  min,
+  onChange,
+  value,
+}: NearbyDistanceSliderProps) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const progress = (value - min) / Math.max(1, max - min);
+  const thumbSize = 28;
+  const fillWidth = trackWidth * progress;
+  const thumbLeft = clamp(
+    fillWidth - thumbSize / 2,
+    0,
+    Math.max(0, trackWidth - thumbSize),
+  );
+
+  const updateValueFromTrackPosition = (locationX: number) => {
+    if (trackWidth <= 0) {
+      return;
+    }
+
+    const nextProgress = clamp(locationX / trackWidth, 0, 1);
+    const nextValue = min + nextProgress * (max - min);
+    onChange(snapDistanceMeters(nextValue));
+  };
+
+  return (
+    <View className="gap-2">
+      <View className="flex-row items-center justify-between">
+        <Text className="text-[11px] font-semibold text-[#8E869A]">
+          {formatDistanceMeters(min)}
+        </Text>
+        <Text className="text-[11px] font-semibold text-[#8E869A]">
+          {formatDistanceMeters(max)}
+        </Text>
+      </View>
+
+      <View
+        className="relative h-10 justify-center"
+        onLayout={(event) => {
+          setTrackWidth(event.nativeEvent.layout.width);
+        }}
+        onMoveShouldSetResponder={() => true}
+        onStartShouldSetResponder={() => true}
+        onResponderGrant={(event) => {
+          updateValueFromTrackPosition(event.nativeEvent.locationX);
+        }}
+        onResponderMove={(event) => {
+          updateValueFromTrackPosition(event.nativeEvent.locationX);
+        }}
+      >
+        <View className="h-2 rounded-full bg-[#F6DDD0]" />
+        <View
+          className="absolute left-0 top-1/2 h-2 rounded-full bg-[#F58752]"
+          style={{
+            transform: [{ translateY: -4 }],
+            width: fillWidth,
+          }}
+        />
+        <View
+          className="absolute top-1/2 h-7 w-7 rounded-full border-4 border-white bg-[#EB489B]"
+          style={{
+            left: thumbLeft,
+            shadowColor: "rgba(235, 72, 155, 0.28)",
+            shadowOpacity: 1,
+            shadowRadius: 10,
+            shadowOffset: {
+              width: 0,
+              height: 4,
+            },
+            elevation: 6,
+            transform: [{ translateY: -14 }],
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+type NearbyDistanceSheetProps = {
+  currentDistanceMeters: number;
+  isLoading: boolean;
+  onApply: () => void;
+  onChangeDistance: (nextValue: number) => void;
+  onClose: () => void;
+  selectedDistanceMeters: number;
+  visible: boolean;
+};
+
+function NearbyDistanceSheet({
+  currentDistanceMeters,
+  isLoading,
+  onApply,
+  onChangeDistance,
+  onClose,
+  selectedDistanceMeters,
+  visible,
+}: NearbyDistanceSheetProps) {
+  return (
+    <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View className="flex-1 justify-end bg-black/55">
+        <Pressable
+          onPress={onClose}
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+          }}
+        />
+
+        <View className="rounded-t-[32px] bg-[#FFF9F5] px-5 pb-7 pt-4">
+          <View className="items-center">
+            <View className="h-1.5 w-14 rounded-full bg-[#E7D8CD]" />
+          </View>
+
+          <View className="mt-4 flex-row items-start justify-between gap-4">
+            <View className="flex-1 gap-1">
+              <Text className="text-[20px] font-extrabold text-[#2B2233]">
+                Chọn bán kính nearby
+              </Text>
+              <Text className="text-[12px] leading-5 text-[#8E869A]">
+                Bấm nút Test để chọn khoảng cách gọi nearby API quanh vị trí test hiện tại.
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={onClose}
+              className="h-10 w-10 items-center justify-center rounded-full bg-white"
+            >
+              <SymbolView
+                name={{ ios: "xmark", android: "close", web: "close" }}
+                size={16}
+                tintColor="#8E869A"
+              />
+            </Pressable>
+          </View>
+
+          <View className="mt-6 rounded-[24px] border border-[#F6DDD0] bg-white px-4 py-4">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[#D9587F]">
+                Distance
+              </Text>
+              <View className="rounded-full bg-[#FFF1F6] px-3 py-1.5">
+                <Text className="text-[16px] font-extrabold text-[#EB489B]">
+                  {formatDistanceMeters(selectedDistanceMeters)}
+                </Text>
+              </View>
+            </View>
+
+            <View className="mt-4">
+              <NearbyDistanceSlider
+                max={nearbyDistanceSliderMaximumMeters}
+                min={nearbyDistanceSliderMinimumMeters}
+                onChange={onChangeDistance}
+                value={selectedDistanceMeters}
+              />
+            </View>
+
+            <View className="mt-4 flex-row flex-wrap gap-2">
+              {nearbyDistancePresetMeters.map((presetDistance) => {
+                const isActive = presetDistance === selectedDistanceMeters;
+
+                return (
+                  <Pressable
+                    key={presetDistance}
+                    className={`rounded-full border px-3.5 py-2 ${
+                      isActive
+                        ? "border-[#EB489B] bg-[#FFF1F6]"
+                        : "border-[#F4DCCF] bg-[#FFF9F5]"
+                    }`}
+                    onPress={() => {
+                      onChangeDistance(presetDistance);
+                    }}
+                  >
+                    <Text
+                      className={`text-[12px] font-bold ${
+                        isActive ? "text-[#EB489B]" : "text-[#8E869A]"
+                      }`}
+                    >
+                      {formatDistanceMeters(presetDistance)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text className="mt-4 text-[12px] leading-5 text-[#8E869A]">
+              Hiện tại Home đang gọi nearby API với bán kính{" "}
+              {formatDistanceMeters(currentDistanceMeters)}.
+            </Text>
+          </View>
+
+          <View className="mt-5 flex-row gap-3">
+            <Pressable
+              className="flex-1 rounded-[18px] border border-[#F4DCCF] bg-white px-4 py-3.5"
+              onPress={onClose}
+            >
+              <Text className="text-center text-[14px] font-bold text-[#8E869A]">Đóng</Text>
+            </Pressable>
+
+            <Pressable
+              className={`flex-1 overflow-hidden rounded-[18px] ${
+                isLoading ? "opacity-70" : ""
+              }`}
+              disabled={isLoading}
+              onPress={onApply}
+            >
+              <LinearGradient
+                colors={gradientColors}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                locations={[0, 0.58, 1]}
+                className="items-center justify-center px-4 py-3.5"
+              >
+                <Text className="text-[14px] font-extrabold text-white">
+                  {isLoading ? "Đang tải..." : "Áp dụng"}
+                </Text>
+              </LinearGradient>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
 function GuestAccessCard({ onPress }: { onPress: () => void }) {
@@ -956,11 +1218,15 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
 
 function GuestWelcomeHeader({
   onGreetingPress,
+  onLocationPillPress,
 }: {
   onGreetingPress: () => void;
+  onLocationPillPress?: () => void;
 }) {
   const logoOffset = useSharedValue(0);
-  const { handlePress, locationState } = useGuestLocationPill();
+  const { handlePress, locationState } = useGuestLocationPill(
+    onLocationPillPress,
+  );
 
   useEffect(() => {
     logoOffset.set(
@@ -1053,8 +1319,12 @@ function GuestWelcomeHeader({
   );
 }
 
-function ExplorerHeaderActions() {
-  const { handlePress } = useGuestLocationPill();
+function ExplorerHeaderActions({
+  onLocationPillPress,
+}: {
+  onLocationPillPress?: () => void;
+}) {
+  const { handlePress } = useGuestLocationPill(onLocationPillPress);
 
   return (
     <View className="flex-row items-center gap-3">
@@ -1101,6 +1371,13 @@ export default function HomeScreen() {
   const [nearbyPlacesNote, setNearbyPlacesNote] = useState<string | null>(null);
   const [nearbyPlacesStatus, setNearbyPlacesStatus] =
     useState<NearbyPlacesSectionStatus>("loading");
+  const [isNearbyDistanceSheetVisible, setIsNearbyDistanceSheetVisible] =
+    useState(false);
+  const [nearbySearchDistanceMeters, setNearbySearchDistanceMeters] = useState(
+    defaultNearbySearchDistanceMeters,
+  );
+  const [pendingNearbySearchDistanceMeters, setPendingNearbySearchDistanceMeters] =
+    useState(defaultNearbySearchDistanceMeters);
   const [resolvedNearbyPlaces, setResolvedNearbyPlaces] = useState<
     NearbyPlaceListItem[]
   >([]);
@@ -1122,6 +1399,8 @@ export default function HomeScreen() {
   const voucherMerchantCircleSize = Math.min(Math.max(width * 0.2, 76), 86);
   const voucherMerchantLogoSize = Math.round(voucherMerchantCircleSize * 0.88);
   const voucherMerchantItemWidth = voucherMerchantCircleSize + 14;
+  const isDevelopmentLocationOverrideActive =
+    getDevelopmentLocationOverride() !== null;
   const currentJourney =
     !isGuest && activeJourney && !activeJourney.completed
       ? activeJourney
@@ -1143,6 +1422,18 @@ export default function HomeScreen() {
   const handleOpenRegister = () => {
     router.push("/login?entry=home");
   };
+  const handleOpenNearbyDistanceSheet = useCallback(() => {
+    setPendingNearbySearchDistanceMeters(nearbySearchDistanceMeters);
+    setIsNearbyDistanceSheetVisible(true);
+  }, [nearbySearchDistanceMeters]);
+  const handleCloseNearbyDistanceSheet = useCallback(() => {
+    setPendingNearbySearchDistanceMeters(nearbySearchDistanceMeters);
+    setIsNearbyDistanceSheetVisible(false);
+  }, [nearbySearchDistanceMeters]);
+  const handleApplyNearbyDistance = useCallback(() => {
+    setNearbySearchDistanceMeters(pendingNearbySearchDistanceMeters);
+    setIsNearbyDistanceSheetVisible(false);
+  }, [pendingNearbySearchDistanceMeters]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -1186,7 +1477,7 @@ export default function HomeScreen() {
           : null;
         const apiNearbyHotspots = await getNearbyHotspots({
           accessToken,
-          distance: defaultNearbySearchDistanceMeters,
+          distance: nearbySearchDistanceMeters,
           latitude: coordinate.latitude,
           longitude: coordinate.longitude,
           tokenType: authSession.tokenType,
@@ -1200,8 +1491,8 @@ export default function HomeScreen() {
           setResolvedNearbyPlaces([]);
           setNearbyPlacesNote(
             coordinate.source === "dev-override"
-              ? `API nearby trả rỗng trong bán kính ${defaultNearbySearchDistanceMeters}m quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
-              : `Không có hotspot trong bán kính ${defaultNearbySearchDistanceMeters}m quanh vị trí hiện tại.`,
+              ? `API nearby trả rỗng trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
+              : `Không có hotspot trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh vị trí hiện tại.`,
           );
           setNearbyPlacesStatus("empty");
           return;
@@ -1212,7 +1503,7 @@ export default function HomeScreen() {
         );
         setNearbyPlacesNote(
           coordinate.source === "dev-override"
-            ? `Đang gọi nearby API bằng tọa độ test ${formatCoordinateLabel(coordinate)}.`
+            ? `Đang hiển thị hotspot API trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
             : null,
         );
         setNearbyPlacesStatus("ready");
@@ -1242,7 +1533,11 @@ export default function HomeScreen() {
     return () => {
       isActive = false;
     };
-  }, [authSession.isAuthenticated, authSession.tokenType]);
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    nearbySearchDistanceMeters,
+  ]);
 
   useEffect(() => {
     let isActive = true;
@@ -1354,7 +1649,14 @@ export default function HomeScreen() {
       >
         <View className="gap-6 px-5 pt-1">
           {isGuest ? (
-            <GuestWelcomeHeader onGreetingPress={handleOpenRegister} />
+            <GuestWelcomeHeader
+              onGreetingPress={handleOpenRegister}
+              onLocationPillPress={
+                isDevelopmentLocationOverrideActive
+                  ? handleOpenNearbyDistanceSheet
+                  : undefined
+              }
+            />
           ) : (
             <View className="flex-row items-center justify-between">
               <View className="flex-1 flex-row items-center gap-3.5 pr-3">
@@ -1401,7 +1703,13 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <ExplorerHeaderActions />
+              <ExplorerHeaderActions
+                onLocationPillPress={
+                  isDevelopmentLocationOverrideActive
+                    ? handleOpenNearbyDistanceSheet
+                    : undefined
+                }
+              />
             </View>
           )}
 
@@ -1748,7 +2056,7 @@ export default function HomeScreen() {
                   Đang tải hotspot gần bạn...
                 </Text>
                 <Text className="mt-1 text-[12px] leading-5 text-[#8E869A]">
-                  App đang lấy vị trí hiện tại và gọi nearby API.
+                  {`App đang lấy vị trí hiện tại và gọi nearby API trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)}.`}
                 </Text>
               </View>
             ) : nearbyPlacesStatus === "empty" ? (
@@ -2278,6 +2586,16 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <NearbyDistanceSheet
+        currentDistanceMeters={nearbySearchDistanceMeters}
+        isLoading={nearbyPlacesStatus === "loading"}
+        onApply={handleApplyNearbyDistance}
+        onChangeDistance={setPendingNearbySearchDistanceMeters}
+        onClose={handleCloseNearbyDistanceSheet}
+        selectedDistanceMeters={pendingNearbySearchDistanceMeters}
+        visible={isNearbyDistanceSheetVisible}
+      />
     </SafeAreaView>
   );
 }
