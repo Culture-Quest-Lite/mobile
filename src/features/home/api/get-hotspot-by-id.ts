@@ -38,6 +38,10 @@ function readNullableBoolean(value: unknown) {
   return null;
 }
 
+function hasPublishedStatus(status: string) {
+  return status.trim().toLowerCase() === "publish";
+}
+
 function parseTag(value: unknown) {
   if (!isObject(value)) {
     return null;
@@ -253,6 +257,15 @@ export async function getHotspotById({
       url: getHotspotByIdUrl,
     });
     throw new Error("API chi tiết hotspot trả về dữ liệu không đúng định dạng.");
+  }
+
+  if (!hasPublishedStatus(parsedHotspot.status)) {
+    console.warn("[hotspot] get hotspot by id filtered non-publish hotspot", {
+      hotspotId,
+      status: parsedHotspot.status,
+      url: getHotspotByIdUrl,
+    });
+    throw new Error("Hotspot này chưa ở trạng thái publish.");
   }
 
   return parsedHotspot;
