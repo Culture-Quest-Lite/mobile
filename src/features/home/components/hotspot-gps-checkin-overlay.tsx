@@ -31,7 +31,11 @@ import {
   getDeviceCoordinate,
 } from "@/lib/location";
 
-import { createCheckIn, type CheckInResponse } from "../api/post-checkin";
+import {
+  createCheckIn,
+  isDuplicateCheckInError,
+  type CheckInResponse,
+} from "../api/post-checkin";
 import { getHotspotStories } from "../api/get-hotspot-stories";
 import { cacheHotspotStories } from "../data/hotspot-story-cache";
 import { buildHotspotThemeStoriesFromApi } from "../data/hotspot-theme-stories";
@@ -984,6 +988,12 @@ export function HotspotGpsCheckinOverlay({
       setCheckinStage("success");
       void prefetchUnlockedStories();
     } catch (error) {
+      if (isDuplicateCheckInError(error)) {
+        onSuccess();
+        onClose();
+        return;
+      }
+
       setCheckInError(
         error instanceof Error ? error.message : "Không thể hoàn tất check-in.",
       );

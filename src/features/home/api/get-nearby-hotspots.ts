@@ -35,6 +35,7 @@ export type NearbyHotspotDto = {
   historyInformation: string;
   hotspotId: number;
   hotspotName: string;
+  isCheckedIn: boolean | null;
   latitude: number;
   longitude: number;
   medias: NearbyHotspotMediaDto[];
@@ -81,6 +82,14 @@ function readNumber(value: unknown) {
 
 function readString(value: unknown) {
   return typeof value === "string" ? value : "";
+}
+
+function readNullableBoolean(value: unknown) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  return null;
 }
 
 function parseTag(value: unknown): NearbyHotspotTagDto | null {
@@ -159,6 +168,7 @@ function parseNearbyHotspot(value: unknown): NearbyHotspotDto | null {
     historyInformation: readString(value.historyInformation),
     hotspotId,
     hotspotName,
+    isCheckedIn: readNullableBoolean(value.isCheckedIn),
     latitude,
     longitude,
     medias: Array.isArray(value.medias)
