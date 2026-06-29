@@ -1,0 +1,663 @@
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { SymbolView } from "expo-symbols";
+import { type ReactNode, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+
+import {
+  getValidAccessToken,
+  useAuthSession,
+} from "@/features/auth/hooks/use-auth-session";
+
+import { getMyProfile } from "../api/get-me";
+import { updateMyProfile } from "../api/update-me";
+import type { Profile } from "../types";
+
+const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
+
+type InformationRow = {
+  helperText?: string;
+  key:
+    | "autoPlayAudio"
+    | "createdAt"
+    | "displayName"
+    | "email"
+    | "points"
+    | "premium"
+    | "status"
+    | "totalXp"
+    | "username";
+  label: string;
+  valueTone?: "default" | "success";
+  value: string;
+};
+
+function formatUsername(username: string) {
+  const normalizedUsername = username.replace(/^@+/, "").trim();
+  return normalizedUsername ? `@${normalizedUsername}` : "Chưa cập nhật";
+}
+
+function formatBoolean(value: boolean | null | undefined) {
+  if (typeof value !== "boolean") {
+    return "Chưa cập nhật";
+  }
+
+  return value ? "Bật" : "Tắt";
+}
+
+function formatPremium(value: boolean) {
+  return value ? "Có" : "Không";
+}
+
+function formatDate(dateString: string | null) {
+  if (!dateString) {
+    return "Chưa cập nhật";
+  }
+
+  const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (!match) {
+    return dateString;
+  }
+
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+function formatStatus(status: string | null) {
+  if (!status) {
+    return "Chưa cập nhật";
+  }
+
+  const normalizedStatus = status.trim().toUpperCase();
+
+  if (normalizedStatus === "ACTIVE") {
+    return "Hoạt động";
+  }
+
+  return normalizedStatus;
+}
+
+function formatNumber(value: number) {
+  return value.toLocaleString("vi-VN");
+}
+
+function buildInformationRows(profile: Profile): InformationRow[] {
+  return [
+    {
+      key: "displayName",
+      label: "Tên hiển thị",
+      value: profile.name.trim() || "Chưa cập nhật",
+    },
+    {
+      key: "username",
+      label: "Tên đăng nhập",
+      value: formatUsername(profile.username),
+    },
+    {
+      key: "email",
+      label: "Email",
+      value: profile.email?.trim() || "Chưa cập nhật",
+    },
+
+    {
+      key: "createdAt",
+      label: "Ngày tham gia",
+      value: formatDate(profile.createdAt),
+    },
+    {
+      key: "totalXp",
+      label: "Tổng XP",
+      value: formatNumber(profile.totalXp),
+    },
+    {
+      key: "points",
+      label: "Tổng điểm",
+      value: formatNumber(profile.points),
+    },
+    {
+      key: "autoPlayAudio",
+      label: "Tự động phát audio",
+      value: formatBoolean(profile.autoPlayAudio),
+    },
+    {
+      key: "status",
+      label: "Trạng thái",
+      valueTone:
+        profile.status?.trim().toUpperCase() === "ACTIVE"
+          ? "success"
+          : "default",
+      value: formatStatus(profile.status),
+    },
+    {
+      helperText: profile.isPremium
+        ? "Tài khoản đang có quyền lợi premium."
+        : "Tài khoản hiện chưa bật premium.",
+      key: "premium",
+      label: "Gói đăng kí",
+      value: formatPremium(profile.isPremium),
+    },
+  ];
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return "Không thể tải thông tin cá nhân.";
+}
+
+export default function ProfileInformationScreen() {
+  const router = useRouter();
+  const authSession = useAuthSession();
+  const insets = useSafeAreaInsets();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [draftDisplayName, setDraftDisplayName] = useState("");
+  const [draftAutoPlayAudio, setDraftAutoPlayAudio] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+  const [submitTone, setSubmitTone] = useState<"error" | "success" | null>(
+    null,
+  );
+  const [requestVersion, setRequestVersion] = useState(0);
+
+  const syncDraftFields = (nextProfile: Profile) => {
+    setDraftDisplayName(nextProfile.name.trim());
+    setDraftAutoPlayAudio(nextProfile.autoPlayAudio ?? false);
+  };
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadProfile = async () => {
+      if (!authSession.isAuthenticated) {
+        if (!isActive) {
+          return;
+        }
+
+        setProfile(null);
+        setErrorMessage("Bạn cần đăng nhập để xem thông tin cá nhân.");
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setErrorMessage(null);
+      setSubmitMessage(null);
+      setSubmitTone(null);
+
+      try {
+        const accessToken = await getValidAccessToken();
+
+        if (!accessToken) {
+          throw new Error(
+            "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+          );
+        }
+
+        const nextProfile = await getMyProfile({
+          accessToken,
+          tokenType: authSession.tokenType,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setProfile(nextProfile);
+        syncDraftFields(nextProfile);
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setErrorMessage(getErrorMessage(error));
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.isAuthenticated, authSession.tokenType, requestVersion]);
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/profile/menu");
+  };
+
+  const handleSubmitProfile = async () => {
+    if (!profile || isSubmitting) {
+      return;
+    }
+
+    if (!isEditing) {
+      syncDraftFields(profile);
+      setSubmitMessage(null);
+      setSubmitTone(null);
+      setIsEditing(true);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitMessage(null);
+    setSubmitTone(null);
+
+    try {
+      const accessToken = await getValidAccessToken();
+      const normalizedDisplayName =
+        draftDisplayName.trim() || profile.username.trim();
+
+      if (!accessToken) {
+        throw new Error(
+          "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+        );
+      }
+
+      const updatedProfile = await updateMyProfile({
+        accessToken,
+        avatarUrl: profile.avatar,
+        autoPlayAudio: draftAutoPlayAudio,
+        displayName: normalizedDisplayName,
+        tokenType: authSession.tokenType,
+      });
+
+      if (updatedProfile) {
+        setProfile(updatedProfile);
+        syncDraftFields(updatedProfile);
+      } else {
+        const nextProfile = {
+          ...profile,
+          autoPlayAudio: draftAutoPlayAudio,
+          name: normalizedDisplayName,
+        };
+        setProfile(nextProfile);
+        syncDraftFields(nextProfile);
+      }
+
+      setIsEditing(false);
+      setSubmitMessage("Cập nhật thông tin cá nhân thành công.");
+      setSubmitTone("success");
+    } catch (error) {
+      setSubmitMessage(getErrorMessage(error));
+      setSubmitTone("error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    if (!profile || isSubmitting) {
+      return;
+    }
+
+    syncDraftFields(profile);
+    setIsEditing(false);
+    setSubmitMessage(null);
+    setSubmitTone(null);
+  };
+
+  const informationRows = profile ? buildInformationRows(profile) : [];
+
+  return (
+    <SafeAreaView
+      className="flex-1 bg-[#EEF2F5]"
+      edges={["left", "right", "bottom"]}
+    >
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          paddingBottom: Math.max(insets.bottom, 24) + 24,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        <LinearGradient
+          colors={gradientColors}
+          end={{ x: 1, y: 0.5 }}
+          start={{ x: 0, y: 0.5 }}
+          style={{
+            paddingBottom: 18,
+            paddingHorizontal: 12,
+            paddingTop: insets.top + 12,
+          }}
+        >
+          <View className="flex-row items-center justify-between">
+            <Pressable
+              accessibilityLabel="Quay lại menu hồ sơ"
+              className="h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-white/15"
+              onPress={handleBack}
+            >
+              <SymbolView
+                name={{
+                  ios: "chevron.left",
+                  android: "arrow_back",
+                  web: "arrow_back",
+                }}
+                size={18}
+                tintColor="#FFF7F0"
+              />
+            </Pressable>
+
+            <Text className="flex-1 px-3 text-center text-[20px] font-black text-white">
+              Thông tin cá nhân
+            </Text>
+
+            <View className="h-10 w-10" />
+          </View>
+        </LinearGradient>
+
+        <View className="">
+          {isLoading && !profile ? (
+            <View className="px-4">
+              <StateCard
+                description="Đang tải dữ liệu từ tài khoản của bạn."
+                title="Đang tải thông tin cá nhân"
+              >
+                <ActivityIndicator color="#F58752" size="large" />
+              </StateCard>
+            </View>
+          ) : null}
+
+          {!isLoading && !profile && errorMessage ? (
+            <View className="px-4">
+              <StateCard
+                actionLabel={
+                  authSession.isAuthenticated ? "Tải lại" : "Đăng nhập"
+                }
+                description={errorMessage}
+                onPress={
+                  authSession.isAuthenticated
+                    ? () => setRequestVersion((value) => value + 1)
+                    : () => router.push("/login")
+                }
+                title="Không thể hiển thị thông tin"
+              />
+            </View>
+          ) : null}
+
+          {profile ? (
+            <>
+              {errorMessage ? (
+                <View className="px-4">
+                  <InlineNotice message={errorMessage} tone="error" />
+                </View>
+              ) : null}
+
+              <View className="bg-white">
+                <View className="bg-white">
+                  {informationRows.map((row, index) => (
+                    <InformationDetailRow
+                      draftAutoPlayAudio={draftAutoPlayAudio}
+                      draftDisplayName={draftDisplayName}
+                      isEditing={isEditing}
+                      key={row.label}
+                      onChangeAutoPlayAudio={setDraftAutoPlayAudio}
+                      onChangeDisplayName={setDraftDisplayName}
+                      row={row}
+                      showDivider={index < informationRows.length - 1}
+                    />
+                  ))}
+                </View>
+
+                {submitMessage ? (
+                  <View className="px-4 pb-1 pt-4">
+                    <InlineNotice
+                      message={submitMessage}
+                      tone={submitTone === "success" ? "success" : "error"}
+                    />
+                  </View>
+                ) : null}
+
+                <View className="border-t border-[#ECE8F2] px-4 py-4">
+                  <View className="flex-row gap-3">
+                    {isEditing ? (
+                      <Pressable
+                        accessibilityLabel="Hủy chỉnh sửa"
+                        className="flex-1 items-center justify-center rounded-full border border-[#D8DDE3] bg-white px-4 py-4"
+                        disabled={isSubmitting}
+                        onPress={handleCancelEdit}
+                        style={{ opacity: isSubmitting ? 0.72 : 1 }}
+                      >
+                        <Text className="text-[16px] font-extrabold text-[#6E667C]">
+                          Hủy
+                        </Text>
+                      </Pressable>
+                    ) : null}
+
+                    <Pressable
+                      accessibilityLabel={
+                        isEditing
+                          ? "Lưu thay đổi thông tin cá nhân"
+                          : "Bật chế độ chỉnh sửa thông tin cá nhân"
+                      }
+                      className="flex-1 flex-row items-center justify-center gap-2 rounded-full bg-[#E9EEF1] px-4 py-4"
+                      disabled={isSubmitting}
+                      onPress={() => {
+                        void handleSubmitProfile();
+                      }}
+                      style={{ opacity: isSubmitting ? 0.72 : 1 }}
+                    >
+                      {isSubmitting ? (
+                        <ActivityIndicator color="#2B2233" size="small" />
+                      ) : (
+                        <SymbolView
+                          name={
+                            isEditing
+                              ? {
+                                  ios: "checkmark",
+                                  android: "check",
+                                  web: "check",
+                                }
+                              : {
+                                  ios: "pencil",
+                                  android: "edit",
+                                  web: "edit",
+                                }
+                          }
+                          size={16}
+                          tintColor="#2B2233"
+                        />
+                      )}
+                      <Text className="text-[16px] font-extrabold text-[#2B2233]">
+                        {isSubmitting
+                          ? "Đang lưu..."
+                          : isEditing
+                            ? "Lưu thay đổi"
+                            : "Chỉnh sửa"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            </>
+          ) : null}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function StateCard({
+  actionLabel,
+  children,
+  description,
+  onPress,
+  title,
+}: {
+  actionLabel?: string;
+  children?: ReactNode;
+  description: string;
+  onPress?: () => void;
+  title: string;
+}) {
+  return (
+    <View className="rounded-[28px] bg-white px-5 py-6">
+      <View className="items-center">
+        {children}
+        <Text className="mt-3 text-center text-[18px] font-black text-[#27233A]">
+          {title}
+        </Text>
+        <Text className="mt-2 text-center text-[13px] leading-5 text-[#8E869A]">
+          {description}
+        </Text>
+      </View>
+
+      {actionLabel && onPress ? (
+        <Pressable
+          className="mt-5 items-center justify-center rounded-full bg-[#F3F5F7] px-4 py-3.5"
+          onPress={onPress}
+        >
+          <Text className="text-[15px] font-extrabold text-[#2B2233]">
+            {actionLabel}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function InlineNotice({
+  message,
+  tone,
+}: {
+  message: string;
+  tone: "error" | "success";
+}) {
+  const palette =
+    tone === "success"
+      ? {
+          backgroundColor: "#EAF8EF",
+          borderColor: "#BCE7C8",
+          textColor: "#226B3A",
+        }
+      : {
+          backgroundColor: "#FFF4F1",
+          borderColor: "#F6C9C0",
+          textColor: "#B54D3A",
+        };
+
+  return (
+    <View
+      className="mb-4 rounded-[22px] border px-4 py-3"
+      style={{
+        backgroundColor: palette.backgroundColor,
+        borderColor: palette.borderColor,
+      }}
+    >
+      <Text
+        className="text-[12px] font-semibold leading-5"
+        style={{ color: palette.textColor }}
+      >
+        {message}
+      </Text>
+    </View>
+  );
+}
+
+function InformationDetailRow({
+  draftAutoPlayAudio,
+  draftDisplayName,
+  isEditing,
+  onChangeAutoPlayAudio,
+  onChangeDisplayName,
+  row,
+  showDivider,
+}: {
+  draftAutoPlayAudio: boolean;
+  draftDisplayName: string;
+  isEditing: boolean;
+  onChangeAutoPlayAudio: (value: boolean) => void;
+  onChangeDisplayName: (value: string) => void;
+  row: InformationRow;
+  showDivider: boolean;
+}) {
+  const isSuccessValue = row.valueTone === "success";
+  const isDisplayNameEditable = isEditing && row.key === "displayName";
+  const isAutoPlayAudioEditable = isEditing && row.key === "autoPlayAudio";
+
+  return (
+    <View
+      className="flex-row items-start gap-3 px-4 py-4"
+      style={
+        showDivider
+          ? {
+              borderBottomColor: "#ECE8F2",
+              borderBottomWidth: 1,
+            }
+          : undefined
+      }
+    >
+      <Text
+        className="pt-0.5 text-[15px] text-[#8E869A]"
+        style={{ width: 122 }}
+      >
+        {row.label}
+      </Text>
+
+      <View className="min-w-0 flex-1">
+        {isDisplayNameEditable ? (
+          <TextInput
+            className="rounded-2xl border border-[#E2E7EC] bg-[#F7F9FB] px-4 py-3 text-[16px] font-semibold text-[#27233A]"
+            onChangeText={onChangeDisplayName}
+            placeholder="Nhập tên hiển thị"
+            placeholderTextColor="#A39CAF"
+            selectionColor="#EB489B"
+            value={draftDisplayName}
+          />
+        ) : isAutoPlayAudioEditable ? (
+          <View className="flex-row items-center justify-between rounded-2xl border border-[#E2E7EC] bg-[#F7F9FB] px-4 py-3">
+            <Text className="pr-3 text-[15px] font-semibold text-[#27233A]">
+              {draftAutoPlayAudio ? "Bật" : "Tắt"}
+            </Text>
+            <Switch
+              onValueChange={onChangeAutoPlayAudio}
+              thumbColor="#FFFFFF"
+              trackColor={{ false: "#D5DAE0", true: "#6BCB8B" }}
+              value={draftAutoPlayAudio}
+            />
+          </View>
+        ) : isSuccessValue ? (
+          <View className="self-start rounded-full bg-[#E6F7EC] px-3 py-1.5">
+            <Text className="text-[15px] font-extrabold text-[#1E8E5A]">
+              {row.value}
+            </Text>
+          </View>
+        ) : (
+          <Text className="text-[16px] font-semibold leading-6 text-[#27233A]">
+            {row.value}
+          </Text>
+        )}
+
+        {row.helperText ? (
+          <Text className="mt-1 text-[12px] leading-5 text-[#8E869A]">
+            {row.helperText}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
