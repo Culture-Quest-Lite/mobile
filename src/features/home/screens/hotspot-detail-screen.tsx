@@ -29,8 +29,15 @@ import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
-import { addCheckin, useCheckins } from "@/lib/checkin-store";
+import {
+  addApiCheckin,
+  addCheckin,
+  mergeApiCheckins,
+  useCheckedInApiHotspots,
+  useCheckins,
+} from "@/lib/checkin-store";
 import { getRoutesForHotspot, routes, type RouteItem } from "@/lib/demo-data";
+import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
 import { getHotspotStories } from "../api/get-hotspot-stories";
 import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
@@ -1073,6 +1080,7 @@ function HistoricalInfoSection({ text }: { text: string }) {
 function HiddenStoryCheckinSection({
   audioStoryDurationLabel,
   isCheckedIn,
+  isCheckinStatusLoading = false,
   isStoryAvailabilityLoading = false,
   isStoryAvailable = true,
   onCheckinPress,
@@ -1080,6 +1088,7 @@ function HiddenStoryCheckinSection({
 }: {
   audioStoryDurationLabel: string;
   isCheckedIn: boolean;
+  isCheckinStatusLoading?: boolean;
   isStoryAvailabilityLoading?: boolean;
   isStoryAvailable?: boolean;
   onCheckinPress: () => void;
@@ -1135,18 +1144,38 @@ function HiddenStoryCheckinSection({
         <View className="flex-row items-center rounded-full bg-[#F6EEE8] px-3 py-2">
           <SymbolView
             name={{
-              ios: isCheckedIn ? "checkmark.seal.fill" : "lock.fill",
-              android: isCheckedIn ? "verified" : "lock",
-              web: isCheckedIn ? "verified" : "lock",
+              ios: isCheckedIn
+                ? "checkmark.seal.fill"
+                : isCheckinStatusLoading
+                  ? "clock.fill"
+                  : "lock.fill",
+              android: isCheckedIn
+                ? "verified"
+                : isCheckinStatusLoading
+                  ? "schedule"
+                  : "lock",
+              web: isCheckedIn
+                ? "verified"
+                : isCheckinStatusLoading
+                  ? "schedule"
+                  : "lock",
             }}
             size={12}
-            tintColor={isCheckedIn ? "#1F9D7A" : "#8A736A"}
+            tintColor={
+              isCheckedIn ? "#1F9D7A" : isCheckinStatusLoading ? "#7C7C93" : "#8A736A"
+            }
           />
           <Text
             className="ml-1.5 text-[11px] font-black uppercase tracking-[0.8px]"
-            style={{ color: isCheckedIn ? "#1F9D7A" : "#8A736A" }}
+            style={{
+              color: isCheckedIn ? "#1F9D7A" : isCheckinStatusLoading ? "#7C7C93" : "#8A736A",
+            }}
           >
-            {isCheckedIn ? "Đã check-in" : "Cần check-in"}
+            {isCheckedIn
+              ? "Đã check-in"
+              : isCheckinStatusLoading
+                ? "Đang đồng bộ"
+                : "Cần check-in"}
           </Text>
         </View>
       </View>
@@ -1182,35 +1211,43 @@ function HiddenStoryCheckinSection({
             Câu chuyện đang chờ bạn
           </Text>
 
-            <Text className="mt-3 max-w-[320px] text-center text-[14px] leading-6 text-[#6A5964]">
-              {isStoryAvailable
-              ? "Check-in tại đây để mở khóa story hotspot và bản kể chuyện độc quyền."
-              : "Check-in tại đây để ghi nhận điểm đến. Story chuyên đề cho hotspot này đang được cập nhật."}
-            </Text>
+          <Text className="mt-3 max-w-[320px] text-center text-[14px] leading-6 text-[#6A5964]">
+            {isCheckinStatusLoading
+              ? "Đang kiểm tra trạng thái check-in từ hệ thống trước khi mở khóa nội dung."
+              : isStoryAvailable
+                ? "Check-in tại đây để mở khóa story hotspot và bản kể chuyện độc quyền."
+                : "Check-in tại đây để ghi nhận điểm đến. Story chuyên đề cho hotspot này đang được cập nhật."}
+          </Text>
 
           <Pressable
             className="mt-6 overflow-hidden rounded-full"
+            disabled={isCheckinStatusLoading}
             onPress={onCheckinPress}
             style={buttonShadowStyle}
           >
             <LinearGradient
-              colors={loginGradientColors}
+              colors={
+                isCheckinStatusLoading
+                  ? ["#D7D3E1", "#C8C1D6", "#BBB3CB"]
+                  : loginGradientColors
+              }
               end={{ x: 1, y: 0.5 }}
               locations={[0, 0.58, 1]}
               start={{ x: 0, y: 0.5 }}
               className="flex-row items-center px-5 py-3.5"
+              style={{ opacity: isCheckinStatusLoading ? 0.88 : 1 }}
             >
               <SymbolView
                 name={{
-                  ios: "location.fill",
-                  android: "place",
-                  web: "place",
+                  ios: isCheckinStatusLoading ? "clock.fill" : "location.fill",
+                  android: isCheckinStatusLoading ? "schedule" : "place",
+                  web: isCheckinStatusLoading ? "schedule" : "place",
                 }}
                 size={15}
                 tintColor="#FFFFFF"
               />
               <Text className="ml-2 text-[15px] font-black text-white">
-                Check-in tại đây
+                {isCheckinStatusLoading ? "Đang đồng bộ..." : "Check-in tại đây"}
               </Text>
             </LinearGradient>
           </Pressable>
@@ -1551,10 +1588,12 @@ function PersonalExperienceSection({
 function StickyCheckinBar({
   bottomInset,
   isCheckedIn,
+  isCheckinStatusLoading = false,
   onPress,
 }: {
   bottomInset: number;
   isCheckedIn: boolean;
+  isCheckinStatusLoading?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -1576,17 +1615,23 @@ function StickyCheckinBar({
       >
         <Pressable
           className="overflow-hidden rounded-[22px]"
-          disabled={isCheckedIn}
+          disabled={isCheckedIn || isCheckinStatusLoading}
           onPress={onPress}
           style={buttonShadowStyle}
         >
           <LinearGradient
-            colors={isCheckedIn ? ["#34D399", "#16A34A"] : loginGradientColors}
+            colors={
+              isCheckedIn
+                ? ["#34D399", "#16A34A"]
+                : isCheckinStatusLoading
+                  ? ["#D7D3E1", "#BBB3CB"]
+                  : loginGradientColors
+            }
             end={{ x: 1, y: 0.5 }}
-            locations={isCheckedIn ? [0, 1] : [0, 0.58, 1]}
+            locations={isCheckedIn || isCheckinStatusLoading ? [0, 1] : [0, 0.58, 1]}
             start={{ x: 0, y: 0.5 }}
             className="px-5 py-4"
-            style={{ opacity: isCheckedIn ? 0.92 : 1 }}
+            style={{ opacity: isCheckedIn || isCheckinStatusLoading ? 0.92 : 1 }}
           >
             <View className="flex-row items-center justify-center">
               <View className="h-8 w-8 items-center justify-center rounded-full bg-white/22">
@@ -1594,16 +1639,30 @@ function StickyCheckinBar({
                   name={{
                     ios: isCheckedIn
                       ? "checkmark.circle.fill"
+                      : isCheckinStatusLoading
+                        ? "clock.fill"
                       : "location.fill",
-                    android: isCheckedIn ? "check_circle" : "place",
-                    web: isCheckedIn ? "check_circle" : "place",
+                    android: isCheckedIn
+                      ? "check_circle"
+                      : isCheckinStatusLoading
+                        ? "schedule"
+                        : "place",
+                    web: isCheckedIn
+                      ? "check_circle"
+                      : isCheckinStatusLoading
+                        ? "schedule"
+                        : "place",
                   }}
                   size={16}
                   tintColor="#FFFFFF"
                 />
               </View>
               <Text className="ml-3 text-[16px] font-black tracking-[0.3px] text-white">
-                {isCheckedIn ? "Đã check-in" : "Sẵn sàng checkin"}
+                {isCheckedIn
+                  ? "Đã check-in"
+                  : isCheckinStatusLoading
+                    ? "Đang đồng bộ..."
+                    : "Sẵn sàng checkin"}
               </Text>
             </View>
           </LinearGradient>
@@ -1736,6 +1795,7 @@ export default function HotspotDetailScreen() {
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
   const checkins = useCheckins();
+  const checkedInApiHotspots = useCheckedInApiHotspots();
   const { hotspotId, slug } = useLocalSearchParams<{
     hotspotId?: string;
     slug: string;
@@ -1745,6 +1805,8 @@ export default function HotspotDetailScreen() {
   const [isStickyCheckinVisible, setIsStickyCheckinVisible] = useState(false);
   const [remoteHotspot, setRemoteHotspot] = useState<NearbyHotspotDto | null>(null);
   const [remoteHotspotError, setRemoteHotspotError] = useState<string | null>(null);
+  const [isRemoteCheckinStatusLoading, setIsRemoteCheckinStatusLoading] =
+    useState(false);
   const [isRemoteHotspotLoading, setIsRemoteHotspotLoading] = useState(false);
   const resolvedSlug = Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "");
   const resolvedHotspotId = resolveHotspotIdParam(hotspotId);
@@ -1939,6 +2001,61 @@ export default function HotspotDetailScreen() {
     };
   }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId]);
 
+  useEffect(() => {
+    if (resolvedHotspotId === null || remoteHotspot?.isCheckedIn !== true) {
+      return;
+    }
+
+    mergeApiCheckins([resolvedHotspotId]);
+  }, [remoteHotspot?.isCheckedIn, resolvedHotspotId]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function syncRemoteCheckinStatus() {
+      if (!authSession.isAuthenticated || resolvedHotspotId === null) {
+        setIsRemoteCheckinStatusLoading(false);
+        return;
+      }
+
+      setIsRemoteCheckinStatusLoading(true);
+
+      try {
+        const accessToken = await getValidAccessToken();
+
+        if (!accessToken || !isActive) {
+          return;
+        }
+
+        const checkedInHotspotIds = await getCheckedInHotspotIds({
+          accessToken,
+          tokenType: authSession.tokenType,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        mergeApiCheckins(checkedInHotspotIds);
+      } catch (error) {
+        console.info("[hotspot-detail] check-in status sync skipped", {
+          error: error instanceof Error ? error.message : error,
+          hotspotId: resolvedHotspotId,
+        });
+      } finally {
+        if (isActive) {
+          setIsRemoteCheckinStatusLoading(false);
+        }
+      }
+    }
+
+    void syncRemoteCheckinStatus();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId]);
+
   const localHotspot = getHotspotBySlug(slug);
   const remoteHotspotResult = remoteHotspot
     ? buildHotspotFromApi({
@@ -2056,7 +2173,9 @@ export default function HotspotDetailScreen() {
   const canOpenStories =
     resolvedHotspotId !== null ? hasApiStories : Boolean(matchedLocalHotspot);
   const hotspotCheckinId = hotspot.slug;
-  const isCheckedIn = checkins.includes(hotspotCheckinId);
+  const isCheckedIn =
+    checkins.includes(hotspotCheckinId) ||
+    (resolvedHotspotId !== null && checkedInApiHotspots.includes(resolvedHotspotId));
   const historicalPreview = getHistoricalPreview(hotspot.story);
   const audioStoryDurationLabel = getAudioStoryDurationLabel(hotspot.story);
   const hotspotStoriesHref =
@@ -2439,6 +2558,7 @@ export default function HotspotDetailScreen() {
                 <HiddenStoryCheckinSection
                   audioStoryDurationLabel={audioStoryDurationLabel}
                   isCheckedIn={isCheckedIn}
+                  isCheckinStatusLoading={isRemoteCheckinStatusLoading}
                   isStoryAvailabilityLoading={isStoryAvailabilityLoading}
                   isStoryAvailable={canOpenStories}
                   onCheckinPress={() => setIsCheckinOverlayVisible(true)}
@@ -2511,6 +2631,7 @@ export default function HotspotDetailScreen() {
           <StickyCheckinBar
             bottomInset={insets.bottom}
             isCheckedIn={isCheckedIn}
+            isCheckinStatusLoading={isRemoteCheckinStatusLoading}
             onPress={() => setIsCheckinOverlayVisible(true)}
           />
         </Animated.View>
@@ -2522,7 +2643,13 @@ export default function HotspotDetailScreen() {
             hotspotId={resolvedHotspotId}
             isStoryAvailable={canOpenStories}
             onClose={() => setIsCheckinOverlayVisible(false)}
-            onSuccess={() => addCheckin(hotspotCheckinId)}
+            onSuccess={() => {
+              addCheckin(hotspotCheckinId);
+
+              if (resolvedHotspotId !== null) {
+                addApiCheckin(resolvedHotspotId);
+              }
+            }}
             rewardXp={rewardXp}
             totalRouteStopsCount={routeProgressRoute?.hotspotIds.length}
             visitedRouteStopsCount={visitedRouteStopsCount}

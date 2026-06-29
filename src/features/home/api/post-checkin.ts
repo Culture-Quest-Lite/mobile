@@ -19,6 +19,37 @@ export type CheckInResponse = {
   xpEarned: number;
 };
 
+type CreateCheckInErrorCode =
+  | "duplicate"
+  | "invalid-payload"
+  | "network"
+  | "request";
+
+export class CreateCheckInError extends Error {
+  body?: unknown;
+  code: CreateCheckInErrorCode;
+  status?: number;
+
+  constructor(
+    message: string,
+    {
+      body,
+      code,
+      status,
+    }: {
+      body?: unknown;
+      code: CreateCheckInErrorCode;
+      status?: number;
+    },
+  ) {
+    super(message);
+    this.name = "CreateCheckInError";
+    this.body = body;
+    this.code = code;
+    this.status = status;
+  }
+}
+
 function resolveCreateCheckInUrl() {
   if (PublicEnv.apiBaseUrl.trim()) {
     return buildApiUrl("/api/v1/check-ins");
@@ -37,6 +68,13 @@ function readNumber(value: unknown) {
 
 function readString(value: unknown) {
   return typeof value === "string" ? value : "";
+}
+
+function normalizeLookupText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function readNullableNumber(value: unknown) {
@@ -142,6 +180,25 @@ function getErrorMessage(body: unknown, status: number) {
   return `Check-in thất bại (${status}).`;
 }
 
+function isDuplicateCheckInResponse(body: unknown, status: number) {
+  if (status !== 400) {
+    return false;
+  }
+
+  const message = getErrorMessage(body, status);
+  const normalizedMessage = normalizeLookupText(message);
+
+  return (
+    normalizedMessage.includes("already checked in") ||
+    normalizedMessage.includes("da check-in") ||
+    normalizedMessage.includes("da check in") ||
+    (normalizedMessage.includes("check-in") &&
+      normalizedMessage.includes("truoc do")) ||
+    (normalizedMessage.includes("check in") &&
+      normalizedMessage.includes("truoc do"))
+  );
+}
+
 function getConnectionErrorMessage(url: string) {
   if (Platform.OS === "android" && url.startsWith("http://")) {
     return "Android đang chặn kết nối HTTP tới API. Hãy dùng HTTPS hoặc rebuild Android dev client sau khi bật cleartext traffic.";
@@ -184,12 +241,32 @@ export async function createCheckIn({
       platform: Platform.OS,
       url: createCheckInUrl,
     });
-    throw new Error(getConnectionErrorMessage(createCheckInUrl));
+    throw new CreateCheckInError(getConnectionErrorMessage(createCheckInUrl), {
+      code: "network",
+    });
   }
 
   const responseBody = await parseResponseBody(response);
 
   if (!response.ok) {
+    const errorMessage = getErrorMessage(responseBody, response.status);
+
+    if (isDuplicateCheckInResponse(responseBody, response.status)) {
+      console.info("[checkin] create check-in duplicate", {
+        body: summarizeBody(responseBody),
+        hotspotId,
+        latitude,
+        longitude,
+        status: response.status,
+        url: createCheckInUrl,
+      });
+      throw new CreateCheckInError(errorMessage, {
+        body: summarizeBody(responseBody),
+        code: "duplicate",
+        status: response.status,
+      });
+    }
+
     console.warn("[checkin] create check-in rejected", {
       body: summarizeBody(responseBody),
       hotspotId,
@@ -198,7 +275,11 @@ export async function createCheckIn({
       status: response.status,
       url: createCheckInUrl,
     });
-    throw new Error(getErrorMessage(responseBody, response.status));
+    throw new CreateCheckInError(errorMessage, {
+      body: summarizeBody(responseBody),
+      code: "request",
+      status: response.status,
+    });
   }
 
   const parsedResponse = parseCheckInResponse(responseBody);
@@ -211,8 +292,18 @@ export async function createCheckIn({
       longitude,
       url: createCheckInUrl,
     });
-    throw new Error("API check-in trả về dữ liệu không đúng định dạng.");
+    throw new CreateCheckInError(
+      "API check-in trả về dữ liệu không đúng định dạng.",
+      {
+        body: summarizeBody(responseBody),
+        code: "invalid-payload",
+      },
+    );
   }
 
   return parsedResponse;
+}
+
+export function isDuplicateCheckInError(error: unknown): error is CreateCheckInError {
+  return error instanceof CreateCheckInError && error.code === "duplicate";
 }

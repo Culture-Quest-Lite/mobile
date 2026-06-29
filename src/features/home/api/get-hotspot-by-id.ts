@@ -30,6 +30,14 @@ function readString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+function readNullableBoolean(value: unknown) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  return null;
+}
+
 function parseTag(value: unknown) {
   if (!isObject(value)) {
     return null;
@@ -110,6 +118,7 @@ function parseHotspot(value: unknown): NearbyHotspotDto | null {
     historyInformation: readString(value.historyInformation),
     hotspotId,
     hotspotName,
+    isCheckedIn: readNullableBoolean(value.isCheckedIn),
     latitude,
     longitude,
     medias: Array.isArray(value.medias)
