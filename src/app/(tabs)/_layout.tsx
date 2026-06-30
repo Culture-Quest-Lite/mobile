@@ -26,10 +26,10 @@ type TabConfig = {
   label: string;
 };
 
-const TAB_ICON_SLOT_SIZE = 24;
-const TAB_ICON_RENDER_SIZE = 14;
-const TAB_LABEL_FONT_SIZE = 10;
-const TAB_LABEL_LINE_HEIGHT = 12;
+const TAB_ICON_SLOT_SIZE = 28;
+const TAB_ICON_RENDER_SIZE = 18;
+const TAB_LABEL_FONT_SIZE = 12;
+const TAB_LABEL_LINE_HEIGHT = 14;
 
 const TAB_CONFIG: Record<VisibleTabName, TabConfig> = {
   bookings: {
@@ -53,15 +53,15 @@ const TAB_CONFIG: Record<VisibleTabName, TabConfig> = {
       backgroundColor: "transparent",
       borderRadius: 0,
       borderWidth: 0,
-      height: 24,
+      height: 28,
       overflow: "visible",
-      width: 24,
+      width: 28,
     },
     imageResizeMode: "contain",
     imageSource: HOME_LOGO,
     imageStyle: {
-      height: 24,
-      width: 24,
+      height: 28,
+      width: 28,
     },
     label: "Trang chủ",
   },
@@ -104,16 +104,16 @@ function renderTabIcon(tab: TabConfig, tintColor: ColorValue) {
               alignItems: "center",
               backgroundColor: "#FFF8F1",
               borderColor: "#E9E9EC",
-               borderRadius: 11,
-               borderWidth: 1,
-               height: 20,
-               justifyContent: "center",
-               overflow: "hidden",
-               width: 20,
-             },
-             tab.imageContainerStyle,
-           ]}
-         >
+              borderRadius: 11,
+              borderWidth: 1,
+              height: 20,
+              justifyContent: "center",
+              overflow: "hidden",
+              width: 20,
+            },
+            tab.imageContainerStyle,
+          ]}
+        >
           <Image
             resizeMode={tab.imageResizeMode ?? "cover"}
             source={tab.imageSource}
@@ -150,7 +150,8 @@ function renderTabLabel(
   return (
     <Text
       adjustsFontSizeToFit
-      allowFontScaling={false}
+      allowFontScaling
+      maxFontSizeMultiplier={1.1}
       minimumFontScale={0.7}
       numberOfLines={1}
       style={{
@@ -174,8 +175,8 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const bottomInset = Math.max(insets.bottom, Platform.OS === "android" ? 8 : 0);
-  const tabBarBottomPadding = bottomInset + 11;
-  const tabBarHeight = 50 + tabBarBottomPadding + 6;
+  const tabBarBottomPadding = bottomInset + 12;
+  const tabBarHeight = 56 + tabBarBottomPadding + 8;
   const shouldHideTabBarForGuestProfile =
     !authSession.isAuthenticated && pathname === "/profile";
 
@@ -200,11 +201,11 @@ export default function TabsLayout() {
           tabBarInactiveBackgroundColor: "transparent",
           tabBarInactiveTintColor: TAB_INACTIVE_COLOR,
           tabBarItemStyle: {
-            borderRadius: 16,
+            borderRadius: 18,
             marginHorizontal: 0,
             minWidth: 0,
             overflow: "hidden",
-            paddingVertical: 3,
+            paddingVertical: 4,
           },
           tabBarLabel: tab
             ? ({ color, focused }) => renderTabLabel(tab.label, focused, color)
@@ -221,8 +222,8 @@ export default function TabsLayout() {
                 elevation: 0,
                 height: tabBarHeight,
                 paddingBottom: tabBarBottomPadding,
-                paddingHorizontal: 2,
-                paddingTop: 5,
+                paddingHorizontal: 4,
+                paddingTop: 6,
                 shadowColor: "#1F2A37",
                 shadowOffset: {
                   width: 0,

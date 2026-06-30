@@ -85,20 +85,20 @@ export default function ForgotPasswordSuccessScreen() {
     scrollContentMinHeight,
   } = useAuthScreenLayout(760);
   const logoFloat = useSharedValue(0);
-  const heroHeight = isCompactScreen ? 196 : 236;
-  const heroTopPadding = insets.top + (isCompactScreen ? 16 : 24);
-  const heroBottomPadding = isCompactScreen ? 24 : 44;
-  const logoSize = isCompactScreen ? 112 : 148;
-  const cardTopPadding = isCompactScreen ? 18 : 24;
+  const heroHeight = isCompactScreen ? 208 : 248;
+  const heroTopPadding = insets.top + (isCompactScreen ? 18 : 28);
+  const heroBottomPadding = isCompactScreen ? 28 : 48;
+  const logoSize = isCompactScreen ? 120 : 156;
+  const cardTopPadding = isCompactScreen ? 20 : 28;
   const cardBottomPadding = Math.max(
-    insets.bottom + (isCompactScreen ? 14 : 18),
-    isCompactScreen ? 18 : 24,
+    insets.bottom + (isCompactScreen ? 18 : 22),
+    isCompactScreen ? 20 : 26,
   );
-  const titleSize = isCompactScreen ? 23 : 27;
-  const sectionTopMargin = isCompactScreen ? 16 : 22;
-  const buttonHeightClassName = isCompactScreen ? "h-11" : "h-12";
-  const secondaryButtonHeightClassName = isCompactScreen ? "h-10" : "h-11";
-  const footerGapClassName = isCompactScreen ? "gap-3 pt-4" : "gap-4 pt-6";
+  const titleSize = isCompactScreen ? 25 : 29;
+  const sectionTopMargin = isCompactScreen ? 18 : 24;
+  const buttonHeightClassName = isCompactScreen ? "h-12" : "h-14";
+  const secondaryButtonHeightClassName = isCompactScreen ? "h-11" : "h-12";
+  const footerGapClassName = isCompactScreen ? "gap-4 pt-5" : "gap-5 pt-6";
   const emailValue = email?.trim() ?? "";
   const maskedEmail = maskEmailAddress(emailValue);
   const successMessage = message?.trim() || "Chúng tôi đã gửi hướng dẫn khôi phục mật khẩu tới email của bạn.";
@@ -186,7 +186,7 @@ export default function ForgotPasswordSuccessScreen() {
             >
               <Pressable
                 onPress={goBackToLogin}
-                className="absolute h-11 w-11 items-center justify-center rounded-full bg-white/18"
+                className="absolute h-12 w-12 items-center justify-center rounded-full bg-white/18"
                 style={{ left: horizontalPadding, top: backButtonTop }}
               >
                 <SymbolView
@@ -244,11 +244,11 @@ export default function ForgotPasswordSuccessScreen() {
                   >
                     Kiểm tra email
                   </Text>
-                  <Text className="text-center text-[12px] leading-5 text-[#8E869A]">
+                  <Text className="text-center text-[14px] leading-6 text-[#8E869A]">
                     Chúng tôi đã gửi email khôi phục mật khẩu tới{" "}
                     <Text className="font-bold text-[#322A3D]">{maskedEmail}</Text>.
                   </Text>
-                  <Text className="text-center text-[12px] leading-5 text-[#625B71]">
+                  <Text className="text-center text-[14px] leading-6 text-[#625B71]">
                     {successMessage}
                   </Text>
                 </View>
@@ -266,7 +266,7 @@ export default function ForgotPasswordSuccessScreen() {
                       start={{ x: 0, y: 0.5 }}
                       className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
                     >
-                      <Text className="text-[15px] font-extrabold text-white">
+                      <Text className="text-[16px] font-extrabold text-white">
                         Về đăng nhập
                       </Text>
                     </LinearGradient>
@@ -276,7 +276,7 @@ export default function ForgotPasswordSuccessScreen() {
                     onPress={goBackToForgotPassword}
                     className={`${secondaryButtonHeightClassName} items-center justify-center rounded-[18px] border border-[#F2E4EB] bg-[#FFF9FC]`}
                   >
-                    <Text className="text-[14px] font-bold text-[#F58752]">
+                    <Text className="text-[15px] font-bold text-[#F58752]">
                       Gửi lại email khác
                     </Text>
                   </Pressable>

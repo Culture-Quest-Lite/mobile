@@ -133,27 +133,27 @@ export default function VerifyOtpScreen() {
 
   const emailValue = email?.trim() ?? "";
   const maskedEmail = maskEmailAddress(emailValue);
-  const heroHeight = isCompactScreen ? 218 : 272;
-  const heroTopPadding = insets.top + (isCompactScreen ? 16 : 24);
-  const heroBottomPadding = isCompactScreen ? 30 : 52;
-  const logoSize = isCompactScreen ? 132 : 176;
-  const cardTopPadding = isCompactScreen ? 18 : 24;
+  const heroHeight = isCompactScreen ? 232 : 284;
+  const heroTopPadding = insets.top + (isCompactScreen ? 18 : 28);
+  const heroBottomPadding = isCompactScreen ? 34 : 56;
+  const logoSize = isCompactScreen ? 142 : 186;
+  const cardTopPadding = isCompactScreen ? 22 : 28;
   const cardBottomPadding = Math.max(
-    insets.bottom + (isCompactScreen ? 8 : 10),
-    isCompactScreen ? 10 : 12,
+    insets.bottom + (isCompactScreen ? 12 : 14),
+    isCompactScreen ? 14 : 18,
   );
-  const sectionTopMargin = isCompactScreen ? 16 : 22;
-  const titleSize = isCompactScreen ? 23 : 27;
-  const backButtonTop = insets.top + (isCompactScreen ? 10 : 12);
-  const otpBoxSize = isCompactScreen ? 42 : 48;
-  const otpBoxRadius = isCompactScreen ? 16 : 18;
-  const otpBoxGap = isCompactScreen ? 8 : 10;
+  const sectionTopMargin = isCompactScreen ? 18 : 24;
+  const titleSize = isCompactScreen ? 25 : 29;
+  const backButtonTop = insets.top + (isCompactScreen ? 12 : 14);
+  const otpBoxSize = isCompactScreen ? 46 : 54;
+  const otpBoxRadius = isCompactScreen ? 18 : 20;
+  const otpBoxGap = isCompactScreen ? 10 : 12;
   const otpRowWidth = otpBoxSize * 6 + otpBoxGap * 5;
-  const buttonHeightClassName = isCompactScreen ? "h-11" : "h-12";
-  const helperTopMargin = isCompactScreen ? 10 : 12;
-  const otpBlockTopPadding = isCompactScreen ? 16 : 22;
-  const actionGroupTopMargin = isCompactScreen ? 20 : 24;
-  const contentBottomLift = isCompactScreen ? 8 : 10;
+  const buttonHeightClassName = isCompactScreen ? "h-12" : "h-14";
+  const helperTopMargin = isCompactScreen ? 12 : 14;
+  const otpBlockTopPadding = isCompactScreen ? 18 : 24;
+  const actionGroupTopMargin = isCompactScreen ? 22 : 28;
+  const contentBottomLift = isCompactScreen ? 12 : 14;
   const verifyErrors = validateVerifyOtpForm({
     email: emailValue,
     otpCode,
@@ -494,7 +494,7 @@ export default function VerifyOtpScreen() {
                     },
                   })
                 }
-                className="absolute h-11 w-11 items-center justify-center rounded-full bg-white/18"
+                className="absolute h-12 w-12 items-center justify-center rounded-full bg-white/18"
                 style={{ left: horizontalPadding, top: backButtonTop }}
               >
                 <SymbolView
@@ -544,10 +544,10 @@ export default function VerifyOtpScreen() {
                   >
                     Xác thực OTP
                   </Text>
-                  <Text className="text-center text-[12px] leading-5 text-[#8E869A]">
+                  <Text className="text-center text-[14px] leading-6 text-[#8E869A]">
                     Nhập mã gồm 6 số được gửi tới
                   </Text>
-                  <Text className="text-center text-[13px] font-bold text-[#322A3D]">
+                  <Text className="text-center text-[15px] font-bold text-[#322A3D]">
                     {maskedEmail}
                   </Text>
                 </View>
@@ -624,7 +624,7 @@ export default function VerifyOtpScreen() {
                                 ...(slotShadowStyle ?? {}),
                               }}
                             >
-                              <Text className="text-[19px] font-extrabold text-[#322A3D]">
+                              <Text className="text-[21px] font-extrabold text-[#322A3D]">
                                 {digit || ""}
                               </Text>
                             </View>
@@ -661,7 +661,7 @@ export default function VerifyOtpScreen() {
                           <ActivityIndicator color="#FFFFFF" size="small" />
                         ) : null}
                         <Text
-                          className={`text-[15px] font-extrabold ${
+                          className={`text-[16px] font-extrabold ${
                             isConfirmDisabled ? "text-[#9F95A7]" : "text-white"
                           }`}
                         >
@@ -671,7 +671,7 @@ export default function VerifyOtpScreen() {
                     </Pressable>
 
                     {errorMessage || clientValidationMessage ? (
-                      <Text className="mt-3 text-center text-[13px] font-medium leading-5 text-[#D6456C]">
+                      <Text className="mt-3 text-center text-[14px] font-medium leading-6 text-[#D6456C]">
                         {errorMessage ?? clientValidationMessage}
                       </Text>
                     ) : null}
@@ -682,7 +682,7 @@ export default function VerifyOtpScreen() {
                     >
                       {canResendCode ? (
                         <View className="flex-row items-center justify-center gap-1.5">
-                          <Text className="text-[13px] text-[#8E869A]">
+                          <Text className="text-[14px] text-[#8E869A]">
                             Không nhận được mã?
                           </Text>
                           <Pressable
@@ -692,7 +692,7 @@ export default function VerifyOtpScreen() {
                             }}
                           >
                             <Text
-                              className={`text-[13px] font-extrabold ${
+                              className={`text-[14px] font-extrabold ${
                                 isResending || isSubmitting
                                   ? "text-[#C6B6C6]"
                                   : "text-[#EB489B]"
@@ -703,7 +703,7 @@ export default function VerifyOtpScreen() {
                           </Pressable>
                         </View>
                       ) : (
-                        <Text className="text-[13px] font-medium text-[#8E869A]">
+                        <Text className="text-[14px] font-medium text-[#8E869A]">
                           {`Gửi lại mã sau ${formatCountdown(resendCountdown)}`}
                         </Text>
                       )}
@@ -721,7 +721,7 @@ export default function VerifyOtpScreen() {
                           })
                         }
                       >
-                        <Text className="text-[13px] font-extrabold text-[#F58752]">
+                        <Text className="text-[14px] font-extrabold text-[#F58752]">
                           Quay lại đăng ký
                         </Text>
                       </Pressable>

@@ -87,22 +87,22 @@ export default function ForgotPasswordScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [touchedEmail, setTouchedEmail] = useState(false);
-  const heroHeight = isCompactScreen ? 208 : 255;
-  const heroTopPadding = insets.top + (isCompactScreen ? 16 : 24);
-  const heroBottomPadding = isCompactScreen ? 28 : 56;
-  const logoSize = isCompactScreen ? 132 : 176;
-  const cardTopPadding = isCompactScreen ? 20 : 28;
+  const heroHeight = isCompactScreen ? 220 : 266;
+  const heroTopPadding = insets.top + (isCompactScreen ? 18 : 28);
+  const heroBottomPadding = isCompactScreen ? 32 : 60;
+  const logoSize = isCompactScreen ? 140 : 184;
+  const cardTopPadding = isCompactScreen ? 22 : 30;
   const cardBottomPadding = Math.max(
-    insets.bottom + (isCompactScreen ? 16 : 20),
-    isCompactScreen ? 20 : 28,
+    insets.bottom + (isCompactScreen ? 18 : 24),
+    isCompactScreen ? 22 : 30,
   );
-  const titleSize = isCompactScreen ? 27 : 31;
-  const sectionTopMargin = isCompactScreen ? 20 : 28;
+  const titleSize = isCompactScreen ? 29 : 34;
+  const sectionTopMargin = isCompactScreen ? 22 : 30;
   const fieldHeightClassName = isCompactScreen
-    ? "h-11 rounded-xl"
-    : "h-12 rounded-xl";
-  const buttonHeightClassName = isCompactScreen ? "h-11" : "h-12";
-  const formGapClassName = isCompactScreen ? "gap-3" : "gap-4";
+    ? "h-12 rounded-2xl"
+    : "h-14 rounded-2xl";
+  const buttonHeightClassName = isCompactScreen ? "h-12" : "h-14";
+  const formGapClassName = isCompactScreen ? "gap-4" : "gap-5";
   const forgotPasswordErrors = validateForgotPasswordForm(email);
   const emailError =
     touchedEmail || didAttemptSubmit
@@ -220,7 +220,7 @@ export default function ForgotPasswordScreen() {
             >
               <Pressable
                 onPress={goBackToLogin}
-                className="absolute h-11 w-11 items-center justify-center rounded-full bg-white/18"
+                className="absolute h-12 w-12 items-center justify-center rounded-full bg-white/18"
                 style={{ left: horizontalPadding, top: backButtonTop }}
               >
                 <SymbolView
@@ -262,7 +262,7 @@ export default function ForgotPasswordScreen() {
                   >
                     Quên mật khẩu
                   </Text>
-                  <Text className="text-center text-[12px] leading-5 text-[#8E869A]">
+                  <Text className="text-center text-[14px] leading-6 text-[#8E869A]">
                     Nhập email bạn đã dùng để đăng ký để tiếp tục khôi phục mật
                     khẩu
                   </Text>
@@ -309,14 +309,14 @@ export default function ForgotPasswordScreen() {
                         start={{ x: 0, y: 0.5 }}
                         className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
                       >
-                        <Text className="text-[15px] font-extrabold text-white">
+                        <Text className="text-[16px] font-extrabold text-white">
                           {isSubmitting ? "Đang gửi email..." : "Gửi email khôi phục"}
                         </Text>
                       </LinearGradient>
                     </Pressable>
 
                     {errorMessage ? (
-                      <Text className="text-[13px] font-medium leading-5 text-[#D6456C]">
+                      <Text className="text-[14px] font-medium leading-6 text-[#D6456C]">
                         {errorMessage}
                       </Text>
                     ) : null}

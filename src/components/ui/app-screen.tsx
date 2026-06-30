@@ -13,7 +13,7 @@ type AppScreenProps = PropsWithChildren<{
 }>;
 
 const rootClassName = 'flex-1 bg-[#F7F3EA] dark:bg-[#171A17]';
-const contentClassName = 'flex-1 gap-4';
+const contentClassName = 'flex-1 gap-5';
 
 export function AppScreen({
   children,
@@ -30,7 +30,7 @@ export function AppScreen({
     alignSelf: 'center' as const,
     maxWidth: contentMaxWidth,
     paddingHorizontal: gutter,
-    paddingVertical: 24,
+    paddingVertical: 28,
     width: '100%' as const,
   };
 

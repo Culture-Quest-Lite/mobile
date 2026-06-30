@@ -75,23 +75,23 @@ export default function LoginScreen() {
     password: false,
     username: false,
   });
-  const heroHeight = isCompactScreen ? 196 : 236;
-  const heroTopPadding = insets.top + (isCompactScreen ? 16 : 24);
-  const heroBottomPadding = isCompactScreen ? 24 : 44;
-  const logoSize = isCompactScreen ? 112 : 148;
-  const cardTopPadding = isCompactScreen ? 18 : 24;
+  const heroHeight = isCompactScreen ? 208 : 248;
+  const heroTopPadding = insets.top + (isCompactScreen ? 18 : 28);
+  const heroBottomPadding = isCompactScreen ? 28 : 48;
+  const logoSize = isCompactScreen ? 120 : 156;
+  const cardTopPadding = isCompactScreen ? 20 : 28;
   const cardBottomPadding = Math.max(
-    insets.bottom + (isCompactScreen ? 14 : 18),
-    isCompactScreen ? 18 : 24,
+    insets.bottom + (isCompactScreen ? 18 : 22),
+    isCompactScreen ? 20 : 26,
   );
-  const titleSize = isCompactScreen ? 23 : 27;
-  const sectionTopMargin = isCompactScreen ? 16 : 22;
+  const titleSize = isCompactScreen ? 25 : 29;
+  const sectionTopMargin = isCompactScreen ? 18 : 24;
   const fieldHeightClassName = isCompactScreen
-    ? "h-10 rounded-xl"
-    : "h-11 rounded-xl";
-  const buttonHeightClassName = isCompactScreen ? "h-11" : "h-12";
-  const formGapClassName = isCompactScreen ? "gap-3" : "gap-4";
-  const footerGapClassName = isCompactScreen ? "gap-3 pt-4" : "gap-4 pt-6";
+    ? "h-11 rounded-2xl"
+    : "h-12 rounded-2xl";
+  const buttonHeightClassName = isCompactScreen ? "h-12" : "h-14";
+  const formGapClassName = isCompactScreen ? "gap-4" : "gap-5";
+  const footerGapClassName = isCompactScreen ? "gap-4 pt-5" : "gap-5 pt-6";
   const loginErrors = validateLoginForm({
     password,
     username,
@@ -226,7 +226,7 @@ export default function LoginScreen() {
             >
               <Pressable
                 onPress={() => router.replace("/home")}
-                className="absolute h-11 w-11 items-center justify-center rounded-full bg-white/18"
+                className="absolute h-12 w-12 items-center justify-center rounded-full bg-white/18"
                 style={{ left: horizontalPadding, top: backButtonTop }}
               >
                 <SymbolView
@@ -268,7 +268,7 @@ export default function LoginScreen() {
                   >
                     Đăng nhập
                   </Text>
-                  <Text className="text-[12px] text-[#8E869A]">
+                  <Text className="text-[14px] text-[#8E869A]">
                     Nhập tài khoản của bạn để đăng nhập
                   </Text>
                 </View>
@@ -324,7 +324,7 @@ export default function LoginScreen() {
                       className="self-end"
                       onPress={() => router.push("/forgot-password?entry=home")}
                     >
-                      <Text className="text-[13px] font-medium text-[#8E869A]">
+                      <Text className="text-[14px] font-medium text-[#8E869A]">
                         Bạn quên mật khẩu?
                       </Text>
                     </Pressable>
@@ -347,14 +347,14 @@ export default function LoginScreen() {
                         start={{ x: 0, y: 0.5 }}
                         className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
                       >
-                      <Text className="text-[15px] font-extrabold text-white">
+                      <Text className="text-[16px] font-extrabold text-white">
                         {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
                       </Text>
                       </LinearGradient>
                     </Pressable>
 
                     {errorMessage ? (
-                      <Text className="text-[13px] font-medium text-[#D6456C]">
+                      <Text className="text-[14px] font-medium text-[#D6456C]">
                         {errorMessage}
                       </Text>
                     ) : null}
@@ -363,7 +363,7 @@ export default function LoginScreen() {
                   <View className={footerGapClassName}>
                     <View className="flex-row items-center justify-center gap-3">
                       <View className="h-px flex-1 bg-[#F0E8F4]" />
-                      <Text className="text-[12px] font-medium text-[#AA9FB0]">
+                      <Text className="text-[13px] font-medium text-[#AA9FB0]">
                         Hoặc đăng nhập với
                       </Text>
                       <View className="h-px flex-1 bg-[#F0E8F4]" />
@@ -376,13 +376,13 @@ export default function LoginScreen() {
                     </View>
 
                     <View className="flex-row items-center justify-center gap-1.5">
-                      <Text className="text-[13px] text-[#8E869A]">
+                      <Text className="text-[14px] text-[#8E869A]">
                         Bạn chưa có tài khoản?
                       </Text>
                       <Pressable
                         onPress={() => router.push("/register?entry=home")}
                       >
-                        <Text className="text-[13px] font-extrabold text-[#F58752]">
+                        <Text className="text-[14px] font-extrabold text-[#F58752]">
                           Đăng ký
                         </Text>
                       </Pressable>
