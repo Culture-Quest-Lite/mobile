@@ -2,6 +2,8 @@ import { Platform } from "react-native";
 
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 
+import { isPublishedHotspotStatus } from "./hotspot-status";
+
 export type NearbyHotspotTagDto = {
   createdAt: string;
   hotspotCount: number | null;
@@ -90,10 +92,6 @@ function readNullableBoolean(value: unknown) {
   }
 
   return null;
-}
-
-function hasPublishedStatus(status: string) {
-  return status.trim().toLowerCase() === "publish";
 }
 
 function parseTag(value: unknown): NearbyHotspotTagDto | null {
@@ -322,12 +320,15 @@ export async function getNearbyHotspots({
 
   const validHotspots = parsedHotspots.filter(isNonNull);
   const publishedHotspots = validHotspots.filter((hotspot) =>
-    hasPublishedStatus(hotspot.status),
+    isPublishedHotspotStatus(hotspot.status),
   );
 
   if (publishedHotspots.length !== validHotspots.length) {
     console.info("[home] filtered non-publish nearby hotspots", {
       filteredCount: validHotspots.length - publishedHotspots.length,
+      filteredStatuses: validHotspots
+        .filter((hotspot) => !isPublishedHotspotStatus(hotspot.status))
+        .map((hotspot) => hotspot.status),
       url: getNearbyHotspotsUrl,
     });
   }

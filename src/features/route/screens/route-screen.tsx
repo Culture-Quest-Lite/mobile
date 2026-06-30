@@ -12,7 +12,7 @@ import {
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { type Href, useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/ui/symbol-view';
 import { type ComponentProps, useMemo, useState } from 'react';
 import {
   Modal,
@@ -114,7 +114,7 @@ export default function RouteScreen() {
         >
           <View className="flex-row items-center justify-between">
             <View>
-              <Text className="text-[10px] font-bold uppercase tracking-wider text-white/80">
+              <Text className="text-[11px] font-bold uppercase tracking-wider text-white/80">
                 Hành trình
               </Text>
               <Text className="text-[24px] font-extrabold text-white">
@@ -131,21 +131,21 @@ export default function RouteScreen() {
                 size={14}
                 tintColor="#FFE566"
               />
-              <Text className="text-[13px] font-bold text-white">BXH</Text>
+              <Text className="text-[14px] font-bold text-white">BXH</Text>
             </Pressable>
           </View>
 
           <View className="mt-3 rounded-2xl bg-black/20 p-3">
             <View className="mb-1.5 flex-row items-center justify-between">
-              <Text className="text-[11px] font-bold text-white">
+              <Text className="text-[12px] font-bold text-white">
                 Cấp {currentUser.level} · {currentUser.title}
               </Text>
-              <Text className="text-[11px] text-white/80">
+              <Text className="text-[12px] text-white/80">
                 {currentUser.xp} / {currentUser.xpToNext}
               </Text>
             </View>
             <XPBar value={currentUser.xp} max={currentUser.xpToNext} />
-            <Text className="mt-1.5 text-[10px] text-white/75">
+            <Text className="mt-1.5 text-[11px] text-white/75">
               Còn {currentUser.xpToNext - currentUser.xp} XP để lên cấp{' '}
               {currentUser.level + 1}
             </Text>
@@ -239,13 +239,13 @@ function CommunityTab() {
               />
             </View>
             <View className="flex-1">
-              <Text className="text-[10px] font-bold uppercase tracking-wider text-white/90">
+              <Text className="text-[11px] font-bold uppercase tracking-wider text-white/90">
                 Mới · Journey Recording
               </Text>
-              <Text className="text-[16px] font-extrabold leading-tight text-white">
+              <Text className="text-[17px] font-extrabold leading-tight text-white">
                 Ghi hành trình của bạn
               </Text>
-              <Text className="mt-0.5 text-[11px] text-white/90">
+              <Text className="mt-0.5 text-[12px] text-white/90">
                 Đi tự do, app tự tạo tuyến chia sẻ
               </Text>
             </View>
@@ -266,7 +266,7 @@ function CommunityTab() {
               size={14}
               tintColor="#EB489B"
             />
-            <Text className="text-[14px] font-extrabold text-[#2B2233]">
+            <Text className="text-[15px] font-extrabold text-[#2B2233]">
               Tuyến được quan tâm nhiều nhất
             </Text>
           </View>
@@ -286,7 +286,7 @@ function CommunityTab() {
             size={14}
             tintColor="#F58752"
           />
-          <Text className="text-[14px] font-extrabold text-[#2B2233]">
+          <Text className="text-[15px] font-extrabold text-[#2B2233]">
             Tuyến từ cộng đồng
           </Text>
         </View>
@@ -321,7 +321,7 @@ function CommunityRankCard({
       style={cardShadowStyle}
     >
       <View className={`h-8 w-8 items-center justify-center rounded-xl ${rankStyle}`}>
-        <Text className="text-[12px] font-extrabold">#{rank}</Text>
+        <Text className="text-[13px] font-extrabold">#{rank}</Text>
       </View>
       <Image
         source={journey.cover}
@@ -329,7 +329,7 @@ function CommunityRankCard({
         style={{ height: 56, width: 56, borderRadius: 12 }}
       />
       <View className="min-w-0 flex-1">
-        <Text className="text-[13px] font-extrabold leading-tight text-[#2B2233]" numberOfLines={1}>
+        <Text className="text-[14px] font-extrabold leading-tight text-[#2B2233]" numberOfLines={1}>
           {journey.title}
         </Text>
         <View className="mt-0.5 flex-row items-center gap-1.5">
@@ -338,7 +338,7 @@ function CommunityRankCard({
             size={10}
             tintColor="#8E869A"
           />
-          <Text className="text-[10px] text-[#8E869A]">
+          <Text className="text-[11px] text-[#8E869A]">
             {journey.participants.toLocaleString()} lượt tham gia
           </Text>
         </View>
@@ -348,7 +348,7 @@ function CommunityRankCard({
             contentFit="cover"
             style={{ height: 12, width: 12, borderRadius: 999 }}
           />
-          <Text className="text-[10px] text-[#8E869A]">{journey.creator.name}</Text>
+          <Text className="text-[11px] text-[#8E869A]">{journey.creator.name}</Text>
         </View>
       </View>
     </Pressable>
@@ -374,16 +374,16 @@ function CommunityJourneyCard({ journey }: { journey: CommunityJourney }) {
         />
         {journey.visibility === 'link' && (
           <View className="absolute left-2 top-2 rounded-full bg-black/40 px-2 py-0.5">
-            <Text className="text-[10px] font-bold text-white">
+            <Text className="text-[11px] font-bold text-white">
               Link · còn {(journey.maxParticipants ?? 20) - journey.participants} suất
             </Text>
           </View>
         )}
         <View className="absolute bottom-2 left-2 right-2">
-          <Text className="text-[14px] font-extrabold leading-tight text-white" numberOfLines={1}>
+          <Text className="text-[15px] font-extrabold leading-tight text-white" numberOfLines={1}>
             {journey.title}
           </Text>
-          <Text className="text-[10px] text-white/90">
+          <Text className="text-[11px] text-white/90">
             {journey.distance} · {journey.duration} · {journey.hotspotIds.length} điểm
           </Text>
         </View>
@@ -395,7 +395,7 @@ function CommunityJourneyCard({ journey }: { journey: CommunityJourney }) {
           contentFit="cover"
           style={{ height: 20, width: 20, borderRadius: 999 }}
         />
-        <Text className="flex-1 text-[11px] font-semibold text-[#2B2233]" numberOfLines={1}>
+        <Text className="flex-1 text-[12px] font-semibold text-[#2B2233]" numberOfLines={1}>
           {journey.creator.name}
         </Text>
         <View className="flex-row items-center gap-1">
@@ -404,7 +404,7 @@ function CommunityJourneyCard({ journey }: { journey: CommunityJourney }) {
             size={10}
             tintColor="#FFB400"
           />
-          <Text className="text-[11px] text-[#8E869A]">{journey.avgRating}</Text>
+          <Text className="text-[12px] text-[#8E869A]">{journey.avgRating}</Text>
         </View>
         <View className="flex-row items-center gap-1">
           <SymbolView
@@ -412,7 +412,7 @@ function CommunityJourneyCard({ journey }: { journey: CommunityJourney }) {
             size={10}
             tintColor="#8E869A"
           />
-          <Text className="text-[11px] text-[#8E869A]">{journey.participants}</Text>
+          <Text className="text-[12px] text-[#8E869A]">{journey.participants}</Text>
         </View>
       </View>
     </Pressable>
@@ -482,7 +482,7 @@ function RouteCard({
           </View>
 
           <View style={styles.cardTitleWrap}>
-            <Text className="text-[15px] font-extrabold leading-tight text-white">
+            <Text className="text-[16px] font-extrabold leading-tight text-white">
               {route.title}
             </Text>
             <View className="mt-0.5 flex-row items-center gap-1">
@@ -491,22 +491,22 @@ function RouteCard({
                 size={10}
                 tintColor="#FFE566"
               />
-              <Text className="text-[10px] text-white">{route.rating}</Text>
+              <Text className="text-[11px] text-white">{route.rating}</Text>
             </View>
           </View>
         </View>
 
         <View className="p-3">
           <View className="flex-row items-center gap-2">
-            <Text className="text-[11px] text-[#8E869A]">{route.distance}</Text>
-            <Text className="text-[11px] text-[#8E869A]">·</Text>
-            <Text className="text-[11px] text-[#8E869A]">{route.duration}</Text>
-            <Text className="text-[11px] text-[#8E869A]">·</Text>
-            <Text className="text-[11px] text-[#8E869A]">
+            <Text className="text-[12px] text-[#8E869A]">{route.distance}</Text>
+            <Text className="text-[12px] text-[#8E869A]">·</Text>
+            <Text className="text-[12px] text-[#8E869A]">{route.duration}</Text>
+            <Text className="text-[12px] text-[#8E869A]">·</Text>
+            <Text className="text-[12px] text-[#8E869A]">
               {route.hotspotIds.length} điểm
             </Text>
             <View className="ml-auto rounded-full bg-[#FFF4EF] px-2 py-0.5">
-              <Text className="text-[11px] font-bold text-[#F58752]">+{route.xp} XP</Text>
+              <Text className="text-[12px] font-bold text-[#F58752]">+{route.xp} XP</Text>
             </View>
           </View>
         </View>
@@ -514,12 +514,12 @@ function RouteCard({
 
       {variant === 'active' && progress !== undefined && (
         <View className="px-3 pb-3">
-          <Text className="mb-1 text-[10px] font-bold text-[#2B2233]">
+          <Text className="mb-1 text-[11px] font-bold text-[#2B2233]">
             Tiến độ {progress}%
           </Text>
           <XPBar value={progress} max={100} trackColor="#ECEEF4" height={6} />
           <Pressable className="mt-2 rounded-xl bg-[#F58752] py-2">
-            <Text className="text-center text-[12px] font-bold text-white">Tiếp tục</Text>
+            <Text className="text-center text-[13px] font-bold text-white">Tiếp tục</Text>
           </Pressable>
         </View>
       )}
@@ -530,7 +530,7 @@ function RouteCard({
 function Badge({ text }: { text: string }) {
   return (
     <View className="rounded-full bg-black/35 px-2 py-0.5">
-      <Text className="text-[10px] font-bold text-white">{text}</Text>
+      <Text className="text-[11px] font-bold text-white">{text}</Text>
     </View>
   );
 }
@@ -543,7 +543,7 @@ function EmptyState({ text }: { text: string }) {
         size={32}
         tintColor="#C9C3CF"
       />
-      <Text className="mt-2 text-[12px] text-[#8E869A]">{text}</Text>
+      <Text className="mt-2 text-[13px] text-[#8E869A]">{text}</Text>
     </View>
   );
 }
@@ -569,7 +569,7 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
                   size={15}
                   tintColor="#FFE566"
                 />
-                <Text className="text-[16px] font-extrabold text-white">Bảng xếp hạng</Text>
+                <Text className="text-[17px] font-extrabold text-white">Bảng xếp hạng</Text>
               </View>
               <Pressable
                 onPress={onClose}
@@ -596,7 +596,7 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
                   }`}
                 >
                   <Text
-                    className={`text-center text-[11px] font-bold ${
+                    className={`text-center text-[12px] font-bold ${
                       scope === item.key ? 'text-[#1E2433]' : 'text-white/80'
                     }`}
                   >
@@ -631,7 +631,7 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
                         marginTop: isFirst ? 4 : 8,
                       }}
                     />
-                    <Text className="mt-1 text-[10px] font-bold text-white" numberOfLines={1}>
+                    <Text className="mt-1 text-[11px] font-bold text-white" numberOfLines={1}>
                       {user.name.split(' ').slice(-1)}
                     </Text>
                     <View
@@ -643,8 +643,8 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
                             : 'h-10 bg-[#EB489B]'
                       }`}
                     >
-                      <Text className="text-[10px] font-bold text-white">#{rank}</Text>
-                      <Text className="text-[10px] text-white/90">
+                      <Text className="text-[11px] font-bold text-white">#{rank}</Text>
+                      <Text className="text-[11px] text-white/90">
                         {user.xp.toLocaleString()}
                       </Text>
                     </View>
@@ -662,7 +662,7 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
                   user.name === currentUser.name ? 'bg-[#FFF4EF]' : ''
                 }`}
               >
-                <Text className="w-6 text-center text-[13px] font-bold text-[#8E869A]">
+                <Text className="w-6 text-center text-[14px] font-bold text-[#8E869A]">
                   {user.rank}
                 </Text>
                 <Image
@@ -671,13 +671,13 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
                   style={{ height: 40, width: 40, borderRadius: 999 }}
                 />
                 <View className="min-w-0 flex-1">
-                  <Text className="text-[13px] font-semibold text-[#2B2233]" numberOfLines={1}>
+                  <Text className="text-[14px] font-semibold text-[#2B2233]" numberOfLines={1}>
                     {user.name}
                   </Text>
-                  <Text className="text-[10px] text-[#8E869A]">Cấp {user.level}</Text>
+                  <Text className="text-[11px] text-[#8E869A]">Cấp {user.level}</Text>
                 </View>
                 <View className="items-end">
-                  <Text className="text-[13px] font-bold text-[#2B2233]">
+                  <Text className="text-[14px] font-bold text-[#2B2233]">
                     {user.xp.toLocaleString()}
                   </Text>
                   <TrendChange value={user.change} />
@@ -772,7 +772,7 @@ function TrendChange({ value }: { value: number }) {
   return (
     <View className="flex-row items-center gap-0.5">
       <SymbolView name={icon} size={9} tintColor={value > 0 ? '#34C759' : value < 0 ? '#E84D6A' : '#8E869A'} />
-      <Text className={`text-[10px] ${color}`}>{Math.abs(value) || '-'}</Text>
+      <Text className={`text-[11px] ${color}`}>{Math.abs(value) || '-'}</Text>
     </View>
   );
 }

@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useCallback, useEffect, useState, type ComponentProps } from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
@@ -157,7 +157,7 @@ function NotFoundState() {
             <Text className="text-center text-[24px] font-black text-[#2B2233]">
               Không tìm thấy detail story
             </Text>
-            <Text className="mt-3 text-center text-[14px] leading-6 text-[#6F657A]">
+            <Text className="mt-3 text-center text-[15px] leading-6 text-[#6F657A]">
               Story này không còn trong dữ liệu hiện tại hoặc đường dẫn chưa
               đúng.
             </Text>
@@ -165,7 +165,7 @@ function NotFoundState() {
               className="mt-6 items-center rounded-full bg-[#FFF0F6] px-5 py-3.5"
               onPress={() => router.back()}
             >
-              <Text className="text-[14px] font-black text-[#EB489B]">
+              <Text className="text-[15px] font-black text-[#EB489B]">
                 Quay lại danh sách
               </Text>
             </Pressable>
@@ -191,7 +191,7 @@ function LoadingState() {
             <Text className="text-center text-[24px] font-black text-[#2B2233]">
               Đang tải story
             </Text>
-            <Text className="mt-3 text-center text-[14px] leading-6 text-[#6F657A]">
+            <Text className="mt-3 text-center text-[15px] leading-6 text-[#6F657A]">
               Hệ thống đang lấy nội dung story thật của hotspot này.
             </Text>
           </View>
@@ -225,7 +225,7 @@ function StoryTagPill({
         style={{ borderRadius: 999, height: 24, width: 24 }}
       />
       <Text
-        className="ml-2 text-[12px] font-black uppercase tracking-[0.7px]"
+        className="ml-2 text-[13px] font-black uppercase tracking-[0.7px]"
         style={{ color: dark ? "#FFFFFF" : palette.chipText }}
       >
         {story.tagLabel}
@@ -243,8 +243,8 @@ function SectionHeading({
 }) {
   return (
     <View>
-      <Text className="text-[18px] font-black text-[#2B2233]">{title}</Text>
-      <Text className="mt-1.5 text-[14px] leading-6 text-[#7C7286]">
+      <Text className="text-[19px] font-black text-[#2B2233]">{title}</Text>
+      <Text className="mt-1.5 text-[15px] leading-6 text-[#7C7286]">
         {description}
       </Text>
     </View>
@@ -392,13 +392,13 @@ function StoryHeroHeader({
 
           <View className="mx-4 flex-1">
             <Text
-              className="text-center text-[16px] font-black text-white"
+              className="text-center text-[17px] font-black text-white"
               numberOfLines={1}
             >
               {title}
             </Text>
             <Text
-              className="mt-0.5 text-center text-[11px] font-semibold uppercase tracking-[1px] text-[#D9F0FF]"
+              className="mt-0.5 text-center text-[12px] font-semibold uppercase tracking-[1px] text-[#D9F0FF]"
               numberOfLines={1}
             >
               {subtitle}
@@ -407,7 +407,7 @@ function StoryHeroHeader({
 
           <View className="min-w-[44px] items-end">
             {totalImages > 1 ? (
-              <Text className="text-[13px] font-black text-white">
+              <Text className="text-[14px] font-black text-white">
                 {activeIndex + 1}/{totalImages}
               </Text>
             ) : (
@@ -816,7 +816,7 @@ export default function HotspotStoryDetailScreen() {
                   <Text className="mt-5 text-[28px] font-black leading-9 text-[#2B2233]">
                     {story.title}
                   </Text>
-                  <Text className="mt-3 text-[15px] leading-7 text-[#6F657A]">
+                  <Text className="mt-3 text-[16px] leading-7 text-[#6F657A]">
                     {story.summary}
                   </Text>
                 </View>
@@ -825,7 +825,7 @@ export default function HotspotStoryDetailScreen() {
                   className="rounded-full px-3 py-2"
                   style={{ backgroundColor: palette.accentSoft }}
                 >
-                  <Text className="text-[11px] font-black text-[#6F657A]">
+                  <Text className="text-[12px] font-black text-[#6F657A]">
                     {story.audioDurationLabel}
                   </Text>
                 </View>
@@ -847,8 +847,8 @@ export default function HotspotStoryDetailScreen() {
                     key={`${story.id}-script-${index}`}
                     className={
                       index === story.scriptParagraphs.length - 1
-                        ? "text-[15px] leading-7 text-[#51435B]"
-                        : "mb-4 text-[15px] leading-7 text-[#51435B]"
+                        ? "text-[16px] leading-7 text-[#51435B]"
+                        : "mb-4 text-[16px] leading-7 text-[#51435B]"
                     }
                   >
                     {paragraph}
@@ -869,7 +869,7 @@ export default function HotspotStoryDetailScreen() {
               >
                 <View className="flex-row items-start justify-between">
                   <View className="flex-1 pr-4">
-                    <Text className="text-[18px] font-black text-[#2B2233]">
+                    <Text className="text-[19px] font-black text-[#2B2233]">
                       Đoạn audio
                     </Text>
                   </View>
@@ -894,10 +894,10 @@ export default function HotspotStoryDetailScreen() {
                   </View>
 
                   <View className="ml-4 flex-1">
-                    <Text className="text-[15px] font-black text-[#2B2233]">
+                    <Text className="text-[16px] font-black text-[#2B2233]">
                       {story.audioTitle}
                     </Text>
-                    <Text className="mt-1 text-[13px] leading-5 text-[#7C7286]">
+                    <Text className="mt-1 text-[14px] leading-5 text-[#7C7286]">
                       {story.audioDescription}
                     </Text>
                   </View>
@@ -907,10 +907,10 @@ export default function HotspotStoryDetailScreen() {
 
                 <View className="mt-4 rounded-[24px] bg-white/85 px-4 py-4">
                   <View className="flex-row items-center justify-between">
-                    <Text className="text-[13px] font-bold text-[#5C4D67]">
+                    <Text className="text-[14px] font-bold text-[#5C4D67]">
                       {audioCurrentTimeLabel}
                     </Text>
-                    <Text className="text-[13px] font-bold text-[#5C4D67]">
+                    <Text className="text-[14px] font-bold text-[#5C4D67]">
                       {audioDurationTimeLabel}
                     </Text>
                   </View>
@@ -932,7 +932,7 @@ export default function HotspotStoryDetailScreen() {
                       onPress={() => void handleSeekAudio(-10)}
                       style={{ opacity: hasAudioUrl ? 1 : 0.52 }}
                     >
-                      <Text className="text-[13px] font-black text-[#6F657A]">-10s</Text>
+                      <Text className="text-[14px] font-black text-[#6F657A]">-10s</Text>
                     </Pressable>
 
                     <Pressable
@@ -964,7 +964,7 @@ export default function HotspotStoryDetailScreen() {
                           size={18}
                           tintColor="#FFFFFF"
                         />
-                        <Text className="ml-2 text-[15px] font-black text-white">
+                        <Text className="ml-2 text-[16px] font-black text-white">
                           {audioPrimaryActionLabel}
                         </Text>
                       </LinearGradient>
@@ -976,7 +976,7 @@ export default function HotspotStoryDetailScreen() {
                       onPress={() => void handleSeekAudio(10)}
                       style={{ opacity: hasAudioUrl ? 1 : 0.52 }}
                     >
-                      <Text className="text-[13px] font-black text-[#6F657A]">+10s</Text>
+                      <Text className="text-[14px] font-black text-[#6F657A]">+10s</Text>
                     </Pressable>
                   </View>
 
@@ -987,7 +987,7 @@ export default function HotspotStoryDetailScreen() {
                       onPress={() => void handleResetAudio()}
                       style={{ opacity: hasAudioUrl ? 1 : 0.52 }}
                     >
-                      <Text className="text-[13px] font-bold text-[#7C7286]">
+                      <Text className="text-[14px] font-bold text-[#7C7286]">
                         Về đầu
                       </Text>
                     </Pressable>
@@ -995,13 +995,13 @@ export default function HotspotStoryDetailScreen() {
                 </View>
 
                 {!hasAudioUrl ? (
-                  <Text className="mt-4 text-[13px] leading-5 text-[#A16207]">
+                  <Text className="mt-4 text-[14px] leading-5 text-[#A16207]">
                     Story này chưa có file audio từ API, nên phần player chỉ hiển thị khung chờ.
                   </Text>
                 ) : null}
 
                 {audioStatus.error ? (
-                  <Text className="mt-4 text-[13px] leading-5 text-[#C2410C]">
+                  <Text className="mt-4 text-[14px] leading-5 text-[#C2410C]">
                     {audioStatus.error}
                   </Text>
                 ) : null}
@@ -1054,7 +1054,7 @@ export default function HotspotStoryDetailScreen() {
                       />
                       <View className="absolute bottom-0 left-0 right-0 flex-row items-end justify-between px-4 pb-4">
                         <View className="flex-1 pr-4">
-                          <Text className="text-[18px] font-black text-white">
+                          <Text className="text-[19px] font-black text-white">
                             {story.videoTitle}
                           </Text>
                         </View>
@@ -1079,10 +1079,10 @@ export default function HotspotStoryDetailScreen() {
                 <View className="mt-4 rounded-[22px] bg-[#FAF5F8] px-4 py-4">
                   <View className="flex-row items-center justify-between gap-3">
                     <View className="flex-1">
-                      <Text className="text-[15px] font-black text-[#2B2233]">
+                      <Text className="text-[16px] font-black text-[#2B2233]">
                         {story.videoTitle}
                       </Text>
-                      <Text className="mt-1 text-[13px] leading-5 text-[#7C7286]">
+                      <Text className="mt-1 text-[14px] leading-5 text-[#7C7286]">
                         {hasVideoUrl
                           ? "Dùng điều khiển ngay trên khung video để phát, tua hoặc phóng to."
                           : "Story này chưa có file video từ API."}
@@ -1093,7 +1093,7 @@ export default function HotspotStoryDetailScreen() {
                       style={{ backgroundColor: palette.accentSoft }}
                     >
                       <Text
-                        className="text-[11px] font-black"
+                        className="text-[12px] font-black"
                         style={{ color: palette.accent }}
                       >
                         {story.videoDurationLabel}
@@ -1102,13 +1102,13 @@ export default function HotspotStoryDetailScreen() {
                   </View>
 
                   {videoStatusEvent.status === "loading" ? (
-                    <Text className="mt-3 text-[13px] leading-5 text-[#7C7286]">
+                    <Text className="mt-3 text-[14px] leading-5 text-[#7C7286]">
                       Đang tải dữ liệu video...
                     </Text>
                   ) : null}
 
                   {videoErrorMessage ? (
-                    <Text className="mt-3 text-[13px] leading-5 text-[#C2410C]">
+                    <Text className="mt-3 text-[14px] leading-5 text-[#C2410C]">
                       {videoErrorMessage}
                     </Text>
                   ) : null}

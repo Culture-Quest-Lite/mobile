@@ -1,15 +1,15 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect } from "react";
 import {
   Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   View,
-  useWindowDimensions,
 } from "react-native";
 import Animated, {
   Easing,
@@ -22,8 +22,9 @@ import Animated, {
 } from "react-native-reanimated";
 import {
   SafeAreaView,
-  useSafeAreaInsets,
 } from "react-native-safe-area-context";
+
+import { useAuthScreenLayout } from "@/features/auth/hooks/use-auth-screen-layout";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 
@@ -75,25 +76,29 @@ export default function ForgotPasswordSuccessScreen() {
     entry?: string;
     message?: string;
   }>();
-  const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
+  const {
+    backButtonTop,
+    cardMaxWidth,
+    horizontalPadding,
+    insets,
+    isCompactScreen,
+    scrollContentMinHeight,
+  } = useAuthScreenLayout(760);
   const logoFloat = useSharedValue(0);
-  const isCompactScreen = height <= 760;
-  const heroHeight = isCompactScreen ? 208 : 255;
+  const heroHeight = isCompactScreen ? 196 : 236;
   const heroTopPadding = insets.top + (isCompactScreen ? 16 : 24);
-  const heroBottomPadding = isCompactScreen ? 28 : 56;
-  const logoSize = isCompactScreen ? 132 : 176;
-  const cardTopPadding = isCompactScreen ? 20 : 28;
+  const heroBottomPadding = isCompactScreen ? 24 : 44;
+  const logoSize = isCompactScreen ? 112 : 148;
+  const cardTopPadding = isCompactScreen ? 18 : 24;
   const cardBottomPadding = Math.max(
-    insets.bottom + (isCompactScreen ? 16 : 20),
-    isCompactScreen ? 20 : 28,
+    insets.bottom + (isCompactScreen ? 14 : 18),
+    isCompactScreen ? 18 : 24,
   );
-  const titleSize = isCompactScreen ? 27 : 31;
-  const sectionTopMargin = isCompactScreen ? 20 : 28;
-  const buttonHeightClassName = isCompactScreen ? "h-12" : "h-[52px]";
-  const secondaryButtonHeightClassName = isCompactScreen ? "h-11" : "h-12";
+  const titleSize = isCompactScreen ? 23 : 27;
+  const sectionTopMargin = isCompactScreen ? 16 : 22;
+  const buttonHeightClassName = isCompactScreen ? "h-11" : "h-12";
+  const secondaryButtonHeightClassName = isCompactScreen ? "h-10" : "h-11";
   const footerGapClassName = isCompactScreen ? "gap-3 pt-4" : "gap-4 pt-6";
-  const backButtonTop = insets.top + (isCompactScreen ? 10 : 12);
   const emailValue = email?.trim() ?? "";
   const maskedEmail = maskEmailAddress(emailValue);
   const successMessage = message?.trim() || "Chúng tôi đã gửi hướng dẫn khôi phục mật khẩu tới email của bạn.";
@@ -158,118 +163,128 @@ export default function ForgotPasswordSuccessScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         className="flex-1"
       >
-        <View className="flex-1 bg-white">
-          <LinearGradient
-            colors={gradientColors}
-            end={{ x: 1, y: 0.5 }}
-            locations={[0, 0.58, 1]}
-            start={{ x: 0, y: 0.5 }}
-            className="relative w-full items-center justify-center overflow-hidden px-6"
-            style={{
-              minHeight: heroHeight,
-              paddingBottom: heroBottomPadding,
-              paddingTop: heroTopPadding,
-            }}
-          >
-            <Pressable
-              onPress={goBackToLogin}
-              className="absolute left-6 h-11 w-11 items-center justify-center rounded-full bg-white/18"
-              style={{ top: backButtonTop }}
-            >
-              <SymbolView
-                name={{
-                  ios: "chevron.left",
-                  android: "arrow_back",
-                  web: "arrow_back",
-                }}
-                size={18}
-                tintColor="#FFFFFF"
-              />
-            </Pressable>
-
-            <Animated.View style={animatedLogoStyle}>
-              <Image
-                source={require("../../../../assets/images/logo2.png")}
-                style={{ height: logoSize, width: logoSize }}
-                resizeMode="contain"
-              />
-            </Animated.View>
-          </LinearGradient>
-
-          <View
-            className="-mt-8 flex-1 rounded-t-[34px] bg-white px-6"
-            style={cardShadowStyle}
-          >
-            <View
-              className="w-full max-w-[390px] self-center"
+        <ScrollView
+          className="flex-1 bg-white"
+          contentContainerStyle={{ flexGrow: 1, minHeight: scrollContentMinHeight }}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="flex-1 bg-white">
+            <LinearGradient
+              colors={gradientColors}
+              end={{ x: 1, y: 0.5 }}
+              locations={[0, 0.58, 1]}
+              start={{ x: 0, y: 0.5 }}
+              className="relative w-full items-center justify-center overflow-hidden"
               style={{
-                paddingBottom: cardBottomPadding,
-                paddingTop: cardTopPadding,
+                minHeight: heroHeight,
+                paddingBottom: heroBottomPadding,
+                paddingHorizontal: horizontalPadding,
+                paddingTop: heroTopPadding,
               }}
             >
-              <View className="items-center">
-                <View className="h-20 w-20 items-center justify-center rounded-full bg-[#FFF4EF]">
-                  <View className="h-14 w-14 items-center justify-center rounded-full bg-[#EB489B]">
-                    <SymbolView
-                      name={{
-                        ios: "envelope.badge.fill",
-                        android: "mark_email_read",
-                        web: "mark_email_read",
-                      }}
-                      size={28}
-                      tintColor="#FFFFFF"
-                    />
+              <Pressable
+                onPress={goBackToLogin}
+                className="absolute h-11 w-11 items-center justify-center rounded-full bg-white/18"
+                style={{ left: horizontalPadding, top: backButtonTop }}
+              >
+                <SymbolView
+                  name={{
+                    ios: "chevron.left",
+                    android: "arrow_back",
+                    web: "arrow_back",
+                  }}
+                  size={16}
+                  tintColor="#FFFFFF"
+                />
+              </Pressable>
+
+              <Animated.View style={animatedLogoStyle}>
+                <Image
+                  source={require("../../../../assets/images/logo2.png")}
+                  style={{ height: logoSize, width: logoSize }}
+                  resizeMode="contain"
+                />
+              </Animated.View>
+            </LinearGradient>
+
+            <View
+              className="-mt-8 flex-1 rounded-t-[34px] bg-white"
+              style={[cardShadowStyle, { paddingHorizontal: horizontalPadding }]}
+            >
+              <View
+                className="w-full self-center"
+                style={{
+                  maxWidth: cardMaxWidth,
+                  paddingBottom: cardBottomPadding,
+                  paddingTop: cardTopPadding,
+                }}
+              >
+                <View className="items-center">
+                  <View className="h-20 w-20 items-center justify-center rounded-full bg-[#FFF4EF]">
+                    <View className="h-14 w-14 items-center justify-center rounded-full bg-[#EB489B]">
+                      <SymbolView
+                        name={{
+                          ios: "envelope.badge.fill",
+                          android: "mark_email_read",
+                          web: "mark_email_read",
+                        }}
+                        size={24}
+                        tintColor="#FFFFFF"
+                      />
+                    </View>
                   </View>
                 </View>
-              </View>
 
-              <View className="items-center gap-2" style={{ marginTop: sectionTopMargin }}>
-                <Text
-                  className="text-center font-extrabold text-[#EB489B]"
-                  style={{ fontSize: titleSize }}
-                >
-                  Kiểm tra email
-                </Text>
-                <Text className="text-center text-[12px] leading-5 text-[#8E869A]">
-                  Chúng tôi đã gửi email khôi phục mật khẩu tới{" "}
-                  <Text className="font-bold text-[#322A3D]">{maskedEmail}</Text>.
-                </Text>
-                <Text className="text-center text-[12px] leading-5 text-[#625B71]">
-                  {successMessage}
-                </Text>
-              </View>
-
-              <View className={footerGapClassName}>
-                <Pressable
-                  onPress={goBackToLogin}
-                  className="rounded-[18px]"
-                  style={buttonShadowStyle}
-                >
-                  <LinearGradient
-                    colors={gradientColors}
-                    end={{ x: 1, y: 0.5 }}
-                    locations={[0, 0.58, 1]}
-                    start={{ x: 0, y: 0.5 }}
-                    className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
+                <View className="items-center gap-2" style={{ marginTop: sectionTopMargin }}>
+                  <Text
+                    className="text-center font-extrabold text-[#EB489B]"
+                    style={{ fontSize: titleSize }}
                   >
-                    <Text className="text-[15px] font-extrabold text-white">
-                      Về đăng nhập
-                    </Text>
-                  </LinearGradient>
-                </Pressable>
-
-                <Pressable
-                  onPress={goBackToForgotPassword}
-                  className={`${secondaryButtonHeightClassName} items-center justify-center rounded-[18px] border border-[#F2E4EB] bg-[#FFF9FC]`}
-                >
-                  <Text className="text-[14px] font-bold text-[#F58752]">
-                    Gửi lại email khác
+                    Kiểm tra email
                   </Text>
-                </Pressable>
+                  <Text className="text-center text-[12px] leading-5 text-[#8E869A]">
+                    Chúng tôi đã gửi email khôi phục mật khẩu tới{" "}
+                    <Text className="font-bold text-[#322A3D]">{maskedEmail}</Text>.
+                  </Text>
+                  <Text className="text-center text-[12px] leading-5 text-[#625B71]">
+                    {successMessage}
+                  </Text>
+                </View>
+
+                <View className={footerGapClassName}>
+                  <Pressable
+                    onPress={goBackToLogin}
+                    className="rounded-[18px]"
+                    style={buttonShadowStyle}
+                  >
+                    <LinearGradient
+                      colors={gradientColors}
+                      end={{ x: 1, y: 0.5 }}
+                      locations={[0, 0.58, 1]}
+                      start={{ x: 0, y: 0.5 }}
+                      className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
+                    >
+                      <Text className="text-[15px] font-extrabold text-white">
+                        Về đăng nhập
+                      </Text>
+                    </LinearGradient>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={goBackToForgotPassword}
+                    className={`${secondaryButtonHeightClassName} items-center justify-center rounded-[18px] border border-[#F2E4EB] bg-[#FFF9FC]`}
+                  >
+                    <Text className="text-[14px] font-bold text-[#F58752]">
+                      Gửi lại email khác
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
             </View>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

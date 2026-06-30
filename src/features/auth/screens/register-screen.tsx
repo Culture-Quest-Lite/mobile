@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect, useState } from "react";
 import {
   Image,
@@ -10,11 +10,9 @@ import {
   ScrollView,
   Text,
   View,
-  useWindowDimensions,
 } from "react-native";
 import {
   SafeAreaView,
-  useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import Animated, {
   Easing,
@@ -29,6 +27,7 @@ import Animated, {
 import { registerWithPassword } from "@/features/auth/api/register";
 import { AuthInput } from "@/features/auth/components/auth-input";
 import { SocialAuthButton } from "@/features/auth/components/social-auth-button";
+import { useAuthScreenLayout } from "@/features/auth/hooks/use-auth-screen-layout";
 import {
   hasAnyFieldError,
   validateRegisterForm,
@@ -67,8 +66,14 @@ export default function RegisterScreen() {
     username?: string;
   }>();
   const { entry } = params;
-  const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
+  const {
+    backButtonTop,
+    cardMaxWidth,
+    horizontalPadding,
+    insets,
+    isCompactScreen,
+    scrollContentMinHeight,
+  } = useAuthScreenLayout(820);
   const logoFloat = useSharedValue(0);
   const [username, setUsername] = useState(params.username?.trim() ?? "");
   const [displayName, setDisplayName] = useState(
@@ -87,26 +92,26 @@ export default function RegisterScreen() {
     password: false,
     username: false,
   });
-  const isCompactScreen = height <= 820;
-  const heroHeight = isCompactScreen ? 190 : 235;
-  const heroTopPadding = insets.top + (isCompactScreen ? 14 : 20);
-  const heroBottomPadding = isCompactScreen ? 24 : 48;
-  const logoSize = isCompactScreen ? 124 : 160;
-  const cardTopPadding = isCompactScreen ? 18 : 28;
+  const heroHeight = isCompactScreen ? 182 : 220;
+  const heroTopPadding = insets.top + (isCompactScreen ? 10 : 18);
+  const heroBottomPadding = isCompactScreen ? 18 : 32;
+  const logoSize = isCompactScreen ? 96 : 132;
+  const cardOverlapClassName = isCompactScreen ? "-mt-5" : "-mt-7";
+  const cardTopPadding = isCompactScreen ? 20 : 24;
   const cardBottomPadding = Math.max(
-    insets.bottom + (isCompactScreen ? 14 : 18),
-    isCompactScreen ? 18 : 24,
+    insets.bottom + (isCompactScreen ? 12 : 16),
+    isCompactScreen ? 16 : 22,
   );
-  const titleSize = isCompactScreen ? 27 : 31;
-  const sectionTopMargin = isCompactScreen ? 16 : 24;
+  const scrollBottomPadding = Math.max(insets.bottom + 16, 24);
+  const titleSize = isCompactScreen ? 23 : 27;
+  const sectionTopMargin = isCompactScreen ? 16 : 20;
   const fieldHeightClassName = isCompactScreen
     ? "h-10 rounded-xl"
-    : "h-11 rounded-xl";
-  const buttonHeightClassName = isCompactScreen ? "h-12" : "h-[52px]";
-  const formGapClassName = isCompactScreen ? "gap-3" : "gap-3.5";
-  const footerGapClassName = isCompactScreen ? "gap-3 pt-4" : "gap-4 pt-5";
+    : "h-11 rounded-2xl";
+  const buttonHeightClassName = isCompactScreen ? "h-11" : "h-12";
+  const formGapClassName = isCompactScreen ? "gap-4" : "gap-4";
+  const footerGapClassName = isCompactScreen ? "gap-4 pt-5" : "gap-4 pt-6";
   const buttonTopPaddingClassName = isCompactScreen ? "pt-0" : "pt-1";
-  const backButtonTop = insets.top + (isCompactScreen ? 10 : 12);
   const registerErrors = validateRegisterForm({
     confirmPassword,
     displayName,
@@ -240,12 +245,15 @@ export default function RegisterScreen() {
       edges={["left", "right", "bottom"]}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
       >
         <ScrollView
           className="flex-1 bg-white"
-          contentContainerStyle={{ minHeight: height + insets.top }}
+          contentContainerStyle={{
+            minHeight: scrollContentMinHeight,
+            paddingBottom: scrollBottomPadding,
+          }}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -256,17 +264,18 @@ export default function RegisterScreen() {
               end={{ x: 1, y: 0.5 }}
               locations={[0, 0.58, 1]}
               start={{ x: 0, y: 0.5 }}
-              className="relative w-full items-center justify-center overflow-hidden px-6"
+              className="relative w-full items-center justify-center overflow-hidden"
               style={{
                 minHeight: heroHeight,
                 paddingBottom: heroBottomPadding,
+                paddingHorizontal: horizontalPadding,
                 paddingTop: heroTopPadding,
               }}
             >
               <Pressable
                 onPress={() => router.replace("/home")}
-                className="absolute left-6 h-11 w-11 items-center justify-center rounded-full bg-white/18"
-                style={{ top: backButtonTop }}
+                className="absolute h-11 w-11 items-center justify-center rounded-full bg-white/18"
+                style={{ left: horizontalPadding, top: backButtonTop }}
               >
                 <SymbolView
                   name={{
@@ -274,7 +283,7 @@ export default function RegisterScreen() {
                     android: "arrow_back",
                     web: "arrow_back",
                   }}
-                  size={18}
+                  size={16}
                   tintColor="#FFFFFF"
                 />
               </Pressable>
@@ -289,12 +298,13 @@ export default function RegisterScreen() {
             </LinearGradient>
 
             <View
-              className="-mt-8 rounded-t-[34px] bg-white px-6"
-              style={cardShadowStyle}
+              className={`${cardOverlapClassName} rounded-t-[34px] bg-white`}
+              style={[cardShadowStyle, { paddingHorizontal: horizontalPadding }]}
             >
               <View
-                className="w-full max-w-[390px] self-center"
+                className="w-full self-center"
                 style={{
+                  maxWidth: cardMaxWidth,
                   paddingBottom: cardBottomPadding,
                   paddingTop: cardTopPadding,
                 }}
@@ -432,7 +442,7 @@ export default function RegisterScreen() {
                     </Pressable>
 
                     {errorMessage ? (
-                      <Text className="text-[12px] font-medium text-[#D6456C]">
+                      <Text className="text-[13px] font-medium text-[#D6456C]">
                         {errorMessage}
                       </Text>
                     ) : null}
@@ -441,7 +451,7 @@ export default function RegisterScreen() {
                   <View className={footerGapClassName}>
                     <View className="flex-row items-center justify-center gap-3">
                       <View className="h-px flex-1 bg-[#F0E8F4]" />
-                      <Text className="text-[11px] font-medium text-[#AA9FB0]">
+                      <Text className="text-[12px] font-medium text-[#AA9FB0]">
                         Hoặc đăng ký với
                       </Text>
                       <View className="h-px flex-1 bg-[#F0E8F4]" />
@@ -453,11 +463,11 @@ export default function RegisterScreen() {
                     </View>
 
                     <View className="flex-row items-center justify-center gap-1.5">
-                      <Text className="text-[12px] text-[#8E869A]">
+                      <Text className="text-[13px] text-[#8E869A]">
                         Bạn đã có tài khoản?
                       </Text>
                       <Pressable onPress={() => router.push("/login?entry=home")}>
-                        <Text className="text-[12px] font-extrabold text-[#F58752]">
+                        <Text className="text-[13px] font-extrabold text-[#F58752]">
                           Đăng nhập
                         </Text>
                       </Pressable>

@@ -1,5 +1,5 @@
 import { Tabs, usePathname } from "expo-router";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { type ComponentProps } from "react";
 import { type ColorValue, Image, Platform, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,7 +26,10 @@ type TabConfig = {
   label: string;
 };
 
-const TAB_ICON_SLOT_SIZE = 32;
+const TAB_ICON_SLOT_SIZE = 24;
+const TAB_ICON_RENDER_SIZE = 14;
+const TAB_LABEL_FONT_SIZE = 10;
+const TAB_LABEL_LINE_HEIGHT = 12;
 
 const TAB_CONFIG: Record<VisibleTabName, TabConfig> = {
   bookings: {
@@ -50,15 +53,15 @@ const TAB_CONFIG: Record<VisibleTabName, TabConfig> = {
       backgroundColor: "transparent",
       borderRadius: 0,
       borderWidth: 0,
-      height: 32,
+      height: 24,
       overflow: "visible",
-      width: 32,
+      width: 24,
     },
     imageResizeMode: "contain",
     imageSource: HOME_LOGO,
     imageStyle: {
-      height: 44,
-      width: 44,
+      height: 24,
+      width: 24,
     },
     label: "Trang chủ",
   },
@@ -101,16 +104,16 @@ function renderTabIcon(tab: TabConfig, tintColor: ColorValue) {
               alignItems: "center",
               backgroundColor: "#FFF8F1",
               borderColor: "#E9E9EC",
-              borderRadius: 11,
-              borderWidth: 1,
-              height: 22,
-              justifyContent: "center",
-              overflow: "hidden",
-              width: 22,
-            },
-            tab.imageContainerStyle,
-          ]}
-        >
+               borderRadius: 11,
+               borderWidth: 1,
+               height: 20,
+               justifyContent: "center",
+               overflow: "hidden",
+               width: 20,
+             },
+             tab.imageContainerStyle,
+           ]}
+         >
           <Image
             resizeMode={tab.imageResizeMode ?? "cover"}
             source={tab.imageSource}
@@ -132,7 +135,7 @@ function renderTabIcon(tab: TabConfig, tintColor: ColorValue) {
     >
       <SymbolView
         name={tab.icon ?? { ios: "circle", android: "circle", web: "circle" }}
-        size={18}
+        size={TAB_ICON_RENDER_SIZE}
         tintColor={tintColor}
       />
     </View>
@@ -146,14 +149,19 @@ function renderTabLabel(
 ) {
   return (
     <Text
-      numberOfLines={2}
+      adjustsFontSizeToFit
+      allowFontScaling={false}
+      minimumFontScale={0.7}
+      numberOfLines={1}
       style={{
         color: tintColor,
-        fontSize: 10,
+        fontSize: TAB_LABEL_FONT_SIZE,
         fontWeight: focused ? "700" : "500",
-        letterSpacing: -0.15,
-        lineHeight: 11,
+        includeFontPadding: false,
+        letterSpacing: -0.1,
+        lineHeight: TAB_LABEL_LINE_HEIGHT,
         textAlign: "center",
+        width: "100%",
       }}
     >
       {label}
@@ -165,9 +173,9 @@ export default function TabsLayout() {
   const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
-  const bottomInset = Platform.OS === "ios" ? insets.bottom : 0;
-  const tabBarBottomPadding = Platform.OS === "ios" ? bottomInset + 23 : 23;
-  const tabBarHeight = Platform.OS === "ios" ? 54 + tabBarBottomPadding : 77;
+  const bottomInset = Math.max(insets.bottom, Platform.OS === "android" ? 8 : 0);
+  const tabBarBottomPadding = bottomInset + 11;
+  const tabBarHeight = 50 + tabBarBottomPadding + 6;
   const shouldHideTabBarForGuestProfile =
     !authSession.isAuthenticated && pathname === "/profile";
 
@@ -193,9 +201,10 @@ export default function TabsLayout() {
           tabBarInactiveTintColor: TAB_INACTIVE_COLOR,
           tabBarItemStyle: {
             borderRadius: 16,
-            marginHorizontal: 4,
+            marginHorizontal: 0,
+            minWidth: 0,
             overflow: "hidden",
-            paddingVertical: 0,
+            paddingVertical: 3,
           },
           tabBarLabel: tab
             ? ({ color, focused }) => renderTabLabel(tab.label, focused, color)
@@ -212,8 +221,8 @@ export default function TabsLayout() {
                 elevation: 0,
                 height: tabBarHeight,
                 paddingBottom: tabBarBottomPadding,
-                paddingHorizontal: 6,
-                paddingTop: 6,
+                paddingHorizontal: 2,
+                paddingTop: 5,
                 shadowColor: "#1F2A37",
                 shadowOffset: {
                   width: 0,

@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/ui/symbol-view';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   Animated,
@@ -220,13 +220,13 @@ function RewardRow({
         {icon}
       </LinearGradient>
       <View className="flex-1">
-        <Text className="text-[10px] font-bold uppercase tracking-wider text-white/60">
+        <Text className="text-[11px] font-bold uppercase tracking-wider text-white/60">
           {label}
         </Text>
-        <Text className="text-[14px] font-bold text-white">{value}</Text>
+        <Text className="text-[15px] font-bold text-white">{value}</Text>
       </View>
       {badge && (
-        <Text className="text-[14px] font-bold text-[#22C55E]">{badge}</Text>
+        <Text className="text-[15px] font-bold text-[#22C55E]">{badge}</Text>
       )}
     </View>
   );
@@ -304,7 +304,7 @@ export default function CheckinScreen() {
                 tintColor="#fff"
               />
             </Pressable>
-            <Text className="text-[11px] font-semibold uppercase tracking-wider text-white/70">
+            <Text className="text-[12px] font-semibold uppercase tracking-wider text-white/70">
               Check-in
             </Text>
             <View className="w-10" />
@@ -342,16 +342,16 @@ export default function CheckinScreen() {
               <Text className="text-center text-[24px] font-extrabold text-white">
                 {h.name}
               </Text>
-              <Text className="mt-1 text-center text-[13px] text-white/70">{h.address}</Text>
+              <Text className="mt-1 text-center text-[14px] text-white/70">{h.address}</Text>
 
               {/* GPS status card */}
               <View className="mt-5 w-full flex-row items-center gap-3 rounded-[20px] bg-white/10 px-4 py-3.5">
                 <View className="h-2 w-2 rounded-full bg-[#22C55E]" />
                 <View className="flex-1">
-                  <Text className="text-[10px] font-bold uppercase tracking-wider text-white/60">
+                  <Text className="text-[11px] font-bold uppercase tracking-wider text-white/60">
                     GPS xác minh
                   </Text>
-                  <Text className="text-[12px] font-semibold text-white">
+                  <Text className="text-[13px] font-semibold text-white">
                     Bạn cách 12m · trong bán kính 50m ✓
                   </Text>
                 </View>
@@ -374,11 +374,11 @@ export default function CheckinScreen() {
                     size={16}
                     tintColor="#fff"
                   />
-                  <Text className="text-[15px] font-extrabold text-white">Check-in ngay</Text>
+                  <Text className="text-[16px] font-extrabold text-white">Check-in ngay</Text>
                 </LinearGradient>
               </Pressable>
 
-              <Text className="mt-3 max-w-[260px] text-center text-[10px] text-white/50">
+              <Text className="mt-3 max-w-[260px] text-center text-[11px] text-white/50">
                 Mở khoá +{h.xp} XP, audio story và đánh giá địa điểm
               </Text>
             </View>
@@ -388,10 +388,10 @@ export default function CheckinScreen() {
           {stage === 'scanning' && (
             <View className="flex-1 items-center justify-center gap-5 px-6">
               <SpinnerRing />
-              <Text className="text-[20px] font-bold text-white">
+              <Text className="text-[21px] font-bold text-white">
                 Đang xác minh vị trí...
               </Text>
-              <Text className="text-[12px] text-white/60">
+              <Text className="text-[13px] text-white/60">
                 GPS · Wi-Fi triangulation · Hotspot fingerprint
               </Text>
             </View>
@@ -422,7 +422,7 @@ export default function CheckinScreen() {
               <Text className="text-[30px] font-extrabold text-white">
                 Check-in thành công!
               </Text>
-              <Text className="mt-1 text-[13px] text-white/80">{h.name}</Text>
+              <Text className="mt-1 text-[14px] text-white/80">{h.name}</Text>
 
               {/* Reward card */}
               <View
@@ -432,7 +432,7 @@ export default function CheckinScreen() {
                 <RewardRow
                   iconBg={['#EB489B', '#F58752']}
                   icon={
-                    <Text className="text-[12px] font-extrabold text-white">XP</Text>
+                    <Text className="text-[13px] font-extrabold text-white">XP</Text>
                   }
                   label="Phần thưởng"
                   value={`+${h.xp} XP`}
@@ -492,7 +492,7 @@ export default function CheckinScreen() {
                       size={15}
                       tintColor="#fff"
                     />
-                    <Text className="text-[14px] font-extrabold text-white">
+                    <Text className="text-[15px] font-extrabold text-white">
                       Nghe câu chuyện
                     </Text>
                   </LinearGradient>
@@ -513,7 +513,7 @@ export default function CheckinScreen() {
                   }}
                   className="items-center rounded-[18px] bg-white/10 py-4"
                 >
-                  <Text className="text-[13px] font-semibold text-white">
+                  <Text className="text-[14px] font-semibold text-white">
                     Tiếp tục khám phá
                   </Text>
                 </Pressable>

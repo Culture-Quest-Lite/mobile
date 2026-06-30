@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
 import * as Location from "expo-location";
 import { useFocusEffect, useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Modal,
@@ -12,7 +12,6 @@ import {
   ScrollView,
   Text,
   View,
-  useWindowDimensions,
 } from "react-native";
 import Animated, {
   Easing,
@@ -30,6 +29,7 @@ import {
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 import { getMyProfile } from "@/features/profile/api/get-me";
+import { useScreenLayout } from "@/hooks/use-screen-layout";
 import {
   type AppCoordinate,
   formatCoordinateLabel,
@@ -318,10 +318,10 @@ function JourneyProgressRing({ progress }: { progress: number }) {
       </View>
 
       <View className="h-[58px] w-[58px] items-center justify-center rounded-full bg-white">
-        <Text className="text-[22px] font-black leading-6 text-[#2B2233]">
+        <Text className="text-[20px] font-black leading-5 text-[#2B2233]">
           {boundedProgress}%
         </Text>
-        <Text className="text-[8px] font-semibold text-[#6F657A]">
+        <Text className="text-[9px] font-semibold text-[#6F657A]">
           Hoàn thành
         </Text>
       </View>
@@ -873,10 +873,10 @@ function NearbyDistanceSlider({
   return (
     <View className="gap-2">
       <View className="flex-row items-center justify-between">
-        <Text className="text-[11px] font-semibold text-[#8E869A]">
+        <Text className="text-[12px] font-semibold text-[#8E869A]">
           {formatDistanceMeters(min)}
         </Text>
-        <Text className="text-[11px] font-semibold text-[#8E869A]">
+        <Text className="text-[12px] font-semibold text-[#8E869A]">
           {formatDistanceMeters(max)}
         </Text>
       </View>
@@ -963,10 +963,10 @@ function NearbyDistanceSheet({
 
           <View className="mt-4 flex-row items-start justify-between gap-4">
             <View className="flex-1 gap-1">
-              <Text className="text-[20px] font-extrabold text-[#2B2233]">
+              <Text className="text-[19px] font-extrabold text-[#2B2233]">
                 Chọn bán kính nearby
               </Text>
-              <Text className="text-[12px] leading-5 text-[#8E869A]">
+              <Text className="text-[13px] leading-5 text-[#8E869A]">
                 Bấm nút Test để chọn khoảng cách gọi nearby API quanh vị trí test hiện tại.
               </Text>
             </View>
@@ -985,11 +985,11 @@ function NearbyDistanceSheet({
 
           <View className="mt-6 rounded-[24px] border border-[#F6DDD0] bg-white px-4 py-4">
             <View className="flex-row items-center justify-between">
-              <Text className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[#D9587F]">
+              <Text className="text-[13px] font-semibold uppercase tracking-[0.5px] text-[#D9587F]">
                 Distance
               </Text>
               <View className="rounded-full bg-[#FFF1F6] px-3 py-1.5">
-                <Text className="text-[16px] font-extrabold text-[#EB489B]">
+                <Text className="text-[17px] font-extrabold text-[#EB489B]">
                   {formatDistanceMeters(selectedDistanceMeters)}
                 </Text>
               </View>
@@ -1021,7 +1021,7 @@ function NearbyDistanceSheet({
                     }}
                   >
                     <Text
-                      className={`text-[12px] font-bold ${
+                      className={`text-[13px] font-bold ${
                         isActive ? "text-[#EB489B]" : "text-[#8E869A]"
                       }`}
                     >
@@ -1032,7 +1032,7 @@ function NearbyDistanceSheet({
               })}
             </View>
 
-            <Text className="mt-4 text-[12px] leading-5 text-[#8E869A]">
+            <Text className="mt-4 text-[13px] leading-5 text-[#8E869A]">
               Hiện tại Home đang gọi nearby API với bán kính{" "}
               {formatDistanceMeters(currentDistanceMeters)}.
             </Text>
@@ -1043,7 +1043,7 @@ function NearbyDistanceSheet({
               className="flex-1 rounded-[18px] border border-[#F4DCCF] bg-white px-4 py-3.5"
               onPress={onClose}
             >
-              <Text className="text-center text-[14px] font-bold text-[#8E869A]">Đóng</Text>
+              <Text className="text-center text-[15px] font-bold text-[#8E869A]">Đóng</Text>
             </Pressable>
 
             <Pressable
@@ -1060,7 +1060,7 @@ function NearbyDistanceSheet({
                 locations={[0, 0.58, 1]}
                 className="items-center justify-center px-4 py-3.5"
               >
-                <Text className="text-[14px] font-extrabold text-white">
+                <Text className="text-[15px] font-extrabold text-white">
                   {isLoading ? "Đang tải..." : "Áp dụng"}
                 </Text>
               </LinearGradient>
@@ -1104,7 +1104,7 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
 
   return (
     <View className="gap-3">
-      <Text className="text-[20px] font-extrabold text-[#2B2233]">
+      <Text className="text-[18px] font-extrabold text-[#2B2233]">
         Mở khóa hành trình của bạn
       </Text>
 
@@ -1123,7 +1123,7 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
           <View className="flex-row items-start gap-4">
             <View className="flex-1 gap-2">
               <View className="self-start rounded-full bg-white/90 px-3 py-1">
-                <Text className="text-[10px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
+                <Text className="text-[11px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
                   Guest mode
                 </Text>
               </View>
@@ -1152,7 +1152,7 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
                         android: "lock",
                         web: "lock",
                       }}
-                      size={38}
+                      size={30}
                       tintColor="#EB489B"
                     />
                   </View>
@@ -1163,17 +1163,17 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
 
           <View className="flex-row flex-wrap gap-2">
             <View className="rounded-full bg-white/90 px-3 py-2">
-              <Text className="text-[11px] font-bold text-[#D9587F]">
+              <Text className="text-[12px] font-bold text-[#D9587F]">
                 Lưu tiến trình
               </Text>
             </View>
             <View className="rounded-full bg-white/90 px-3 py-2">
-              <Text className="text-[11px] font-bold text-[#D9587F]">
+              <Text className="text-[12px] font-bold text-[#D9587F]">
                 Mở khóa story
               </Text>
             </View>
             <View className="rounded-full bg-white/90 px-3 py-2">
-              <Text className="text-[11px] font-bold text-[#D9587F]">
+              <Text className="text-[12px] font-bold text-[#D9587F]">
                 Nhận voucher
               </Text>
             </View>
@@ -1203,7 +1203,7 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
                       android: "arrow_forward",
                       web: "arrow_forward",
                     }}
-                    size={16}
+                    size={15}
                     tintColor="#FFFFFF"
                   />
                 </Animated.View>
@@ -1271,7 +1271,7 @@ function GuestWelcomeHeader({
       <View className="flex-1 gap-1">
         <View className="flex-row items-center justify-between gap-3">
           <Pressable className="flex-1" hitSlop={8} onPress={onGreetingPress}>
-            <Text className="text-[22px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
+            <Text className="text-[19px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
               Xin chào bạn
             </Text>
           </Pressable>
@@ -1292,7 +1292,7 @@ function GuestWelcomeHeader({
               tintColor="#F58752"
             />
             <Text
-              className="text-[11px] font-semibold text-[#8E869A]"
+              className="text-[12px] font-semibold text-[#8E869A]"
               numberOfLines={1}
             >
               {locationState.label}
@@ -1310,7 +1310,7 @@ function GuestWelcomeHeader({
             size={14}
             tintColor="#F7B500"
           />
-          <Text className="text-[13px] font-bold text-[#8E869A]">
+          <Text className="text-[14px] font-bold text-[#8E869A]">
             Đăng nhập để lưu hành trình
           </Text>
         </View>
@@ -1327,32 +1327,32 @@ function ExplorerHeaderActions({
   const { handlePress } = useGuestLocationPill(onLocationPillPress);
 
   return (
-    <View className="flex-row items-center gap-3">
-      <Pressable
-        className="h-12 w-12 items-center justify-center rounded-full bg-[#FFF4EF]"
-        onPress={() => {
-          void handlePress();
-        }}
-      >
+      <View className="flex-row items-center gap-2.5">
+        <Pressable
+          className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
+          onPress={() => {
+            void handlePress();
+          }}
+        >
         <SymbolView
           name={{
             ios: "location",
             android: "my_location",
             web: "my_location",
           }}
-          size={20}
+          size={16}
           tintColor="#F58752"
         />
       </Pressable>
 
-      <Pressable className="h-12 w-12 items-center justify-center rounded-full bg-[#FFF4EF]">
+      <Pressable className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]">
         <SymbolView
           name={{
             ios: "bell",
             android: "notifications",
             web: "notifications",
           }}
-          size={22}
+          size={16}
           tintColor="#EB489B"
         />
       </Pressable>
@@ -1363,7 +1363,9 @@ function ExplorerHeaderActions({
 export default function HomeScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
-  const { width } = useWindowDimensions();
+  const { contentWidth, gutter, safeWidth } = useScreenLayout({
+    maxContentWidth: 640,
+  });
   const activeRouteIndexRef = useRef(0);
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
   const [explorerSummary, setExplorerSummary] =
@@ -1387,16 +1389,12 @@ export default function HomeScreen() {
   const [activeCommunityTab, setActiveCommunityTab] =
     useState<CommunityBoardTab>("community");
   const isGuest = authSession.role === "guest";
-  const routeCardLeftInset = 20;
-  const routeCardRightInset = 16;
-  const routeCardWidth = Math.max(
-    width - routeCardLeftInset - routeCardRightInset,
-    264,
-  );
-  const nearbyRouteCardWidth = Math.min(Math.max(width * 0.64, 220), 252);
-  const nearbyPlaceCardWidth = Math.min(Math.max(width * 0.4, 156), 170);
+  const routeCardLeftInset = gutter;
+  const routeCardWidth = Math.max(contentWidth, 264);
+  const nearbyRouteCardWidth = Math.min(Math.max(contentWidth * 0.72, 220), 252);
+  const nearbyPlaceCardWidth = Math.min(Math.max(contentWidth * 0.46, 156), 170);
   const nearbyPlaceImageHeight = Math.round(nearbyPlaceCardWidth * 0.8);
-  const voucherMerchantCircleSize = Math.min(Math.max(width * 0.2, 76), 86);
+  const voucherMerchantCircleSize = Math.min(Math.max(contentWidth * 0.22, 76), 86);
   const voucherMerchantLogoSize = Math.round(voucherMerchantCircleSize * 0.88);
   const voucherMerchantItemWidth = voucherMerchantCircleSize + 14;
   const isDevelopmentLocationOverrideActive =
@@ -1647,7 +1645,7 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingBottom: 0 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-6 px-5 pt-1">
+        <View className="gap-6 pt-1" style={{ paddingHorizontal: gutter }}>
           {isGuest ? (
             <GuestWelcomeHeader
               onGreetingPress={handleOpenRegister}
@@ -1679,7 +1677,7 @@ export default function HomeScreen() {
                   </LinearGradient>
 
                   <View className="absolute -bottom-1 -right-2 rounded-full border-2 border-white bg-[#b1741e] px-2.5 py-1">
-                    <Text className="text-[10px] font-extrabold text-white">
+                    <Text className="text-[11px] font-extrabold text-white">
                       {`Lv.${explorerLevel}`}
                     </Text>
                   </View>
@@ -1687,16 +1685,16 @@ export default function HomeScreen() {
 
                 <View className="flex-1 gap-1">
                   <View className="self-start rounded-full bg-[#FFF1F6] px-2.5 py-1">
-                    <Text className="text-[10px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
+                    <Text className="text-[11px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
                       Explorer
                     </Text>
                   </View>
 
                   <View className="gap-0.5">
-                    <Text className="text-[20px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
+                    <Text className="text-[18px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
                       {`Chào ${explorerName}`}
                     </Text>
-                    <Text className="text-[13px] leading-5 text-[#8E869A]">
+                    <Text className="text-[13px] leading-4 text-[#8E869A]">
                       Sẵn sàng khám phá hành trình
                     </Text>
                   </View>
@@ -1714,44 +1712,44 @@ export default function HomeScreen() {
           )}
 
           <View className="flex-row items-center gap-3">
-            <View className="flex-1 flex-row items-center rounded-[18px] bg-[#FAF7FC] px-4 py-4">
+            <View className="flex-1 flex-row items-center rounded-[18px] bg-[#FAF7FC] px-4 py-3.5">
               <SymbolView
                 name={{
                   ios: "magnifyingglass",
                   android: "search",
                   web: "search",
                 }}
-                size={20}
+                size={15}
                 tintColor="#AA9FB0"
               />
-              <Text className="ml-2 text-[15px] text-[#AA9FB0]">
+              <Text className="ml-2 text-[14px] text-[#AA9FB0]">
                 Tìm địa danh, thử thách...
               </Text>
             </View>
 
-            <Pressable className="h-[54px] w-[54px] items-center justify-center rounded-[18px] bg-[#FAF2FF]">
+            <Pressable className="h-9 w-9 items-center justify-center rounded-[14px] bg-[#FAF2FF]">
               <SymbolView
                 name={{
                   ios: "slider.horizontal.3",
                   android: "tune",
                   web: "tune",
                 }}
-                size={20}
+                size={15}
                 tintColor="#EB489B"
               />
             </Pressable>
           </View>
 
           <View className="gap-4">
-            <Text className="text-[20px] font-extrabold text-[#2B2233]">
+            <Text className="text-[17px] font-extrabold text-[#2B2233]">
               Tuyến nổi bật
             </Text>
 
             <View
               className="items-start"
               style={{
-                marginHorizontal: -20,
-                width,
+                marginHorizontal: -gutter,
+                width: safeWidth,
                 paddingLeft: routeCardLeftInset,
               }}
             >
@@ -1788,24 +1786,24 @@ export default function HomeScreen() {
                     <View className="flex-row items-start justify-between gap-3">
                       <View className="max-w-[78%] gap-2">
                         <View className="gap-1">
-                          <Text className="text-[29px] font-extrabold leading-8 text-white">
+                          <Text className="text-[21px] font-extrabold leading-6 text-white">
                             {activeFeaturedRoute.title}
                           </Text>
                         </View>
                         <View className="gap-3">
                           <View className="flex-row flex-wrap gap-2">
                             <View className="rounded-full bg-white/18 px-3 py-1.5">
-                              <Text className="text-[12px] font-bold text-white">
+                              <Text className="text-[11px] font-bold text-white">
                                 {activeFeaturedRoute.stops}
                               </Text>
                             </View>
                             <View className="rounded-full bg-white/18 px-3 py-1.5">
-                              <Text className="text-[12px] font-bold text-white">
+                              <Text className="text-[11px] font-bold text-white">
                                 {activeFeaturedRoute.distance}
                               </Text>
                             </View>
                             <View className="rounded-full bg-white/18 px-3 py-1.5">
-                              <Text className="text-[12px] font-bold text-white">
+                              <Text className="text-[11px] font-bold text-white">
                                 {activeFeaturedRoute.duration}
                               </Text>
                             </View>
@@ -1821,10 +1819,10 @@ export default function HomeScreen() {
                         </View>
                       </View>
 
-                      <View className="h-12 w-12 items-center justify-center rounded-2xl bg-white/16">
-                        <SymbolView
+                        <View className="h-9 w-9 items-center justify-center rounded-2xl bg-white/16">
+                          <SymbolView
                           name={{ ios: "map", android: "map", web: "map" }}
-                          size={22}
+                          size={15}
                           tintColor="#FFFFFF"
                         />
                       </View>
@@ -1834,7 +1832,10 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <View className="flex-row items-center justify-center gap-2 px-5">
+            <View
+              className="flex-row items-center justify-center gap-2"
+              style={{ paddingHorizontal: gutter }}
+            >
               {featuredRoutes.map((route, index) => (
                 <Pressable
                   key={route.title}
@@ -1856,7 +1857,7 @@ export default function HomeScreen() {
             <GuestAccessCard onPress={handleOpenRegister} />
           ) : currentJourney ? (
             <View className="gap-3">
-              <Text className="text-[20px] font-extrabold text-[#2B2233]">
+              <Text className="text-[18px] font-extrabold text-[#2B2233]">
                 Tiếp tục hành trình
               </Text>
 
@@ -1897,7 +1898,7 @@ export default function HomeScreen() {
                         className="mr-1.5 h-2 w-2 rounded-full"
                         style={{ backgroundColor: activeJourneyAccentWarm }}
                       />
-                      <Text className="text-[10px] font-extrabold uppercase tracking-[0.5px] text-[#453D4A]">
+                      <Text className="text-[11px] font-extrabold uppercase tracking-[0.5px] text-[#453D4A]">
                         Đang thực hiện
                       </Text>
                     </View>
@@ -1912,7 +1913,7 @@ export default function HomeScreen() {
                         size={12}
                         tintColor="#FFFFFF"
                       />
-                      <Text className="ml-1 text-[10px] font-extrabold text-white">
+                      <Text className="ml-1 text-[11px] font-extrabold text-white">
                         {currentJourney.rewardLabel}
                       </Text>
                     </View>
@@ -1926,7 +1927,7 @@ export default function HomeScreen() {
                     </View>
 
                     <View className="flex-1 gap-1.5 pt-4">
-                      <Text className="text-[15px] font-extrabold text-[#2B2233]">
+                      <Text className="text-[16px] font-extrabold text-[#2B2233]">
                         {currentJourney.title}
                       </Text>
 
@@ -1940,7 +1941,7 @@ export default function HomeScreen() {
                           size={13}
                           tintColor="#8E869A"
                         />
-                        <Text className="text-[12px] text-[#6F657A]">
+                        <Text className="text-[13px] text-[#6F657A]">
                           Tiếp theo: {currentJourney.nextStop} ·{" "}
                           {currentJourney.distanceToNext}
                         </Text>
@@ -1993,7 +1994,7 @@ export default function HomeScreen() {
                         })}
                       </View>
 
-                      <Text className="text-[11px] font-medium text-[#8E869A]">
+                      <Text className="text-[12px] font-medium text-[#8E869A]">
                         {currentJourney.remainingStopsLabel} ·{" "}
                         {currentJourney.remainingTimeLabel}
                       </Text>
@@ -2017,9 +2018,9 @@ export default function HomeScreen() {
                         size={14}
                         tintColor="#FFFFFF"
                       />
-                      <Text className="ml-2 text-[15px] font-extrabold text-white">
-                        Tiếp tục khám phá
-                      </Text>
+                        <Text className="ml-2 text-[15px] font-extrabold text-white">
+                         Tiếp tục khám phá
+                       </Text>
                     </LinearGradient>
                   </Pressable>
                 </View>
@@ -2030,7 +2031,7 @@ export default function HomeScreen() {
           <View className="gap-4">
             <View className="flex-row items-center justify-between">
               <Pressable hitSlop={8} onPress={handleOpenHotspots}>
-                <Text className="text-[20px] font-extrabold text-[#2B2233]">
+                <Text className="text-[18px] font-extrabold text-[#2B2233]">
                   Địa điểm gần bạn
                 </Text>
               </Pressable>
@@ -2038,33 +2039,33 @@ export default function HomeScreen() {
                 className="rounded-full bg-[#FFF4EF] px-3.5 py-2"
                 onPress={handleOpenHotspots}
               >
-                <Text className="text-[13px] font-bold text-[#F58752]">
+                <Text className="text-[12px] font-bold text-[#F58752]">
                   Xem tất cả
                 </Text>
               </Pressable>
             </View>
 
             {nearbyPlacesStatus !== "empty" && nearbyPlacesNote ? (
-              <Text className="text-[12px] leading-5 text-[#8E869A]">
+              <Text className="text-[13px] leading-5 text-[#8E869A]">
                 {nearbyPlacesNote}
               </Text>
             ) : null}
 
             {nearbyPlacesStatus === "loading" ? (
               <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-                <Text className="text-[14px] font-bold text-[#3B4454]">
+                <Text className="text-[15px] font-bold text-[#3B4454]">
                   Đang tải hotspot gần bạn...
                 </Text>
-                <Text className="mt-1 text-[12px] leading-5 text-[#8E869A]">
+                <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
                   {`App đang lấy vị trí hiện tại và gọi nearby API trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)}.`}
                 </Text>
               </View>
             ) : nearbyPlacesStatus === "empty" ? (
               <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-                <Text className="text-[14px] font-bold text-[#3B4454]">
+                <Text className="text-[15px] font-bold text-[#3B4454]">
                   Chưa có hotspot gần vị trí này
                 </Text>
-                <Text className="mt-1 text-[12px] leading-5 text-[#8E869A]">
+                <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
                   {nearbyPlacesNote ??
                     "Nearby API đang trả mảng rỗng cho tọa độ hiện tại."}
                 </Text>
@@ -2114,13 +2115,13 @@ export default function HomeScreen() {
 
                         <View className="absolute inset-x-2.5 top-2.5 flex-row items-center justify-between">
                           <View className="rounded-full bg-[#45414D]/92 px-2.5 py-1">
-                            <Text className="text-[10px] font-extrabold text-white">
+                            <Text className="text-[11px] font-extrabold text-white">
                               {place.distance}
                             </Text>
                           </View>
 
                           <View className="rounded-full bg-[#f0af16] px-2.5 py-1">
-                            <Text className="text-[10px] font-extrabold text-[#2B2233]">
+                            <Text className="text-[11px] font-extrabold text-[#2B2233]">
                               {place.reward} XP
                             </Text>
                           </View>
@@ -2129,19 +2130,19 @@ export default function HomeScreen() {
 
                       <View className="gap-2 px-3.5 pb-3.5 pt-3">
                         <Text
-                          className="text-[13px] font-extrabold leading-[18px] text-[#3B4454]"
+                          className="text-[14px] font-extrabold leading-[18px] text-[#3B4454]"
                           numberOfLines={2}
                         >
                           {place.title}
                         </Text>
 
-                        <Text className="text-[12px] text-[#A39AAB]">
+                        <Text className="text-[13px] text-[#A39AAB]">
                           {place.category}
                         </Text>
 
                         <View className="flex-row items-center gap-1">
                           {place.detailIcon === "star" ? (
-                            <Text className="text-[11px] text-[#F58752]">
+                            <Text className="text-[12px] text-[#F58752]">
                               ★
                             </Text>
                           ) : (
@@ -2158,15 +2159,15 @@ export default function HomeScreen() {
                           <Text
                             className={
                               place.detailIcon === "star"
-                                ? "text-[11px] font-bold text-[#F58752]"
-                                : "flex-1 text-[11px] text-[#8E869A]"
+                                ? "text-[12px] font-bold text-[#F58752]"
+                                : "flex-1 text-[12px] text-[#8E869A]"
                             }
                             numberOfLines={1}
                           >
                             {place.detailPrimaryText}
                           </Text>
                           {place.detailSecondaryText ? (
-                            <Text className="text-[11px] text-[#8E869A]">
+                            <Text className="text-[12px] text-[#8E869A]">
                               {place.detailSecondaryText}
                             </Text>
                           ) : null}
@@ -2178,7 +2179,7 @@ export default function HomeScreen() {
               </ScrollView>
             )}
 
-            <Text className="text-[20px] font-extrabold text-[#2B2233]">
+            <Text className="text-[18px] font-extrabold text-[#2B2233]">
               Chủ đề
             </Text>
 
@@ -2195,19 +2196,19 @@ export default function HomeScreen() {
                   }
                 >
                   <View
-                    className="h-[112px] w-[112px] items-center justify-center rounded-[24px] p-4"
+                    className="h-[104px] w-[104px] items-center justify-center rounded-[22px] p-4"
                     style={{ backgroundColor: item.background }}
                   >
                     <View className="items-center justify-center">
                       <SymbolView
                         name={item.icon}
-                        size={28}
+                        size={16}
                         tintColor={item.accent}
                       />
                     </View>
 
                     <Text
-                      className="mt-3 text-center text-[14px] font-extrabold leading-[18px] text-[#2F2A35]"
+                      className="mt-3 text-center text-[13px] font-extrabold leading-4 text-[#2F2A35]"
                       numberOfLines={2}
                     >
                       {item.label}
@@ -2217,7 +2218,7 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
 
-            <Text className="text-[20px] font-extrabold text-[#2B2233]">
+            <Text className="text-[18px] font-extrabold text-[#2B2233]">
               Đề xuất tuyến đường
             </Text>
 
@@ -2246,7 +2247,7 @@ export default function HomeScreen() {
                       />
 
                       <View className="absolute right-3 top-3 rounded-full bg-[#FFF1F6] px-2.5 py-1">
-                        <Text className="text-[10px] font-extrabold text-[#EB489B]">
+                        <Text className="text-[11px] font-extrabold text-[#EB489B]">
                           {route.xp}
                         </Text>
                       </View>
@@ -2255,12 +2256,12 @@ export default function HomeScreen() {
                     <View className="gap-2.5 px-4 pb-4 pt-3.5">
                       <View className="flex-row flex-wrap items-center gap-2">
                         <View className="rounded-full bg-[#FFF1F6] px-2.5 py-1">
-                          <Text className="text-[10px] font-extrabold text-[#EB489B]">
+                          <Text className="text-[11px] font-extrabold text-[#EB489B]">
                             {route.distance}
                           </Text>
                         </View>
                         <View className="rounded-full bg-[#FFF4EF] px-2.5 py-1">
-                          <Text className="text-[10px] font-extrabold text-[#F58752]">
+                          <Text className="text-[11px] font-extrabold text-[#F58752]">
                             {route.duration}
                           </Text>
                         </View>
@@ -2274,7 +2275,7 @@ export default function HomeScreen() {
                           }}
                         >
                           <Text
-                            className="text-[10px] font-extrabold"
+                            className="text-[11px] font-extrabold"
                             style={{
                               color:
                                 routeDifficultyStyles[route.difficulty].color,
@@ -2286,14 +2287,14 @@ export default function HomeScreen() {
                       </View>
 
                       <Text
-                        className="text-[16px] font-extrabold leading-5 text-[#2B2233]"
+                        className="text-[16px] font-extrabold leading-4 text-[#2B2233]"
                         numberOfLines={1}
                       >
                         {route.title}
                       </Text>
 
                       <Text
-                        className="text-[12px] leading-[18px] text-[#8E869A]"
+                        className="text-[13px] leading-[18px] text-[#8E869A]"
                         numberOfLines={2}
                       >
                         {route.subtitle}
@@ -2307,13 +2308,13 @@ export default function HomeScreen() {
             <View className="gap-4">
               <View className="flex-row items-start justify-between gap-3">
                 <View className="flex-1">
-                  <Text className="text-[20px] font-extrabold text-[#2B2233]">
+                  <Text className="text-[18px] font-extrabold text-[#2B2233]">
                     Voucher ưu đãi
                   </Text>
                 </View>
 
                 <Pressable className="rounded-full bg-[#FFF4EF] px-3.5 py-2">
-                  <Text className="text-[13px] font-bold text-[#F58752]">
+                  <Text className="text-[12px] font-bold text-[#F58752]">
                     Xem tất cả
                   </Text>
                 </Pressable>
@@ -2360,7 +2361,7 @@ export default function HomeScreen() {
                           </View>
 
                           <Text
-                            className="mt-2 text-center text-[12px] font-extrabold leading-4 text-[#2B2233]"
+                            className="mt-2 text-center text-[13px] font-extrabold leading-4 text-[#2B2233]"
                             numberOfLines={2}
                           >
                             {merchant.label}
@@ -2392,12 +2393,12 @@ export default function HomeScreen() {
                       tintColor="#C98A10"
                     />
                   </View>
-                  <Text className="text-[20px] font-extrabold text-[#1F2940]">
+                  <Text className="text-[18px] font-extrabold text-[#1F2940]">
                     Cộng đồng hôm nay
                   </Text>
                 </View>
 
-                <Text className="text-[11px] font-bold uppercase tracking-[0.3px] text-[#FF6F95]">
+                <Text className="text-[12px] font-bold uppercase tracking-[0.3px] text-[#FF6F95]">
                   BXH
                 </Text>
               </View>
@@ -2416,7 +2417,7 @@ export default function HomeScreen() {
                         }}
                       >
                         <Text
-                          className={`text-[12px] font-bold ${
+                          className={`text-[13px] font-bold ${
                             isActive ? "text-[#FF5F87]" : "text-[#7D7281]"
                           }`}
                         >
@@ -2442,7 +2443,7 @@ export default function HomeScreen() {
                     size={12}
                     tintColor="#7D7281"
                   />
-                  <Text className="ml-1 text-[10px] font-semibold text-[#7D7281]">
+                  <Text className="ml-1 text-[11px] font-semibold text-[#7D7281]">
                     Live
                   </Text>
                 </View>
@@ -2455,17 +2456,17 @@ export default function HomeScreen() {
                   end={{ x: 1, y: 0.5 }}
                   className="flex-row items-center rounded-[22px] border border-[#F9E2EA] px-3.5 py-3.5"
                 >
-                  <View className="mr-3 h-12 w-12 items-center justify-center rounded-full bg-[#FFE8F0]">
-                    <Text className="text-[11px] font-black text-[#FF5F87]">
+                  <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-[#FFE8F0]">
+                    <Text className="text-[12px] font-black text-[#FF5F87]">
                       #{activeCommunityTab === "community" ? "24" : "01"}
                     </Text>
                   </View>
 
                   <View className="flex-1 pr-3">
-                    <Text className="text-[13px] font-extrabold text-[#1F2940]">
+                    <Text className="text-[14px] font-extrabold text-[#1F2940]">
                       {activeCommunityBoard.summaryLabel}
                     </Text>
-                    <Text className="mt-0.5 text-[10px] leading-4 text-[#9B8D9A]">
+                    <Text className="mt-0.5 text-[11px] leading-4 text-[#9B8D9A]">
                       {activeCommunityBoard.summaryNote}
                     </Text>
                   </View>
@@ -2480,7 +2481,7 @@ export default function HomeScreen() {
                       size={12}
                       tintColor="#FF5F87"
                     />
-                    <Text className="ml-1 text-[11px] font-extrabold text-[#1F2940]">
+                    <Text className="ml-1 text-[12px] font-extrabold text-[#1F2940]">
                       {activeCommunityBoard.totalPoints}
                     </Text>
                   </View>
@@ -2493,7 +2494,7 @@ export default function HomeScreen() {
                       className="flex-row items-center rounded-[24px] border border-[#EEF1F4] bg-white px-3.5 py-3"
                       style={communityRowShadowStyle}
                     >
-                      <View className="relative mr-3.5 h-[54px] w-[54px] items-center justify-center">
+                      <View className="relative mr-3.5 h-12 w-12 items-center justify-center">
                         <View
                           className="items-center justify-center rounded-full bg-white"
                           style={{
@@ -2532,17 +2533,17 @@ export default function HomeScreen() {
                               ],
                           }}
                         >
-                          <Text className="text-[12px] font-black text-white">
+                          <Text className="text-[13px] font-black text-white">
                             {index + 1}
                           </Text>
                         </View>
                       </View>
 
                       <View className="flex-1 pr-3">
-                        <Text className="text-[14px] font-extrabold text-[#1F2940]">
+                        <Text className="text-[15px] font-extrabold text-[#1F2940]">
                           {entry.name}
                         </Text>
-                        <Text className="mt-0.5 text-[11px] leading-4 text-[#8F8290]">
+                        <Text className="mt-0.5 text-[12px] leading-4 text-[#8F8290]">
                           {entry.subtitle}
                         </Text>
                       </View>
@@ -2557,7 +2558,7 @@ export default function HomeScreen() {
                           size={11}
                           tintColor="#FF5F87"
                         />
-                        <Text className="ml-1 text-[11px] font-extrabold text-[#1F2940]">
+                        <Text className="ml-1 text-[12px] font-extrabold text-[#1F2940]">
                           {entry.points}
                         </Text>
                       </View>
@@ -2578,7 +2579,7 @@ export default function HomeScreen() {
                   size={13}
                   tintColor="#FF5F87"
                 />
-                <Text className="ml-1.5 text-[12px] font-bold text-[#FF5F87]">
+                <Text className="ml-1.5 text-[13px] font-bold text-[#FF5F87]">
                   Xem bảng xếp hạng đầy đủ
                 </Text>
               </View>

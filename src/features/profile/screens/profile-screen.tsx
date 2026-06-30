@@ -1,14 +1,13 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { type Href, useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { type ComponentProps, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   Text,
-  useWindowDimensions,
   View,
 } from "react-native";
 import {
@@ -21,6 +20,7 @@ import {
   getHotspotHref,
   type HotspotDetail,
 } from "@/features/home/data/hotspots";
+import { useScreenLayout } from "@/hooks/use-screen-layout";
 import type { RouteItem } from "@/lib/demo-data";
 import { useProfile } from "../hooks/use-profile";
 import type { ProfilePost } from "../types";
@@ -180,8 +180,8 @@ export default function ProfileScreen() {
     useProfile();
   const [tab, setTab] = useState<Tab>("posts");
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const heroHeight = Math.max(Math.min(width * 0.88, 320), 280);
+  const { gutter, safeWidth } = useScreenLayout({ maxContentWidth: 640 });
+  const heroHeight = Math.max(Math.min(safeWidth * 0.88, 320), 280);
   const avatarSize = 126;
   const profileOverlap = avatarSize * 0.52;
   const handleOpenAuth = () => {
@@ -193,20 +193,21 @@ export default function ProfileScreen() {
 
   if (!authSession.isAuthenticated) {
     return (
-      <GuestProfileScreen
-        bottomInset={insets.bottom}
-        onBackHome={handleBackToHome}
-        onOpenAuth={handleOpenAuth}
-        screenWidth={width}
-      />
-    );
-  }
+        <GuestProfileScreen
+          bottomInset={insets.bottom}
+          onBackHome={handleBackToHome}
+          onOpenAuth={handleOpenAuth}
+          pageGutter={gutter}
+          screenWidth={safeWidth}
+        />
+      );
+    }
 
   if (isLoading && !profile) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-[#F7F8FC]">
         <ActivityIndicator color="#F58752" size="large" />
-        <Text className="mt-3 text-[14px] text-[#8E869A]">
+        <Text className="mt-3 text-[15px] text-[#8E869A]">
           Đang tải hồ sơ...
         </Text>
       </SafeAreaView>
@@ -216,10 +217,10 @@ export default function ProfileScreen() {
   if (error && !profile) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-[#F7F8FC] px-6">
-        <Text className="text-center text-[16px] font-extrabold text-[#2B2233]">
+        <Text className="text-center text-[17px] font-extrabold text-[#2B2233]">
           Không thể tải hồ sơ
         </Text>
-        <Text className="mt-2 text-center text-[13px] leading-5 text-[#8E869A]">
+        <Text className="mt-2 text-center text-[14px] leading-5 text-[#8E869A]">
           {error.message}
         </Text>
       </SafeAreaView>
@@ -229,7 +230,7 @@ export default function ProfileScreen() {
   if (!profile) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-[#F7F8FC]">
-        <Text className="text-[14px] text-[#8E869A]">Không tìm thấy hồ sơ</Text>
+        <Text className="text-[15px] text-[#8E869A]">Không tìm thấy hồ sơ</Text>
       </SafeAreaView>
     );
   }
@@ -301,8 +302,8 @@ export default function ProfileScreen() {
             style={{ position: "absolute", inset: 0 }}
           />
           <View
-            className="absolute left-4 right-4 flex-row items-center justify-between"
-            style={{ paddingTop: insets.top + 10 }}
+            className="absolute flex-row items-center justify-between"
+            style={{ left: gutter, paddingTop: insets.top + 10, right: gutter }}
           >
             <View className="w-10" />
 
@@ -317,7 +318,7 @@ export default function ProfileScreen() {
                   size={15}
                   tintColor="#FFD54A"
                 />
-                <Text className="text-[12px] font-extrabold text-white">
+                <Text className="text-[13px] font-extrabold text-white">
                   {profile.points.toLocaleString()}
                 </Text>
               </View>
@@ -340,7 +341,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <View className="px-4" style={{ marginTop: -profileOverlap }}>
+        <View style={{ marginTop: -profileOverlap, paddingHorizontal: gutter }}>
           <View className="flex-row items-start gap-4">
             <AccountAvatar
               avatar={profile.avatar}
@@ -353,7 +354,7 @@ export default function ProfileScreen() {
             <View className="min-w-0 flex-1 pt-10">
               <View className="flex-row items-center">
                 <Text
-                  className="text-[22px] font-extrabold leading-tight text-[#2B2233]"
+                  className="text-[20px] font-extrabold leading-tight text-[#2B2233]"
                   numberOfLines={1}
                 >
                   {profile.name}
@@ -363,7 +364,7 @@ export default function ProfileScreen() {
               {canShowLevelProgress ? (
                 <View className="mt-3">
                   <View className="mb-1.5 flex-row items-center justify-between gap-3">
-                    <Text className="text-[13px] font-extrabold text-[#2B2233]">
+                    <Text className="text-[14px] font-extrabold text-[#2B2233]">
                       Level
                     </Text>
                     <View className="flex-row items-center gap-1 rounded-full bg-[#FFF4EF] px-2.5 py-1">
@@ -376,7 +377,7 @@ export default function ProfileScreen() {
                         size={13}
                         tintColor="#F58752"
                       />
-                      <Text className="text-[11px] font-extrabold text-[#F58752]">
+                      <Text className="text-[12px] font-extrabold text-[#F58752]">
                         Cấp {levelNumber}
                       </Text>
                     </View>
@@ -388,10 +389,10 @@ export default function ProfileScreen() {
                     trackColor="#F4EAF0"
                   />
                   <View className="mt-1.5 flex-row items-center justify-between">
-                    <Text className="flex-1 pr-3 text-[10px] text-[#8E869A]">
+                    <Text className="flex-1 pr-3 text-[11px] text-[#8E869A]">
                       Còn {remainingXp} XP để lên cấp {levelNumber + 1}
                     </Text>
-                    <Text className="text-[10px] font-extrabold text-[#F58752]">
+                    <Text className="text-[11px] font-extrabold text-[#F58752]">
                       {Math.round(levelProgressPercent)}%
                     </Text>
                   </View>
@@ -424,7 +425,7 @@ export default function ProfileScreen() {
                 >
                   <SymbolView
                     name={item.icon}
-                    size={18}
+                    size={16}
                     tintColor={selected ? "#F58752" : "#AA9FB0"}
                   />
                 </Pressable>
@@ -481,14 +482,16 @@ function GuestProfileScreen({
   bottomInset,
   onBackHome,
   onOpenAuth,
+  pageGutter,
   screenWidth,
 }: {
   bottomInset: number;
   onBackHome: () => void;
   onOpenAuth: () => void;
+  pageGutter: number;
   screenWidth: number;
 }) {
-  const cardInnerWidth = Math.max(screenWidth - 80, 220);
+  const cardInnerWidth = Math.max(screenWidth - pageGutter * 4, 220);
   const heroArtWidth = Math.min(Math.max(cardInnerWidth * 0.38, 116), 142);
 
   return (
@@ -540,7 +543,10 @@ function GuestProfileScreen({
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="flex-row items-center justify-between px-5 pt-3">
+        <View
+          className="flex-row items-center justify-between pt-3"
+          style={{ paddingHorizontal: pageGutter }}
+        >
           <Pressable
             accessibilityLabel="Về trang chủ"
             className="h-10 w-10 items-center justify-center rounded-[16px] border border-[#F6DFE8] bg-white"
@@ -553,19 +559,19 @@ function GuestProfileScreen({
                 android: "arrow_back",
                 web: "arrow_back",
               }}
-              size={18}
+              size={16}
               tintColor="#2B2233"
             />
           </Pressable>
 
-          <Text className="text-center text-[22px] font-black tracking-[-0.3px] text-[#2B2233]">
+          <Text className="text-center text-[20px] font-black tracking-[-0.3px] text-[#2B2233]">
             Cá nhân
           </Text>
 
           <View className="h-10 w-10" />
         </View>
 
-        <View className="px-5 pt-5">
+        <View style={{ paddingHorizontal: pageGutter, paddingTop: 20 }}>
           <View
             className="relative rounded-[30px]"
             style={[guestHeroShadow, { marginBottom: 22, overflow: "visible" }]}
@@ -643,10 +649,10 @@ function GuestProfileScreen({
                 }}
                 className="gap-2.5"
               >
-                <Text className="text-[24px] font-black leading-7 text-white">
+                <Text className="text-[21px] font-black leading-6 text-white">
                   Chào bạn
                 </Text>
-                <Text className="text-[12px] leading-5 text-white/90">
+                <Text className="text-[13px] leading-5 text-white/90">
                   Hãy tham gia để trải nghiệm nội dung đặc sắc
                 </Text>
                 <Pressable
@@ -656,7 +662,7 @@ function GuestProfileScreen({
                   style={cardShadow}
                 >
                   <Text
-                    className="text-[13px] font-extrabold text-[#D94D89]"
+                    className="text-[14px] font-extrabold text-[#D94D89]"
                     numberOfLines={1}
                   >
                     Đăng ký / Đăng nhập
@@ -758,15 +764,15 @@ function GuestMenuPreviewRow({
       }
     >
       <View className="h-11 w-11 items-center justify-center rounded-full bg-[#FFF5F8]">
-        <SymbolView name={item.icon} size={18} tintColor="#EB489B" />
+        <SymbolView name={item.icon} size={16} tintColor="#EB489B" />
       </View>
 
-      <Text className="min-w-0 flex-1 text-[15px] font-semibold leading-5 text-[#2B2233]">
+      <Text className="min-w-0 flex-1 text-[17px] font-semibold leading-5 text-[#2B2233]">
         {item.label}
       </Text>
 
       {item.value ? (
-        <Text className="text-[12px] text-[#A6ABB8]">{item.value}</Text>
+        <Text className="text-[13px] text-[#A6ABB8]">{item.value}</Text>
       ) : null}
 
       <SymbolView
@@ -775,7 +781,7 @@ function GuestMenuPreviewRow({
           android: "chevron_right",
           web: "chevron_right",
         }}
-        size={18}
+        size={16}
         tintColor="#AA9FB0"
       />
     </View>
@@ -878,10 +884,10 @@ function AccountAvatar({
 function ProfileStat({ n, label }: { n: number; label: string }) {
   return (
     <View className="flex-1 rounded-2xl bg-white py-2.5" style={cardShadow}>
-      <Text className="text-center text-[15px] font-extrabold text-[#2B2233]">
+      <Text className="text-center text-[17px] font-extrabold text-[#2B2233]">
         {n.toLocaleString()}
       </Text>
-      <Text className="mt-0.5 text-center text-[9px] leading-tight text-[#8E869A]">
+      <Text className="mt-0.5 text-center text-[10px] leading-tight text-[#8E869A]">
         {label}
       </Text>
     </View>
@@ -891,7 +897,7 @@ function ProfileStat({ n, label }: { n: number; label: string }) {
 function InlineNotice({ message }: { message: string }) {
   return (
     <View className="mt-5 rounded-2xl border border-[#F6C9C0] bg-[#FFF4F1] px-4 py-3">
-      <Text className="text-[12px] font-semibold leading-5 text-[#B54D3A]">
+      <Text className="text-[13px] font-semibold leading-5 text-[#B54D3A]">
         {message}
       </Text>
     </View>
@@ -901,7 +907,7 @@ function InlineNotice({ message }: { message: string }) {
 function PostCard({ post }: { post: ProfilePost }) {
   return (
     <View className="rounded-2xl bg-white p-3" style={cardShadow}>
-      <Text className="text-[12px] leading-relaxed text-[#2B2233]">
+      <Text className="text-[13px] leading-relaxed text-[#2B2233]">
         {post.text}
       </Text>
       {post.image ? (
@@ -918,7 +924,7 @@ function PostCard({ post }: { post: ProfilePost }) {
           }}
         />
       ) : null}
-      <Text className="mt-2 text-[10px] text-[#8E869A]">
+      <Text className="mt-2 text-[11px] text-[#8E869A]">
         {post.time} · {post.likes} thích · {post.comments} bình luận
       </Text>
     </View>
@@ -947,15 +953,15 @@ function RouteCard({
       />
       <View className="min-w-0 flex-1 justify-center">
         <Text
-          className="text-[13px] font-semibold text-[#2B2233]"
+          className="text-[14px] font-semibold text-[#2B2233]"
           numberOfLines={1}
         >
           {route.title}
         </Text>
-        <Text className="text-[10px] text-[#8E869A]">
+        <Text className="text-[11px] text-[#8E869A]">
           {route.distance} · {route.duration}
         </Text>
-        <Text className="mt-0.5 text-[10px] font-extrabold text-[#F58752]">
+        <Text className="mt-0.5 text-[11px] font-extrabold text-[#F58752]">
           +{route.xp} XP
         </Text>
       </View>
@@ -986,7 +992,7 @@ function LikedHotspotCard({
       <View className="min-w-0 flex-1 justify-center">
         <View className="flex-row items-start justify-between gap-2">
           <Text
-            className="flex-1 text-[13px] font-semibold text-[#2B2233]"
+            className="flex-1 text-[14px] font-semibold text-[#2B2233]"
             numberOfLines={1}
           >
             {hotspot.title}
@@ -997,13 +1003,13 @@ function LikedHotspotCard({
             tintColor="#EB489B"
           />
         </View>
-        <Text className="mt-0.5 text-[10px] text-[#8E869A]">
+        <Text className="mt-0.5 text-[11px] text-[#8E869A]">
           {hotspot.category} · {hotspot.district}
         </Text>
-        <Text className="mt-1 text-[10px] text-[#8E869A]">
+        <Text className="mt-1 text-[11px] text-[#8E869A]">
           {hotspot.distance} · {hotspot.reviews} reviews
         </Text>
-        <Text className="mt-1 text-[10px] font-extrabold text-[#F58752]">
+        <Text className="mt-1 text-[11px] font-extrabold text-[#F58752]">
           {hotspot.reward}
         </Text>
       </View>
@@ -1016,10 +1022,10 @@ function EmptyPosts() {
     <View className="items-center py-12">
       <SymbolView
         name={{ ios: "photo", android: "image", web: "image" }}
-        size={36}
+        size={30}
         tintColor="#AA9FB0"
       />
-      <Text className="mt-2 text-[12px] text-[#8E869A]">
+      <Text className="mt-2 text-[13px] text-[#8E869A]">
         Bạn chưa có bài đăng nào
       </Text>
     </View>
@@ -1031,10 +1037,10 @@ function EmptyRoutes() {
     <View className="items-center py-12">
       <SymbolView
         name={{ ios: "map", android: "map", web: "map" }}
-        size={36}
+        size={30}
         tintColor="#AA9FB0"
       />
-      <Text className="mt-2 text-[12px] text-[#8E869A]">
+      <Text className="mt-2 text-[13px] text-[#8E869A]">
         Chưa có tuyến cộng đồng nào
       </Text>
     </View>
@@ -1050,10 +1056,10 @@ function EmptyLikedHotspots() {
           android: "favorite_border",
           web: "favorite_border",
         }}
-        size={36}
+        size={30}
         tintColor="#AA9FB0"
       />
-      <Text className="mt-2 text-[12px] text-[#8E869A]">
+      <Text className="mt-2 text-[13px] text-[#8E869A]">
         Chưa có hotspot đã thích nào
       </Text>
     </View>

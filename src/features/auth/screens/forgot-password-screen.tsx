@@ -1,15 +1,15 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect, useState } from "react";
 import {
   Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   View,
-  useWindowDimensions,
 } from "react-native";
 import Animated, {
   Easing,
@@ -22,11 +22,11 @@ import Animated, {
 } from "react-native-reanimated";
 import {
   SafeAreaView,
-  useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
 import { forgotPassword } from "@/features/auth/api/forgot-password";
 import { AuthInput } from "@/features/auth/components/auth-input";
+import { useAuthScreenLayout } from "@/features/auth/hooks/use-auth-screen-layout";
 import { hasAnyFieldError } from "@/features/auth/utils/validation";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
@@ -73,15 +73,20 @@ export default function ForgotPasswordScreen() {
     email?: string;
     entry?: string;
   }>();
-  const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
+  const {
+    backButtonTop,
+    cardMaxWidth,
+    horizontalPadding,
+    insets,
+    isCompactScreen,
+    scrollContentMinHeight,
+  } = useAuthScreenLayout(760);
   const logoFloat = useSharedValue(0);
   const [email, setEmail] = useState(emailParam?.trim() ?? "");
   const [didAttemptSubmit, setDidAttemptSubmit] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [touchedEmail, setTouchedEmail] = useState(false);
-  const isCompactScreen = height <= 760;
   const heroHeight = isCompactScreen ? 208 : 255;
   const heroTopPadding = insets.top + (isCompactScreen ? 16 : 24);
   const heroBottomPadding = isCompactScreen ? 28 : 56;
@@ -96,9 +101,8 @@ export default function ForgotPasswordScreen() {
   const fieldHeightClassName = isCompactScreen
     ? "h-11 rounded-xl"
     : "h-12 rounded-xl";
-  const buttonHeightClassName = isCompactScreen ? "h-12" : "h-[52px]";
+  const buttonHeightClassName = isCompactScreen ? "h-11" : "h-12";
   const formGapClassName = isCompactScreen ? "gap-3" : "gap-4";
-  const backButtonTop = insets.top + (isCompactScreen ? 10 : 12);
   const forgotPasswordErrors = validateForgotPasswordForm(email);
   const emailError =
     touchedEmail || didAttemptSubmit
@@ -193,125 +197,135 @@ export default function ForgotPasswordScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         className="flex-1"
       >
-        <View className="flex-1 bg-white">
-          <LinearGradient
-            colors={gradientColors}
-            end={{ x: 1, y: 0.5 }}
-            locations={[0, 0.58, 1]}
-            start={{ x: 0, y: 0.5 }}
-            className="relative w-full items-center justify-center overflow-hidden px-6"
-            style={{
-              minHeight: heroHeight,
-              paddingBottom: heroBottomPadding,
-              paddingTop: heroTopPadding,
-            }}
-          >
-            <Pressable
-              onPress={goBackToLogin}
-              className="absolute left-6 h-11 w-11 items-center justify-center rounded-full bg-white/18"
-              style={{ top: backButtonTop }}
-            >
-              <SymbolView
-                name={{
-                  ios: "chevron.left",
-                  android: "arrow_back",
-                  web: "arrow_back",
-                }}
-                size={18}
-                tintColor="#FFFFFF"
-              />
-            </Pressable>
-
-            <Animated.View style={animatedLogoStyle}>
-              <Image
-                source={require("../../../../assets/images/logo2.png")}
-                style={{ height: logoSize, width: logoSize }}
-                resizeMode="contain"
-              />
-            </Animated.View>
-          </LinearGradient>
-
-          <View
-            className="-mt-8 flex-1 rounded-t-[34px] bg-white px-6"
-            style={cardShadowStyle}
-          >
-            <View
-              className="w-full max-w-[390px] self-center"
+        <ScrollView
+          className="flex-1 bg-white"
+          contentContainerStyle={{ flexGrow: 1, minHeight: scrollContentMinHeight }}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="flex-1 bg-white">
+            <LinearGradient
+              colors={gradientColors}
+              end={{ x: 1, y: 0.5 }}
+              locations={[0, 0.58, 1]}
+              start={{ x: 0, y: 0.5 }}
+              className="relative w-full items-center justify-center overflow-hidden"
               style={{
-                paddingBottom: cardBottomPadding,
-                paddingTop: cardTopPadding,
+                minHeight: heroHeight,
+                paddingBottom: heroBottomPadding,
+                paddingHorizontal: horizontalPadding,
+                paddingTop: heroTopPadding,
               }}
             >
-              <View className="items-center gap-1.5">
-                <Text
-                  className="font-extrabold text-[#EB489B]"
-                  style={{ fontSize: titleSize }}
-                >
-                  Quên mật khẩu
-                </Text>
-                <Text className="text-center text-[12px] leading-5 text-[#8E869A]">
-                  Nhập email bạn đã dùng để đăng ký để tiếp tục khôi phục mật
-                  khẩu
-                </Text>
-              </View>
+              <Pressable
+                onPress={goBackToLogin}
+                className="absolute h-11 w-11 items-center justify-center rounded-full bg-white/18"
+                style={{ left: horizontalPadding, top: backButtonTop }}
+              >
+                <SymbolView
+                  name={{
+                    ios: "chevron.left",
+                    android: "arrow_back",
+                    web: "arrow_back",
+                  }}
+                  size={16}
+                  tintColor="#FFFFFF"
+                />
+              </Pressable>
 
-              <View style={{ marginTop: sectionTopMargin }}>
-                <View className={formGapClassName}>
-                  <AuthInput
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    autoCorrect={false}
-                    className="gap-1.5"
-                    errorMessage={emailError}
-                    inputClassName={fieldHeightClassName}
-                    keyboardType="email-address"
-                    label="Email"
-                    placeholder="Nhập địa chỉ email"
-                    textContentType="emailAddress"
-                    value={email}
-                    onBlur={() => setTouchedEmail(true)}
-                    onChangeText={(value) => {
-                      setEmail(value);
-                      if (errorMessage) {
-                        setErrorMessage(null);
-                      }
-                    }}
-                  />
+              <Animated.View style={animatedLogoStyle}>
+                <Image
+                  source={require("../../../../assets/images/logo2.png")}
+                  style={{ height: logoSize, width: logoSize }}
+                  resizeMode="contain"
+                />
+              </Animated.View>
+            </LinearGradient>
 
-                  <Pressable
-                    disabled={isSubmitDisabled}
-                    onPress={() => {
-                      void handleSubmit();
-                    }}
-                    className="rounded-[18px]"
-                    style={[
-                      isSubmitDisabled ? null : buttonShadowStyle,
-                      isSubmitDisabled ? { opacity: 0.72 } : null,
-                    ]}
+            <View
+              className="-mt-8 flex-1 rounded-t-[34px] bg-white"
+              style={[cardShadowStyle, { paddingHorizontal: horizontalPadding }]}
+            >
+              <View
+                className="w-full self-center"
+                style={{
+                  maxWidth: cardMaxWidth,
+                  paddingBottom: cardBottomPadding,
+                  paddingTop: cardTopPadding,
+                }}
+              >
+                <View className="items-center gap-1.5">
+                  <Text
+                    className="font-extrabold text-[#EB489B]"
+                    style={{ fontSize: titleSize }}
                   >
-                    <LinearGradient
-                      colors={gradientColors}
-                      end={{ x: 1, y: 0.5 }}
-                      locations={[0, 0.58, 1]}
-                      start={{ x: 0, y: 0.5 }}
-                      className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
-                    >
-                      <Text className="text-[15px] font-extrabold text-white">
-                        {isSubmitting ? "Đang gửi email..." : "Gửi email khôi phục"}
-                      </Text>
-                    </LinearGradient>
-                  </Pressable>
+                    Quên mật khẩu
+                  </Text>
+                  <Text className="text-center text-[12px] leading-5 text-[#8E869A]">
+                    Nhập email bạn đã dùng để đăng ký để tiếp tục khôi phục mật
+                    khẩu
+                  </Text>
+                </View>
 
-                  {errorMessage ? (
-                    <Text className="text-[12px] font-medium leading-5 text-[#D6456C]">
-                      {errorMessage}
-                    </Text>
-                  ) : null}
+                <View style={{ marginTop: sectionTopMargin }}>
+                  <View className={formGapClassName}>
+                    <AuthInput
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      autoCorrect={false}
+                      className="gap-1.5"
+                      errorMessage={emailError}
+                      inputClassName={fieldHeightClassName}
+                      keyboardType="email-address"
+                      label="Email"
+                      placeholder="Nhập địa chỉ email"
+                      textContentType="emailAddress"
+                      value={email}
+                      onBlur={() => setTouchedEmail(true)}
+                      onChangeText={(value) => {
+                        setEmail(value);
+                        if (errorMessage) {
+                          setErrorMessage(null);
+                        }
+                      }}
+                    />
+
+                    <Pressable
+                      disabled={isSubmitDisabled}
+                      onPress={() => {
+                        void handleSubmit();
+                      }}
+                      className="rounded-[18px]"
+                      style={[
+                        isSubmitDisabled ? null : buttonShadowStyle,
+                        isSubmitDisabled ? { opacity: 0.72 } : null,
+                      ]}
+                    >
+                      <LinearGradient
+                        colors={gradientColors}
+                        end={{ x: 1, y: 0.5 }}
+                        locations={[0, 0.58, 1]}
+                        start={{ x: 0, y: 0.5 }}
+                        className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
+                      >
+                        <Text className="text-[15px] font-extrabold text-white">
+                          {isSubmitting ? "Đang gửi email..." : "Gửi email khôi phục"}
+                        </Text>
+                      </LinearGradient>
+                    </Pressable>
+
+                    {errorMessage ? (
+                      <Text className="text-[13px] font-medium leading-5 text-[#D6456C]">
+                        {errorMessage}
+                      </Text>
+                    ) : null}
+                  </View>
                 </View>
               </View>
             </View>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

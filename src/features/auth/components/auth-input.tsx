@@ -22,10 +22,10 @@ export function AuthInput({
 }: AuthInputProps) {
   return (
     <View className={`gap-2 ${className ?? ''}`.trim()}>
-      <Text className="text-[13px] font-semibold text-[#625B71]">{label}</Text>
+      <Text className="text-[15px] font-semibold text-[#625B71]">{label}</Text>
       <TextInput
         {...props}
-        className={`h-[52px] rounded-2xl border px-4 text-[15px] text-[#322A3D] focus:border-[#FF679A]/50 ${
+        className={`h-12 rounded-2xl border px-3.5 text-[16px] text-[#322A3D] focus:border-[#FF679A]/50 ${
           errorMessage
             ? 'border-[#D6456C] bg-[#FFF6F9]'
             : 'border-white/90 bg-[#F7F5FA]'
@@ -35,7 +35,7 @@ export function AuthInput({
         style={[webInputStyle, style]}
       />
       {errorMessage ? (
-        <Text className="text-[12px] font-medium text-[#D6456C]">{errorMessage}</Text>
+        <Text className="text-[14px] font-medium text-[#D6456C]">{errorMessage}</Text>
       ) : null}
     </View>
   );
