@@ -1,4 +1,4 @@
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { type ComponentProps } from "react";
 
 export type SymbolName = ComponentProps<typeof SymbolView>["name"];

@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/ui/symbol-view';
 import { type ReactNode } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -117,7 +117,7 @@ function RouteMapHero({
                 tintColor="#fff"
               />
             ) : (
-              <Text className="text-[10px] font-bold text-white">{index + 1}</Text>
+              <Text className="text-[11px] font-bold text-white">{index + 1}</Text>
             )}
           </View>
         );
@@ -152,12 +152,12 @@ function Stat({
     <View className={`flex-1 rounded-2xl p-2 ${highlight ? 'bg-[#FFF5E8]' : 'bg-[#F4EFF8]'}`}>
       <View className="mb-0.5 items-center">{icon}</View>
       <Text
-        className={`text-center text-[12px] font-bold leading-tight ${highlight ? 'text-[#B86D2A]' : 'text-[#2B2233]'}`}
+        className={`text-center text-[13px] font-bold leading-tight ${highlight ? 'text-[#B86D2A]' : 'text-[#2B2233]'}`}
       >
         {label}
       </Text>
       <Text
-        className={`text-center text-[9px] ${highlight ? 'text-[#B86D2A]/80' : 'text-[#8E869A]'}`}
+        className={`text-center text-[10px] ${highlight ? 'text-[#B86D2A]/80' : 'text-[#8E869A]'}`}
       >
         {hint}
       </Text>
@@ -187,7 +187,7 @@ function StoryCard({
     <View className={`rounded-2xl border p-4 ${bgClass}`}>
       <View className="mb-1.5 flex-row items-center gap-2">
         <Text className="text-lg">{emoji}</Text>
-        <Text className="text-[14px] font-bold text-[#2B2233]">{title}</Text>
+        <Text className="text-[15px] font-bold text-[#2B2233]">{title}</Text>
       </View>
       <Text className="text-[12.5px] leading-5 text-[#3D3446]/85">{body}</Text>
     </View>
@@ -220,9 +220,9 @@ function RouteReviewCard({ review }: { review: RouteReview }) {
         />
         <View className="min-w-0 flex-1">
           <View className="flex-row items-center gap-1.5">
-            <Text className="text-[13px] font-semibold text-[#2B2233]">{review.user}</Text>
+            <Text className="text-[14px] font-semibold text-[#2B2233]">{review.user}</Text>
             <View className="rounded-full bg-[#FFF4EF] px-1.5 py-0.5">
-              <Text className="text-[9px] font-bold text-[#F58752]">Đã hoàn thành</Text>
+              <Text className="text-[10px] font-bold text-[#F58752]">Đã hoàn thành</Text>
             </View>
           </View>
           <View className="mt-0.5 flex-row items-center gap-1">
@@ -231,7 +231,7 @@ function RouteReviewCard({ review }: { review: RouteReview }) {
               size={9}
               tintColor="#8E869A"
             />
-            <Text className="text-[10px] text-[#8E869A]">
+            <Text className="text-[11px] text-[#8E869A]">
               {review.completedIn} · {review.date}
             </Text>
           </View>
@@ -242,7 +242,7 @@ function RouteReviewCard({ review }: { review: RouteReview }) {
       <Text className="mt-2 text-[12.5px] font-bold text-[#EB489B]">
         &ldquo;{review.highlight}&rdquo;
       </Text>
-      <Text className="mt-1 text-[12px] leading-5 text-[#3D3446]/85">{review.text}</Text>
+      <Text className="mt-1 text-[13px] leading-5 text-[#3D3446]/85">{review.text}</Text>
 
       <View className="mt-2 flex-row flex-wrap gap-1.5">
         {review.tags.map((tag) => (
@@ -259,11 +259,11 @@ function RouteReviewCard({ review }: { review: RouteReview }) {
             size={12}
             tintColor="#8E869A"
           />
-          <Text className="text-[11px] font-semibold text-[#8E869A]">
+          <Text className="text-[12px] font-semibold text-[#8E869A]">
             Hữu ích · {review.helpful}
           </Text>
         </Pressable>
-        <Text className="text-[10px] text-[#8E869A]">Trả lời</Text>
+        <Text className="text-[11px] text-[#8E869A]">Trả lời</Text>
       </View>
     </View>
   );
@@ -279,9 +279,9 @@ export default function RouteDetailScreen() {
   if (!route) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-white">
-        <Text className="text-[16px] text-[#8E869A]">Tuyến không tồn tại</Text>
+        <Text className="text-[17px] text-[#8E869A]">Tuyến không tồn tại</Text>
         <Pressable onPress={() => router.back()} className="mt-4">
-          <Text className="text-[14px] font-bold text-[#EB489B]">Quay lại</Text>
+          <Text className="text-[15px] font-bold text-[#EB489B]">Quay lại</Text>
         </Pressable>
       </SafeAreaView>
     );
@@ -344,14 +344,14 @@ export default function RouteDetailScreen() {
                 size={12}
                 tintColor="#EB489B"
               />
-              <Text className="text-[10px] font-semibold uppercase tracking-wider text-[#EB489B]">
+              <Text className="text-[11px] font-semibold uppercase tracking-wider text-[#EB489B]">
                 Tuyến chủ đề · {route.era}
               </Text>
             </View>
             <Text className="mt-1 text-[24px] font-extrabold leading-tight text-[#2B2233]">
               {route.title}
             </Text>
-            <Text className="mt-1 text-[13px] text-[#8E869A]">{route.subtitle}</Text>
+            <Text className="mt-1 text-[14px] text-[#8E869A]">{route.subtitle}</Text>
 
             <View className="mt-4 flex-row gap-2">
               <Stat
@@ -388,7 +388,7 @@ export default function RouteDetailScreen() {
                 hint="Độ khó"
               />
               <Stat
-                icon={<Text className="text-[11px] font-bold text-[#B86D2A]">XP</Text>}
+                icon={<Text className="text-[12px] font-bold text-[#B86D2A]">XP</Text>}
                 label={`+${route.xp}`}
                 hint="Phần thưởng"
                 highlight
@@ -397,11 +397,11 @@ export default function RouteDetailScreen() {
 
             <View className="mt-4 flex-row items-center gap-2">
               <XPBar value={completed} max={stops.length} />
-              <Text className="text-[11px] font-bold text-[#2B2233]">
+              <Text className="text-[12px] font-bold text-[#2B2233]">
                 {completed}/{stops.length}
               </Text>
             </View>
-            <Text className="mt-1 text-[10px] text-[#8E869A]">
+            <Text className="mt-1 text-[11px] text-[#8E869A]">
               Tiến độ {Math.round(progress)}% · check-in theo bất kỳ thứ tự nào
             </Text>
           </View>
@@ -414,7 +414,7 @@ export default function RouteDetailScreen() {
           </View>
 
           <View className="mt-6">
-            <Text className="mb-3 text-[18px] font-bold text-[#2B2233]">Hành trình của bạn</Text>
+            <Text className="mb-3 text-[19px] font-bold text-[#2B2233]">Hành trình của bạn</Text>
             <View className="pl-7">
               <View className="absolute bottom-2 left-3 top-2 w-px bg-[#EB489B]/40" />
               {stops.map((stop, index) => {
@@ -440,7 +440,7 @@ export default function RouteDetailScreen() {
                           tintColor="#fff"
                         />
                       ) : (
-                        <Text className="text-[10px] font-bold text-white">{index + 1}</Text>
+                        <Text className="text-[11px] font-bold text-white">{index + 1}</Text>
                       )}
                     </View>
                     <Image
@@ -449,20 +449,20 @@ export default function RouteDetailScreen() {
                       style={{ width: 64, height: 64, borderRadius: 16 }}
                     />
                     <View className="min-w-0 flex-1">
-                      <Text className="text-[14px] font-semibold text-[#2B2233]" numberOfLines={1}>
+                      <Text className="text-[15px] font-semibold text-[#2B2233]" numberOfLines={1}>
                         {stop.name}
                       </Text>
-                      <Text className="text-[11px] text-[#8E869A]" numberOfLines={1}>
+                      <Text className="text-[12px] text-[#8E869A]" numberOfLines={1}>
                         {stop.address}
                       </Text>
                       <View className="mt-1.5 flex-row items-center gap-2">
                         <View className="rounded-full bg-[#F4EFF8] px-2 py-0.5">
-                          <Text className="text-[10px] text-[#2B2233]">{stop.distance}</Text>
+                          <Text className="text-[11px] text-[#2B2233]">{stop.distance}</Text>
                         </View>
                         <View className="rounded-full bg-[#F4EFF8] px-2 py-0.5">
-                          <Text className="text-[10px] text-[#2B2233]">{stop.duration}</Text>
+                          <Text className="text-[11px] text-[#2B2233]">{stop.duration}</Text>
                         </View>
-                        <Text className="ml-auto text-[10px] font-bold text-[#EB489B]">
+                        <Text className="ml-auto text-[11px] font-bold text-[#EB489B]">
                           +{stop.xp} XP
                         </Text>
                       </View>
@@ -483,15 +483,15 @@ export default function RouteDetailScreen() {
                 />
               </View>
               <View>
-                <Text className="text-[10px] font-bold uppercase tracking-wider text-[#F58752]">
+                <Text className="text-[11px] font-bold uppercase tracking-wider text-[#F58752]">
                   AI Gợi ý
                 </Text>
-                <Text className="text-[13px] font-semibold text-[#2B2233]">
+                <Text className="text-[14px] font-semibold text-[#2B2233]">
                   Tuyến này hợp với bạn 94%
                 </Text>
               </View>
             </View>
-            <Text className="mt-2 text-[12px] leading-5 text-[#3D3446]/80">
+            <Text className="mt-2 text-[13px] leading-5 text-[#3D3446]/80">
               Dựa trên 7 tuyến bạn đã hoàn thành, bạn yêu kiến trúc Pháp thuộc. Tuyến này có 3/4 điểm
               khớp sở thích — và thời tiết sáng mai lý tưởng để đi bộ ☀️ 26°C.
             </Text>
@@ -505,19 +505,19 @@ export default function RouteDetailScreen() {
                 tintColor="#F58752"
               />
               <View>
-                <Text className="text-[13px] font-semibold text-[#2B2233]">
+                <Text className="text-[14px] font-semibold text-[#2B2233]">
                   Tải về để dùng offline
                 </Text>
-                <Text className="text-[10px] text-[#8E869A]">Bản đồ + story · 12.4 MB</Text>
+                <Text className="text-[11px] text-[#8E869A]">Bản đồ + story · 12.4 MB</Text>
               </View>
             </View>
-            <Text className="text-[11px] font-bold text-[#F58752]">Tải xuống</Text>
+            <Text className="text-[12px] font-bold text-[#F58752]">Tải xuống</Text>
           </Pressable>
 
           <View className="mt-6">
             <View className="mb-3 flex-row items-center justify-between">
-              <Text className="text-[18px] font-bold text-[#2B2233]">Phản hồi về tuyến</Text>
-              <Text className="text-[10px] text-[#8E869A]">{rating.count} đánh giá</Text>
+              <Text className="text-[19px] font-bold text-[#2B2233]">Phản hồi về tuyến</Text>
+              <Text className="text-[11px] text-[#8E869A]">{rating.count} đánh giá</Text>
             </View>
 
             <View className="rounded-3xl bg-white p-4" style={cardShadow}>
@@ -527,12 +527,12 @@ export default function RouteDetailScreen() {
                     {rating.avg}
                   </Text>
                   <Stars rating={Math.round(rating.avg)} />
-                  <Text className="mt-0.5 text-[10px] text-[#8E869A]">{rating.count} người</Text>
+                  <Text className="mt-0.5 text-[11px] text-[#8E869A]">{rating.count} người</Text>
                 </View>
                 <View className="flex-1 gap-1">
                   {ratingDist.map((d) => (
                     <View key={d.star} className="flex-row items-center gap-2">
-                      <Text className="w-3 text-[10px] text-[#8E869A]">{d.star}</Text>
+                      <Text className="w-3 text-[11px] text-[#8E869A]">{d.star}</Text>
                       <Text style={{ fontSize: 9, color: '#EB489B' }}>★</Text>
                       <View className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#F4EFF8]">
                         <LinearGradient
@@ -542,7 +542,7 @@ export default function RouteDetailScreen() {
                           style={{ height: '100%', width: `${d.pct}%`, borderRadius: 999 }}
                         />
                       </View>
-                      <Text className="w-7 text-right text-[10px] text-[#8E869A]">{d.pct}%</Text>
+                      <Text className="w-7 text-right text-[11px] text-[#8E869A]">{d.pct}%</Text>
                     </View>
                   ))}
                 </View>
@@ -551,7 +551,7 @@ export default function RouteDetailScreen() {
               <View className="mt-3 flex-row flex-wrap gap-1.5">
                 {feedbackTags.map((tag) => (
                   <View key={tag} className="rounded-full bg-[#F4EFF8] px-2.5 py-1">
-                    <Text className="text-[10px] font-semibold text-[#3D3446]/80">{tag}</Text>
+                    <Text className="text-[11px] font-semibold text-[#3D3446]/80">{tag}</Text>
                   </View>
                 ))}
               </View>
@@ -571,17 +571,17 @@ export default function RouteDetailScreen() {
                 />
               </View>
               <View className="flex-1">
-                <Text className="text-[13px] font-bold text-[#2B2233]">
+                <Text className="text-[14px] font-bold text-[#2B2233]">
                   {isFinished ? 'Chia sẻ trải nghiệm tuyến này' : 'Hoàn thành tuyến để viết feedback'}
                 </Text>
-                <Text className="text-[10px] text-[#8E869A]">
+                <Text className="text-[11px] text-[#8E869A]">
                   {isFinished
                     ? '+50 XP cho đánh giá có ảnh'
                     : `Còn ${stops.length - completed} điểm check-in`}
                 </Text>
               </View>
               {isFinished && (
-                <Text className="text-[11px] font-bold text-[#EB489B]">Viết ngay</Text>
+                <Text className="text-[12px] font-bold text-[#EB489B]">Viết ngay</Text>
               )}
             </Pressable>
 
@@ -624,7 +624,7 @@ export default function RouteDetailScreen() {
                 size={16}
                 tintColor="#fff"
               />
-              <Text className="text-[14px] font-bold text-white">Bắt đầu hành trình</Text>
+              <Text className="text-[15px] font-bold text-white">Bắt đầu hành trình</Text>
             </LinearGradient>
           </Pressable>
         </View>

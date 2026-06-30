@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 import {
@@ -42,7 +42,7 @@ function HotspotStoryFilterChip({
       }}
     >
       <Text
-        className="text-[13px] font-black"
+        className="text-[14px] font-black"
         style={{ color: isActive ? "#15803D" : "#8E869A" }}
       >
         {label}
@@ -81,7 +81,7 @@ function HotspotStoryCard({ item }: { item: HotspotStoryItem }) {
               style={{ backgroundColor: accent.badgeBackground }}
             >
               <Text
-                className="text-[10px] font-black uppercase tracking-[0.8px]"
+                className="text-[11px] font-black uppercase tracking-[0.8px]"
                 style={{ color: accent.badgeText }}
               >
                 {item.pillLabel}
@@ -96,13 +96,13 @@ function HotspotStoryCard({ item }: { item: HotspotStoryItem }) {
             </View>
           </View>
 
-          <Text className="mt-3 text-[16px] font-black leading-5 text-[#2B2233]">
+          <Text className="mt-3 text-[17px] font-black leading-5 text-[#2B2233]">
             {item.title}
           </Text>
-          <Text className="mt-2 text-[13px] leading-5 text-[#6F657A]" numberOfLines={4}>
+          <Text className="mt-2 text-[14px] leading-5 text-[#6F657A]" numberOfLines={4}>
             {getHotspotStoryPreview(item.body)}
           </Text>
-          <Text className="mt-3 text-[11px] font-semibold text-[#AA9FB0]">
+          <Text className="mt-3 text-[12px] font-semibold text-[#AA9FB0]">
             {item.metaLabel}
           </Text>
         </View>
@@ -141,11 +141,11 @@ export function HotspotStoryBrowser({
       <View className="flex-row items-center justify-between gap-3">
         <View className="flex-1">
           <Text className="text-[22px] font-black text-[#2B2233]">{title}</Text>
-          <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">{description}</Text>
+          <Text className="mt-1 text-[14px] leading-5 text-[#8E869A]">{description}</Text>
         </View>
 
         <View className="rounded-full bg-[#ECFDF3] px-3 py-2">
-          <Text className="text-[11px] font-black text-[#15803D]">{storyItems.length} story</Text>
+          <Text className="text-[12px] font-black text-[#15803D]">{storyItems.length} story</Text>
         </View>
       </View>
 
@@ -180,8 +180,8 @@ export function HotspotStoryBrowser({
               borderColor: "#F4DCE6",
             }}
           >
-            <Text className="text-[15px] font-black text-[#2B2233]">{emptyTitle}</Text>
-            <Text className="mt-2 text-[13px] leading-5 text-[#8E869A]">
+            <Text className="text-[16px] font-black text-[#2B2233]">{emptyTitle}</Text>
+            <Text className="mt-2 text-[14px] leading-5 text-[#8E869A]">
               {emptyDescription}
             </Text>
           </View>

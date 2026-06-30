@@ -1,7 +1,7 @@
 import { type Href, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { useMemo, useState, type ComponentProps } from "react";
 import {
   Image,
@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { useScreenLayout } from "@/hooks/use-screen-layout";
 import {
   communityPosts,
   type CommunityPost,
@@ -202,6 +203,7 @@ const tagPalettes: Record<string, TagPalette> = {
 
 export default function CommunityScreen() {
   const router = useRouter();
+  const { gutter } = useScreenLayout({ maxContentWidth: 640 });
   const [activeTab, setActiveTab] = useState<CommunityTabKey>("community");
   const [activeTopic, setActiveTopic] = useState<TopicKey>("all");
   const activeTopicLabel = useMemo(
@@ -251,7 +253,7 @@ export default function CommunityScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 28 }}
         >
-          <View className="px-5 pb-8 pt-4">
+          <View className="pb-8 pt-4" style={{ paddingHorizontal: gutter }}>
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center gap-3">
                 <Pressable
@@ -264,12 +266,12 @@ export default function CommunityScreen() {
                       android: "menu",
                       web: "menu",
                     }}
-                    size={17}
+                    size={15}
                     tintColor="#D55E8E"
                   />
                 </Pressable>
 
-                <Text className="text-[23px] font-black tracking-[-0.6px] text-[#EB489B]">
+                <Text className="text-[20px] font-black tracking-[-0.4px] text-[#EB489B]">
                   {PROJECT_WORDMARK}
                 </Text>
               </View>
@@ -300,7 +302,7 @@ export default function CommunityScreen() {
                 <ComposerAvatar uri={COMPOSER_AVATAR_URI} />
 
                 <Pressable className="ml-3 flex-1 px-1 py-2">
-                  <Text className="text-[12px] font-medium text-[#B1A2AB]">
+                  <Text className="text-[13px] font-medium text-[#B1A2AB]">
                     Chia sẻ trải nghiệm của bạn...
                   </Text>
                 </Pressable>
@@ -319,7 +321,7 @@ export default function CommunityScreen() {
                         android: "image",
                         web: "image",
                       }}
-                      size={18}
+                      size={16}
                       tintColor="#FFFFFF"
                     />
                   </LinearGradient>
@@ -394,7 +396,7 @@ export default function CommunityScreen() {
                   <Text className="text-[18px] font-black text-[#2E2336]">
                     Chưa có cập nhật mới
                   </Text>
-                  <Text className="mt-2 text-[13px] leading-5 text-[#8E869A]">
+                  <Text className="mt-2 text-[14px] leading-5 text-[#8E869A]">
                     {activeTopic !== "all"
                       ? `Chưa có bài thuộc chủ đề ${activeTopicLabel.toLowerCase()} trong mục này. Hãy thử đổi chủ đề khác để xem thêm nội dung.`
                       : activeTab === "following"
@@ -440,7 +442,7 @@ function CommunityTabLabel({
         tintColor={active ? "#FFFFFF" : "#EB489B"}
       />
       <Text
-        className={`text-[11px] font-extrabold ${
+        className={`text-[12px] font-extrabold ${
           active ? "text-white" : "text-[#7C6F82]"
         }`}
       >
@@ -478,7 +480,7 @@ function CommunityPostCard({
 
         <View className="ml-3.5 flex-1 pr-3">
           <View className="flex-row items-center gap-1.5">
-            <Text className="text-[15px] font-black text-[#2F2337]">
+            <Text className="text-[17px] font-black text-[#2F2337]">
               {post.author}
             </Text>
             <View className="h-5 w-5 items-center justify-center rounded-full bg-[#E7FFF2]">
@@ -494,10 +496,10 @@ function CommunityPostCard({
             </View>
           </View>
 
-          <Text className="mt-0.5 text-[12px] font-medium text-[#8E869A]">
+          <Text className="mt-0.5 text-[13px] font-medium text-[#8E869A]">
             {post.role}
           </Text>
-          <Text className="mt-1 text-[11px] font-medium text-[#B3A9B6]">
+          <Text className="mt-1 text-[12px] font-medium text-[#B3A9B6]">
             {post.time}
           </Text>
         </View>
@@ -515,7 +517,7 @@ function CommunityPostCard({
         </View>
       </Pressable>
 
-      <Text className="mt-4 text-[14px] leading-6 text-[#33293A]">
+      <Text className="mt-4 text-[16px] leading-6 text-[#33293A]">
         {post.caption}
       </Text>
 
@@ -546,10 +548,10 @@ function CommunityPostCard({
             paddingTop: 42,
           }}
         >
-          <Text className="text-[14px] font-extrabold text-white">
+          <Text className="text-[15px] font-extrabold text-white">
             {post.location}
           </Text>
-          <Text className="mt-1 text-[11px] text-white/80">{post.mood}</Text>
+          <Text className="mt-1 text-[12px] text-white/80">{post.mood}</Text>
         </LinearGradient>
 
         <View className="absolute left-4 top-4 rounded-full bg-white px-3 py-2">
@@ -563,7 +565,7 @@ function CommunityPostCard({
               size={12}
               tintColor="#F58752"
             />
-            <Text className="text-[11px] font-black text-[#2F2337]">
+            <Text className="text-[12px] font-black text-[#2F2337]">
               {post.hotScore}
             </Text>
           </View>
@@ -586,12 +588,12 @@ function CommunityPostCard({
 
           <View className="flex-1">
             <Text
-              className="text-[12px] font-bold text-[#43354C]"
+              className="text-[13px] font-bold text-[#43354C]"
               numberOfLines={1}
             >
               {post.location}
             </Text>
-            <Text className="mt-0.5 text-[10px] text-[#9E93A4]">
+            <Text className="mt-0.5 text-[11px] text-[#9E93A4]">
               {post.mood}
             </Text>
           </View>
@@ -677,7 +679,7 @@ function TopicFilterChip({
       }
     >
       <Text
-        className="text-[11px] font-extrabold"
+        className="text-[12px] font-extrabold"
         style={{
           color: active ? selectedPalette.textColor : "#8E869A",
         }}
@@ -700,7 +702,7 @@ function TagPill({ label }: { label: string }) {
       }}
     >
       <Text
-        className="text-[10px] font-bold uppercase tracking-[0.5px]"
+        className="text-[11px] font-bold uppercase tracking-[0.5px]"
         style={{ color: palette.textColor }}
       >
         {label}
@@ -760,7 +762,7 @@ function ComposerAvatar({ uri }: { uri: string }) {
         <AvatarMonogram
           colors={["#EB489B", "#F58752"]}
           initials="NT"
-          size={36}
+          size={28}
         />
       </View>
     );
@@ -790,7 +792,7 @@ function CompactEngagementItem({
   return (
     <View className="flex-row items-center">
       <SymbolView name={icon} size={16} tintColor="#8C8096" />
-      <Text className="ml-1.5 text-[12px] font-bold text-[#6E6177]">
+      <Text className="ml-1.5 text-[13px] font-bold text-[#6E6177]">
         {value}
       </Text>
     </View>
