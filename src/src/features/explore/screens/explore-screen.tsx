@@ -222,8 +222,11 @@ export default function ExploreScreen() {
   const carouselRef = useRef<ScrollView>(null);
   const activeRouteIndexRef = useRef(0);
 
-  const snapInterval = width;
-  const routeCardWidth = Math.max(width - 72, 280);
+  const safeWidth = Math.max(width, 320);
+  const gutter = 20;
+  const contentWidth = Math.max(safeWidth - gutter * 2, 280);
+  const snapInterval = safeWidth;
+  const routeCardWidth = Math.max(contentWidth, 280);
 
   const filteredPlaces = useMemo(() => {
     if (activeCategory === 'Tất cả') return nearbyPlaces;
@@ -461,7 +464,8 @@ export default function ExploreScreen() {
         </View>
 
         <View className="mb-6">
-          <View className="mb-3 flex-row items-center justify-between px-5">
+          <View className="mb-3 flex-row items-center justify-between"
+            style={{ paddingHorizontal: gutter }}>
             <Text className="text-[22px] font-bold text-[#2B2233]">Bản đồ địa điểm</Text>
             <Pressable className="rounded-full bg-[#FFF4EF] px-3 py-2">
               <Text className="text-[13px] font-semibold text-[#F58752]">Toàn màn hình</Text>

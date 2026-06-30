@@ -39,6 +39,20 @@ const glowShadow = {
 } as const;
 
 
+type RouteReview = {
+  id: string;
+  user: string;
+  avatar: string;
+  completedIn: string;
+  date: string;
+  rating: number;
+  highlight: string;
+  text: string;
+  tags: string[];
+  helpful: number;
+};
+
+
 
 
 function getCoordinate(stop: RouteHotspotDto) {
@@ -277,6 +291,22 @@ export default function RouteDetailScreen() {
   const completed = route.hotspots.filter((stop) => checkedInIds.includes(String(stop.hotspotId))).length;
   const progress = route.hotspots.length > 0 ? (completed / route.hotspots.length) * 100 : 0;
   const firstStop = route.hotspots[0];
+  const totalStops = route.hotspots.length;
+  const routeTheme = route.tags[0]?.tagName || 'Di sản';
+  const routeDistanceLabel = `${route.totalDistance || 0} km`;
+  const routeDurationLabel = `${route.estimateTime || 0} phút`;
+  const routeDifficultyLabel = getDifficultyLabel(String(route.difficulty));
+  const isFinished = totalStops > 0 && completed >= totalStops;
+  const rating = { avg: 4.8, count: 0 };
+  const ratingDist = [
+    { star: 5, pct: 72 },
+    { star: 4, pct: 18 },
+    { star: 3, pct: 7 },
+    { star: 2, pct: 2 },
+    { star: 1, pct: 1 },
+  ];
+  const feedbackTags = ['Dễ đi', 'Cảnh đẹp', 'Nội dung hay'];
+  const reviews: RouteReview[] = [];
 
   return (
     <View className="flex-1 bg-white">

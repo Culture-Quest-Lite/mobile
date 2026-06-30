@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import "dotenv/config";
 
 export default {
   expo: {
@@ -54,6 +54,8 @@ export default {
             "Cho phép Culture Quest truy cập vị trí của bạn để xác minh check-in gần hotspot.",
         },
       ],
+      "expo-audio",
+      "expo-video",
     ],
 
     experiments: {
@@ -63,6 +65,8 @@ export default {
 
     extra: {
       goongApiKey: process.env.EXPO_PUBLIC_GOONG_API_KEY,
+      googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+      goongMaptilesKey: process.env.EXPO_PUBLIC_GOONG_MAPTILES_KEY,
     },
   },
 };

@@ -11,6 +11,7 @@ import {
   Pressable,
   ScrollView,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -221,6 +222,9 @@ export default function ExploreScreen() {
   const carouselRef = useRef<ScrollView>(null);
   const activeRouteIndexRef = useRef(0);
 
+  const safeWidth = Math.max(width, 320);
+  const gutter = 20;
+  const contentWidth = Math.max(safeWidth - gutter * 2, 280);
   const snapInterval = safeWidth;
   const routeCardWidth = Math.max(contentWidth, 280);
 
