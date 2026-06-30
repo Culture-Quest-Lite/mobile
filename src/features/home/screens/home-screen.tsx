@@ -11,6 +11,7 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import Animated, {
@@ -394,16 +395,20 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+function clampDistanceMeters(value: number) {
+  return clamp(
+    Math.round(value),
+    nearbyDistanceSliderMinimumMeters,
+    nearbyDistanceSliderMaximumMeters,
+  );
+}
+
 function snapDistanceMeters(value: number) {
   const snappedValue =
     Math.round(value / nearbyDistanceSliderStepMeters) *
     nearbyDistanceSliderStepMeters;
 
-  return clamp(
-    snappedValue,
-    nearbyDistanceSliderMinimumMeters,
-    nearbyDistanceSliderMaximumMeters,
-  );
+  return clampDistanceMeters(snappedValue);
 }
 
 function toRadians(value: number) {
@@ -788,7 +793,7 @@ function useGuestLocationPill(onDevelopmentLocationPress?: () => void) {
   }, []);
 
   const handlePress = async () => {
-    if (developmentLocation) {
+    if (developmentLocation && onDevelopmentLocationPress) {
       onDevelopmentLocationPress?.();
       return;
     }
@@ -926,7 +931,7 @@ function NearbyDistanceSlider({
 type NearbyDistanceSheetProps = {
   currentDistanceMeters: number;
   isLoading: boolean;
-  onApply: () => void;
+  onApply: (nextDistanceMeters: number) => void;
   onChangeDistance: (nextValue: number) => void;
   onClose: () => void;
   selectedDistanceMeters: number;
@@ -942,11 +947,53 @@ function NearbyDistanceSheet({
   selectedDistanceMeters,
   visible,
 }: NearbyDistanceSheetProps) {
+  const [draftDistanceInputValue, setDraftDistanceInputValue] = useState<
+    string | null
+  >(null);
+  const distanceInputValue =
+    draftDistanceInputValue ?? `${selectedDistanceMeters}`;
+
+  const commitDistanceInput = useCallback(() => {
+    const sanitizedValue = distanceInputValue.replace(/\D/g, "");
+
+    if (!sanitizedValue) {
+      setDraftDistanceInputValue(null);
+      return selectedDistanceMeters;
+    }
+
+    const normalizedDistance = clampDistanceMeters(Number(sanitizedValue));
+    onChangeDistance(normalizedDistance);
+    setDraftDistanceInputValue(`${normalizedDistance}`);
+
+    return normalizedDistance;
+  }, [distanceInputValue, onChangeDistance, selectedDistanceMeters]);
+
+  const handleClose = () => {
+    setDraftDistanceInputValue(null);
+    onClose();
+  };
+
+  const handleApply = () => {
+    const nextDistanceMeters = commitDistanceInput();
+    setDraftDistanceInputValue(null);
+    onApply(nextDistanceMeters);
+  };
+
+  const handleSelectDistance = (nextDistance: number) => {
+    onChangeDistance(nextDistance);
+    setDraftDistanceInputValue(`${nextDistance}`);
+  };
+
   return (
-    <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+    <Modal
+      transparent
+      visible={visible}
+      animationType="slide"
+      onRequestClose={handleClose}
+    >
       <View className="flex-1 justify-end bg-black/55">
         <Pressable
-          onPress={onClose}
+          onPress={handleClose}
           style={{
             position: "absolute",
             top: 0,
@@ -967,12 +1014,12 @@ function NearbyDistanceSheet({
                 Chọn bán kính nearby
               </Text>
               <Text className="text-[13px] leading-5 text-[#8E869A]">
-                Bấm nút Test để chọn khoảng cách gọi nearby API quanh vị trí test hiện tại.
+                Nhập hoặc chọn khoảng cách để gọi nearby API quanh vị trí hiện tại.
               </Text>
             </View>
 
             <Pressable
-              onPress={onClose}
+              onPress={handleClose}
               className="h-10 w-10 items-center justify-center rounded-full bg-white"
             >
               <SymbolView
@@ -999,9 +1046,44 @@ function NearbyDistanceSheet({
               <NearbyDistanceSlider
                 max={nearbyDistanceSliderMaximumMeters}
                 min={nearbyDistanceSliderMinimumMeters}
-                onChange={onChangeDistance}
+                onChange={handleSelectDistance}
                 value={selectedDistanceMeters}
               />
+            </View>
+
+            <View className="mt-4 gap-2">
+              <Text className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[#D9587F]">
+                Nhập thủ công
+              </Text>
+
+              <View className="flex-row items-center rounded-[18px] border border-[#F4DCCF] bg-[#FFF9F5] px-4">
+                <TextInput
+                  accessibilityLabel="Nhập bán kính nearby theo mét"
+                  className="flex-1 py-3.5 text-[16px] font-bold text-[#2B2233]"
+                  inputMode="numeric"
+                  keyboardType={Platform.OS === "ios" ? "number-pad" : "numeric"}
+                  onBlur={commitDistanceInput}
+                  onChangeText={(value) => {
+                    setDraftDistanceInputValue(value.replace(/\D/g, ""));
+                  }}
+                  onSubmitEditing={commitDistanceInput}
+                  placeholder="Nhập số mét"
+                  placeholderTextColor="#C1AFA3"
+                  returnKeyType="done"
+                  selectionColor="#EB489B"
+                  value={distanceInputValue}
+                />
+                <View className="rounded-full bg-white px-3 py-1.5">
+                  <Text className="text-[12px] font-extrabold uppercase tracking-[0.4px] text-[#8E869A]">
+                    mét
+                  </Text>
+                </View>
+              </View>
+
+              <Text className="text-[12px] leading-5 text-[#8E869A]">
+                Nhập từ {nearbyDistanceSliderMinimumMeters} đến{" "}
+                {nearbyDistanceSliderMaximumMeters} mét.
+              </Text>
             </View>
 
             <View className="mt-4 flex-row flex-wrap gap-2">
@@ -1017,7 +1099,7 @@ function NearbyDistanceSheet({
                         : "border-[#F4DCCF] bg-[#FFF9F5]"
                     }`}
                     onPress={() => {
-                      onChangeDistance(presetDistance);
+                      handleSelectDistance(presetDistance);
                     }}
                   >
                     <Text
@@ -1041,7 +1123,7 @@ function NearbyDistanceSheet({
           <View className="mt-5 flex-row gap-3">
             <Pressable
               className="flex-1 rounded-[18px] border border-[#F4DCCF] bg-white px-4 py-3.5"
-              onPress={onClose}
+              onPress={handleClose}
             >
               <Text className="text-center text-[15px] font-bold text-[#8E869A]">Đóng</Text>
             </Pressable>
@@ -1051,7 +1133,7 @@ function NearbyDistanceSheet({
                 isLoading ? "opacity-70" : ""
               }`}
               disabled={isLoading}
-              onPress={onApply}
+              onPress={handleApply}
             >
               <LinearGradient
                 colors={gradientColors}
@@ -1319,43 +1401,118 @@ function GuestWelcomeHeader({
   );
 }
 
-function ExplorerHeaderActions({
-  onLocationPillPress,
-}: {
-  onLocationPillPress?: () => void;
-}) {
-  const { handlePress } = useGuestLocationPill(onLocationPillPress);
+function ExplorerHeaderActions() {
+  const { handlePress, locationState } = useGuestLocationPill();
+  const [isLocationDropdownVisible, setIsLocationDropdownVisible] =
+    useState(false);
+
+  const handleLocationPress = async () => {
+    if (locationState.mode === "ready") {
+      setIsLocationDropdownVisible((currentValue) => !currentValue);
+      return;
+    }
+
+    setIsLocationDropdownVisible(true);
+    await handlePress();
+  };
 
   return (
+    <View className="relative z-20">
       <View className="flex-row items-center gap-2.5">
         <Pressable
-          className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
+          className={`h-10 flex-row items-center gap-1 rounded-full px-2.5 ${
+            isLocationDropdownVisible ? "bg-[#FFE8DE]" : "bg-[#FFF4EF]"
+          }`}
           onPress={() => {
-            void handlePress();
+            void handleLocationPress();
           }}
         >
-        <SymbolView
-          name={{
-            ios: "location",
-            android: "my_location",
-            web: "my_location",
-          }}
-          size={16}
-          tintColor="#F58752"
-        />
-      </Pressable>
+          <SymbolView
+            name={{
+              ios: "location",
+              android: "my_location",
+              web: "my_location",
+            }}
+            size={16}
+            tintColor="#F58752"
+          />
+          <SymbolView
+            name={{
+              ios: "expand_more",
+              android: "expand_more",
+              web: "expand_more",
+            }}
+            size={15}
+            tintColor="#F58752"
+            style={{
+              transform: [
+                {
+                  rotate: isLocationDropdownVisible ? "180deg" : "0deg",
+                },
+              ],
+            }}
+          />
+        </Pressable>
 
-      <Pressable className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]">
-        <SymbolView
-          name={{
-            ios: "bell",
-            android: "notifications",
-            web: "notifications",
-          }}
-          size={16}
-          tintColor="#EB489B"
-        />
-      </Pressable>
+        <Pressable className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]">
+          <SymbolView
+            name={{
+              ios: "bell",
+              android: "notifications",
+              web: "notifications",
+            }}
+            size={16}
+            tintColor="#EB489B"
+          />
+        </Pressable>
+      </View>
+
+      {isLocationDropdownVisible ? (
+        <View
+          className="absolute right-0 top-[52px] w-[198px] rounded-[20px] border border-[#F6DDD0] bg-white px-3.5 py-3"
+          style={[
+            cardShadowStyle,
+            {
+              elevation: 14,
+              shadowColor: "rgba(43, 34, 51, 0.16)",
+              zIndex: 30,
+            },
+          ]}
+        >
+          <View className="flex-row items-start gap-2.5">
+            <View className="mt-0.5 h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF]">
+              <SymbolView
+                name={{
+                  ios: "location.fill",
+                  android: "my_location",
+                  web: "my_location",
+                }}
+                size={14}
+                tintColor="#F58752"
+              />
+            </View>
+
+            <View className="flex-1">
+              <Text className="text-[10px] font-extrabold uppercase tracking-[0.5px] text-[#D9587F]">
+                {locationState.mode === "ready" ? "Vị trí hiện tại" : "Đang định vị"}
+              </Text>
+              <Text
+                className="mt-1 text-[13px] font-bold leading-5 text-[#2B2233]"
+                numberOfLines={2}
+              >
+                {locationState.label}
+              </Text>
+            </View>
+          </View>
+
+          <View
+            className="absolute -top-2 right-7 h-4 w-4 rotate-45 border-l border-t border-[#F6DDD0] bg-white"
+            style={{
+              shadowColor: "transparent",
+            }}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1428,10 +1585,11 @@ export default function HomeScreen() {
     setPendingNearbySearchDistanceMeters(nearbySearchDistanceMeters);
     setIsNearbyDistanceSheetVisible(false);
   }, [nearbySearchDistanceMeters]);
-  const handleApplyNearbyDistance = useCallback(() => {
-    setNearbySearchDistanceMeters(pendingNearbySearchDistanceMeters);
+  const handleApplyNearbyDistance = useCallback((nextDistanceMeters: number) => {
+    setNearbySearchDistanceMeters(nextDistanceMeters);
+    setPendingNearbySearchDistanceMeters(nextDistanceMeters);
     setIsNearbyDistanceSheetVisible(false);
-  }, [pendingNearbySearchDistanceMeters]);
+  }, []);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -1701,13 +1859,7 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <ExplorerHeaderActions
-                onLocationPillPress={
-                  isDevelopmentLocationOverrideActive
-                    ? handleOpenNearbyDistanceSheet
-                    : undefined
-                }
-              />
+              <ExplorerHeaderActions />
             </View>
           )}
 
@@ -1727,16 +1879,32 @@ export default function HomeScreen() {
               </Text>
             </View>
 
-            <Pressable className="h-9 w-9 items-center justify-center rounded-[14px] bg-[#FAF2FF]">
-              <SymbolView
-                name={{
-                  ios: "slider.horizontal.3",
-                  android: "tune",
-                  web: "tune",
-                }}
-                size={15}
-                tintColor="#EB489B"
-              />
+            <Pressable
+              accessibilityLabel={`Điều chỉnh bán kính nearby, hiện tại ${formatDistanceMeters(nearbySearchDistanceMeters)}`}
+              className="overflow-hidden rounded-[14px]"
+              hitSlop={8}
+              onPress={handleOpenNearbyDistanceSheet}
+            >
+              <LinearGradient
+                colors={gradientColors}
+                end={{ x: 1, y: 0.5 }}
+                locations={[0, 0.58, 1]}
+                start={{ x: 0, y: 0.5 }}
+                className="h-9 flex-row items-center justify-center gap-1.5 px-3"
+              >
+                <SymbolView
+                  name={{
+                    ios: "slider.horizontal.3",
+                    android: "tune",
+                    web: "tune",
+                  }}
+                  size={14}
+                  tintColor="#FFFFFF"
+                />
+                <Text className="text-[12px] font-extrabold text-white">
+                  {formatDistanceMeters(nearbySearchDistanceMeters)}
+                </Text>
+              </LinearGradient>
             </Pressable>
           </View>
 
