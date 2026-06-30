@@ -24,12 +24,12 @@ const AppTextInput = TextInput as typeof TextInput & {
 };
 
 AppText.defaultProps = AppText.defaultProps ?? {};
-AppText.defaultProps.allowFontScaling = false;
-AppText.defaultProps.maxFontSizeMultiplier = 1;
+AppText.defaultProps.allowFontScaling = true;
+AppText.defaultProps.maxFontSizeMultiplier = 1.15;
 
 AppTextInput.defaultProps = AppTextInput.defaultProps ?? {};
-AppTextInput.defaultProps.allowFontScaling = false;
-AppTextInput.defaultProps.maxFontSizeMultiplier = 1;
+AppTextInput.defaultProps.allowFontScaling = true;
+AppTextInput.defaultProps.maxFontSizeMultiplier = 1.15;
 
 export default function RootLayout() {
   warnForInvalidPublicEnv();

@@ -92,25 +92,25 @@ export default function RegisterScreen() {
     password: false,
     username: false,
   });
-  const heroHeight = isCompactScreen ? 182 : 220;
-  const heroTopPadding = insets.top + (isCompactScreen ? 10 : 18);
-  const heroBottomPadding = isCompactScreen ? 18 : 32;
-  const logoSize = isCompactScreen ? 96 : 132;
-  const cardOverlapClassName = isCompactScreen ? "-mt-5" : "-mt-7";
-  const cardTopPadding = isCompactScreen ? 20 : 24;
+  const heroHeight = isCompactScreen ? 196 : 232;
+  const heroTopPadding = insets.top + (isCompactScreen ? 12 : 20);
+  const heroBottomPadding = isCompactScreen ? 22 : 36;
+  const logoSize = isCompactScreen ? 106 : 140;
+  const cardOverlapClassName = isCompactScreen ? "-mt-6" : "-mt-8";
+  const cardTopPadding = isCompactScreen ? 22 : 28;
   const cardBottomPadding = Math.max(
-    insets.bottom + (isCompactScreen ? 12 : 16),
-    isCompactScreen ? 16 : 22,
+    insets.bottom + (isCompactScreen ? 16 : 20),
+    isCompactScreen ? 20 : 26,
   );
-  const scrollBottomPadding = Math.max(insets.bottom + 16, 24);
-  const titleSize = isCompactScreen ? 23 : 27;
-  const sectionTopMargin = isCompactScreen ? 16 : 20;
+  const scrollBottomPadding = Math.max(insets.bottom + 20, 28);
+  const titleSize = isCompactScreen ? 25 : 29;
+  const sectionTopMargin = isCompactScreen ? 18 : 24;
   const fieldHeightClassName = isCompactScreen
-    ? "h-10 rounded-xl"
-    : "h-11 rounded-2xl";
-  const buttonHeightClassName = isCompactScreen ? "h-11" : "h-12";
-  const formGapClassName = isCompactScreen ? "gap-4" : "gap-4";
-  const footerGapClassName = isCompactScreen ? "gap-4 pt-5" : "gap-4 pt-6";
+    ? "h-11 rounded-2xl"
+    : "h-12 rounded-2xl";
+  const buttonHeightClassName = isCompactScreen ? "h-12" : "h-14";
+  const formGapClassName = isCompactScreen ? "gap-4" : "gap-5";
+  const footerGapClassName = isCompactScreen ? "gap-5 pt-5" : "gap-5 pt-6";
   const buttonTopPaddingClassName = isCompactScreen ? "pt-0" : "pt-1";
   const registerErrors = validateRegisterForm({
     confirmPassword,
@@ -274,7 +274,7 @@ export default function RegisterScreen() {
             >
               <Pressable
                 onPress={() => router.replace("/home")}
-                className="absolute h-11 w-11 items-center justify-center rounded-full bg-white/18"
+                className="absolute h-12 w-12 items-center justify-center rounded-full bg-white/18"
                 style={{ left: horizontalPadding, top: backButtonTop }}
               >
                 <SymbolView
@@ -316,7 +316,7 @@ export default function RegisterScreen() {
                   >
                     Đăng ký
                   </Text>
-                  <Text className="text-[12px] text-[#8E869A]">
+                  <Text className="text-[14px] text-[#8E869A]">
                     Tạo tài khoản để bắt đầu hành trình
                   </Text>
                 </View>
@@ -435,14 +435,14 @@ export default function RegisterScreen() {
                         start={{ x: 0, y: 0.5 }}
                         className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
                       >
-                        <Text className="text-[15px] font-extrabold text-white">
+                        <Text className="text-[16px] font-extrabold text-white">
                           {isSubmitting ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
                         </Text>
                       </LinearGradient>
                     </Pressable>
 
                     {errorMessage ? (
-                      <Text className="text-[13px] font-medium text-[#D6456C]">
+                      <Text className="text-[14px] font-medium text-[#D6456C]">
                         {errorMessage}
                       </Text>
                     ) : null}
@@ -451,7 +451,7 @@ export default function RegisterScreen() {
                   <View className={footerGapClassName}>
                     <View className="flex-row items-center justify-center gap-3">
                       <View className="h-px flex-1 bg-[#F0E8F4]" />
-                      <Text className="text-[12px] font-medium text-[#AA9FB0]">
+                      <Text className="text-[13px] font-medium text-[#AA9FB0]">
                         Hoặc đăng ký với
                       </Text>
                       <View className="h-px flex-1 bg-[#F0E8F4]" />
@@ -463,11 +463,11 @@ export default function RegisterScreen() {
                     </View>
 
                     <View className="flex-row items-center justify-center gap-1.5">
-                      <Text className="text-[13px] text-[#8E869A]">
+                      <Text className="text-[14px] text-[#8E869A]">
                         Bạn đã có tài khoản?
                       </Text>
                       <Pressable onPress={() => router.push("/login?entry=home")}>
-                        <Text className="text-[13px] font-extrabold text-[#F58752]">
+                        <Text className="text-[14px] font-extrabold text-[#F58752]">
                           Đăng nhập
                         </Text>
                       </Pressable>

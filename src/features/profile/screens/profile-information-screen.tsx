@@ -601,7 +601,7 @@ function InformationDetailRow({
 
   return (
     <View
-      className="flex-row items-start gap-3 px-4 py-4"
+      className="flex-row items-start gap-4 px-5 py-5"
       style={
         showDivider
           ? {
@@ -612,7 +612,7 @@ function InformationDetailRow({
       }
     >
       <Text
-        className="pt-0.5 text-[16px] text-[#8E869A]"
+        className="pt-0.5 text-[17px] text-[#8E869A]"
         style={{ width: 122 }}
       >
         {row.label}
@@ -621,7 +621,7 @@ function InformationDetailRow({
       <View className="min-w-0 flex-1">
         {isDisplayNameEditable ? (
           <TextInput
-            className="rounded-2xl border border-[#E2E7EC] bg-[#F7F9FB] px-4 py-3 text-[17px] font-semibold text-[#27233A]"
+            className="rounded-[20px] border border-[#E2E7EC] bg-[#F7F9FB] px-4 py-3.5 text-[18px] font-semibold text-[#27233A]"
             onChangeText={onChangeDisplayName}
             placeholder="Nhập tên hiển thị"
             placeholderTextColor="#A39CAF"
@@ -629,8 +629,8 @@ function InformationDetailRow({
             value={draftDisplayName}
           />
         ) : isAutoPlayAudioEditable ? (
-          <View className="flex-row items-center justify-between rounded-2xl border border-[#E2E7EC] bg-[#F7F9FB] px-4 py-3">
-            <Text className="pr-3 text-[16px] font-semibold text-[#27233A]">
+          <View className="flex-row items-center justify-between rounded-[20px] border border-[#E2E7EC] bg-[#F7F9FB] px-4 py-3.5">
+            <Text className="pr-3 text-[17px] font-semibold text-[#27233A]">
               {draftAutoPlayAudio ? "Bật" : "Tắt"}
             </Text>
             <Switch
@@ -642,18 +642,18 @@ function InformationDetailRow({
           </View>
         ) : isSuccessValue ? (
           <View className="self-start rounded-full bg-[#E6F7EC] px-3 py-1.5">
-            <Text className="text-[16px] font-extrabold text-[#1E8E5A]">
+            <Text className="text-[17px] font-extrabold text-[#1E8E5A]">
               {row.value}
             </Text>
           </View>
         ) : (
-          <Text className="text-[17px] font-semibold leading-6 text-[#27233A]">
+          <Text className="text-[18px] font-semibold leading-7 text-[#27233A]">
             {row.value}
           </Text>
         )}
 
         {row.helperText ? (
-          <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+          <Text className="mt-1.5 text-[14px] leading-6 text-[#8E869A]">
             {row.helperText}
           </Text>
         ) : null}
