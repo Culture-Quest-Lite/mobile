@@ -1,17 +1,23 @@
+import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect, useState, type ComponentProps } from "react";
 import {
   Platform,
   Pressable,
+  Text as RNText,
   ScrollView,
-  Text,
   View,
   useWindowDimensions,
 } from "react-native";
+import MapView, {
+  Marker,
+  PROVIDER_GOOGLE,
+  type Region,
+} from "react-native-maps";
 import Animated, {
   Extrapolation,
   cancelAnimation,
@@ -46,8 +52,8 @@ import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
 import { getHotspotStories } from "../api/get-hotspot-stories";
 import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
-import { HotspotGpsCheckinOverlay } from "../components/hotspot-gps-checkin-overlay";
 import { HiddenStoryUnlockedContent } from "../components/hidden-story-unlocked-content";
+import { HotspotGpsCheckinOverlay } from "../components/hotspot-gps-checkin-overlay";
 import {
   avatarImageUri,
   communityBoards,
@@ -66,6 +72,8 @@ import {
 } from "../data/hotspots";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
+type HotspotCoordinate = NonNullable<HotspotDetail["coordinate"]>;
+type TextProps = ComponentProps<typeof RNText>;
 type PersonalExperienceMediaItem = {
   duration?: string;
   type: "image" | "video";
@@ -90,9 +98,15 @@ type SummaryStatItem = {
 const loginGradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const screenBackground = "#FFFFFF";
 const panelBackground = "#FFFFFF";
+const detailTextMaxFontSizeMultiplier = 1.05;
+const defaultMapCoordinate = {
+  latitude: 10.77712,
+  longitude: 106.69531,
+} as const;
 const defaultRemoteHotspotImageUri =
   "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
 const meaninglessApiTextValues = new Set(["", "string", "null", "undefined"]);
+const mapLoadTimeoutMs = 6000;
 
 const heroShadowStyle = {
   shadowColor: "rgba(15, 23, 42, 0.20)",
@@ -149,6 +163,13 @@ const routeCarouselShadowStyle = {
   elevation: 12,
 } as const;
 
+function Text({
+  maxFontSizeMultiplier = detailTextMaxFontSizeMultiplier,
+  ...props
+}: TextProps) {
+  return <RNText maxFontSizeMultiplier={maxFontSizeMultiplier} {...props} />;
+}
+
 function resolveHotspotIdParam(value?: string | string[]) {
   const rawValue = Array.isArray(value) ? value[0] : value;
   const parsedValue = Number(rawValue);
@@ -197,7 +218,10 @@ function formatApiTimeWindow(start?: string | null, end?: string | null) {
   return formattedStart ?? formattedEnd;
 }
 
-function resolveRemoteDistrictLabel(address: string, fallbackDistrict?: string) {
+function resolveRemoteDistrictLabel(
+  address: string,
+  fallbackDistrict?: string,
+) {
   const segments = address
     .split(",")
     .map((segment) => segment.trim())
@@ -277,10 +301,7 @@ function buildHotspotFromApi({
   const tagNames = apiHotspot.tags
     .map((tag) => readMeaningfulApiText(tag.tagName))
     .filter((tagName): tagName is string => Boolean(tagName));
-  const category =
-    tagNames[0] ??
-    matchedLocalHotspot?.category ??
-    "Hotspot";
+  const category = tagNames[0] ?? matchedLocalHotspot?.category ?? "Hotspot";
   const address =
     readMeaningfulApiText(apiHotspot.address) ??
     matchedLocalHotspot?.address ??
@@ -318,7 +339,10 @@ function buildHotspotFromApi({
         longitude: apiHotspot.longitude,
       },
       distance: matchedLocalHotspot?.distance ?? "Từ API",
-      district: resolveRemoteDistrictLabel(address, matchedLocalHotspot?.district),
+      district: resolveRemoteDistrictLabel(
+        address,
+        matchedLocalHotspot?.district,
+      ),
       gallery,
       highlights: matchedLocalHotspot?.highlights ?? [
         overview,
@@ -329,7 +353,8 @@ function buildHotspotFromApi({
       overview,
       rating: matchedLocalHotspot?.rating ?? 0,
       reviews:
-        matchedLocalHotspot?.reviews ?? `${Math.max(0, Math.round(apiHotspot.point ?? 0))}`,
+        matchedLocalHotspot?.reviews ??
+        `${Math.max(0, Math.round(apiHotspot.point ?? 0))}`,
       reward:
         matchedLocalHotspot?.reward ??
         `+${Math.max(0, Math.round(apiHotspot.xp ?? 0))}`,
@@ -346,7 +371,10 @@ function buildHotspotFromApi({
         readMeaningfulApiText(apiHotspot.hotspotName) ??
         matchedLocalHotspot?.title ??
         `Hotspot #${apiHotspot.hotspotId}`,
-      vibeTags: tagNames.length > 0 ? tagNames : (matchedLocalHotspot?.vibeTags ?? [category]),
+      vibeTags:
+        tagNames.length > 0
+          ? tagNames
+          : (matchedLocalHotspot?.vibeTags ?? [category]),
     } satisfies HotspotDetail,
     matchedLocalHotspot,
   };
@@ -354,6 +382,83 @@ function buildHotspotFromApi({
 
 function clampNumber(value: number, minimum: number, maximum: number) {
   return Math.min(Math.max(value, minimum), maximum);
+}
+
+function isValidHotspotCoordinate(
+  coordinate?: HotspotDetail["coordinate"] | null,
+): coordinate is HotspotCoordinate {
+  return Boolean(
+    coordinate &&
+    Number.isFinite(coordinate.latitude) &&
+    Number.isFinite(coordinate.longitude),
+  );
+}
+
+function buildDirectionMapRegion(
+  coordinate?: HotspotDetail["coordinate"] | null,
+): Region {
+  const resolvedCoordinate = isValidHotspotCoordinate(coordinate)
+    ? coordinate
+    : defaultMapCoordinate;
+
+  return {
+    ...resolvedCoordinate,
+    latitudeDelta: 0.0068,
+    longitudeDelta: 0.0068,
+  };
+}
+
+function buildHotspotDirectionsUrls({
+  address,
+  coordinate,
+  title,
+}: {
+  address: string;
+  coordinate?: HotspotDetail["coordinate"] | null;
+  title: string;
+}) {
+  const hasCoordinate = isValidHotspotCoordinate(coordinate);
+  const searchTerm = address.trim() || title.trim() || "Hotspot";
+  const encodedSearchTerm = encodeURIComponent(searchTerm);
+  const coordinateQuery = hasCoordinate
+    ? `${coordinate.latitude},${coordinate.longitude}`
+    : null;
+  const encodedCoordinateQuery = coordinateQuery
+    ? encodeURIComponent(coordinateQuery)
+    : null;
+  const encodedTitle = encodeURIComponent(title.trim() || searchTerm);
+  const fallbackUrl = `https://www.google.com/maps/search/?api=1&query=${
+    encodedCoordinateQuery ?? encodedSearchTerm
+  }`;
+
+  const nativeUrl =
+    Platform.select({
+      ios: coordinateQuery
+        ? `http://maps.apple.com/?ll=${coordinateQuery}&q=${encodedTitle}`
+        : `http://maps.apple.com/?q=${encodedSearchTerm}`,
+      android: coordinateQuery
+        ? `geo:${coordinateQuery}?q=${coordinateQuery}(${encodedTitle})`
+        : `geo:0,0?q=${encodedSearchTerm}`,
+      default: fallbackUrl,
+    }) ?? fallbackUrl;
+
+  return { fallbackUrl, nativeUrl };
+}
+
+async function openHotspotDirections(params: {
+  address: string;
+  coordinate?: HotspotDetail["coordinate"] | null;
+  title: string;
+}) {
+  const { fallbackUrl, nativeUrl } = buildHotspotDirectionsUrls(params);
+
+  try {
+    await Linking.openURL(nativeUrl);
+  } catch {
+    if (fallbackUrl !== nativeUrl) {
+      await Linking.openURL(fallbackUrl);
+    }
+  }
 }
 
 function formatCompactCount(value: number | string) {
@@ -466,28 +571,30 @@ function getGalleryPreviewImages(hotspot: HotspotDetail) {
   return [hotspot.imageUri, ...hotspot.gallery].slice(0, 4);
 }
 
+function buildHeroLocationLabel({
+  distance,
+  district,
+}: {
+  distance?: string;
+  district: string;
+}) {
+  const resolvedDistance = readMeaningfulApiText(distance);
+  const resolvedDistrict = readMeaningfulApiText(district);
+  const shouldHideDistance =
+    resolvedDistance?.toLowerCase().includes("api") ?? false;
+  const labels = [
+    shouldHideDistance ? null : resolvedDistance,
+    resolvedDistrict,
+  ].filter((label): label is string => Boolean(label));
+
+  return labels[0] ?? "Đang cập nhật";
+}
+
 function normalizeLookupText(value: string) {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
-}
-
-function getStoryPreview(story: string, maxLength = 168) {
-  const trimmed = story.trim();
-
-  if (trimmed.length <= maxLength) {
-    return trimmed;
-  }
-
-  const sliced = trimmed.slice(0, maxLength);
-  const lastSpace = sliced.lastIndexOf(" ");
-
-  return `${sliced.slice(0, lastSpace > 0 ? lastSpace : maxLength)}...`;
-}
-
-function getHistoricalPreview(story: string) {
-  return getStoryPreview(story, 220);
 }
 
 function getRouteBadgeColors(label: string) {
@@ -741,13 +848,57 @@ function HeroGalleryThumb({
   );
 }
 
+function SingleArrow({ size = 15 }: { size?: number }) {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1200 }),
+        withTiming(0, { duration: 1200 }),
+      ),
+      -1,
+      false,
+    );
+
+    return () => {
+      cancelAnimation(progress);
+    };
+  }, [progress]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      progress.value,
+      [0, 0.5, 1],
+      [0.7, 1, 0.7],
+      Extrapolation.CLAMP,
+    ),
+    transform: [
+      {
+        translateY: interpolate(
+          progress.value,
+          [0, 1],
+          [1.5, -3],
+          Extrapolation.CLAMP,
+        ),
+      },
+    ],
+  }));
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <SymbolView name="keyboard_arrow_up" size={size} tintColor="#FFFFFF" />
+    </Animated.View>
+  );
+}
+
 function ScrollDownHint({ scrollY }: { scrollY: { value: number } }) {
   const floatOffset = useSharedValue(0);
 
   useEffect(() => {
     floatOffset.value = withRepeat(
       withSequence(
-        withTiming(-6, { duration: 720 }),
+        withTiming(-4, { duration: 720 }),
         withTiming(0, { duration: 720 }),
       ),
       -1,
@@ -776,11 +927,25 @@ function ScrollDownHint({ scrollY }: { scrollY: { value: number } }) {
   }));
 
   return (
-    <Animated.View pointerEvents="none" style={[animatedStyle, { alignItems: "center" }]}>
-      <View className="rounded-full border border-white/18 bg-black/30 px-4 py-2.5">
+    <Animated.View
+      pointerEvents="none"
+      style={[animatedStyle, { alignItems: "center" }]}
+    >
+      <View
+        className="rounded-full px-4 py-2.5"
+        style={{ backgroundColor: "transparent" }}
+      >
         <View className="flex-row items-center">
-          <SymbolView name="keyboard_arrow_up" size={15} tintColor="#FFFFFF" />
-          <Text className="ml-1.5 text-[13px] font-bold text-white">
+          <View
+            style={{
+              height: 20,
+              marginRight: 8,
+              width: 20,
+            }}
+          >
+            <SingleArrow size={15} />
+          </View>
+          <Text className="text-[13px] font-semibold text-white">
             Vuốt lên để xem thêm thông tin
           </Text>
         </View>
@@ -870,110 +1035,210 @@ function TagChip({
 
 function DirectionMapCard({
   address,
+  coordinate,
   districtLabel,
+  onInteractionChange,
+  title,
 }: {
   address: string;
+  coordinate?: HotspotDetail["coordinate"] | null;
   districtLabel: string;
+  onInteractionChange?: (isInteracting: boolean) => void;
+  title: string;
 }) {
+  const hasCoordinate = isValidHotspotCoordinate(coordinate);
+  const mapRegion = buildDirectionMapRegion(coordinate);
+  const mapStateKey = hasCoordinate
+    ? `${coordinate.latitude}:${coordinate.longitude}`
+    : "missing-coordinate";
+  const [loadedMapKey, setLoadedMapKey] = useState<string | null>(null);
+  const [mapError, setMapError] = useState<{
+    key: string;
+    message: string;
+  } | null>(null);
+  const hasMapLoaded =
+    !hasCoordinate || Platform.OS === "web" || loadedMapKey === mapStateKey;
+  const activeMapError =
+    mapError?.key === mapStateKey ? mapError.message : null;
+  const showMapFallback = Boolean(activeMapError);
+  const mapStatusLabel = !hasCoordinate
+    ? "Tọa độ đang cập nhật"
+    : showMapFallback
+      ? "Preview bản đồ tạm ẩn"
+      : "Bản đồ tương tác";
+  const mapGestureHint = !hasCoordinate
+    ? "Địa chỉ hotspot"
+    : showMapFallback
+      ? "Vẫn có thể mở chỉ đường"
+      : "Pinch để zoom";
+
+  useEffect(() => {
+    if (!hasCoordinate || Platform.OS === "web" || hasMapLoaded) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setMapError({
+        key: mapStateKey,
+        message:
+          "MapView da mount nhung tile Google Maps khong tai. Thuong do API key chua hop le, key dang bi restrict sai package/SHA-1, Maps SDK for Android chua bat, hoac ban chua rebuild app sau khi sua app.config.js/.env.",
+      });
+    }, mapLoadTimeoutMs);
+
+    return () => clearTimeout(timeoutId);
+  }, [hasCoordinate, hasMapLoaded, mapStateKey]);
+
   return (
     <View
       className="overflow-hidden rounded-[30px]"
-      style={[cardShadowStyle, { height: 188 }]}
+      style={[cardShadowStyle, { height: 220 }]}
     >
+      {activeMapError ? (
+        <View
+          style={{
+            left: 16,
+            padding: 12,
+            position: "absolute",
+            right: 16,
+            top: 16,
+            zIndex: 20,
+            borderRadius: 16,
+            backgroundColor: "rgba(255, 69, 58, 0.92)",
+          }}
+        >
+          <Text className="text-[12px] font-bold text-white">
+            Google Maps error:
+          </Text>
+          <Text className="mt-1 text-[12px] text-white">{activeMapError}</Text>
+        </View>
+      ) : null}
+
+      {hasCoordinate ? (
+        <MapView
+          key={mapStateKey}
+          initialRegion={mapRegion}
+          loadingEnabled
+          moveOnMarkerPress={false}
+          provider={PROVIDER_GOOGLE}
+          onPanDrag={() => onInteractionChange?.(true)}
+          onRegionChange={() => onInteractionChange?.(true)}
+          onRegionChangeComplete={() => onInteractionChange?.(false)}
+          onTouchCancel={() => onInteractionChange?.(false)}
+          onTouchEnd={() => onInteractionChange?.(false)}
+          onTouchStart={() => onInteractionChange?.(true)}
+          pitchEnabled={false}
+          rotateEnabled={false}
+          scrollEnabled
+          showsBuildings
+          showsCompass={Platform.OS === "ios"}
+          style={{ flex: 1 }}
+          toolbarEnabled={false}
+          zoomControlEnabled={Platform.OS === "android"}
+          zoomEnabled
+          onMapReady={() =>
+            setMapError((current) =>
+              current?.key === mapStateKey ? null : current,
+            )
+          }
+          onMapLoaded={() => {
+            setLoadedMapKey(mapStateKey);
+            setMapError((current) =>
+              current?.key === mapStateKey ? null : current,
+            );
+          }}
+        >
+          <Marker
+            coordinate={coordinate}
+            description={address}
+            pinColor="#EB489B"
+            title={title}
+          />
+        </MapView>
+      ) : (
+        <LinearGradient
+          colors={["#FAEFE7", "#D9F0E7", "#D2ECE8"]}
+          locations={[0, 0.58, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
+        />
+      )}
+
       <LinearGradient
-        colors={["#FAEFE7", "#D9F0E7", "#D2ECE8"]}
-        locations={[0, 0.58, 1]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        pointerEvents="none"
+        colors={["rgba(15, 23, 42, 0)", "rgba(15, 23, 42, 0.72)"]}
+        locations={[0.42, 1]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
         style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
       />
 
-      <View
-        className="absolute rounded-full bg-white/35"
-        style={{ height: 170, left: -10, top: -34, width: 170 }}
-      />
-      <View
-        className="absolute rounded-full bg-[#F3CFCF]/25"
-        style={{ height: 146, right: -24, top: -12, width: 146 }}
-      />
-      <View
-        className="absolute rounded-full bg-white/55"
-        style={{
-          height: 260,
-          left: 82,
-          top: -58,
-          transform: [{ rotate: "18deg" }],
-          width: 18,
-        }}
-      />
-      <View
-        className="absolute rounded-full bg-[#D7C7B7]/28"
-        style={{
-          height: 300,
-          left: 170,
-          top: -76,
-          transform: [{ rotate: "-82deg" }],
-          width: 14,
-        }}
-      />
-      <View
-        className="absolute rounded-full bg-[#F1B8A5]/30"
-        style={{
-          height: 260,
-          right: 56,
-          top: -42,
-          transform: [{ rotate: "8deg" }],
-          width: 14,
-        }}
-      />
-
-      {[
-        { left: 34, top: 22 },
-        { left: 118, top: 34 },
-        { left: 220, top: 16 },
-      ].map((pin, index) => (
-        <View
-          key={`map-pin-${index}`}
-          style={{ left: pin.left, position: "absolute", top: pin.top }}
+      {showMapFallback ? (
+        <LinearGradient
+          pointerEvents="none"
+          colors={[
+            "rgba(250, 239, 231, 0.94)",
+            "rgba(245, 247, 238, 0.94)",
+            "rgba(210, 236, 232, 0.96)",
+          ]}
+          locations={[0, 0.52, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
         >
-          <View className="h-14 w-14 items-center justify-center rounded-full bg-white/92">
-            <SymbolView
-              name={{
-                ios: "location.fill",
-                android: "place",
-                web: "place",
-              }}
-              size={24}
-              tintColor="#F36A3D"
-            />
+          <View className="flex-1 items-center justify-center px-6">
+            <View className="rounded-[28px] bg-white/85 px-5 py-5">
+              <View className="items-center">
+                <View className="h-16 w-16 items-center justify-center rounded-full bg-white/92">
+                  <LinearGradient
+                    colors={loginGradientColors}
+                    end={{ x: 1, y: 0.5 }}
+                    locations={[0, 0.58, 1]}
+                    start={{ x: 0, y: 0.5 }}
+                    style={{
+                      alignItems: "center",
+                      borderRadius: 999,
+                      height: 48,
+                      justifyContent: "center",
+                      width: 48,
+                    }}
+                  >
+                    <SymbolView
+                      name={{
+                        ios: "map.fill",
+                        android: "map",
+                        web: "map",
+                      }}
+                      size={22}
+                      tintColor="#FFFFFF"
+                    />
+                  </LinearGradient>
+                </View>
+                <Text className="mt-4 text-center text-[17px] font-black text-[#1E3142]">
+                  Không tải được preview bản đồ
+                </Text>
+                <Text className="mt-2 text-center text-[13px] leading-5 text-[#5E7486]">
+                  Kiểm tra Google Maps API key, package Android và SHA-1 của
+                  build rồi rebuild app.
+                </Text>
+              </View>
+            </View>
           </View>
-          <View
-            className="self-center rounded-full bg-[#F36A3D]/18"
-            style={{ height: 10, marginTop: 6, width: 10 }}
-          />
-        </View>
-      ))}
+        </LinearGradient>
+      ) : null}
 
       <View
-        className="absolute items-center justify-center rounded-full bg-[#6C61C9]/78"
-        style={{ height: 46, right: 58, top: 32, width: 46 }}
+        pointerEvents="none"
+        className="absolute left-4 right-4 top-4 flex-row items-center justify-between gap-3"
       >
-        <View className="h-5 w-5 rounded-full bg-white/72" />
-      </View>
-      <View
-        className="absolute items-center justify-center rounded-full border-4 border-white bg-[#4A44A8]"
-        style={{ height: 32, right: 38, top: 56, width: 32 }}
-      />
-
-      <View className="absolute left-5 right-5 top-5 flex-row items-center justify-between">
-        <View className="rounded-full bg-white/76 px-3 py-2">
-          <Text className="text-[12px] font-bold uppercase tracking-[1px] text-[#3A6C63]">
-            Tuyến đường gần đây
+        <View className="rounded-full bg-white/90 px-3 py-2">
+          <Text className="text-[11px] font-bold uppercase tracking-[0.8px] text-[#335A70]">
+            {mapStatusLabel}
           </Text>
         </View>
-        <View className="max-w-[140px] rounded-full bg-white/78 px-3 py-2">
+        <View className="max-w-[160px] rounded-full bg-white/88 px-3 py-2">
           <Text
-            className="text-[12px] font-semibold text-[#4E6473]"
+            className="text-[11px] font-medium text-[#4E6473]"
             numberOfLines={1}
           >
             {address}
@@ -981,15 +1246,22 @@ function DirectionMapCard({
         </View>
       </View>
 
-      <View className="absolute bottom-5 left-5 right-5 flex-row items-end justify-between gap-4">
-        <View className="flex-1">
-          <Text className="text-[22px] font-black uppercase tracking-[1px] text-[#7E8874]/95">
+      <View className="absolute bottom-4 left-4 right-4 flex-row items-end justify-between gap-4">
+        <View pointerEvents="none" className="flex-1">
+          <Text className="text-[11px] font-semibold uppercase tracking-[0.8px] text-white/72">
+            {mapGestureHint}
+          </Text>
+          <Text className="mt-1 text-[18px] font-black uppercase tracking-[0.6px] text-white">
             {districtLabel}
           </Text>
         </View>
 
         <Pressable
           className="overflow-hidden rounded-full"
+          onPress={() => {
+            onInteractionChange?.(false);
+            void openHotspotDirections({ address, coordinate, title });
+          }}
           style={buttonShadowStyle}
         >
           <LinearGradient
@@ -1008,7 +1280,7 @@ function DirectionMapCard({
               size={14}
               tintColor="#FFFFFF"
             />
-            <Text className="ml-1.5 text-[16px] font-black text-white">
+            <Text className="ml-1.5 text-[14px] font-black text-white">
               Chỉ đường
             </Text>
           </LinearGradient>
@@ -1071,7 +1343,7 @@ function LocationInformationSection({
   return (
     <View className="mt-7 gap-5">
       <View>
-        <Text className="mt-2 text-[20px] font-black text-[#3C2D34]">
+        <Text className="mt-2 text-[18px] font-black text-[#3C2D34]">
           Thông tin địa điểm
         </Text>
       </View>
@@ -1091,7 +1363,7 @@ function LocationInformationSection({
                 <Text className="text-[12px] font-medium uppercase tracking-[1px] text-[#8FA6BA]">
                   {item.label}
                 </Text>
-                <Text className="mt-1 text-[16px] leading-6 text-[#526879]">
+                <Text className="mt-1 text-[15px] leading-6 text-[#526879]">
                   {item.value}
                 </Text>
               </View>
@@ -1104,6 +1376,9 @@ function LocationInformationSection({
 }
 
 function HistoricalInfoSection({ text }: { text: string }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const shouldShowToggle = text.trim().length > 180;
+
   return (
     <View className="gap-3">
       <View className="flex-row items-center gap-2">
@@ -1118,13 +1393,29 @@ function HistoricalInfoSection({ text }: { text: string }) {
             tintColor="#7E6F82"
           />
         </View>
-        <Text className="text-[20px] font-black text-[#3C2D34]">
+        <Text className="text-[18px] font-black text-[#3C2D34]">
           Thông tin lịch sử
         </Text>
       </View>
 
       <View className="rounded-[28px] bg-[#FFF9F3] px-5 py-5">
-        <Text className="text-[16px] leading-7 text-[#554751]">{text}</Text>
+        <Text
+          className="text-[15px] leading-6 text-[#554751]"
+          numberOfLines={isExpanded ? undefined : 4}
+        >
+          {text}
+        </Text>
+
+        {shouldShowToggle ? (
+          <Pressable
+            className="mt-3 self-start"
+            onPress={() => setIsExpanded((value) => !value)}
+          >
+            <Text className="text-[13px] font-bold text-[#7E6F82]">
+              {isExpanded ? "Thu gọn" : "Xem thêm"}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -1148,11 +1439,14 @@ function HiddenStoryCheckinSection({
   onListenStories: () => void;
 }) {
   const checkedInContent = isStoryAvailabilityLoading ? (
-    <View className="rounded-[30px] bg-[#F8FBFF] px-5 py-5" style={cardShadowStyle}>
-      <Text className="text-[18px] font-black text-[#2F242C]">
+    <View
+      className="rounded-[30px] bg-[#F8FBFF] px-5 py-5"
+      style={cardShadowStyle}
+    >
+      <Text className="text-[16px] font-black text-[#2F242C]">
         Đang tải story hotspot
       </Text>
-      <Text className="mt-2 text-[16px] leading-6 text-[#5E7486]">
+      <Text className="mt-2 text-[15px] leading-6 text-[#5E7486]">
         App đang gọi API story cho hotspot này để hiển thị đúng nội dung theo
         từng tag.
       </Text>
@@ -1163,11 +1457,14 @@ function HiddenStoryCheckinSection({
       onListenStories={onListenStories}
     />
   ) : (
-    <View className="rounded-[30px] bg-[#F8FBFF] px-5 py-5" style={cardShadowStyle}>
-      <Text className="text-[18px] font-black text-[#2F242C]">
+    <View
+      className="rounded-[30px] bg-[#F8FBFF] px-5 py-5"
+      style={cardShadowStyle}
+    >
+      <Text className="text-[16px] font-black text-[#2F242C]">
         Story chuyên đề đang cập nhật
       </Text>
-      <Text className="mt-2 text-[16px] leading-6 text-[#5E7486]">
+      <Text className="mt-2 text-[15px] leading-6 text-[#5E7486]">
         Hotspot này đã check-in thành công. Nội dung story riêng cho điểm đến
         này sẽ được bổ sung sau.
       </Text>
@@ -1189,7 +1486,7 @@ function HiddenStoryCheckinSection({
               tintColor="#8B6B82"
             />
           </View>
-          <Text className="text-[20px] font-black text-[#3C2D34]">
+          <Text className="text-[18px] font-black text-[#3C2D34]">
             Câu chuyện ẩn
           </Text>
         </View>
@@ -1215,13 +1512,21 @@ function HiddenStoryCheckinSection({
             }}
             size={12}
             tintColor={
-              isCheckedIn ? "#1F9D7A" : isCheckinStatusLoading ? "#7C7C93" : "#8A736A"
+              isCheckedIn
+                ? "#1F9D7A"
+                : isCheckinStatusLoading
+                  ? "#7C7C93"
+                  : "#8A736A"
             }
           />
           <Text
             className="ml-1.5 text-[13px] font-black uppercase tracking-[0.8px]"
             style={{
-              color: isCheckedIn ? "#1F9D7A" : isCheckinStatusLoading ? "#7C7C93" : "#8A736A",
+              color: isCheckedIn
+                ? "#1F9D7A"
+                : isCheckinStatusLoading
+                  ? "#7C7C93"
+                  : "#8A736A",
             }}
           >
             {isCheckedIn
@@ -1300,7 +1605,9 @@ function HiddenStoryCheckinSection({
                 tintColor="#FFFFFF"
               />
               <Text className="ml-2 text-[17px] font-black text-white">
-                {isCheckinStatusLoading ? "Đang đồng bộ..." : "Check-in tại đây"}
+                {isCheckinStatusLoading
+                  ? "Đang đồng bộ..."
+                  : "Check-in tại đây"}
               </Text>
             </LinearGradient>
           </Pressable>
@@ -1440,7 +1747,7 @@ function RouteMatchesSectionHeader() {
           tintColor="#8B6B82"
         />
       </View>
-      <Text className="text-[20px] font-black text-[#3C2D34]">
+      <Text className="text-[18px] font-black text-[#3C2D34]">
         Các tuyến đường phù hợp
       </Text>
     </View>
@@ -1454,7 +1761,7 @@ function PersonalExperienceSectionHeader({
 }) {
   return (
     <View className="flex-row items-center justify-between gap-3">
-      <Text className="text-[20px] font-black text-[#3C2D34]">
+      <Text className="text-[18px] font-black text-[#3C2D34]">
         Trải nghiệm cá nhân
       </Text>
       <Text className="text-[14px] font-semibold text-[#8A736A]">
@@ -1553,7 +1860,7 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
             style={{ height: 44, width: 44, borderRadius: 22 }}
           />
           <View className="ml-3 flex-1">
-            <Text className="text-[17px] font-black text-[#2F242C]">
+            <Text className="text-[16px] font-black text-[#2F242C]">
               {item.user}
             </Text>
             <Text className="mt-0.5 text-[14px] text-[#8A7B83]">
@@ -1564,7 +1871,7 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
         <PersonalExperienceStars rating={item.rating} />
       </View>
 
-      <Text className="mt-4 text-[17px] leading-7 text-[#554751]">
+      <Text className="mt-4 text-[15px] leading-6 text-[#554751]">
         {item.text}
       </Text>
 
@@ -1591,10 +1898,10 @@ function EmptyPersonalExperienceCard({
 }) {
   return (
     <View className="rounded-[30px] bg-white px-5 py-5" style={cardShadowStyle}>
-      <Text className="text-[17px] font-black text-[#2F242C]">
+      <Text className="text-[16px] font-black text-[#2F242C]">
         Chưa có trải nghiệm cá nhân
       </Text>
-      <Text className="mt-2 text-[16px] leading-6 text-[#6A5964]">
+      <Text className="mt-2 text-[15px] leading-6 text-[#6A5964]">
         {isCheckedIn
           ? "Bạn là người đầu tiên có thể để lại cảm nhận cho hotspot này."
           : "Check-in tại hotspot để mở quyền chia sẻ trải nghiệm cá nhân."}
@@ -1681,10 +1988,14 @@ function StickyCheckinBar({
                   : loginGradientColors
             }
             end={{ x: 1, y: 0.5 }}
-            locations={isCheckedIn || isCheckinStatusLoading ? [0, 1] : [0, 0.58, 1]}
+            locations={
+              isCheckedIn || isCheckinStatusLoading ? [0, 1] : [0, 0.58, 1]
+            }
             start={{ x: 0, y: 0.5 }}
             className="px-5 py-4"
-            style={{ opacity: isCheckedIn || isCheckinStatusLoading ? 0.92 : 1 }}
+            style={{
+              opacity: isCheckedIn || isCheckinStatusLoading ? 0.92 : 1,
+            }}
           >
             <View className="flex-row items-center justify-center">
               <View className="h-8 w-8 items-center justify-center rounded-full bg-white/22">
@@ -1694,7 +2005,7 @@ function StickyCheckinBar({
                       ? "checkmark.circle.fill"
                       : isCheckinStatusLoading
                         ? "clock.fill"
-                      : "location.fill",
+                        : "location.fill",
                     android: isCheckedIn
                       ? "check_circle"
                       : isCheckinStatusLoading
@@ -1710,7 +2021,7 @@ function StickyCheckinBar({
                   tintColor="#FFFFFF"
                 />
               </View>
-              <Text className="ml-3 text-[18px] font-black tracking-[0.3px] text-white">
+              <Text className="ml-3 text-[16px] font-black tracking-[0.3px] text-white">
                 {isCheckedIn
                   ? "Đã check-in"
                   : isCheckinStatusLoading
@@ -1856,8 +2167,12 @@ export default function HotspotDetailScreen() {
   const scrollY = useSharedValue(0);
   const [isCheckinOverlayVisible, setIsCheckinOverlayVisible] = useState(false);
   const [isStickyCheckinVisible, setIsStickyCheckinVisible] = useState(false);
-  const [remoteHotspot, setRemoteHotspot] = useState<NearbyHotspotDto | null>(null);
-  const [remoteHotspotError, setRemoteHotspotError] = useState<string | null>(null);
+  const [remoteHotspot, setRemoteHotspot] = useState<NearbyHotspotDto | null>(
+    null,
+  );
+  const [remoteHotspotError, setRemoteHotspotError] = useState<string | null>(
+    null,
+  );
   const [isRemoteCheckinStatusLoading, setIsRemoteCheckinStatusLoading] =
     useState(false);
   const [isRemoteHotspotLoading, setIsRemoteHotspotLoading] = useState(false);
@@ -1867,9 +2182,10 @@ export default function HotspotDetailScreen() {
     hotspotId: resolvedHotspotId,
     slug: resolvedSlug,
   });
-  const [hasApiStories, setHasApiStories] = useState(
-    () => Boolean(cachedStoriesEntry?.stories.length),
+  const [hasApiStories, setHasApiStories] = useState(() =>
+    Boolean(cachedStoriesEntry?.stories.length),
   );
+  const [isMapInteracting, setIsMapInteracting] = useState(false);
   const [isStoryAvailabilityLoading, setIsStoryAvailabilityLoading] = useState(
     () => cachedStoriesEntry === null && resolvedHotspotId !== null,
   );
@@ -2228,8 +2544,8 @@ export default function HotspotDetailScreen() {
   const hotspotCheckinId = hotspot.slug;
   const isCheckedIn =
     checkins.includes(hotspotCheckinId) ||
-    (resolvedHotspotId !== null && checkedInApiHotspots.includes(resolvedHotspotId));
-  const historicalPreview = getHistoricalPreview(hotspot.story);
+    (resolvedHotspotId !== null &&
+      checkedInApiHotspots.includes(resolvedHotspotId));
   const audioStoryDurationLabel = getAudioStoryDurationLabel(hotspot.story);
   const hotspotStoriesHref =
     resolvedHotspotId !== null
@@ -2361,12 +2677,12 @@ export default function HotspotDetailScreen() {
                 style={[compactHeaderStyle, { flex: 1, marginHorizontal: 18 }]}
               >
                 <Text
-                  className="text-center text-[18px] font-black text-white"
+                  className="text-center text-[16px] font-black text-white"
                   numberOfLines={1}
                 >
                   {hotspot.title}
                 </Text>
-                <Text className="mt-0.5 text-center text-[13px] font-semibold uppercase tracking-[1px] text-[#C3EAF5]">
+                <Text className="mt-0.5 text-center text-[12px] font-semibold uppercase tracking-[1px] text-[#C3EAF5]">
                   {hotspot.category}
                 </Text>
               </Animated.View>
@@ -2403,6 +2719,7 @@ export default function HotspotDetailScreen() {
             paddingTop: heroHeightExpanded - contentOverlap,
           }}
           onScroll={handleScroll}
+          scrollEnabled={!isMapInteracting}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
@@ -2423,12 +2740,12 @@ export default function HotspotDetailScreen() {
               style={{
                 justifyContent: "center",
                 minHeight: heroHeightExpanded,
-                paddingBottom: Math.max(insets.bottom + 126, 144),
-                paddingTop: insets.top + 84,
+                paddingBottom: Math.max(insets.bottom + 110, 128),
+                paddingTop: insets.top + 72,
                 width: "100%",
               }}
             >
-              <View style={{ maxWidth: 340 }}>
+              <View style={{ maxWidth: 360 }}>
                 <View className="flex-row flex-wrap gap-2">
                   <HeroChip
                     icon={{
@@ -2444,19 +2761,15 @@ export default function HotspotDetailScreen() {
                       android: "place",
                       web: "place",
                     }}
-                    label={`${hotspot.distance} • ${hotspot.district}`}
+                    label={buildHeroLocationLabel({
+                      distance: hotspot.distance,
+                      district: hotspot.district,
+                    })}
                   />
                 </View>
 
-                <Text className="mt-4 text-[34px] font-black leading-[38px] text-white">
+                <Text className="mt-3 text-[30px] font-black leading-[34px] text-white">
                   {hotspot.title}
-                </Text>
-
-                <Text
-                  className="mt-3 text-[16px] leading-6 text-[#D3EEF6]"
-                  numberOfLines={4}
-                >
-                  {hotspot.story}
                 </Text>
               </View>
             </View>
@@ -2548,20 +2861,22 @@ export default function HotspotDetailScreen() {
                   <Text className="text-[13px] font-extrabold uppercase tracking-[1.2px] text-[#EB489B]">
                     Hotspot detail
                   </Text>
-                  <Text className="mt-2 text-[31px] font-black leading-[35px] text-[#1E3142]">
+                  <Text className="mt-2 text-[26px] font-black leading-[30px] text-[#1E3142]">
                     {hotspot.title}
                   </Text>
                 </View>
                 <View className="rounded-full bg-[#FFF0F6] px-3 py-2">
-                  <Text className="text-[14px] font-semibold uppercase tracking-[0.8px] text-[#EB489B]">
+                  <Text className="text-[13px] font-semibold uppercase tracking-[0.8px] text-[#EB489B]">
                     {hotspot.category}
                   </Text>
                 </View>
               </View>
 
-              <Text className="mt-4 text-[16px] leading-6 text-[#677C8E]">
-                {hotspot.overview}
-              </Text>
+              <View className="mt-4">
+                <Text className="text-[15px] leading-6 text-[#677C8E]">
+                  {hotspot.overview}
+                </Text>
+              </View>
 
               {remoteHotspotError && localHotspot ? (
                 <View className="mt-4 rounded-[22px] bg-[#FFF4E8] px-4 py-3">
@@ -2608,7 +2923,10 @@ export default function HotspotDetailScreen() {
               <View className="mt-5">
                 <DirectionMapCard
                   address={hotspot.address}
+                  coordinate={hotspot.coordinate}
                   districtLabel={hotspot.district}
+                  onInteractionChange={setIsMapInteracting}
+                  title={hotspot.title}
                 />
               </View>
 
@@ -2621,17 +2939,17 @@ export default function HotspotDetailScreen() {
             </View>
 
             <View className="mt-7 gap-5">
-              <HistoricalInfoSection text={historicalPreview} />
+              <HistoricalInfoSection text={hotspot.story} />
 
-                <HiddenStoryCheckinSection
-                  audioStoryDurationLabel={audioStoryDurationLabel}
-                  isCheckedIn={isCheckedIn}
-                  isCheckinStatusLoading={isRemoteCheckinStatusLoading}
-                  isStoryAvailabilityLoading={isStoryAvailabilityLoading}
-                  isStoryAvailable={canOpenStories}
-                  onCheckinPress={() => setIsCheckinOverlayVisible(true)}
-                  onListenStories={() => router.push(hotspotStoriesHref)}
-                />
+              <HiddenStoryCheckinSection
+                audioStoryDurationLabel={audioStoryDurationLabel}
+                isCheckedIn={isCheckedIn}
+                isCheckinStatusLoading={isRemoteCheckinStatusLoading}
+                isStoryAvailabilityLoading={isStoryAvailabilityLoading}
+                isStoryAvailable={canOpenStories}
+                onCheckinPress={() => setIsCheckinOverlayVisible(true)}
+                onListenStories={() => router.push(hotspotStoriesHref)}
+              />
             </View>
 
             <View className="mt-8 gap-5">
@@ -2659,10 +2977,10 @@ export default function HotspotDetailScreen() {
                   className="rounded-[28px] bg-white px-5 py-5"
                   style={cardShadowStyle}
                 >
-                  <Text className="text-[17px] font-black text-[#1E3142]">
+                  <Text className="text-[16px] font-black text-[#1E3142]">
                     Chua co route truc tiep
                   </Text>
-                  <Text className="mt-2 text-[16px] leading-6 text-[#5E7486]">
+                  <Text className="mt-2 text-[15px] leading-6 text-[#5E7486]">
                     Hotspot nay hien chua duoc gan vao mot tuyen route cu the
                     trong du lieu mau.
                   </Text>
@@ -2681,7 +2999,7 @@ export default function HotspotDetailScreen() {
                 onPress={() => router.back()}
                 style={cardShadowStyle}
               >
-                <Text className="text-[16px] font-bold text-[#254055]">
+                <Text className="text-[15px] font-bold text-[#254055]">
                   Quay lai hero list
                 </Text>
               </Pressable>
