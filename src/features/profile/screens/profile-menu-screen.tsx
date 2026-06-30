@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { type Href, useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import {
   SafeAreaView,
@@ -139,7 +139,7 @@ export default function ProfileMenuScreen() {
             </Pressable>
 
             <Text
-              className="flex-1 px-3 text-center text-[20px] font-black text-white"
+              className="flex-1 px-3 text-center text-[21px] font-black text-white"
               numberOfLines={1}
             >
               {displayName}
@@ -154,7 +154,7 @@ export default function ProfileMenuScreen() {
 
           <View className="h-3 bg-[#F5F5F8]" />
 
-          <Text className="px-4 py-3 text-[15px] font-black text-[#EB489B]">
+          <Text className="px-4 py-3 text-[16px] font-black text-[#EB489B]">
             Cài đặt
           </Text>
 
@@ -168,7 +168,7 @@ export default function ProfileMenuScreen() {
             </>
           ) : (
             <View className="border-t border-[#ECE8F2] px-4 py-4">
-              <Text className="text-[12px] leading-5 text-[#9A94A8]">
+              <Text className="text-[13px] leading-5 text-[#9A94A8]">
                 Bạn đang ở chế độ khách. Một số mục sẽ cần đăng nhập để sử dụng.
               </Text>
             </View>
@@ -210,7 +210,7 @@ function LogoutButton({ onPress }: { onPress: () => void }) {
           size={18}
           tintColor="#E54572"
         />
-        <Text className="text-[16px] font-extrabold text-[#E54572]">Đăng xuất</Text>
+        <Text className="text-[17px] font-extrabold text-[#E54572]">Đăng xuất</Text>
       </Pressable>
     </View>
   );
@@ -240,7 +240,7 @@ function MenuRow({
       }
     >
       <Text
-        className="min-w-0 flex-1 text-[16px] font-semibold"
+        className="min-w-0 flex-1 text-[17px] font-semibold"
         style={{ color: labelColor }}
       >
         {row.label}
@@ -249,7 +249,7 @@ function MenuRow({
       <View className="flex-row items-center gap-2" style={{ maxWidth: "56%" }}>
         {row.value ? (
           <Text
-            className="text-right text-[13px] leading-[18px]"
+            className="text-right text-[14px] leading-[18px]"
             numberOfLines={2}
             style={{ color: valueColor }}
           >

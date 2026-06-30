@@ -3,15 +3,15 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
 import * as Location from "expo-location";
 import { useFocusEffect, useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   Text,
   View,
-  useWindowDimensions,
 } from "react-native";
 import Animated, {
   Easing,
@@ -29,6 +29,7 @@ import {
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 import { getMyProfile } from "@/features/profile/api/get-me";
+import { useScreenLayout } from "@/hooks/use-screen-layout";
 import {
   type AppCoordinate,
   formatCoordinateLabel,
@@ -317,10 +318,10 @@ function JourneyProgressRing({ progress }: { progress: number }) {
       </View>
 
       <View className="h-[58px] w-[58px] items-center justify-center rounded-full bg-white">
-        <Text className="text-[22px] font-black leading-6 text-[#2B2233]">
+        <Text className="text-[20px] font-black leading-5 text-[#2B2233]">
           {boundedProgress}%
         </Text>
-        <Text className="text-[8px] font-semibold text-[#6F657A]">
+        <Text className="text-[9px] font-semibold text-[#6F657A]">
           Hoàn thành
         </Text>
       </View>
@@ -380,10 +381,30 @@ const guestLocationLoadingState: GuestLocationState = {
   mode: "loading",
 };
 
-const defaultNearbySearchDistanceMeters = 1000;
+const defaultNearbySearchDistanceMeters = 20;
+const nearbyDistanceSliderMinimumMeters = 20;
+const nearbyDistanceSliderMaximumMeters = 1000;
+const nearbyDistanceSliderStepMeters = 20;
+const nearbyDistancePresetMeters = [20, 100, 300, 500, 1000] as const;
 const nearbyPlaceFallbackImageUri =
   nearbyPlaces[0]?.imageUri ??
   "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function snapDistanceMeters(value: number) {
+  const snappedValue =
+    Math.round(value / nearbyDistanceSliderStepMeters) *
+    nearbyDistanceSliderStepMeters;
+
+  return clamp(
+    snappedValue,
+    nearbyDistanceSliderMinimumMeters,
+    nearbyDistanceSliderMaximumMeters,
+  );
+}
 
 function toRadians(value: number) {
   return (value * Math.PI) / 180;
@@ -726,11 +747,12 @@ async function resolveNearbyRequestCoordinate(): Promise<{
   };
 }
 
-function useGuestLocationPill() {
+function useGuestLocationPill(onDevelopmentLocationPress?: () => void) {
   const [locationState, setLocationState] = useState<GuestLocationState>(
     guestLocationLoadingState,
   );
   const requestIdRef = useRef(0);
+  const developmentLocation = getDevelopmentLocationOverride();
 
   useEffect(() => {
     let isMounted = true;
@@ -766,6 +788,11 @@ function useGuestLocationPill() {
   }, []);
 
   const handlePress = async () => {
+    if (developmentLocation) {
+      onDevelopmentLocationPress?.();
+      return;
+    }
+
     if (locationState.mode === "permission-denied") {
       await Linking.openSettings();
       return;
@@ -810,6 +837,241 @@ function useGuestLocationPill() {
   };
 }
 
+type NearbyDistanceSliderProps = {
+  max: number;
+  min: number;
+  onChange: (nextValue: number) => void;
+  value: number;
+};
+
+function NearbyDistanceSlider({
+  max,
+  min,
+  onChange,
+  value,
+}: NearbyDistanceSliderProps) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const progress = (value - min) / Math.max(1, max - min);
+  const thumbSize = 28;
+  const fillWidth = trackWidth * progress;
+  const thumbLeft = clamp(
+    fillWidth - thumbSize / 2,
+    0,
+    Math.max(0, trackWidth - thumbSize),
+  );
+
+  const updateValueFromTrackPosition = (locationX: number) => {
+    if (trackWidth <= 0) {
+      return;
+    }
+
+    const nextProgress = clamp(locationX / trackWidth, 0, 1);
+    const nextValue = min + nextProgress * (max - min);
+    onChange(snapDistanceMeters(nextValue));
+  };
+
+  return (
+    <View className="gap-2">
+      <View className="flex-row items-center justify-between">
+        <Text className="text-[12px] font-semibold text-[#8E869A]">
+          {formatDistanceMeters(min)}
+        </Text>
+        <Text className="text-[12px] font-semibold text-[#8E869A]">
+          {formatDistanceMeters(max)}
+        </Text>
+      </View>
+
+      <View
+        className="relative h-10 justify-center"
+        onLayout={(event) => {
+          setTrackWidth(event.nativeEvent.layout.width);
+        }}
+        onMoveShouldSetResponder={() => true}
+        onStartShouldSetResponder={() => true}
+        onResponderGrant={(event) => {
+          updateValueFromTrackPosition(event.nativeEvent.locationX);
+        }}
+        onResponderMove={(event) => {
+          updateValueFromTrackPosition(event.nativeEvent.locationX);
+        }}
+      >
+        <View className="h-2 rounded-full bg-[#F6DDD0]" />
+        <View
+          className="absolute left-0 top-1/2 h-2 rounded-full bg-[#F58752]"
+          style={{
+            transform: [{ translateY: -4 }],
+            width: fillWidth,
+          }}
+        />
+        <View
+          className="absolute top-1/2 h-7 w-7 rounded-full border-4 border-white bg-[#EB489B]"
+          style={{
+            left: thumbLeft,
+            shadowColor: "rgba(235, 72, 155, 0.28)",
+            shadowOpacity: 1,
+            shadowRadius: 10,
+            shadowOffset: {
+              width: 0,
+              height: 4,
+            },
+            elevation: 6,
+            transform: [{ translateY: -14 }],
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+type NearbyDistanceSheetProps = {
+  currentDistanceMeters: number;
+  isLoading: boolean;
+  onApply: () => void;
+  onChangeDistance: (nextValue: number) => void;
+  onClose: () => void;
+  selectedDistanceMeters: number;
+  visible: boolean;
+};
+
+function NearbyDistanceSheet({
+  currentDistanceMeters,
+  isLoading,
+  onApply,
+  onChangeDistance,
+  onClose,
+  selectedDistanceMeters,
+  visible,
+}: NearbyDistanceSheetProps) {
+  return (
+    <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View className="flex-1 justify-end bg-black/55">
+        <Pressable
+          onPress={onClose}
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+          }}
+        />
+
+        <View className="rounded-t-[32px] bg-[#FFF9F5] px-5 pb-7 pt-4">
+          <View className="items-center">
+            <View className="h-1.5 w-14 rounded-full bg-[#E7D8CD]" />
+          </View>
+
+          <View className="mt-4 flex-row items-start justify-between gap-4">
+            <View className="flex-1 gap-1">
+              <Text className="text-[19px] font-extrabold text-[#2B2233]">
+                Chọn bán kính nearby
+              </Text>
+              <Text className="text-[13px] leading-5 text-[#8E869A]">
+                Bấm nút Test để chọn khoảng cách gọi nearby API quanh vị trí test hiện tại.
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={onClose}
+              className="h-10 w-10 items-center justify-center rounded-full bg-white"
+            >
+              <SymbolView
+                name={{ ios: "xmark", android: "close", web: "close" }}
+                size={16}
+                tintColor="#8E869A"
+              />
+            </Pressable>
+          </View>
+
+          <View className="mt-6 rounded-[24px] border border-[#F6DDD0] bg-white px-4 py-4">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-[13px] font-semibold uppercase tracking-[0.5px] text-[#D9587F]">
+                Distance
+              </Text>
+              <View className="rounded-full bg-[#FFF1F6] px-3 py-1.5">
+                <Text className="text-[17px] font-extrabold text-[#EB489B]">
+                  {formatDistanceMeters(selectedDistanceMeters)}
+                </Text>
+              </View>
+            </View>
+
+            <View className="mt-4">
+              <NearbyDistanceSlider
+                max={nearbyDistanceSliderMaximumMeters}
+                min={nearbyDistanceSliderMinimumMeters}
+                onChange={onChangeDistance}
+                value={selectedDistanceMeters}
+              />
+            </View>
+
+            <View className="mt-4 flex-row flex-wrap gap-2">
+              {nearbyDistancePresetMeters.map((presetDistance) => {
+                const isActive = presetDistance === selectedDistanceMeters;
+
+                return (
+                  <Pressable
+                    key={presetDistance}
+                    className={`rounded-full border px-3.5 py-2 ${
+                      isActive
+                        ? "border-[#EB489B] bg-[#FFF1F6]"
+                        : "border-[#F4DCCF] bg-[#FFF9F5]"
+                    }`}
+                    onPress={() => {
+                      onChangeDistance(presetDistance);
+                    }}
+                  >
+                    <Text
+                      className={`text-[13px] font-bold ${
+                        isActive ? "text-[#EB489B]" : "text-[#8E869A]"
+                      }`}
+                    >
+                      {formatDistanceMeters(presetDistance)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text className="mt-4 text-[13px] leading-5 text-[#8E869A]">
+              Hiện tại Home đang gọi nearby API với bán kính{" "}
+              {formatDistanceMeters(currentDistanceMeters)}.
+            </Text>
+          </View>
+
+          <View className="mt-5 flex-row gap-3">
+            <Pressable
+              className="flex-1 rounded-[18px] border border-[#F4DCCF] bg-white px-4 py-3.5"
+              onPress={onClose}
+            >
+              <Text className="text-center text-[15px] font-bold text-[#8E869A]">Đóng</Text>
+            </Pressable>
+
+            <Pressable
+              className={`flex-1 overflow-hidden rounded-[18px] ${
+                isLoading ? "opacity-70" : ""
+              }`}
+              disabled={isLoading}
+              onPress={onApply}
+            >
+              <LinearGradient
+                colors={gradientColors}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                locations={[0, 0.58, 1]}
+                className="items-center justify-center px-4 py-3.5"
+              >
+                <Text className="text-[15px] font-extrabold text-white">
+                  {isLoading ? "Đang tải..." : "Áp dụng"}
+                </Text>
+              </LinearGradient>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function GuestAccessCard({ onPress }: { onPress: () => void }) {
   const arrowOffset = useSharedValue(0);
 
@@ -842,7 +1104,7 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
 
   return (
     <View className="gap-3">
-      <Text className="text-[20px] font-extrabold text-[#2B2233]">
+      <Text className="text-[18px] font-extrabold text-[#2B2233]">
         Mở khóa hành trình của bạn
       </Text>
 
@@ -861,7 +1123,7 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
           <View className="flex-row items-start gap-4">
             <View className="flex-1 gap-2">
               <View className="self-start rounded-full bg-white/90 px-3 py-1">
-                <Text className="text-[10px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
+                <Text className="text-[11px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
                   Guest mode
                 </Text>
               </View>
@@ -890,7 +1152,7 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
                         android: "lock",
                         web: "lock",
                       }}
-                      size={38}
+                      size={30}
                       tintColor="#EB489B"
                     />
                   </View>
@@ -901,17 +1163,17 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
 
           <View className="flex-row flex-wrap gap-2">
             <View className="rounded-full bg-white/90 px-3 py-2">
-              <Text className="text-[11px] font-bold text-[#D9587F]">
+              <Text className="text-[12px] font-bold text-[#D9587F]">
                 Lưu tiến trình
               </Text>
             </View>
             <View className="rounded-full bg-white/90 px-3 py-2">
-              <Text className="text-[11px] font-bold text-[#D9587F]">
+              <Text className="text-[12px] font-bold text-[#D9587F]">
                 Mở khóa story
               </Text>
             </View>
             <View className="rounded-full bg-white/90 px-3 py-2">
-              <Text className="text-[11px] font-bold text-[#D9587F]">
+              <Text className="text-[12px] font-bold text-[#D9587F]">
                 Nhận voucher
               </Text>
             </View>
@@ -941,7 +1203,7 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
                       android: "arrow_forward",
                       web: "arrow_forward",
                     }}
-                    size={16}
+                    size={15}
                     tintColor="#FFFFFF"
                   />
                 </Animated.View>
@@ -956,11 +1218,15 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
 
 function GuestWelcomeHeader({
   onGreetingPress,
+  onLocationPillPress,
 }: {
   onGreetingPress: () => void;
+  onLocationPillPress?: () => void;
 }) {
   const logoOffset = useSharedValue(0);
-  const { handlePress, locationState } = useGuestLocationPill();
+  const { handlePress, locationState } = useGuestLocationPill(
+    onLocationPillPress,
+  );
 
   useEffect(() => {
     logoOffset.set(
@@ -1005,7 +1271,7 @@ function GuestWelcomeHeader({
       <View className="flex-1 gap-1">
         <View className="flex-row items-center justify-between gap-3">
           <Pressable className="flex-1" hitSlop={8} onPress={onGreetingPress}>
-            <Text className="text-[22px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
+            <Text className="text-[19px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
               Xin chào bạn
             </Text>
           </Pressable>
@@ -1026,7 +1292,7 @@ function GuestWelcomeHeader({
               tintColor="#F58752"
             />
             <Text
-              className="text-[11px] font-semibold text-[#8E869A]"
+              className="text-[12px] font-semibold text-[#8E869A]"
               numberOfLines={1}
             >
               {locationState.label}
@@ -1044,7 +1310,7 @@ function GuestWelcomeHeader({
             size={14}
             tintColor="#F7B500"
           />
-          <Text className="text-[13px] font-bold text-[#8E869A]">
+          <Text className="text-[14px] font-bold text-[#8E869A]">
             Đăng nhập để lưu hành trình
           </Text>
         </View>
@@ -1053,36 +1319,40 @@ function GuestWelcomeHeader({
   );
 }
 
-function ExplorerHeaderActions() {
-  const { handlePress } = useGuestLocationPill();
+function ExplorerHeaderActions({
+  onLocationPillPress,
+}: {
+  onLocationPillPress?: () => void;
+}) {
+  const { handlePress } = useGuestLocationPill(onLocationPillPress);
 
   return (
-    <View className="flex-row items-center gap-3">
-      <Pressable
-        className="h-12 w-12 items-center justify-center rounded-full bg-[#FFF4EF]"
-        onPress={() => {
-          void handlePress();
-        }}
-      >
+      <View className="flex-row items-center gap-2.5">
+        <Pressable
+          className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
+          onPress={() => {
+            void handlePress();
+          }}
+        >
         <SymbolView
           name={{
             ios: "location",
             android: "my_location",
             web: "my_location",
           }}
-          size={20}
+          size={16}
           tintColor="#F58752"
         />
       </Pressable>
 
-      <Pressable className="h-12 w-12 items-center justify-center rounded-full bg-[#FFF4EF]">
+      <Pressable className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]">
         <SymbolView
           name={{
             ios: "bell",
             android: "notifications",
             web: "notifications",
           }}
-          size={22}
+          size={16}
           tintColor="#EB489B"
         />
       </Pressable>
@@ -1093,7 +1363,9 @@ function ExplorerHeaderActions() {
 export default function HomeScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
-  const { width } = useWindowDimensions();
+  const { contentWidth, gutter, safeWidth } = useScreenLayout({
+    maxContentWidth: 640,
+  });
   const activeRouteIndexRef = useRef(0);
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
   const [explorerSummary, setExplorerSummary] =
@@ -1101,6 +1373,13 @@ export default function HomeScreen() {
   const [nearbyPlacesNote, setNearbyPlacesNote] = useState<string | null>(null);
   const [nearbyPlacesStatus, setNearbyPlacesStatus] =
     useState<NearbyPlacesSectionStatus>("loading");
+  const [isNearbyDistanceSheetVisible, setIsNearbyDistanceSheetVisible] =
+    useState(false);
+  const [nearbySearchDistanceMeters, setNearbySearchDistanceMeters] = useState(
+    defaultNearbySearchDistanceMeters,
+  );
+  const [pendingNearbySearchDistanceMeters, setPendingNearbySearchDistanceMeters] =
+    useState(defaultNearbySearchDistanceMeters);
   const [resolvedNearbyPlaces, setResolvedNearbyPlaces] = useState<
     NearbyPlaceListItem[]
   >([]);
@@ -1110,18 +1389,16 @@ export default function HomeScreen() {
   const [activeCommunityTab, setActiveCommunityTab] =
     useState<CommunityBoardTab>("community");
   const isGuest = authSession.role === "guest";
-  const routeCardLeftInset = 20;
-  const routeCardRightInset = 16;
-  const routeCardWidth = Math.max(
-    width - routeCardLeftInset - routeCardRightInset,
-    264,
-  );
-  const nearbyRouteCardWidth = Math.min(Math.max(width * 0.64, 220), 252);
-  const nearbyPlaceCardWidth = Math.min(Math.max(width * 0.4, 156), 170);
+  const routeCardLeftInset = gutter;
+  const routeCardWidth = Math.max(contentWidth, 264);
+  const nearbyRouteCardWidth = Math.min(Math.max(contentWidth * 0.72, 220), 252);
+  const nearbyPlaceCardWidth = Math.min(Math.max(contentWidth * 0.46, 156), 170);
   const nearbyPlaceImageHeight = Math.round(nearbyPlaceCardWidth * 0.8);
-  const voucherMerchantCircleSize = Math.min(Math.max(width * 0.2, 76), 86);
+  const voucherMerchantCircleSize = Math.min(Math.max(contentWidth * 0.22, 76), 86);
   const voucherMerchantLogoSize = Math.round(voucherMerchantCircleSize * 0.88);
   const voucherMerchantItemWidth = voucherMerchantCircleSize + 14;
+  const isDevelopmentLocationOverrideActive =
+    getDevelopmentLocationOverride() !== null;
   const currentJourney =
     !isGuest && activeJourney && !activeJourney.completed
       ? activeJourney
@@ -1143,6 +1420,18 @@ export default function HomeScreen() {
   const handleOpenRegister = () => {
     router.push("/login?entry=home");
   };
+  const handleOpenNearbyDistanceSheet = useCallback(() => {
+    setPendingNearbySearchDistanceMeters(nearbySearchDistanceMeters);
+    setIsNearbyDistanceSheetVisible(true);
+  }, [nearbySearchDistanceMeters]);
+  const handleCloseNearbyDistanceSheet = useCallback(() => {
+    setPendingNearbySearchDistanceMeters(nearbySearchDistanceMeters);
+    setIsNearbyDistanceSheetVisible(false);
+  }, [nearbySearchDistanceMeters]);
+  const handleApplyNearbyDistance = useCallback(() => {
+    setNearbySearchDistanceMeters(pendingNearbySearchDistanceMeters);
+    setIsNearbyDistanceSheetVisible(false);
+  }, [pendingNearbySearchDistanceMeters]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -1186,7 +1475,7 @@ export default function HomeScreen() {
           : null;
         const apiNearbyHotspots = await getNearbyHotspots({
           accessToken,
-          distance: defaultNearbySearchDistanceMeters,
+          distance: nearbySearchDistanceMeters,
           latitude: coordinate.latitude,
           longitude: coordinate.longitude,
           tokenType: authSession.tokenType,
@@ -1200,8 +1489,8 @@ export default function HomeScreen() {
           setResolvedNearbyPlaces([]);
           setNearbyPlacesNote(
             coordinate.source === "dev-override"
-              ? `API nearby trả rỗng trong bán kính ${defaultNearbySearchDistanceMeters}m quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
-              : `Không có hotspot trong bán kính ${defaultNearbySearchDistanceMeters}m quanh vị trí hiện tại.`,
+              ? `API nearby trả rỗng trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
+              : `Không có hotspot trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh vị trí hiện tại.`,
           );
           setNearbyPlacesStatus("empty");
           return;
@@ -1212,7 +1501,7 @@ export default function HomeScreen() {
         );
         setNearbyPlacesNote(
           coordinate.source === "dev-override"
-            ? `Đang gọi nearby API bằng tọa độ test ${formatCoordinateLabel(coordinate)}.`
+            ? `Đang hiển thị hotspot API trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
             : null,
         );
         setNearbyPlacesStatus("ready");
@@ -1242,7 +1531,11 @@ export default function HomeScreen() {
     return () => {
       isActive = false;
     };
-  }, [authSession.isAuthenticated, authSession.tokenType]);
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    nearbySearchDistanceMeters,
+  ]);
 
   useEffect(() => {
     let isActive = true;
@@ -1352,9 +1645,16 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingBottom: 0 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-6 px-5 pt-1">
+        <View className="gap-6 pt-1" style={{ paddingHorizontal: gutter }}>
           {isGuest ? (
-            <GuestWelcomeHeader onGreetingPress={handleOpenRegister} />
+            <GuestWelcomeHeader
+              onGreetingPress={handleOpenRegister}
+              onLocationPillPress={
+                isDevelopmentLocationOverrideActive
+                  ? handleOpenNearbyDistanceSheet
+                  : undefined
+              }
+            />
           ) : (
             <View className="flex-row items-center justify-between">
               <View className="flex-1 flex-row items-center gap-3.5 pr-3">
@@ -1377,7 +1677,7 @@ export default function HomeScreen() {
                   </LinearGradient>
 
                   <View className="absolute -bottom-1 -right-2 rounded-full border-2 border-white bg-[#b1741e] px-2.5 py-1">
-                    <Text className="text-[10px] font-extrabold text-white">
+                    <Text className="text-[11px] font-extrabold text-white">
                       {`Lv.${explorerLevel}`}
                     </Text>
                   </View>
@@ -1385,65 +1685,71 @@ export default function HomeScreen() {
 
                 <View className="flex-1 gap-1">
                   <View className="self-start rounded-full bg-[#FFF1F6] px-2.5 py-1">
-                    <Text className="text-[10px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
+                    <Text className="text-[11px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
                       Explorer
                     </Text>
                   </View>
 
                   <View className="gap-0.5">
-                    <Text className="text-[20px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
+                    <Text className="text-[18px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
                       {`Chào ${explorerName}`}
                     </Text>
-                    <Text className="text-[13px] leading-5 text-[#8E869A]">
+                    <Text className="text-[13px] leading-4 text-[#8E869A]">
                       Sẵn sàng khám phá hành trình
                     </Text>
                   </View>
                 </View>
               </View>
 
-              <ExplorerHeaderActions />
+              <ExplorerHeaderActions
+                onLocationPillPress={
+                  isDevelopmentLocationOverrideActive
+                    ? handleOpenNearbyDistanceSheet
+                    : undefined
+                }
+              />
             </View>
           )}
 
           <View className="flex-row items-center gap-3">
-            <View className="flex-1 flex-row items-center rounded-[18px] bg-[#FAF7FC] px-4 py-4">
+            <View className="flex-1 flex-row items-center rounded-[18px] bg-[#FAF7FC] px-4 py-3.5">
               <SymbolView
                 name={{
                   ios: "magnifyingglass",
                   android: "search",
                   web: "search",
                 }}
-                size={20}
+                size={15}
                 tintColor="#AA9FB0"
               />
-              <Text className="ml-2 text-[15px] text-[#AA9FB0]">
+              <Text className="ml-2 text-[14px] text-[#AA9FB0]">
                 Tìm địa danh, thử thách...
               </Text>
             </View>
 
-            <Pressable className="h-[54px] w-[54px] items-center justify-center rounded-[18px] bg-[#FAF2FF]">
+            <Pressable className="h-9 w-9 items-center justify-center rounded-[14px] bg-[#FAF2FF]">
               <SymbolView
                 name={{
                   ios: "slider.horizontal.3",
                   android: "tune",
                   web: "tune",
                 }}
-                size={20}
+                size={15}
                 tintColor="#EB489B"
               />
             </Pressable>
           </View>
 
           <View className="gap-4">
-            <Text className="text-[20px] font-extrabold text-[#2B2233]">
+            <Text className="text-[17px] font-extrabold text-[#2B2233]">
               Tuyến nổi bật
             </Text>
 
             <View
               className="items-start"
               style={{
-                marginHorizontal: -20,
-                width,
+                marginHorizontal: -gutter,
+                width: safeWidth,
                 paddingLeft: routeCardLeftInset,
               }}
             >
@@ -1480,24 +1786,24 @@ export default function HomeScreen() {
                     <View className="flex-row items-start justify-between gap-3">
                       <View className="max-w-[78%] gap-2">
                         <View className="gap-1">
-                          <Text className="text-[29px] font-extrabold leading-8 text-white">
+                          <Text className="text-[21px] font-extrabold leading-6 text-white">
                             {activeFeaturedRoute.title}
                           </Text>
                         </View>
                         <View className="gap-3">
                           <View className="flex-row flex-wrap gap-2">
                             <View className="rounded-full bg-white/18 px-3 py-1.5">
-                              <Text className="text-[12px] font-bold text-white">
+                              <Text className="text-[11px] font-bold text-white">
                                 {activeFeaturedRoute.stops}
                               </Text>
                             </View>
                             <View className="rounded-full bg-white/18 px-3 py-1.5">
-                              <Text className="text-[12px] font-bold text-white">
+                              <Text className="text-[11px] font-bold text-white">
                                 {activeFeaturedRoute.distance}
                               </Text>
                             </View>
                             <View className="rounded-full bg-white/18 px-3 py-1.5">
-                              <Text className="text-[12px] font-bold text-white">
+                              <Text className="text-[11px] font-bold text-white">
                                 {activeFeaturedRoute.duration}
                               </Text>
                             </View>
@@ -1513,10 +1819,10 @@ export default function HomeScreen() {
                         </View>
                       </View>
 
-                      <View className="h-12 w-12 items-center justify-center rounded-2xl bg-white/16">
-                        <SymbolView
+                        <View className="h-9 w-9 items-center justify-center rounded-2xl bg-white/16">
+                          <SymbolView
                           name={{ ios: "map", android: "map", web: "map" }}
-                          size={22}
+                          size={15}
                           tintColor="#FFFFFF"
                         />
                       </View>
@@ -1526,7 +1832,10 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <View className="flex-row items-center justify-center gap-2 px-5">
+            <View
+              className="flex-row items-center justify-center gap-2"
+              style={{ paddingHorizontal: gutter }}
+            >
               {featuredRoutes.map((route, index) => (
                 <Pressable
                   key={route.title}
@@ -1548,7 +1857,7 @@ export default function HomeScreen() {
             <GuestAccessCard onPress={handleOpenRegister} />
           ) : currentJourney ? (
             <View className="gap-3">
-              <Text className="text-[20px] font-extrabold text-[#2B2233]">
+              <Text className="text-[18px] font-extrabold text-[#2B2233]">
                 Tiếp tục hành trình
               </Text>
 
@@ -1589,7 +1898,7 @@ export default function HomeScreen() {
                         className="mr-1.5 h-2 w-2 rounded-full"
                         style={{ backgroundColor: activeJourneyAccentWarm }}
                       />
-                      <Text className="text-[10px] font-extrabold uppercase tracking-[0.5px] text-[#453D4A]">
+                      <Text className="text-[11px] font-extrabold uppercase tracking-[0.5px] text-[#453D4A]">
                         Đang thực hiện
                       </Text>
                     </View>
@@ -1604,7 +1913,7 @@ export default function HomeScreen() {
                         size={12}
                         tintColor="#FFFFFF"
                       />
-                      <Text className="ml-1 text-[10px] font-extrabold text-white">
+                      <Text className="ml-1 text-[11px] font-extrabold text-white">
                         {currentJourney.rewardLabel}
                       </Text>
                     </View>
@@ -1618,7 +1927,7 @@ export default function HomeScreen() {
                     </View>
 
                     <View className="flex-1 gap-1.5 pt-4">
-                      <Text className="text-[15px] font-extrabold text-[#2B2233]">
+                      <Text className="text-[16px] font-extrabold text-[#2B2233]">
                         {currentJourney.title}
                       </Text>
 
@@ -1632,7 +1941,7 @@ export default function HomeScreen() {
                           size={13}
                           tintColor="#8E869A"
                         />
-                        <Text className="text-[12px] text-[#6F657A]">
+                        <Text className="text-[13px] text-[#6F657A]">
                           Tiếp theo: {currentJourney.nextStop} ·{" "}
                           {currentJourney.distanceToNext}
                         </Text>
@@ -1685,7 +1994,7 @@ export default function HomeScreen() {
                         })}
                       </View>
 
-                      <Text className="text-[11px] font-medium text-[#8E869A]">
+                      <Text className="text-[12px] font-medium text-[#8E869A]">
                         {currentJourney.remainingStopsLabel} ·{" "}
                         {currentJourney.remainingTimeLabel}
                       </Text>
@@ -1709,9 +2018,9 @@ export default function HomeScreen() {
                         size={14}
                         tintColor="#FFFFFF"
                       />
-                      <Text className="ml-2 text-[15px] font-extrabold text-white">
-                        Tiếp tục khám phá
-                      </Text>
+                        <Text className="ml-2 text-[15px] font-extrabold text-white">
+                         Tiếp tục khám phá
+                       </Text>
                     </LinearGradient>
                   </Pressable>
                 </View>
@@ -1722,7 +2031,7 @@ export default function HomeScreen() {
           <View className="gap-4">
             <View className="flex-row items-center justify-between">
               <Pressable hitSlop={8} onPress={handleOpenHotspots}>
-                <Text className="text-[20px] font-extrabold text-[#2B2233]">
+                <Text className="text-[18px] font-extrabold text-[#2B2233]">
                   Địa điểm gần bạn
                 </Text>
               </Pressable>
@@ -1730,33 +2039,33 @@ export default function HomeScreen() {
                 className="rounded-full bg-[#FFF4EF] px-3.5 py-2"
                 onPress={handleOpenHotspots}
               >
-                <Text className="text-[13px] font-bold text-[#F58752]">
+                <Text className="text-[12px] font-bold text-[#F58752]">
                   Xem tất cả
                 </Text>
               </Pressable>
             </View>
 
             {nearbyPlacesStatus !== "empty" && nearbyPlacesNote ? (
-              <Text className="text-[12px] leading-5 text-[#8E869A]">
+              <Text className="text-[13px] leading-5 text-[#8E869A]">
                 {nearbyPlacesNote}
               </Text>
             ) : null}
 
             {nearbyPlacesStatus === "loading" ? (
               <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-                <Text className="text-[14px] font-bold text-[#3B4454]">
+                <Text className="text-[15px] font-bold text-[#3B4454]">
                   Đang tải hotspot gần bạn...
                 </Text>
-                <Text className="mt-1 text-[12px] leading-5 text-[#8E869A]">
-                  App đang lấy vị trí hiện tại và gọi nearby API.
+                <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+                  {`App đang lấy vị trí hiện tại và gọi nearby API trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)}.`}
                 </Text>
               </View>
             ) : nearbyPlacesStatus === "empty" ? (
               <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-                <Text className="text-[14px] font-bold text-[#3B4454]">
+                <Text className="text-[15px] font-bold text-[#3B4454]">
                   Chưa có hotspot gần vị trí này
                 </Text>
-                <Text className="mt-1 text-[12px] leading-5 text-[#8E869A]">
+                <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
                   {nearbyPlacesNote ??
                     "Nearby API đang trả mảng rỗng cho tọa độ hiện tại."}
                 </Text>
@@ -1806,13 +2115,13 @@ export default function HomeScreen() {
 
                         <View className="absolute inset-x-2.5 top-2.5 flex-row items-center justify-between">
                           <View className="rounded-full bg-[#45414D]/92 px-2.5 py-1">
-                            <Text className="text-[10px] font-extrabold text-white">
+                            <Text className="text-[11px] font-extrabold text-white">
                               {place.distance}
                             </Text>
                           </View>
 
                           <View className="rounded-full bg-[#f0af16] px-2.5 py-1">
-                            <Text className="text-[10px] font-extrabold text-[#2B2233]">
+                            <Text className="text-[11px] font-extrabold text-[#2B2233]">
                               {place.reward} XP
                             </Text>
                           </View>
@@ -1821,19 +2130,19 @@ export default function HomeScreen() {
 
                       <View className="gap-2 px-3.5 pb-3.5 pt-3">
                         <Text
-                          className="text-[13px] font-extrabold leading-[18px] text-[#3B4454]"
+                          className="text-[14px] font-extrabold leading-[18px] text-[#3B4454]"
                           numberOfLines={2}
                         >
                           {place.title}
                         </Text>
 
-                        <Text className="text-[12px] text-[#A39AAB]">
+                        <Text className="text-[13px] text-[#A39AAB]">
                           {place.category}
                         </Text>
 
                         <View className="flex-row items-center gap-1">
                           {place.detailIcon === "star" ? (
-                            <Text className="text-[11px] text-[#F58752]">
+                            <Text className="text-[12px] text-[#F58752]">
                               ★
                             </Text>
                           ) : (
@@ -1850,15 +2159,15 @@ export default function HomeScreen() {
                           <Text
                             className={
                               place.detailIcon === "star"
-                                ? "text-[11px] font-bold text-[#F58752]"
-                                : "flex-1 text-[11px] text-[#8E869A]"
+                                ? "text-[12px] font-bold text-[#F58752]"
+                                : "flex-1 text-[12px] text-[#8E869A]"
                             }
                             numberOfLines={1}
                           >
                             {place.detailPrimaryText}
                           </Text>
                           {place.detailSecondaryText ? (
-                            <Text className="text-[11px] text-[#8E869A]">
+                            <Text className="text-[12px] text-[#8E869A]">
                               {place.detailSecondaryText}
                             </Text>
                           ) : null}
@@ -1870,7 +2179,7 @@ export default function HomeScreen() {
               </ScrollView>
             )}
 
-            <Text className="text-[20px] font-extrabold text-[#2B2233]">
+            <Text className="text-[18px] font-extrabold text-[#2B2233]">
               Chủ đề
             </Text>
 
@@ -1887,19 +2196,19 @@ export default function HomeScreen() {
                   }
                 >
                   <View
-                    className="h-[112px] w-[112px] items-center justify-center rounded-[24px] p-4"
+                    className="h-[104px] w-[104px] items-center justify-center rounded-[22px] p-4"
                     style={{ backgroundColor: item.background }}
                   >
                     <View className="items-center justify-center">
                       <SymbolView
                         name={item.icon}
-                        size={28}
+                        size={16}
                         tintColor={item.accent}
                       />
                     </View>
 
                     <Text
-                      className="mt-3 text-center text-[14px] font-extrabold leading-[18px] text-[#2F2A35]"
+                      className="mt-3 text-center text-[13px] font-extrabold leading-4 text-[#2F2A35]"
                       numberOfLines={2}
                     >
                       {item.label}
@@ -1909,7 +2218,7 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
 
-            <Text className="text-[20px] font-extrabold text-[#2B2233]">
+            <Text className="text-[18px] font-extrabold text-[#2B2233]">
               Đề xuất tuyến đường
             </Text>
 
@@ -1938,7 +2247,7 @@ export default function HomeScreen() {
                       />
 
                       <View className="absolute right-3 top-3 rounded-full bg-[#FFF1F6] px-2.5 py-1">
-                        <Text className="text-[10px] font-extrabold text-[#EB489B]">
+                        <Text className="text-[11px] font-extrabold text-[#EB489B]">
                           {route.xp}
                         </Text>
                       </View>
@@ -1947,12 +2256,12 @@ export default function HomeScreen() {
                     <View className="gap-2.5 px-4 pb-4 pt-3.5">
                       <View className="flex-row flex-wrap items-center gap-2">
                         <View className="rounded-full bg-[#FFF1F6] px-2.5 py-1">
-                          <Text className="text-[10px] font-extrabold text-[#EB489B]">
+                          <Text className="text-[11px] font-extrabold text-[#EB489B]">
                             {route.distance}
                           </Text>
                         </View>
                         <View className="rounded-full bg-[#FFF4EF] px-2.5 py-1">
-                          <Text className="text-[10px] font-extrabold text-[#F58752]">
+                          <Text className="text-[11px] font-extrabold text-[#F58752]">
                             {route.duration}
                           </Text>
                         </View>
@@ -1966,7 +2275,7 @@ export default function HomeScreen() {
                           }}
                         >
                           <Text
-                            className="text-[10px] font-extrabold"
+                            className="text-[11px] font-extrabold"
                             style={{
                               color:
                                 routeDifficultyStyles[route.difficulty].color,
@@ -1978,14 +2287,14 @@ export default function HomeScreen() {
                       </View>
 
                       <Text
-                        className="text-[16px] font-extrabold leading-5 text-[#2B2233]"
+                        className="text-[16px] font-extrabold leading-4 text-[#2B2233]"
                         numberOfLines={1}
                       >
                         {route.title}
                       </Text>
 
                       <Text
-                        className="text-[12px] leading-[18px] text-[#8E869A]"
+                        className="text-[13px] leading-[18px] text-[#8E869A]"
                         numberOfLines={2}
                       >
                         {route.subtitle}
@@ -1999,13 +2308,13 @@ export default function HomeScreen() {
             <View className="gap-4">
               <View className="flex-row items-start justify-between gap-3">
                 <View className="flex-1">
-                  <Text className="text-[20px] font-extrabold text-[#2B2233]">
+                  <Text className="text-[18px] font-extrabold text-[#2B2233]">
                     Voucher ưu đãi
                   </Text>
                 </View>
 
                 <Pressable className="rounded-full bg-[#FFF4EF] px-3.5 py-2">
-                  <Text className="text-[13px] font-bold text-[#F58752]">
+                  <Text className="text-[12px] font-bold text-[#F58752]">
                     Xem tất cả
                   </Text>
                 </Pressable>
@@ -2052,7 +2361,7 @@ export default function HomeScreen() {
                           </View>
 
                           <Text
-                            className="mt-2 text-center text-[12px] font-extrabold leading-4 text-[#2B2233]"
+                            className="mt-2 text-center text-[13px] font-extrabold leading-4 text-[#2B2233]"
                             numberOfLines={2}
                           >
                             {merchant.label}
@@ -2084,12 +2393,12 @@ export default function HomeScreen() {
                       tintColor="#C98A10"
                     />
                   </View>
-                  <Text className="text-[20px] font-extrabold text-[#1F2940]">
+                  <Text className="text-[18px] font-extrabold text-[#1F2940]">
                     Cộng đồng hôm nay
                   </Text>
                 </View>
 
-                <Text className="text-[11px] font-bold uppercase tracking-[0.3px] text-[#FF6F95]">
+                <Text className="text-[12px] font-bold uppercase tracking-[0.3px] text-[#FF6F95]">
                   BXH
                 </Text>
               </View>
@@ -2108,7 +2417,7 @@ export default function HomeScreen() {
                         }}
                       >
                         <Text
-                          className={`text-[12px] font-bold ${
+                          className={`text-[13px] font-bold ${
                             isActive ? "text-[#FF5F87]" : "text-[#7D7281]"
                           }`}
                         >
@@ -2134,7 +2443,7 @@ export default function HomeScreen() {
                     size={12}
                     tintColor="#7D7281"
                   />
-                  <Text className="ml-1 text-[10px] font-semibold text-[#7D7281]">
+                  <Text className="ml-1 text-[11px] font-semibold text-[#7D7281]">
                     Live
                   </Text>
                 </View>
@@ -2147,17 +2456,17 @@ export default function HomeScreen() {
                   end={{ x: 1, y: 0.5 }}
                   className="flex-row items-center rounded-[22px] border border-[#F9E2EA] px-3.5 py-3.5"
                 >
-                  <View className="mr-3 h-12 w-12 items-center justify-center rounded-full bg-[#FFE8F0]">
-                    <Text className="text-[11px] font-black text-[#FF5F87]">
+                  <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-[#FFE8F0]">
+                    <Text className="text-[12px] font-black text-[#FF5F87]">
                       #{activeCommunityTab === "community" ? "24" : "01"}
                     </Text>
                   </View>
 
                   <View className="flex-1 pr-3">
-                    <Text className="text-[13px] font-extrabold text-[#1F2940]">
+                    <Text className="text-[14px] font-extrabold text-[#1F2940]">
                       {activeCommunityBoard.summaryLabel}
                     </Text>
-                    <Text className="mt-0.5 text-[10px] leading-4 text-[#9B8D9A]">
+                    <Text className="mt-0.5 text-[11px] leading-4 text-[#9B8D9A]">
                       {activeCommunityBoard.summaryNote}
                     </Text>
                   </View>
@@ -2172,7 +2481,7 @@ export default function HomeScreen() {
                       size={12}
                       tintColor="#FF5F87"
                     />
-                    <Text className="ml-1 text-[11px] font-extrabold text-[#1F2940]">
+                    <Text className="ml-1 text-[12px] font-extrabold text-[#1F2940]">
                       {activeCommunityBoard.totalPoints}
                     </Text>
                   </View>
@@ -2185,7 +2494,7 @@ export default function HomeScreen() {
                       className="flex-row items-center rounded-[24px] border border-[#EEF1F4] bg-white px-3.5 py-3"
                       style={communityRowShadowStyle}
                     >
-                      <View className="relative mr-3.5 h-[54px] w-[54px] items-center justify-center">
+                      <View className="relative mr-3.5 h-12 w-12 items-center justify-center">
                         <View
                           className="items-center justify-center rounded-full bg-white"
                           style={{
@@ -2224,17 +2533,17 @@ export default function HomeScreen() {
                               ],
                           }}
                         >
-                          <Text className="text-[12px] font-black text-white">
+                          <Text className="text-[13px] font-black text-white">
                             {index + 1}
                           </Text>
                         </View>
                       </View>
 
                       <View className="flex-1 pr-3">
-                        <Text className="text-[14px] font-extrabold text-[#1F2940]">
+                        <Text className="text-[15px] font-extrabold text-[#1F2940]">
                           {entry.name}
                         </Text>
-                        <Text className="mt-0.5 text-[11px] leading-4 text-[#8F8290]">
+                        <Text className="mt-0.5 text-[12px] leading-4 text-[#8F8290]">
                           {entry.subtitle}
                         </Text>
                       </View>
@@ -2249,7 +2558,7 @@ export default function HomeScreen() {
                           size={11}
                           tintColor="#FF5F87"
                         />
-                        <Text className="ml-1 text-[11px] font-extrabold text-[#1F2940]">
+                        <Text className="ml-1 text-[12px] font-extrabold text-[#1F2940]">
                           {entry.points}
                         </Text>
                       </View>
@@ -2270,7 +2579,7 @@ export default function HomeScreen() {
                   size={13}
                   tintColor="#FF5F87"
                 />
-                <Text className="ml-1.5 text-[12px] font-bold text-[#FF5F87]">
+                <Text className="ml-1.5 text-[13px] font-bold text-[#FF5F87]">
                   Xem bảng xếp hạng đầy đủ
                 </Text>
               </View>
@@ -2278,6 +2587,16 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <NearbyDistanceSheet
+        currentDistanceMeters={nearbySearchDistanceMeters}
+        isLoading={nearbyPlacesStatus === "loading"}
+        onApply={handleApplyNearbyDistance}
+        onChangeDistance={setPendingNearbySearchDistanceMeters}
+        onClose={handleCloseNearbyDistanceSheet}
+        selectedDistanceMeters={pendingNearbySearchDistanceMeters}
+        visible={isNearbyDistanceSheetVisible}
+      />
     </SafeAreaView>
   );
 }

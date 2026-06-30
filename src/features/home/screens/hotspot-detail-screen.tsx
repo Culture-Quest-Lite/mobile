@@ -2,9 +2,10 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect, useState, type ComponentProps } from "react";
 import {
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -13,12 +14,16 @@ import {
 } from "react-native";
 import Animated, {
   Extrapolation,
+  cancelAnimation,
   interpolate,
   runOnJS,
   useAnimatedReaction,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
 } from "react-native-reanimated";
 import {
   SafeAreaView,
@@ -29,8 +34,15 @@ import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
-import { addCheckin, useCheckins } from "@/lib/checkin-store";
+import {
+  addApiCheckin,
+  addCheckin,
+  mergeApiCheckins,
+  useCheckedInApiHotspots,
+  useCheckins,
+} from "@/lib/checkin-store";
 import { getRoutesForHotspot, routes, type RouteItem } from "@/lib/demo-data";
+import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
 import { getHotspotStories } from "../api/get-hotspot-stories";
 import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
@@ -90,7 +102,7 @@ const heroShadowStyle = {
     width: 0,
     height: 14,
   },
-  elevation: 8,
+  elevation: Platform.OS === "android" ? 0 : 8,
 } as const;
 
 const sheetShadowStyle = {
@@ -101,7 +113,7 @@ const sheetShadowStyle = {
     width: 0,
     height: -6,
   },
-  elevation: 6,
+  elevation: Platform.OS === "android" ? 12 : 6,
 } as const;
 
 const cardShadowStyle = {
@@ -678,7 +690,7 @@ function HeroChip({ icon, label }: { icon: SymbolName; label: string }) {
   return (
     <View className="flex-row items-center rounded-full bg-black/24 px-3 py-2">
       <SymbolView name={icon} size={13} tintColor="#FFFFFF" />
-      <Text className="ml-1.5 text-[12px] font-semibold text-white">
+      <Text className="ml-1.5 text-[14px] font-semibold text-white">
         {label}
       </Text>
     </View>
@@ -729,6 +741,54 @@ function HeroGalleryThumb({
   );
 }
 
+function ScrollDownHint({ scrollY }: { scrollY: { value: number } }) {
+  const floatOffset = useSharedValue(0);
+
+  useEffect(() => {
+    floatOffset.value = withRepeat(
+      withSequence(
+        withTiming(-6, { duration: 720 }),
+        withTiming(0, { duration: 720 }),
+      ),
+      -1,
+      false,
+    );
+
+    return () => {
+      cancelAnimation(floatOffset);
+    };
+  }, [floatOffset]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      scrollY.value,
+      [0, 40, 88],
+      [1, 0.74, 0],
+      Extrapolation.CLAMP,
+    ),
+    transform: [
+      {
+        translateY:
+          floatOffset.value +
+          interpolate(scrollY.value, [0, 88], [0, -10], Extrapolation.CLAMP),
+      },
+    ],
+  }));
+
+  return (
+    <Animated.View pointerEvents="none" style={[animatedStyle, { alignItems: "center" }]}>
+      <View className="rounded-full border border-white/18 bg-black/30 px-4 py-2.5">
+        <View className="flex-row items-center">
+          <SymbolView name="keyboard_arrow_up" size={15} tintColor="#FFFFFF" />
+          <Text className="ml-1.5 text-[13px] font-bold text-white">
+            Vuốt lên để xem thêm thông tin
+          </Text>
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
 function SummaryStat({
   icon,
   isCompactValue = false,
@@ -749,14 +809,14 @@ function SummaryStat({
         <Text
           className={
             isCompactValue
-              ? "text-[10px] font-black leading-4 text-[#1E3142]"
-              : "text-[13px] font-black text-[#1E3142]"
+              ? "text-[12px] font-black leading-4 text-[#1E3142]"
+              : "text-[15px] font-black text-[#1E3142]"
           }
           numberOfLines={1}
         >
           {value}
         </Text>
-        <Text className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[#9B91A0]">
+        <Text className="text-[12px] font-semibold uppercase tracking-[0.8px] text-[#9B91A0]">
           {label}
         </Text>
       </View>
@@ -799,7 +859,7 @@ function TagChip({
   return (
     <View className="rounded-full px-3 py-2" style={{ backgroundColor }}>
       <Text
-        className="text-[11px] font-semibold uppercase tracking-[0.8px]"
+        className="text-[13px] font-semibold uppercase tracking-[0.8px]"
         style={{ color: textColor }}
       >
         {label}
@@ -907,13 +967,13 @@ function DirectionMapCard({
 
       <View className="absolute left-5 right-5 top-5 flex-row items-center justify-between">
         <View className="rounded-full bg-white/76 px-3 py-2">
-          <Text className="text-[10px] font-bold uppercase tracking-[1px] text-[#3A6C63]">
+          <Text className="text-[12px] font-bold uppercase tracking-[1px] text-[#3A6C63]">
             Tuyến đường gần đây
           </Text>
         </View>
         <View className="max-w-[140px] rounded-full bg-white/78 px-3 py-2">
           <Text
-            className="text-[10px] font-semibold text-[#4E6473]"
+            className="text-[12px] font-semibold text-[#4E6473]"
             numberOfLines={1}
           >
             {address}
@@ -923,7 +983,7 @@ function DirectionMapCard({
 
       <View className="absolute bottom-5 left-5 right-5 flex-row items-end justify-between gap-4">
         <View className="flex-1">
-          <Text className="text-[20px] font-black uppercase tracking-[1px] text-[#7E8874]/95">
+          <Text className="text-[22px] font-black uppercase tracking-[1px] text-[#7E8874]/95">
             {districtLabel}
           </Text>
         </View>
@@ -948,7 +1008,7 @@ function DirectionMapCard({
               size={14}
               tintColor="#FFFFFF"
             />
-            <Text className="ml-1.5 text-[14px] font-black text-white">
+            <Text className="ml-1.5 text-[16px] font-black text-white">
               Chỉ đường
             </Text>
           </LinearGradient>
@@ -1011,7 +1071,7 @@ function LocationInformationSection({
   return (
     <View className="mt-7 gap-5">
       <View>
-        <Text className="mt-2 text-[18px] font-black text-[#3C2D34]">
+        <Text className="mt-2 text-[20px] font-black text-[#3C2D34]">
           Thông tin địa điểm
         </Text>
       </View>
@@ -1028,10 +1088,10 @@ function LocationInformationSection({
               </View>
 
               <View className="flex-1">
-                <Text className="text-[10px] font-medium uppercase tracking-[1px] text-[#8FA6BA]">
+                <Text className="text-[12px] font-medium uppercase tracking-[1px] text-[#8FA6BA]">
                   {item.label}
                 </Text>
-                <Text className="mt-1 text-[14px] leading-6 text-[#526879]">
+                <Text className="mt-1 text-[16px] leading-6 text-[#526879]">
                   {item.value}
                 </Text>
               </View>
@@ -1058,13 +1118,13 @@ function HistoricalInfoSection({ text }: { text: string }) {
             tintColor="#7E6F82"
           />
         </View>
-        <Text className="text-[18px] font-black text-[#3C2D34]">
+        <Text className="text-[20px] font-black text-[#3C2D34]">
           Thông tin lịch sử
         </Text>
       </View>
 
       <View className="rounded-[28px] bg-[#FFF9F3] px-5 py-5">
-        <Text className="text-[14px] leading-7 text-[#554751]">{text}</Text>
+        <Text className="text-[16px] leading-7 text-[#554751]">{text}</Text>
       </View>
     </View>
   );
@@ -1073,6 +1133,7 @@ function HistoricalInfoSection({ text }: { text: string }) {
 function HiddenStoryCheckinSection({
   audioStoryDurationLabel,
   isCheckedIn,
+  isCheckinStatusLoading = false,
   isStoryAvailabilityLoading = false,
   isStoryAvailable = true,
   onCheckinPress,
@@ -1080,6 +1141,7 @@ function HiddenStoryCheckinSection({
 }: {
   audioStoryDurationLabel: string;
   isCheckedIn: boolean;
+  isCheckinStatusLoading?: boolean;
   isStoryAvailabilityLoading?: boolean;
   isStoryAvailable?: boolean;
   onCheckinPress: () => void;
@@ -1087,10 +1149,10 @@ function HiddenStoryCheckinSection({
 }) {
   const checkedInContent = isStoryAvailabilityLoading ? (
     <View className="rounded-[30px] bg-[#F8FBFF] px-5 py-5" style={cardShadowStyle}>
-      <Text className="text-[16px] font-black text-[#2F242C]">
+      <Text className="text-[18px] font-black text-[#2F242C]">
         Đang tải story hotspot
       </Text>
-      <Text className="mt-2 text-[14px] leading-6 text-[#5E7486]">
+      <Text className="mt-2 text-[16px] leading-6 text-[#5E7486]">
         App đang gọi API story cho hotspot này để hiển thị đúng nội dung theo
         từng tag.
       </Text>
@@ -1102,10 +1164,10 @@ function HiddenStoryCheckinSection({
     />
   ) : (
     <View className="rounded-[30px] bg-[#F8FBFF] px-5 py-5" style={cardShadowStyle}>
-      <Text className="text-[16px] font-black text-[#2F242C]">
+      <Text className="text-[18px] font-black text-[#2F242C]">
         Story chuyên đề đang cập nhật
       </Text>
-      <Text className="mt-2 text-[14px] leading-6 text-[#5E7486]">
+      <Text className="mt-2 text-[16px] leading-6 text-[#5E7486]">
         Hotspot này đã check-in thành công. Nội dung story riêng cho điểm đến
         này sẽ được bổ sung sau.
       </Text>
@@ -1127,7 +1189,7 @@ function HiddenStoryCheckinSection({
               tintColor="#8B6B82"
             />
           </View>
-          <Text className="text-[18px] font-black text-[#3C2D34]">
+          <Text className="text-[20px] font-black text-[#3C2D34]">
             Câu chuyện ẩn
           </Text>
         </View>
@@ -1135,18 +1197,38 @@ function HiddenStoryCheckinSection({
         <View className="flex-row items-center rounded-full bg-[#F6EEE8] px-3 py-2">
           <SymbolView
             name={{
-              ios: isCheckedIn ? "checkmark.seal.fill" : "lock.fill",
-              android: isCheckedIn ? "verified" : "lock",
-              web: isCheckedIn ? "verified" : "lock",
+              ios: isCheckedIn
+                ? "checkmark.seal.fill"
+                : isCheckinStatusLoading
+                  ? "clock.fill"
+                  : "lock.fill",
+              android: isCheckedIn
+                ? "verified"
+                : isCheckinStatusLoading
+                  ? "schedule"
+                  : "lock",
+              web: isCheckedIn
+                ? "verified"
+                : isCheckinStatusLoading
+                  ? "schedule"
+                  : "lock",
             }}
             size={12}
-            tintColor={isCheckedIn ? "#1F9D7A" : "#8A736A"}
+            tintColor={
+              isCheckedIn ? "#1F9D7A" : isCheckinStatusLoading ? "#7C7C93" : "#8A736A"
+            }
           />
           <Text
-            className="ml-1.5 text-[11px] font-black uppercase tracking-[0.8px]"
-            style={{ color: isCheckedIn ? "#1F9D7A" : "#8A736A" }}
+            className="ml-1.5 text-[13px] font-black uppercase tracking-[0.8px]"
+            style={{
+              color: isCheckedIn ? "#1F9D7A" : isCheckinStatusLoading ? "#7C7C93" : "#8A736A",
+            }}
           >
-            {isCheckedIn ? "Đã check-in" : "Cần check-in"}
+            {isCheckedIn
+              ? "Đã check-in"
+              : isCheckinStatusLoading
+                ? "Đang đồng bộ"
+                : "Cần check-in"}
           </Text>
         </View>
       </View>
@@ -1178,39 +1260,47 @@ function HiddenStoryCheckinSection({
             />
           </LinearGradient>
 
-          <Text className="mt-5 text-center text-[20px] font-black text-[#3B2A32]">
+          <Text className="mt-5 text-center text-[22px] font-black text-[#3B2A32]">
             Câu chuyện đang chờ bạn
           </Text>
 
-            <Text className="mt-3 max-w-[320px] text-center text-[14px] leading-6 text-[#6A5964]">
-              {isStoryAvailable
-              ? "Check-in tại đây để mở khóa story hotspot và bản kể chuyện độc quyền."
-              : "Check-in tại đây để ghi nhận điểm đến. Story chuyên đề cho hotspot này đang được cập nhật."}
-            </Text>
+          <Text className="mt-3 max-w-[320px] text-center text-[16px] leading-6 text-[#6A5964]">
+            {isCheckinStatusLoading
+              ? "Đang kiểm tra trạng thái check-in từ hệ thống trước khi mở khóa nội dung."
+              : isStoryAvailable
+                ? "Check-in tại đây để mở khóa story hotspot và bản kể chuyện độc quyền."
+                : "Check-in tại đây để ghi nhận điểm đến. Story chuyên đề cho hotspot này đang được cập nhật."}
+          </Text>
 
           <Pressable
             className="mt-6 overflow-hidden rounded-full"
+            disabled={isCheckinStatusLoading}
             onPress={onCheckinPress}
             style={buttonShadowStyle}
           >
             <LinearGradient
-              colors={loginGradientColors}
+              colors={
+                isCheckinStatusLoading
+                  ? ["#D7D3E1", "#C8C1D6", "#BBB3CB"]
+                  : loginGradientColors
+              }
               end={{ x: 1, y: 0.5 }}
               locations={[0, 0.58, 1]}
               start={{ x: 0, y: 0.5 }}
               className="flex-row items-center px-5 py-3.5"
+              style={{ opacity: isCheckinStatusLoading ? 0.88 : 1 }}
             >
               <SymbolView
                 name={{
-                  ios: "location.fill",
-                  android: "place",
-                  web: "place",
+                  ios: isCheckinStatusLoading ? "clock.fill" : "location.fill",
+                  android: isCheckinStatusLoading ? "schedule" : "place",
+                  web: isCheckinStatusLoading ? "schedule" : "place",
                 }}
                 size={15}
                 tintColor="#FFFFFF"
               />
-              <Text className="ml-2 text-[15px] font-black text-white">
-                Check-in tại đây
+              <Text className="ml-2 text-[17px] font-black text-white">
+                {isCheckinStatusLoading ? "Đang đồng bộ..." : "Check-in tại đây"}
               </Text>
             </LinearGradient>
           </Pressable>
@@ -1261,11 +1351,11 @@ function HotspotRouteCarouselCard({ route }: { route: RouteItem }) {
         </View>
 
         <View className="absolute inset-x-4 bottom-4">
-          <Text className="text-[18px] font-black leading-6 text-white">
+          <Text className="text-[20px] font-black leading-6 text-white">
             {route.title}
           </Text>
           <Text
-            className="mt-1 text-[12px] leading-5 text-[#F5E8EE]"
+            className="mt-1 text-[14px] leading-5 text-[#F5E8EE]"
             numberOfLines={2}
           >
             {route.subtitle}
@@ -1285,7 +1375,7 @@ function HotspotRouteCarouselCard({ route }: { route: RouteItem }) {
               size={11}
               tintColor="#EB489B"
             />
-            <Text className="ml-1.5 text-[11px] font-semibold text-[#6D8194]">
+            <Text className="ml-1.5 text-[13px] font-semibold text-[#6D8194]">
               {route.distance}
             </Text>
           </View>
@@ -1300,7 +1390,7 @@ function HotspotRouteCarouselCard({ route }: { route: RouteItem }) {
               size={11}
               tintColor="#F58752"
             />
-            <Text className="ml-1.5 text-[11px] font-semibold text-[#6D8194]">
+            <Text className="ml-1.5 text-[13px] font-semibold text-[#6D8194]">
               {route.duration}
             </Text>
           </View>
@@ -1315,18 +1405,18 @@ function HotspotRouteCarouselCard({ route }: { route: RouteItem }) {
               size={11}
               tintColor="#FFC93C"
             />
-            <Text className="ml-1.5 text-[11px] font-semibold text-[#6D8194]">
+            <Text className="ml-1.5 text-[13px] font-semibold text-[#6D8194]">
               {route.rating.toFixed(1)}
             </Text>
           </View>
         </View>
 
         <View className="mt-4 flex-row items-center justify-between">
-          <Text className="text-[12px] font-semibold text-[#44596B]">
+          <Text className="text-[14px] font-semibold text-[#44596B]">
             {route.hotspotIds.length} diem dung
           </Text>
           <View className="rounded-full bg-[#FFF0F6] px-3 py-2">
-            <Text className="text-[11px] font-black uppercase tracking-[0.8px] text-[#EB489B]">
+            <Text className="text-[13px] font-black uppercase tracking-[0.8px] text-[#EB489B]">
               +{route.xp} XP
             </Text>
           </View>
@@ -1350,7 +1440,7 @@ function RouteMatchesSectionHeader() {
           tintColor="#8B6B82"
         />
       </View>
-      <Text className="text-[18px] font-black text-[#3C2D34]">
+      <Text className="text-[20px] font-black text-[#3C2D34]">
         Các tuyến đường phù hợp
       </Text>
     </View>
@@ -1364,10 +1454,10 @@ function PersonalExperienceSectionHeader({
 }) {
   return (
     <View className="flex-row items-center justify-between gap-3">
-      <Text className="text-[18px] font-black text-[#3C2D34]">
+      <Text className="text-[20px] font-black text-[#3C2D34]">
         Trải nghiệm cá nhân
       </Text>
-      <Text className="text-[12px] font-semibold text-[#8A736A]">
+      <Text className="text-[14px] font-semibold text-[#8A736A]">
         {isCheckedIn ? "Bạn có thể chia sẻ" : "Check-in để chia sẻ"}
       </Text>
     </View>
@@ -1431,7 +1521,7 @@ function PersonalExperienceMediaThumb({
             </View>
           </View>
           <View className="absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-1">
-            <Text className="text-[10px] font-black text-white">
+            <Text className="text-[12px] font-black text-white">
               {item.duration ?? "0:30"}
             </Text>
           </View>
@@ -1463,10 +1553,10 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
             style={{ height: 44, width: 44, borderRadius: 22 }}
           />
           <View className="ml-3 flex-1">
-            <Text className="text-[15px] font-black text-[#2F242C]">
+            <Text className="text-[17px] font-black text-[#2F242C]">
               {item.user}
             </Text>
-            <Text className="mt-0.5 text-[12px] text-[#8A7B83]">
+            <Text className="mt-0.5 text-[14px] text-[#8A7B83]">
               {item.date}
             </Text>
           </View>
@@ -1474,7 +1564,7 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
         <PersonalExperienceStars rating={item.rating} />
       </View>
 
-      <Text className="mt-4 text-[15px] leading-7 text-[#554751]">
+      <Text className="mt-4 text-[17px] leading-7 text-[#554751]">
         {item.text}
       </Text>
 
@@ -1501,10 +1591,10 @@ function EmptyPersonalExperienceCard({
 }) {
   return (
     <View className="rounded-[30px] bg-white px-5 py-5" style={cardShadowStyle}>
-      <Text className="text-[15px] font-black text-[#2F242C]">
+      <Text className="text-[17px] font-black text-[#2F242C]">
         Chưa có trải nghiệm cá nhân
       </Text>
-      <Text className="mt-2 text-[14px] leading-6 text-[#6A5964]">
+      <Text className="mt-2 text-[16px] leading-6 text-[#6A5964]">
         {isCheckedIn
           ? "Bạn là người đầu tiên có thể để lại cảm nhận cho hotspot này."
           : "Check-in tại hotspot để mở quyền chia sẻ trải nghiệm cá nhân."}
@@ -1539,7 +1629,7 @@ function PersonalExperienceSection({
           className="self-center rounded-full bg-[#FFF0F6] px-5 py-3"
           style={cardShadowStyle}
         >
-          <Text className="text-[14px] font-black text-[#EB489B]">
+          <Text className="text-[16px] font-black text-[#EB489B]">
             Xem thêm
           </Text>
         </Pressable>
@@ -1551,10 +1641,12 @@ function PersonalExperienceSection({
 function StickyCheckinBar({
   bottomInset,
   isCheckedIn,
+  isCheckinStatusLoading = false,
   onPress,
 }: {
   bottomInset: number;
   isCheckedIn: boolean;
+  isCheckinStatusLoading?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -1576,17 +1668,23 @@ function StickyCheckinBar({
       >
         <Pressable
           className="overflow-hidden rounded-[22px]"
-          disabled={isCheckedIn}
+          disabled={isCheckedIn || isCheckinStatusLoading}
           onPress={onPress}
           style={buttonShadowStyle}
         >
           <LinearGradient
-            colors={isCheckedIn ? ["#34D399", "#16A34A"] : loginGradientColors}
+            colors={
+              isCheckedIn
+                ? ["#34D399", "#16A34A"]
+                : isCheckinStatusLoading
+                  ? ["#D7D3E1", "#BBB3CB"]
+                  : loginGradientColors
+            }
             end={{ x: 1, y: 0.5 }}
-            locations={isCheckedIn ? [0, 1] : [0, 0.58, 1]}
+            locations={isCheckedIn || isCheckinStatusLoading ? [0, 1] : [0, 0.58, 1]}
             start={{ x: 0, y: 0.5 }}
             className="px-5 py-4"
-            style={{ opacity: isCheckedIn ? 0.92 : 1 }}
+            style={{ opacity: isCheckedIn || isCheckinStatusLoading ? 0.92 : 1 }}
           >
             <View className="flex-row items-center justify-center">
               <View className="h-8 w-8 items-center justify-center rounded-full bg-white/22">
@@ -1594,16 +1692,30 @@ function StickyCheckinBar({
                   name={{
                     ios: isCheckedIn
                       ? "checkmark.circle.fill"
+                      : isCheckinStatusLoading
+                        ? "clock.fill"
                       : "location.fill",
-                    android: isCheckedIn ? "check_circle" : "place",
-                    web: isCheckedIn ? "check_circle" : "place",
+                    android: isCheckedIn
+                      ? "check_circle"
+                      : isCheckinStatusLoading
+                        ? "schedule"
+                        : "place",
+                    web: isCheckedIn
+                      ? "check_circle"
+                      : isCheckinStatusLoading
+                        ? "schedule"
+                        : "place",
                   }}
                   size={16}
                   tintColor="#FFFFFF"
                 />
               </View>
-              <Text className="ml-3 text-[16px] font-black tracking-[0.3px] text-white">
-                {isCheckedIn ? "Đã check-in" : "Sẵn sàng checkin"}
+              <Text className="ml-3 text-[18px] font-black tracking-[0.3px] text-white">
+                {isCheckedIn
+                  ? "Đã check-in"
+                  : isCheckinStatusLoading
+                    ? "Đang đồng bộ..."
+                    : "Sẵn sàng checkin"}
               </Text>
             </View>
           </LinearGradient>
@@ -1630,7 +1742,7 @@ function NotFoundState() {
             <Text className="text-center text-[24px] font-black text-[#1E3245]">
               Hotspot khong ton tai
             </Text>
-            <Text className="mt-3 text-center text-[14px] leading-6 text-[#5E7486]">
+            <Text className="mt-3 text-center text-[15px] leading-6 text-[#5E7486]">
               Dia diem nay khong con trong danh sach hien tai. Ban co the quay
               lai hoac mo danh sach hotspot de chon diem khac.
             </Text>
@@ -1639,7 +1751,7 @@ function NotFoundState() {
                 className="flex-1 items-center rounded-full bg-[#E7EFF5] px-4 py-3.5"
                 onPress={() => router.back()}
               >
-                <Text className="text-[13px] font-bold text-[#28475D]">
+                <Text className="text-[14px] font-bold text-[#28475D]">
                   Quay lai
                 </Text>
               </Pressable>
@@ -1647,7 +1759,7 @@ function NotFoundState() {
                 className="flex-1 items-center rounded-full bg-[#13384D] px-4 py-3.5"
                 onPress={() => router.replace("/hotspots")}
               >
-                <Text className="text-[13px] font-bold text-white">
+                <Text className="text-[14px] font-bold text-white">
                   Xem danh sach
                 </Text>
               </Pressable>
@@ -1674,7 +1786,7 @@ function LoadingState() {
             <Text className="text-center text-[24px] font-black text-[#1E3245]">
               Đang tải hotspot
             </Text>
-            <Text className="mt-3 text-center text-[14px] leading-6 text-[#5E7486]">
+            <Text className="mt-3 text-center text-[15px] leading-6 text-[#5E7486]">
               App đang gọi API chi tiết hotspot theo id để hiển thị dữ liệu mới
               nhất.
             </Text>
@@ -1702,7 +1814,7 @@ function LoadFailedState({ message }: { message: string }) {
             <Text className="text-center text-[24px] font-black text-[#7F1D1D]">
               Không tải được hotspot
             </Text>
-            <Text className="mt-3 text-center text-[14px] leading-6 text-[#7F1D1D]">
+            <Text className="mt-3 text-center text-[15px] leading-6 text-[#7F1D1D]">
               {message}
             </Text>
             <View className="mt-6 flex-row gap-3">
@@ -1710,7 +1822,7 @@ function LoadFailedState({ message }: { message: string }) {
                 className="flex-1 items-center rounded-full bg-[#FDE2E2] px-4 py-3.5"
                 onPress={() => router.back()}
               >
-                <Text className="text-[13px] font-bold text-[#7F1D1D]">
+                <Text className="text-[14px] font-bold text-[#7F1D1D]">
                   Quay lại
                 </Text>
               </Pressable>
@@ -1718,7 +1830,7 @@ function LoadFailedState({ message }: { message: string }) {
                 className="flex-1 items-center rounded-full bg-[#7F1D1D] px-4 py-3.5"
                 onPress={() => router.replace("/hotspots")}
               >
-                <Text className="text-[13px] font-bold text-white">
+                <Text className="text-[14px] font-bold text-white">
                   Danh sách
                 </Text>
               </Pressable>
@@ -1736,6 +1848,7 @@ export default function HotspotDetailScreen() {
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
   const checkins = useCheckins();
+  const checkedInApiHotspots = useCheckedInApiHotspots();
   const { hotspotId, slug } = useLocalSearchParams<{
     hotspotId?: string;
     slug: string;
@@ -1745,6 +1858,8 @@ export default function HotspotDetailScreen() {
   const [isStickyCheckinVisible, setIsStickyCheckinVisible] = useState(false);
   const [remoteHotspot, setRemoteHotspot] = useState<NearbyHotspotDto | null>(null);
   const [remoteHotspotError, setRemoteHotspotError] = useState<string | null>(null);
+  const [isRemoteCheckinStatusLoading, setIsRemoteCheckinStatusLoading] =
+    useState(false);
   const [isRemoteHotspotLoading, setIsRemoteHotspotLoading] = useState(false);
   const resolvedSlug = Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "");
   const resolvedHotspotId = resolveHotspotIdParam(hotspotId);
@@ -1939,6 +2054,61 @@ export default function HotspotDetailScreen() {
     };
   }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId]);
 
+  useEffect(() => {
+    if (resolvedHotspotId === null || remoteHotspot?.isCheckedIn !== true) {
+      return;
+    }
+
+    mergeApiCheckins([resolvedHotspotId]);
+  }, [remoteHotspot?.isCheckedIn, resolvedHotspotId]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function syncRemoteCheckinStatus() {
+      if (!authSession.isAuthenticated || resolvedHotspotId === null) {
+        setIsRemoteCheckinStatusLoading(false);
+        return;
+      }
+
+      setIsRemoteCheckinStatusLoading(true);
+
+      try {
+        const accessToken = await getValidAccessToken();
+
+        if (!accessToken || !isActive) {
+          return;
+        }
+
+        const checkedInHotspotIds = await getCheckedInHotspotIds({
+          accessToken,
+          tokenType: authSession.tokenType,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        mergeApiCheckins(checkedInHotspotIds);
+      } catch (error) {
+        console.info("[hotspot-detail] check-in status sync skipped", {
+          error: error instanceof Error ? error.message : error,
+          hotspotId: resolvedHotspotId,
+        });
+      } finally {
+        if (isActive) {
+          setIsRemoteCheckinStatusLoading(false);
+        }
+      }
+    }
+
+    void syncRemoteCheckinStatus();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId]);
+
   const localHotspot = getHotspotBySlug(slug);
   const remoteHotspotResult = remoteHotspot
     ? buildHotspotFromApi({
@@ -2056,7 +2226,9 @@ export default function HotspotDetailScreen() {
   const canOpenStories =
     resolvedHotspotId !== null ? hasApiStories : Boolean(matchedLocalHotspot);
   const hotspotCheckinId = hotspot.slug;
-  const isCheckedIn = checkins.includes(hotspotCheckinId);
+  const isCheckedIn =
+    checkins.includes(hotspotCheckinId) ||
+    (resolvedHotspotId !== null && checkedInApiHotspots.includes(resolvedHotspotId));
   const historicalPreview = getHistoricalPreview(hotspot.story);
   const audioStoryDurationLabel = getAudioStoryDurationLabel(hotspot.story);
   const hotspotStoriesHref =
@@ -2189,12 +2361,12 @@ export default function HotspotDetailScreen() {
                 style={[compactHeaderStyle, { flex: 1, marginHorizontal: 18 }]}
               >
                 <Text
-                  className="text-center text-[16px] font-black text-white"
+                  className="text-center text-[18px] font-black text-white"
                   numberOfLines={1}
                 >
                   {hotspot.title}
                 </Text>
-                <Text className="mt-0.5 text-center text-[11px] font-semibold uppercase tracking-[1px] text-[#C3EAF5]">
+                <Text className="mt-0.5 text-center text-[13px] font-semibold uppercase tracking-[1px] text-[#C3EAF5]">
                   {hotspot.category}
                 </Text>
               </Animated.View>
@@ -2221,7 +2393,11 @@ export default function HotspotDetailScreen() {
 
       <SafeAreaView className="flex-1" edges={["left", "right", "bottom"]}>
         <Animated.ScrollView
-          style={{ flex: 1 }}
+          style={{
+            elevation: Platform.OS === "android" ? 2 : undefined,
+            flex: 1,
+            zIndex: 1,
+          }}
           contentContainerStyle={{
             paddingBottom: Math.max(insets.bottom + 98, 114),
             paddingTop: heroHeightExpanded - contentOverlap,
@@ -2277,7 +2453,7 @@ export default function HotspotDetailScreen() {
                 </Text>
 
                 <Text
-                  className="mt-3 text-[14px] leading-6 text-[#D3EEF6]"
+                  className="mt-3 text-[16px] leading-6 text-[#D3EEF6]"
                   numberOfLines={4}
                 >
                   {hotspot.story}
@@ -2318,6 +2494,15 @@ export default function HotspotDetailScreen() {
                 ))}
               </ScrollView>
             </View>
+
+            <View
+              className="absolute inset-x-0 items-center"
+              style={{
+                bottom: Math.max(contentOverlap + insets.bottom + 164, 190),
+              }}
+            >
+              <ScrollDownHint scrollY={scrollY} />
+            </View>
           </Animated.View>
 
           <Animated.View
@@ -2328,6 +2513,8 @@ export default function HotspotDetailScreen() {
               {
                 backgroundColor: panelBackground,
                 minHeight: screenHeight,
+                position: "relative",
+                zIndex: 2,
               },
             ]}
           >
@@ -2358,27 +2545,27 @@ export default function HotspotDetailScreen() {
             <View className="mt-5">
               <View className="flex-row items-center justify-between gap-3">
                 <View className="flex-1">
-                  <Text className="text-[11px] font-extrabold uppercase tracking-[1.2px] text-[#EB489B]">
+                  <Text className="text-[13px] font-extrabold uppercase tracking-[1.2px] text-[#EB489B]">
                     Hotspot detail
                   </Text>
-                  <Text className="mt-2 text-[30px] font-black leading-[34px] text-[#1E3142]">
+                  <Text className="mt-2 text-[31px] font-black leading-[35px] text-[#1E3142]">
                     {hotspot.title}
                   </Text>
                 </View>
                 <View className="rounded-full bg-[#FFF0F6] px-3 py-2">
-                  <Text className="text-[12px] font-semibold uppercase tracking-[0.8px] text-[#EB489B]">
+                  <Text className="text-[14px] font-semibold uppercase tracking-[0.8px] text-[#EB489B]">
                     {hotspot.category}
                   </Text>
                 </View>
               </View>
 
-              <Text className="mt-4 text-[14px] leading-6 text-[#677C8E]">
+              <Text className="mt-4 text-[16px] leading-6 text-[#677C8E]">
                 {hotspot.overview}
               </Text>
 
               {remoteHotspotError && localHotspot ? (
                 <View className="mt-4 rounded-[22px] bg-[#FFF4E8] px-4 py-3">
-                  <Text className="text-[13px] font-bold text-[#B45309]">
+                  <Text className="text-[15px] font-bold text-[#B45309]">
                     {`${remoteHotspotError} Đang hiển thị dữ liệu cục bộ.`}
                   </Text>
                 </View>
@@ -2412,7 +2599,7 @@ export default function HotspotDetailScreen() {
                 </View>
 
                 <View className="rounded-full bg-[#F7EFF6] px-3 py-2">
-                  <Text className="text-[11px] font-bold text-[#7E6F82]">
+                  <Text className="text-[13px] font-bold text-[#7E6F82]">
                     {reviewSummaryLabel}
                   </Text>
                 </View>
@@ -2439,6 +2626,7 @@ export default function HotspotDetailScreen() {
                 <HiddenStoryCheckinSection
                   audioStoryDurationLabel={audioStoryDurationLabel}
                   isCheckedIn={isCheckedIn}
+                  isCheckinStatusLoading={isRemoteCheckinStatusLoading}
                   isStoryAvailabilityLoading={isStoryAvailabilityLoading}
                   isStoryAvailable={canOpenStories}
                   onCheckinPress={() => setIsCheckinOverlayVisible(true)}
@@ -2471,10 +2659,10 @@ export default function HotspotDetailScreen() {
                   className="rounded-[28px] bg-white px-5 py-5"
                   style={cardShadowStyle}
                 >
-                  <Text className="text-[15px] font-black text-[#1E3142]">
+                  <Text className="text-[17px] font-black text-[#1E3142]">
                     Chua co route truc tiep
                   </Text>
-                  <Text className="mt-2 text-[14px] leading-6 text-[#5E7486]">
+                  <Text className="mt-2 text-[16px] leading-6 text-[#5E7486]">
                     Hotspot nay hien chua duoc gan vao mot tuyen route cu the
                     trong du lieu mau.
                   </Text>
@@ -2493,7 +2681,7 @@ export default function HotspotDetailScreen() {
                 onPress={() => router.back()}
                 style={cardShadowStyle}
               >
-                <Text className="text-[14px] font-bold text-[#254055]">
+                <Text className="text-[16px] font-bold text-[#254055]">
                   Quay lai hero list
                 </Text>
               </Pressable>
@@ -2511,6 +2699,7 @@ export default function HotspotDetailScreen() {
           <StickyCheckinBar
             bottomInset={insets.bottom}
             isCheckedIn={isCheckedIn}
+            isCheckinStatusLoading={isRemoteCheckinStatusLoading}
             onPress={() => setIsCheckinOverlayVisible(true)}
           />
         </Animated.View>
@@ -2522,7 +2711,13 @@ export default function HotspotDetailScreen() {
             hotspotId={resolvedHotspotId}
             isStoryAvailable={canOpenStories}
             onClose={() => setIsCheckinOverlayVisible(false)}
-            onSuccess={() => addCheckin(hotspotCheckinId)}
+            onSuccess={() => {
+              addCheckin(hotspotCheckinId);
+
+              if (resolvedHotspotId !== null) {
+                addApiCheckin(resolvedHotspotId);
+              }
+            }}
             rewardXp={rewardXp}
             totalRouteStopsCount={routeProgressRoute?.hotspotIds.length}
             visitedRouteStopsCount={visitedRouteStopsCount}

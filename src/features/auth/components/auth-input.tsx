@@ -8,7 +8,7 @@ type AuthInputProps = TextInputProps & {
 };
 
 const webInputStyle = Platform.select({
-  web: { paddingVertical: 14 },
+  web: { paddingVertical: 16 },
   default: undefined,
 });
 
@@ -21,11 +21,11 @@ export function AuthInput({
   ...props
 }: AuthInputProps) {
   return (
-    <View className={`gap-2 ${className ?? ''}`.trim()}>
-      <Text className="text-[13px] font-semibold text-[#625B71]">{label}</Text>
+    <View className={`gap-2.5 ${className ?? ''}`.trim()}>
+      <Text className="text-[16px] font-semibold text-[#625B71]">{label}</Text>
       <TextInput
         {...props}
-        className={`h-[52px] rounded-2xl border px-4 text-[15px] text-[#322A3D] focus:border-[#FF679A]/50 ${
+        className={`h-14 rounded-[20px] border px-4 text-[17px] text-[#322A3D] focus:border-[#FF679A]/50 ${
           errorMessage
             ? 'border-[#D6456C] bg-[#FFF6F9]'
             : 'border-white/90 bg-[#F7F5FA]'
@@ -35,7 +35,7 @@ export function AuthInput({
         style={[webInputStyle, style]}
       />
       {errorMessage ? (
-        <Text className="text-[12px] font-medium text-[#D6456C]">{errorMessage}</Text>
+        <Text className="text-[15px] font-medium text-[#D6456C]">{errorMessage}</Text>
       ) : null}
     </View>
   );

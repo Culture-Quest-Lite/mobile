@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import {
@@ -124,10 +124,10 @@ export default function CommunityExplorerProfileScreen() {
             className="w-full max-w-[360px] rounded-[30px] border border-[#F3DDD5] bg-white px-6 py-7"
             style={cardShadowStyle}
           >
-            <Text className="text-center text-[20px] font-black text-[#2F2337]">
+            <Text className="text-center text-[21px] font-black text-[#2F2337]">
               Không tìm thấy explorer
             </Text>
-            <Text className="mt-2 text-center text-[13px] leading-6 text-[#8E869A]">
+            <Text className="mt-2 text-center text-[14px] leading-6 text-[#8E869A]">
               Hồ sơ cộng đồng này không còn khả dụng hoặc dữ liệu demo chưa được
               tạo.
             </Text>
@@ -142,7 +142,7 @@ export default function CommunityExplorerProfileScreen() {
                 end={{ x: 1, y: 0.5 }}
                 className="items-center py-3.5"
               >
-                <Text className="text-[14px] font-black text-white">
+                <Text className="text-[15px] font-black text-white">
                   Quay lại cộng đồng
                 </Text>
               </LinearGradient>
@@ -251,7 +251,7 @@ export default function CommunityExplorerProfileScreen() {
                 />
               </View>
             ) : null}
-            <Text className="mt-3 text-[16px] font-black text-[#F06297]">
+            <Text className="mt-3 text-[17px] font-black text-[#F06297]">
               {profile.username}
             </Text>
             <View className="mt-3 flex-row flex-wrap items-center justify-center gap-2">
@@ -259,7 +259,7 @@ export default function CommunityExplorerProfileScreen() {
                 <ProfileMetaChip key={`${profile.id}-${item}`} label={item} />
               ))}
             </View>
-            <Text className="mt-3 max-w-[320px] text-center text-[14px] leading-6 text-[#5A4C63]">
+            <Text className="mt-3 max-w-[320px] text-center text-[15px] leading-6 text-[#5A4C63]">
               {shortBio}
             </Text>
           </View>
@@ -393,13 +393,13 @@ export default function CommunityExplorerProfileScreen() {
                           end={{ x: 1, y: 0.5 }}
                           className="items-center py-3"
                         >
-                          <Text className="text-[12px] font-black text-white">
+                          <Text className="text-[13px] font-black text-white">
                             {tab.label}
                           </Text>
                         </LinearGradient>
                       ) : (
                         <View className="items-center py-3">
-                          <Text className="text-[12px] font-black text-[#8E869A]">
+                          <Text className="text-[13px] font-black text-[#8E869A]">
                             {tab.label}
                           </Text>
                         </View>
@@ -540,7 +540,7 @@ function StatsSectionHeader({
       <View className="h-7 w-7 items-center justify-center rounded-full bg-[#FFF1F6]">
         <SymbolView name={icon} size={12} tintColor="#EB489B" />
       </View>
-      <Text className="text-[11px] font-black uppercase tracking-[1px] text-[#E06294]">
+      <Text className="text-[12px] font-black uppercase tracking-[1px] text-[#E06294]">
         {title}
       </Text>
     </View>
@@ -557,7 +557,7 @@ function PremiumBadge({ icon, label }: { icon: SymbolName; label: string }) {
       style={pillShadowStyle}
     >
       <SymbolView name={icon} size={11} tintColor="#FFFFFF" />
-      <Text className="text-[11px] font-black text-white">{label}</Text>
+      <Text className="text-[12px] font-black text-white">{label}</Text>
     </LinearGradient>
   );
 }
@@ -565,7 +565,7 @@ function PremiumBadge({ icon, label }: { icon: SymbolName; label: string }) {
 function ProfileMetaChip({ label }: { label: string }) {
   return (
     <View className="rounded-full border border-[#F7DCE7] bg-[#FFF6FB] px-3 py-1.5">
-      <Text className="text-[12px] font-bold text-[#6C5A75]">{label}</Text>
+      <Text className="text-[13px] font-bold text-[#6C5A75]">{label}</Text>
     </View>
   );
 }
@@ -573,7 +573,7 @@ function ProfileMetaChip({ label }: { label: string }) {
 function TagChip({ label }: { label: string }) {
   return (
     <View className="rounded-full border border-[#F3DCE7] bg-[#FFF7FA] px-3 py-2">
-      <Text className="text-[11px] font-semibold text-[#7B7182]">{label}</Text>
+      <Text className="text-[12px] font-semibold text-[#7B7182]">{label}</Text>
     </View>
   );
 }
@@ -615,14 +615,14 @@ function StatIconMetric({
       </View>
       <Text
         className={`mt-3 font-black text-[#2F2337] ${
-          compact ? "text-[16px]" : "text-[18px]"
+          compact ? "text-[17px]" : "text-[19px]"
         }`}
       >
         {value}
       </Text>
       <Text
         className={`mt-1 text-center font-medium text-[#73657B] ${
-          compact ? "text-[10px]" : "text-[11px]"
+          compact ? "text-[11px]" : "text-[12px]"
         }`}
       >
         {label}
@@ -672,19 +672,19 @@ function PublicPostCard({
       <View className="p-4">
         <View className="flex-row items-center justify-between gap-3">
           <View className="rounded-full bg-[#FFF2F8] px-3 py-2">
-            <Text className="text-[11px] font-black text-[#D55E8E]">
+            <Text className="text-[12px] font-black text-[#D55E8E]">
               {postType}
             </Text>
           </View>
-          <Text className="text-[11px] font-medium text-[#A095A6]">
+          <Text className="text-[12px] font-medium text-[#A095A6]">
             {post.time}
           </Text>
         </View>
 
-        <Text className="mt-3 text-[16px] font-black text-[#2F2337]">
+        <Text className="mt-3 text-[17px] font-black text-[#2F2337]">
           {post.location}
         </Text>
-        <Text className="mt-1 text-[13px] leading-6 text-[#5E5168]">
+        <Text className="mt-1 text-[14px] leading-6 text-[#5E5168]">
           {post.caption}
         </Text>
 
@@ -841,21 +841,21 @@ function PublicRouteCard({
       <View className="min-w-0 flex-1 px-4 py-3.5">
         <View className="flex-row items-start justify-between gap-2">
           <Text
-            className="min-w-0 flex-1 text-[14px] font-black text-[#2F2337]"
+            className="min-w-0 flex-1 text-[15px] font-black text-[#2F2337]"
             numberOfLines={1}
           >
             {route.title}
           </Text>
           <View className="flex-row items-center gap-1 rounded-full bg-[#FFF2F8] px-2.5 py-1.5">
             <SymbolView name={statusIcon} size={11} tintColor="#D55E8E" />
-            <Text className="text-[10px] font-black text-[#D55E8E]">
+            <Text className="text-[11px] font-black text-[#D55E8E]">
               {statusLabel}
             </Text>
           </View>
         </View>
 
         <Text
-          className="mt-1 text-[11px] leading-5 text-[#7B7182]"
+          className="mt-1 text-[12px] leading-5 text-[#7B7182]"
           numberOfLines={2}
         >
           {route.subtitle}
@@ -917,7 +917,7 @@ function BadgesTabContent({
         <Text className="text-[24px] font-black text-white">
           {badgeCount} huy hiệu
         </Text>
-        <Text className="mt-1 text-[12px] leading-5 text-white/88">
+        <Text className="mt-1 text-[13px] leading-5 text-white/88">
           Mở khoá từ check-in, route hoàn thành và hoạt động chia sẻ công khai
           {isPremium ? " trong gói Premium." : "."}
         </Text>
@@ -949,7 +949,7 @@ function SectionHeader({
       <Text className="text-[22px] font-black tracking-[-0.4px] text-[#2F2337]">
         {title}
       </Text>
-      <Text className="text-[12px] font-semibold text-[#8E869A]">
+      <Text className="text-[13px] font-semibold text-[#8E869A]">
         {actionLabel}
       </Text>
     </View>
@@ -985,10 +985,10 @@ function BadgeCard({
             tintColor="#FFFFFF"
           />
         </View>
-        <Text className="mt-3 text-[11px] font-bold uppercase tracking-[0.4px] text-white/80">
+        <Text className="mt-3 text-[12px] font-bold uppercase tracking-[0.4px] text-white/80">
           Badge #{index + 1}
         </Text>
-        <Text className="mt-1 text-[15px] font-black leading-6 text-white">
+        <Text className="mt-1 text-[16px] font-black leading-6 text-white">
           {badge}
         </Text>
       </LinearGradient>
@@ -1000,7 +1000,7 @@ function RouteMeta({ icon, value }: { icon: SymbolName; value: string }) {
   return (
     <View className="flex-row items-center gap-1.5">
       <SymbolView name={icon} size={12} tintColor="#EB489B" />
-      <Text className="text-[11px] font-semibold text-[#5E5168]">{value}</Text>
+      <Text className="text-[12px] font-semibold text-[#5E5168]">{value}</Text>
     </View>
   );
 }
@@ -1009,7 +1009,7 @@ function InlineMetric({ icon, value }: { icon: SymbolName; value: string }) {
   return (
     <View className="flex-row items-center gap-1.5">
       <SymbolView name={icon} size={12} tintColor="#EB489B" />
-      <Text className="text-[11px] font-semibold text-[#5E5168]">{value}</Text>
+      <Text className="text-[12px] font-semibold text-[#5E5168]">{value}</Text>
     </View>
   );
 }
@@ -1020,7 +1020,7 @@ function EmptyContent({ message }: { message: string }) {
       className="rounded-[28px] border border-[#F2E0D7] bg-white px-4 py-6"
       style={cardShadowStyle}
     >
-      <Text className="text-center text-[13px] leading-6 text-[#6D6276]">
+      <Text className="text-center text-[14px] leading-6 text-[#6D6276]">
         {message}
       </Text>
     </View>

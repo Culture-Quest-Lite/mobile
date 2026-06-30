@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { type Href, useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/ui/symbol-view';
 import { type ComponentProps, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,7 +12,6 @@ import {
   ScrollView,
   Text,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -222,8 +221,8 @@ export default function ExploreScreen() {
   const carouselRef = useRef<ScrollView>(null);
   const activeRouteIndexRef = useRef(0);
 
-  const snapInterval = width;
-  const routeCardWidth = Math.max(width - 72, 280);
+  const snapInterval = safeWidth;
+  const routeCardWidth = Math.max(contentWidth, 280);
 
   const filteredPlaces = useMemo(() => {
     if (activeCategory === 'Tất cả') return nearbyPlaces;
@@ -385,10 +384,10 @@ export default function ExploreScreen() {
               </View>
             </View>
 
-            <Pressable className="h-12 w-12 items-center justify-center rounded-3xl bg-[#FFF4EF]">
+            <Pressable className="h-10 w-10 items-center justify-center rounded-3xl bg-[#FFF4EF]">
               <SymbolView
                 name={{ ios: 'bell', android: 'notifications', web: 'notifications' }}
-                size={22}
+                size={16}
                 tintColor="#EB489B"
               />
             </Pressable>
@@ -397,7 +396,7 @@ export default function ExploreScreen() {
           <View className="rounded-[28px] bg-[#F7F3EA] p-4">
             <View className="flex-row items-center justify-between">
               <View className="flex-1 pr-3">
-                <Text className="text-[12px] font-semibold uppercase tracking-[1px] text-[#8A7D6D]">
+                <Text className="text-[13px] font-semibold uppercase tracking-[1px] text-[#8A7D6D]">
                   Nổi bật hôm nay
                 </Text>
                 <Text className="mt-1 text-[18px] font-bold text-[#2B2233]">
@@ -413,20 +412,20 @@ export default function ExploreScreen() {
           </View>
 
           <View className="flex-row items-center gap-3">
-            <View className="flex-1 flex-row items-center rounded-[26px] bg-[#FAF7FC] px-4 py-4">
+            <View className="flex-1 flex-row items-center rounded-[26px] bg-[#FAF7FC] px-4 py-3.5">
               <SymbolView
                 name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
-                size={20}
+                size={16}
                 tintColor="#AA9FB0"
               />
               <Text className="ml-2 text-[15px] text-[#AA9FB0]">
                 Tìm điểm, tuyến, thử thách...
               </Text>
             </View>
-            <Pressable className="h-[54px] w-[54px] items-center justify-center rounded-[18px] bg-[#FFF4EF]">
+            <Pressable className="h-10 w-10 items-center justify-center rounded-[15px] bg-[#FFF4EF]">
               <SymbolView
                 name={{ ios: 'slider.horizontal.3', android: 'tune', web: 'tune' }}
-                size={20}
+                size={16}
                 tintColor="#EB489B"
               />
             </Pressable>
@@ -448,7 +447,7 @@ export default function ExploreScreen() {
                   }`}
                 >
                   <Text
-                    className={`text-[13px] font-semibold ${
+                    className={`text-[14px] font-semibold ${
                       selected ? 'text-[#A2672B]' : 'text-[#6E6B62]'
                     }`}
                   >
@@ -461,10 +460,13 @@ export default function ExploreScreen() {
         </View>
 
         <View className="mb-6">
-          <View className="mb-3 flex-row items-center justify-between px-5">
-            <Text className="text-[22px] font-bold text-[#2B2233]">Bản đồ địa điểm</Text>
+          <View
+            className="mb-3 flex-row items-center justify-between"
+            style={{ paddingHorizontal: gutter }}
+          >
+              <Text className="text-[19px] font-bold text-[#2B2233]">Bản đồ địa điểm</Text>
             <Pressable className="rounded-full bg-[#FFF4EF] px-3 py-2">
-              <Text className="text-[13px] font-semibold text-[#F58752]">Toàn màn hình</Text>
+              <Text className="text-[14px] font-semibold text-[#F58752]">Toàn màn hình</Text>
             </Pressable>
           </View>
           <ExploreMap
@@ -600,9 +602,9 @@ export default function ExploreScreen() {
 
           <View className="gap-4">
             <View className="flex-row items-center justify-between">
-              <Text className="text-[22px] font-bold text-[#2B2233]">Gần bạn</Text>
+              <Text className="text-[19px] font-bold text-[#2B2233]">Gần bạn</Text>
               <Pressable className="rounded-full bg-[#FFF4EF] px-3 py-2">
-                <Text className="text-[13px] font-semibold text-[#F58752]">Xem bản đồ</Text>
+                <Text className="text-[14px] font-semibold text-[#F58752]">Xem bản đồ</Text>
               </Pressable>
             </View>
 
@@ -613,7 +615,7 @@ export default function ExploreScreen() {
               </View>
             ) : filteredPlaces.length === 0 ? (
               <View className="items-center py-8">
-                <Text className="text-[14px] text-[#8E869A]">
+                <Text className="text-[15px] text-[#8E869A]">
                   Không có địa điểm cho danh mục này
                 </Text>
               </View>
@@ -635,12 +637,12 @@ export default function ExploreScreen() {
                           {place.title}
                         </Text>
                         <View className="rounded-full bg-[#FFF5E8] px-3 py-1.5">
-                          <Text className="text-[12px] font-semibold text-[#B86D2A]">
+                          <Text className="text-[13px] font-semibold text-[#B86D2A]">
                             {place.reward} XP
                           </Text>
                         </View>
                       </View>
-                      <Text className="mt-1 text-[13px] text-[#6E6B62]">
+                      <Text className="mt-1 text-[14px] text-[#6E6B62]">
                         {place.category} · {place.badge}
                       </Text>
                       <View className="mt-3 flex-row items-center justify-between">
@@ -650,10 +652,10 @@ export default function ExploreScreen() {
                             size={13}
                             tintColor="#D18C2F"
                           />
-                          <Text className="text-[13px] font-semibold text-[#2B2233]">
+                          <Text className="text-[14px] font-semibold text-[#2B2233]">
                             {place.rating}
                           </Text>
-                          <Text className="text-[12px] text-[#8A7D6D]">
+                          <Text className="text-[13px] text-[#8A7D6D]">
                             ({place.reviews} đánh giá)
                           </Text>
                         </View>
@@ -663,7 +665,7 @@ export default function ExploreScreen() {
                             size={12}
                             tintColor="#8A7D6D"
                           />
-                          <Text className="text-[12px] text-[#8A7D6D]">{place.distance}</Text>
+                          <Text className="text-[13px] text-[#8A7D6D]">{place.distance}</Text>
                         </View>
                       </View>
                     </View>
@@ -678,9 +680,9 @@ export default function ExploreScreen() {
             style={cardShadowStyle}
           >
             <View className="flex-row items-center justify-between">
-              <Text className="text-[22px] font-bold text-[#2B2233]">Nhiệm vụ nổi bật</Text>
+              <Text className="text-[19px] font-bold text-[#2B2233]">Nhiệm vụ nổi bật</Text>
               <Pressable>
-                <Text className="text-[14px] font-bold text-[#F58752]">Xem tất cả</Text>
+                <Text className="text-[15px] font-bold text-[#F58752]">Xem tất cả</Text>
               </Pressable>
             </View>
 
@@ -691,18 +693,18 @@ export default function ExploreScreen() {
                   className="flex-row items-center rounded-[22px] bg-white px-3 py-3.5"
                 >
                   <View
-                    className="mr-3 h-12 w-12 items-center justify-center rounded-full"
+                    className="mr-3 h-10 w-10 items-center justify-center rounded-full"
                     style={{ backgroundColor: item.iconBackground }}
                   >
-                    <SymbolView name={item.icon} size={22} tintColor="#3D3446" />
+                    <SymbolView name={item.icon} size={16} tintColor="#3D3446" />
                   </View>
                   <View className="flex-1 pr-3">
-                    <Text className="text-[15px] font-extrabold text-[#2B2233]">{item.label}</Text>
-                    <Text className="mt-0.5 text-[12px] leading-4 text-[#8E869A]">
+                    <Text className="text-[17px] font-extrabold text-[#2B2233]">{item.label}</Text>
+                    <Text className="mt-0.5 text-[13px] leading-4 text-[#8E869A]">
                       {item.subtitle}
                     </Text>
                   </View>
-                  <Text className="text-[16px] font-extrabold text-[#2B2233]">{item.reward}</Text>
+                  <Text className="text-[18px] font-extrabold text-[#2B2233]">{item.reward}</Text>
                 </View>
               ))}
             </View>
@@ -712,3 +714,4 @@ export default function ExploreScreen() {
     </SafeAreaView>
   );
 }
+

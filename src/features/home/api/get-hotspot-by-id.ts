@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 
 import type { NearbyHotspotDto } from "./get-nearby-hotspots";
+import { isPublishedHotspotStatus } from "./hotspot-status";
 
 type GetHotspotByIdRequest = {
   accessToken?: string | null;
@@ -28,6 +29,14 @@ function readNumber(value: unknown) {
 
 function readString(value: unknown) {
   return typeof value === "string" ? value : "";
+}
+
+function readNullableBoolean(value: unknown) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  return null;
 }
 
 function parseTag(value: unknown) {
@@ -110,6 +119,7 @@ function parseHotspot(value: unknown): NearbyHotspotDto | null {
     historyInformation: readString(value.historyInformation),
     hotspotId,
     hotspotName,
+    isCheckedIn: readNullableBoolean(value.isCheckedIn),
     latitude,
     longitude,
     medias: Array.isArray(value.medias)
@@ -244,6 +254,15 @@ export async function getHotspotById({
       url: getHotspotByIdUrl,
     });
     throw new Error("API chi tiết hotspot trả về dữ liệu không đúng định dạng.");
+  }
+
+  if (!isPublishedHotspotStatus(parsedHotspot.status)) {
+    console.warn("[hotspot] get hotspot by id filtered non-publish hotspot", {
+      hotspotId,
+      status: parsedHotspot.status,
+      url: getHotspotByIdUrl,
+    });
+    throw new Error("Hotspot này chưa ở trạng thái publish.");
   }
 
   return parsedHotspot;

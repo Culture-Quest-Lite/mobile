@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -327,7 +327,7 @@ function HotspotStatChip({
     <View className="flex-row items-center">
       <SymbolView name={icon} size={13} tintColor="#FFC93C" />
       <Text
-        className="ml-1.5 text-[12px] font-extrabold"
+        className="ml-1.5 text-[13px] font-extrabold"
         style={{ color: textColor }}
       >
         {label}
@@ -377,7 +377,7 @@ function HotspotCollectionCard({
             start={{ x: 0, y: 0.5 }}
             className="rounded-full px-3 py-1.5"
           >
-            <Text className="text-[11px] font-extrabold text-[#EB489B]">
+            <Text className="text-[12px] font-extrabold text-[#EB489B]">
               {place.category}
             </Text>
           </LinearGradient>
@@ -388,7 +388,7 @@ function HotspotCollectionCard({
             start={{ x: 0, y: 0.5 }}
             className="rounded-full px-3 py-1.5"
           >
-            <Text className="text-[11px] font-bold text-white">
+            <Text className="text-[12px] font-bold text-white">
               {place.reward} XP
             </Text>
           </LinearGradient>
@@ -398,7 +398,7 @@ function HotspotCollectionCard({
           <Text className="text-[29px] font-black leading-[34px] text-white">
             {place.title}
           </Text>
-          <Text className="mt-1 text-[13px] text-[#F6DFE8]" numberOfLines={2}>
+          <Text className="mt-1 text-[14px] text-[#F6DFE8]" numberOfLines={2}>
             {place.overview}
           </Text>
 
@@ -579,7 +579,7 @@ export default function AllHotspotsScreen() {
                 size={13}
                 tintColor="#FFFFFF"
               />
-              <Text className="ml-2 text-[12px] font-bold text-white">
+              <Text className="ml-2 text-[13px] font-bold text-white">
                 {filteredPlaces.length} địa điểm
               </Text>
             </LinearGradient>
@@ -593,7 +593,7 @@ export default function AllHotspotsScreen() {
 
           {nearbyHotspotsStatus === "loading" ? (
             <View className="mt-4 rounded-[18px] border border-[#F0E8F4] bg-[#FAF7FC] px-4 py-4">
-              <Text className="text-[14px] font-bold text-[#3B4454]">
+              <Text className="text-[15px] font-bold text-[#3B4454]">
                 Đang tải hotspot gần bạn...
               </Text>
             </View>
@@ -610,7 +610,7 @@ export default function AllHotspotsScreen() {
                 size={15}
                 tintColor="#8E869A"
               />
-              <Text className="ml-3 flex-1 text-[13px] text-[#8E869A]">
+              <Text className="ml-3 flex-1 text-[14px] text-[#8E869A]">
                 Tìm kiếm địa điểm, lộ trình, văn hóa...
               </Text>
             </View>
@@ -647,7 +647,7 @@ export default function AllHotspotsScreen() {
               style={cardShadowStyle}
             >
               <View className="flex-row items-center justify-between">
-                <Text className="text-[14px] font-extrabold text-[#2B2233]">
+                <Text className="text-[15px] font-extrabold text-[#2B2233]">
                   Lọc theo chủ đề
                 </Text>
                 <Pressable
@@ -657,7 +657,7 @@ export default function AllHotspotsScreen() {
                     setIsFilterPanelVisible(false);
                   }}
                 >
-                  <Text className="text-[12px] font-bold text-[#F58752]">
+                  <Text className="text-[13px] font-bold text-[#F58752]">
                     Xóa lọc
                   </Text>
                 </Pressable>
@@ -683,13 +683,13 @@ export default function AllHotspotsScreen() {
                           start={{ x: 0, y: 0.5 }}
                           className="rounded-full px-4 py-3"
                         >
-                          <Text className="text-[13px] font-semibold text-white">
+                          <Text className="text-[14px] font-semibold text-white">
                             {item.label}
                           </Text>
                         </LinearGradient>
                       ) : (
                         <View className="rounded-full bg-[#FAF7FC] px-4 py-3">
-                          <Text className="text-[13px] font-semibold text-[#2B2233]">
+                          <Text className="text-[14px] font-semibold text-[#2B2233]">
                             {item.label}
                           </Text>
                         </View>
@@ -714,10 +714,10 @@ export default function AllHotspotsScreen() {
 
             {filteredPlaces.length === 0 ? (
               <View className="items-center rounded-[28px] border border-dashed border-[#3A2740] bg-[#1E1720] px-6 py-10">
-                <Text className="text-[16px] font-extrabold text-white">
+                <Text className="text-[17px] font-extrabold text-white">
                   Chưa có hotspot cho chủ đề này
                 </Text>
-                <Text className="mt-2 max-w-[260px] text-center text-[13px] leading-5 text-[#B2A4B8]">
+                <Text className="mt-2 max-w-[260px] text-center text-[14px] leading-5 text-[#B2A4B8]">
                   Hãy chọn chủ đề khác để xem thêm các địa điểm gần bạn.
                 </Text>
               </View>

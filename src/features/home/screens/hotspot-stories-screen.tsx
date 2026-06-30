@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { SymbolView } from "expo-symbols";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import {
@@ -134,7 +134,7 @@ function ThemeTagChip({
         />
       </View>
       <Text
-        className="mt-2 text-[14px] font-black"
+        className="mt-2 text-[15px] font-black"
         style={{ color: isActive ? "#EB489B" : "#A897B2" }}
       >
         {label}
@@ -190,7 +190,7 @@ function StoryCard({
 
         <View style={{ maxWidth: `${item.textWidth}%` }}>
           <Text
-            className="text-[19px] font-black leading-6 text-white"
+            className="text-[20px] font-black leading-6 text-white"
             style={{
               textShadowColor: "rgba(76, 53, 76, 0.12)",
               textShadowOffset: { width: 0, height: 1 },
@@ -237,7 +237,7 @@ function NotFoundState() {
             <Text className="text-center text-[24px] font-black text-[#2B2233]">
               Không tìm thấy story
             </Text>
-            <Text className="mt-3 text-center text-[14px] leading-6 text-[#6F657A]">
+            <Text className="mt-3 text-center text-[15px] leading-6 text-[#6F657A]">
               Hotspot này không còn trong dữ liệu hiện tại hoặc slug chưa hợp
               lệ.
             </Text>
@@ -245,7 +245,7 @@ function NotFoundState() {
               className="mt-6 items-center rounded-full bg-[#FFF0F6] px-5 py-3.5"
               onPress={() => router.back()}
             >
-              <Text className="text-[14px] font-black text-[#EB489B]">
+              <Text className="text-[15px] font-black text-[#EB489B]">
                 Quay lại hotspot
               </Text>
             </Pressable>
@@ -262,10 +262,10 @@ function EmptyStoriesState({ message }: { message: string }) {
       className="rounded-[28px] border border-[#F4DCE6] bg-[#FFF9FD] px-5 py-6"
       style={cardShadowStyle}
     >
-      <Text className="text-[18px] font-black text-[#2B2233]">
+      <Text className="text-[19px] font-black text-[#2B2233]">
         Chưa có story phù hợp
       </Text>
-      <Text className="mt-2 text-[14px] leading-6 text-[#6F657A]">
+      <Text className="mt-2 text-[15px] leading-6 text-[#6F657A]">
         {message}
       </Text>
     </View>
@@ -457,7 +457,7 @@ export default function HotspotStoriesScreen() {
               />
             </Pressable>
 
-            <Text className="text-[15px] font-black text-[#EB489B]">
+            <Text className="text-[16px] font-black text-[#EB489B]">
               Story hotspot
             </Text>
 
@@ -485,13 +485,13 @@ export default function HotspotStoriesScreen() {
           </ScrollView>
 
           {isStoriesLoading ? (
-            <Text className="pb-3 pt-2 text-[12px] font-medium text-[#A897B2]">
+            <Text className="pb-3 pt-2 text-[13px] font-medium text-[#A897B2]">
               Đang tải story của hotspot...
             </Text>
           ) : null}
 
           {storiesError ? (
-            <Text className="pb-3 pt-2 text-[12px] font-medium text-[#D97706]">
+            <Text className="pb-3 pt-2 text-[13px] font-medium text-[#D97706]">
               {storiesError}
             </Text>
           ) : null}

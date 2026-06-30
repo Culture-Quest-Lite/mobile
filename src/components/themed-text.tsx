@@ -19,14 +19,14 @@ const themeColorClassNames: Record<ThemeColor, string> = {
 };
 
 const typeClassNames: Record<NonNullable<ThemedTextProps['type']>, string> = {
-  default: 'text-base font-medium leading-6',
-  title: 'text-5xl font-semibold leading-[52px]',
-  small: 'text-sm font-medium leading-5',
-  smallBold: 'text-sm font-bold leading-5',
-  subtitle: 'text-[32px] font-semibold leading-11',
-  link: 'text-sm leading-[30px]',
-  linkPrimary: 'text-sm leading-[30px] text-[#3C87F7]',
-  code: 'text-xs font-medium',
+  default: 'text-base font-medium leading-7',
+  title: 'text-5xl font-semibold leading-[58px]',
+  small: 'text-sm font-medium leading-6',
+  smallBold: 'text-sm font-bold leading-6',
+  subtitle: 'text-[34px] font-semibold leading-[46px]',
+  link: 'text-sm leading-[32px]',
+  linkPrimary: 'text-sm leading-[32px] text-[#3C87F7]',
+  code: 'text-[13px] font-medium',
 };
 
 const codeStyle = {
