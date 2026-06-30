@@ -1,6 +1,11 @@
 import { useMemo, useRef } from 'react';
 import { Platform, Text, View } from 'react-native';
-import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
+import MapView, {
+  Marker,
+  Polyline,
+  PROVIDER_GOOGLE,
+  type Region,
+} from 'react-native-maps';
 
 export type AppMapPoint = {
   id: string | number;
@@ -40,19 +45,12 @@ function getRegion(points: AppMapPoint[]): Region {
 
   const latitudes = validPoints.map((point) => point.latitude);
   const longitudes = validPoints.map((point) => point.longitude);
-  const minLatitude = Math.min(...latitudes);
-  const maxLatitude = Math.max(...latitudes);
-  const minLongitude = Math.min(...longitudes);
-  const maxLongitude = Math.max(...longitudes);
-
-  const latitudeDelta = Math.max((maxLatitude - minLatitude) * 1.8, 0.015);
-  const longitudeDelta = Math.max((maxLongitude - minLongitude) * 1.8, 0.015);
 
   return {
-    latitude: (minLatitude + maxLatitude) / 2,
-    longitude: (minLongitude + maxLongitude) / 2,
-    latitudeDelta,
-    longitudeDelta,
+    latitude: (Math.min(...latitudes) + Math.max(...latitudes)) / 2,
+    longitude: (Math.min(...longitudes) + Math.max(...longitudes)) / 2,
+    latitudeDelta: Math.max((Math.max(...latitudes) - Math.min(...latitudes)) * 1.8, 0.015),
+    longitudeDelta: Math.max((Math.max(...longitudes) - Math.min(...longitudes)) * 1.8, 0.015),
   };
 }
 
@@ -66,10 +64,14 @@ export function AppMap({
   const mapRef = useRef<MapView | null>(null);
   const validPoints = useMemo(() => points.filter(isValidCoordinate), [points]);
   const initialRegion = useMemo(() => getRegion(validPoints), [validPoints]);
+
   const polylineCoordinates =
     routeCoordinates && routeCoordinates.length > 1
       ? routeCoordinates
-      : validPoints.map((point) => ({ latitude: point.latitude, longitude: point.longitude }));
+      : validPoints.map((point) => ({
+          latitude: point.latitude,
+          longitude: point.longitude,
+        }));
 
   if (Platform.OS === 'web') {
     return (
@@ -91,17 +93,33 @@ export function AppMap({
   }
 
   return (
-    <View style={{ height, overflow: 'hidden', borderRadius: 28 }}>
+    <View
+      style={{
+        height,
+        width: '100%',
+        overflow: 'hidden',
+        borderRadius: 28,
+        backgroundColor: '#E8F0FE',
+      }}
+    >
       <MapView
         ref={mapRef}
-        style={{ flex: 1 }}
+        provider={PROVIDER_GOOGLE}
+        mapType="standard"
+        style={{ width: '100%', height: '100%' }}
         initialRegion={initialRegion}
         showsUserLocation={showsUserLocation}
         showsMyLocationButton
+        loadingEnabled
+        loadingIndicatorColor="#EB489B"
+        loadingBackgroundColor="#E8F0FE"
         onMapReady={() => {
           if (validPoints.length > 1) {
             mapRef.current?.fitToCoordinates(
-              validPoints.map((point) => ({ latitude: point.latitude, longitude: point.longitude })),
+              validPoints.map((point) => ({
+                latitude: point.latitude,
+                longitude: point.longitude,
+              })),
               {
                 animated: true,
                 edgePadding: { top: 55, right: 55, bottom: 55, left: 55 },
@@ -111,13 +129,20 @@ export function AppMap({
         }}
       >
         {polylineCoordinates.length > 1 ? (
-          <Polyline coordinates={polylineCoordinates} strokeWidth={4} strokeColor="#EB489B" />
+          <Polyline
+            coordinates={polylineCoordinates}
+            strokeWidth={4}
+            strokeColor="#EB489B"
+          />
         ) : null}
 
         {validPoints.map((point, index) => (
           <Marker
             key={String(point.id)}
-            coordinate={{ latitude: point.latitude, longitude: point.longitude }}
+            coordinate={{
+              latitude: point.latitude,
+              longitude: point.longitude,
+            }}
             title={point.title}
             description={point.description}
             onPress={() => onPointPress?.(point)}
@@ -135,7 +160,9 @@ export function AppMap({
                 borderWidth: 2,
               }}
             >
-              <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>{index + 1}</Text>
+              <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
+                {index + 1}
+              </Text>
             </View>
           </Marker>
         ))}
