@@ -3,6 +3,8 @@ const keycloakUrl = process.env.EXPO_PUBLIC_KEYCLOAK_URL?.trim() ?? '';
 const keycloakRealm = process.env.EXPO_PUBLIC_KEYCLOAK_REALM?.trim() ?? '';
 const keycloakClientId = process.env.EXPO_PUBLIC_KEYCLOAK_CLIENT_ID?.trim() ?? '';
 const googleRedirectUri = process.env.EXPO_PUBLIC_GOOGLE_REDIRECT_URI?.trim() ?? '';
+const rawUseDevLocationOverride =
+  process.env.EXPO_PUBLIC_USE_DEV_LOCATION_OVERRIDE?.trim() ?? '';
 const devLatitude = process.env.EXPO_PUBLIC_DEV_LATITUDE?.trim() ?? '';
 const devLongitude = process.env.EXPO_PUBLIC_DEV_LONGITUDE?.trim() ?? '';
 
@@ -20,12 +22,20 @@ function normalizeApiBaseUrl(value: string) {
   return normalizedValue.replace(/\/swagger-ui(?:\/index\.html)?$/i, '');
 }
 
+function parseBooleanEnv(value: string) {
+  const normalizedValue = value.trim().toLowerCase();
+
+  return ["1", "true", "yes", "on"].includes(normalizedValue);
+}
+
 const apiBaseUrl = normalizeApiBaseUrl(rawApiBaseUrl);
+const useDevLocationOverride = parseBooleanEnv(rawUseDevLocationOverride);
 
 export const PublicEnv = {
   apiBaseUrl,
   devLatitude,
   devLongitude,
+  useDevLocationOverride,
   keycloakClientId,
   keycloakRealm,
   keycloakUrl,
@@ -76,9 +86,16 @@ function collectEnvWarnings() {
     warnings.push('EXPO_PUBLIC_GOOGLE_REDIRECT_URI is missing.');
   }
 
-  if (Boolean(PublicEnv.devLatitude) !== Boolean(PublicEnv.devLongitude)) {
+  if (
+    PublicEnv.useDevLocationOverride &&
+    (!PublicEnv.devLatitude || !PublicEnv.devLongitude)
+  ) {
     warnings.push(
-      'Set both EXPO_PUBLIC_DEV_LATITUDE and EXPO_PUBLIC_DEV_LONGITUDE to enable the dev mock location.',
+      'Set both EXPO_PUBLIC_DEV_LATITUDE and EXPO_PUBLIC_DEV_LONGITUDE when EXPO_PUBLIC_USE_DEV_LOCATION_OVERRIDE=true.',
+    );
+  } else if (Boolean(PublicEnv.devLatitude) !== Boolean(PublicEnv.devLongitude)) {
+    warnings.push(
+      'Set both EXPO_PUBLIC_DEV_LATITUDE and EXPO_PUBLIC_DEV_LONGITUDE to keep the dev mock location valid.',
     );
   }
 

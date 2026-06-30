@@ -28,7 +28,7 @@ export function formatCoordinateLabel(
 }
 
 export function getDevelopmentLocationOverride(): AppCoordinate | null {
-  if (!__DEV__) {
+  if (!__DEV__ || !PublicEnv.useDevLocationOverride) {
     return null;
   }
 

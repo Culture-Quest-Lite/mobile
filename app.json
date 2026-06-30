@@ -7,16 +7,17 @@
     "icon": "./assets/images/logo2-app-icon-v2.png",
     "scheme": "culturequestlitemobile",
     "userInterfaceStyle": "automatic",
-    "ios": {
-      "icon": "./assets/images/logo2-app-icon-v2.png"
-    },
     "android": {
+      "package": "com.anonymous.Culture_quest_lite_mobile",
       "icon": "./assets/images/logo2-app-icon-v2.png",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/logo2-adaptive-foreground.png"
       },
       "predictiveBackGestureEnabled": false
+    },
+    "ios": {
+      "icon": "./assets/images/logo2-app-icon-v2.png"
     },
     "web": {
       "bundler": "metro",
