@@ -1,0 +1,210 @@
+import { Platform } from "react-native";
+
+import { PublicEnv, buildApiUrl } from "@/constants/env";
+
+export type CreateCheckInRequest = {
+  accessToken: string;
+  hotspotId: number;
+  latitude: number;
+  longitude: number;
+  tokenType?: string | null;
+};
+
+export type CheckInResponse = {
+  checkInAt: string;
+  checkInId: number;
+  hotspotId: number;
+  pointEarned: number;
+  userRouteProgressId: number;
+  xpEarned: number;
+};
+
+function resolveCreateCheckInUrl() {
+  if (PublicEnv.apiBaseUrl.trim()) {
+    return buildApiUrl("/api/v1/check-ins");
+  }
+
+  return "http://13.158.40.56:8080/api/v1/check-ins";
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function parseCheckInResponse(value: unknown): CheckInResponse | null {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  const checkInId = readNumber(value.checkInId);
+  const hotspotId = readNumber(value.hotspotId);
+  const userRouteProgressId = readNumber(value.userRouteProgressId);
+  const pointEarned = readNumber(value.pointEarned);
+  const xpEarned = readNumber(value.xpEarned);
+  const checkInAt = readString(value.checkInAt);
+
+  if (
+    checkInId === null ||
+    hotspotId === null ||
+    userRouteProgressId === null ||
+    pointEarned === null ||
+    xpEarned === null ||
+    !checkInAt.trim()
+  ) {
+    return null;
+  }
+
+  return {
+    checkInAt,
+    checkInId,
+    hotspotId,
+    pointEarned,
+    userRouteProgressId,
+    xpEarned,
+  };
+}
+
+function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    };
+  }
+
+  return {
+    value: error,
+  };
+}
+
+function summarizeBody(body: unknown) {
+  if (typeof body === "string") {
+    return body.slice(0, 300);
+  }
+
+  if (isObject(body) || Array.isArray(body)) {
+    return body;
+  }
+
+  return body;
+}
+
+async function parseResponseBody(response: Response) {
+  const rawBody = await response.text();
+
+  if (!rawBody) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawBody) as unknown;
+  } catch {
+    return rawBody;
+  }
+}
+
+function getErrorMessage(body: unknown, status: number) {
+  if (isObject(body)) {
+    for (const key of ["message", "error", "detail", "title"]) {
+      const candidate = body[key];
+
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate.trim();
+      }
+    }
+  }
+
+  if (typeof body === "string" && body.trim()) {
+    return body.trim();
+  }
+
+  if (status === 401 || status === 403) {
+    return "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.";
+  }
+
+  return `Check-in thất bại (${status}).`;
+}
+
+function getConnectionErrorMessage(url: string) {
+  if (Platform.OS === "android" && url.startsWith("http://")) {
+    return "Android đang chặn kết nối HTTP tới API. Hãy dùng HTTPS hoặc rebuild Android dev client sau khi bật cleartext traffic.";
+  }
+
+  return "Không thể kết nối đến máy chủ check-in.";
+}
+
+export async function createCheckIn({
+  accessToken,
+  hotspotId,
+  latitude,
+  longitude,
+  tokenType,
+}: CreateCheckInRequest): Promise<CheckInResponse> {
+  const createCheckInUrl = resolveCreateCheckInUrl();
+  let response: Response;
+
+  try {
+    response = await fetch(createCheckInUrl, {
+      body: JSON.stringify({
+        hotspotId,
+        latitude,
+        longitude,
+      }),
+      headers: {
+        Accept: "application/json",
+        Authorization: `${tokenType ?? "Bearer"} ${accessToken}`,
+        "Content-Type": "application/json",
+        "X-Client-Type": "mobile",
+      },
+      method: "POST",
+    });
+  } catch (error) {
+    console.warn("[checkin] create check-in network failure", {
+      error: serializeError(error),
+      hotspotId,
+      latitude,
+      longitude,
+      platform: Platform.OS,
+      url: createCheckInUrl,
+    });
+    throw new Error(getConnectionErrorMessage(createCheckInUrl));
+  }
+
+  const responseBody = await parseResponseBody(response);
+
+  if (!response.ok) {
+    console.warn("[checkin] create check-in rejected", {
+      body: summarizeBody(responseBody),
+      hotspotId,
+      latitude,
+      longitude,
+      status: response.status,
+      url: createCheckInUrl,
+    });
+    throw new Error(getErrorMessage(responseBody, response.status));
+  }
+
+  const parsedResponse = parseCheckInResponse(responseBody);
+
+  if (!parsedResponse) {
+    console.warn("[checkin] create check-in invalid payload", {
+      body: summarizeBody(responseBody),
+      hotspotId,
+      latitude,
+      longitude,
+      url: createCheckInUrl,
+    });
+    throw new Error("API check-in trả về dữ liệu không đúng định dạng.");
+  }
+
+  return parsedResponse;
+}

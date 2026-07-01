@@ -1,21 +1,25 @@
+import { SymbolView } from '@/components/ui/symbol-view';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
-import { SymbolView } from '@/components/ui/symbol-view';
-import { type ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useCheckins } from '@/lib/checkin-store';
+import { getValidAccessToken, useAuthSession } from '@/features/auth/hooks/use-auth-session';
+import { getGoongRouteCoordinates } from '@/features/map/api/goong-directions';
+import { AppMap } from '@/features/map/components/app-map';
 import {
-  type RouteReview,
-  type RouteStop,
-  getRoute,
-  getRouteHotspots,
-  getRouteRating,
-  getRouteReviews,
-} from '@/lib/demo-data';
-import { getHotspotDetailHref } from '@/lib/hotspot-navigation';
+  getRouteById,
+  type RouteDto,
+  type RouteHotspotDto
+} from '@/features/route/api/route-api';
+import { useCheckins } from '@/lib/checkin-store';
+
+const fallbackRouteImage =
+  'https://i.pinimg.com/1200x/80/69/f9/8069f9581583a196f9f39bda000b9312.jpg';
+const fallbackStopImage =
+  'https://i.pinimg.com/736x/f3/0f/e8/f30fe84218790e6ffd25f987d434eb13.jpg';
 
 const cardShadow = {
   shadowColor: 'rgba(28, 45, 80, 0.10)',
@@ -33,42 +37,83 @@ const glowShadow = {
   elevation: 10,
 } as const;
 
-const stopMarkerPositions = [
-  { x: '22%', y: '38%' },
-  { x: '38%', y: '52%' },
-  { x: '52%', y: '42%' },
-  { x: '64%', y: '58%' },
-  { x: '48%', y: '68%' },
-  { x: '72%', y: '44%' },
-  { x: '30%', y: '62%' },
-  { x: '58%', y: '30%' },
-] as const;
 
-const ratingDist = [
-  { star: 5, pct: 72 },
-  { star: 4, pct: 21 },
-  { star: 3, pct: 5 },
-  { star: 2, pct: 1 },
-  { star: 1, pct: 1 },
-];
+type RouteReview = {
+  id: string;
+  user: string;
+  avatar: string;
+  completedIn: string;
+  date: string;
+  rating: number;
+  highlight: string;
+  text: string;
+  tags: string[];
+  helpful: number;
+};
 
-const feedbackTags = ['Đáng đi', 'Storytelling hay', 'Đi bộ thoải mái', 'Chụp ảnh đẹp', 'Đi sáng sớm'];
 
-function XPBar({
-  value,
-  max,
-  trackColor = '#ECEEF4',
-  height = 8,
-}: {
-  value: number;
-  max: number;
-  trackColor?: string;
-  height?: number;
-}) {
+
+
+function getCoordinate(stop: RouteHotspotDto) {
+  if (typeof stop.latitude !== 'number' || typeof stop.longitude !== 'number') return null;
+  if (!Number.isFinite(stop.latitude) || !Number.isFinite(stop.longitude)) return null;
+  if (Math.abs(stop.latitude) > 90 || Math.abs(stop.longitude) > 180) return null;
+  return { latitude: stop.latitude, longitude: stop.longitude };
+}
+
+function getDistanceKm(from?: RouteHotspotDto, to?: RouteHotspotDto) {
+  const a = from ? getCoordinate(from) : null;
+  const b = to ? getCoordinate(to) : null;
+  if (!a || !b) return null;
+
+  const earthRadiusKm = 6371;
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLon = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+
+  const haversine =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
+function formatDistance(distanceKm: number | null) {
+  if (distanceKm === null || !Number.isFinite(distanceKm)) return 'Điểm cuối tuyến';
+  if (distanceKm < 1) return `${Math.round(distanceKm * 1000)} m tới điểm sau`;
+  if (distanceKm < 10) return `${distanceKm.toFixed(1)} km tới điểm sau`;
+  return `${Math.round(distanceKm)} km tới điểm sau`;
+}
+
+function getDifficultyLabel(difficulty?: string) {
+  switch (difficulty?.toUpperCase()) {
+    case 'EASY':
+      return 'Dễ';
+    case 'MEDIUM':
+      return 'Vừa';
+    case 'HARD':
+      return 'Khó';
+    default:
+      return difficulty || 'Dễ';
+  }
+}
+
+function getStopImage(stop: RouteHotspotDto) {
+  const image = stop.medias?.find((media) => {
+    const kind = `${media.mediaType ?? ''} ${media.mimeType ?? ''}`.toLowerCase();
+    return kind.includes('image');
+  }) ?? stop.medias?.[0];
+
+  return image?.fileUrl || fallbackStopImage;
+}
+
+function XPBar({ value, max }: { value: number; max: number }) {
   const percent = max > 0 ? Math.min(Math.max((value / max) * 100, 0), 100) : 0;
 
   return (
-    <View className="flex-1 overflow-hidden rounded-full" style={{ backgroundColor: trackColor, height }}>
+    <View className="flex-1 overflow-hidden rounded-full bg-[#ECEEF4]" style={{ height: 8 }}>
       <LinearGradient
         colors={['#FFE566', '#FFB400']}
         start={{ x: 0, y: 0.5 }}
@@ -80,77 +125,97 @@ function XPBar({
 }
 
 function RouteMapHero({
-  stops,
-  routeHotspotIds,
   checkedInIds,
+  route,
 }: {
-  stops: RouteStop[];
-  routeHotspotIds: string[];
   checkedInIds: string[];
+  route: RouteDto;
 }) {
+  const points = useMemo(
+    () =>
+      route.hotspots
+        .filter((stop) => Number.isFinite(stop.latitude) && Number.isFinite(stop.longitude))
+        .map((stop) => ({
+          id: stop.hotspotId,
+          title: stop.hotspotName || `Hotspot #${stop.hotspotId}`,
+          description: checkedInIds.includes(String(stop.hotspotId)) ? 'Đã check-in' : stop.address,
+          latitude: Number(stop.latitude),
+          longitude: Number(stop.longitude),
+        })),
+    [checkedInIds, route.hotspots],
+  );
+
+  const [routeCoordinates, setRouteCoordinates] = useState(
+    points.map((point) => ({ latitude: point.latitude, longitude: point.longitude })),
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDirections() {
+      if (points.length < 2) {
+        setRouteCoordinates(points.map((point) => ({ latitude: point.latitude, longitude: point.longitude })));
+        return;
+      }
+
+      try {
+        const coordinates = await getGoongRouteCoordinates({
+          origin: points[0],
+          destination: points[points.length - 1],
+          waypoints: points.slice(1, -1),
+        });
+
+        if (!cancelled) setRouteCoordinates(coordinates);
+      } catch (error) {
+        console.warn('[route-detail] load Goong directions failed', error);
+        if (!cancelled) {
+          setRouteCoordinates(points.map((point) => ({ latitude: point.latitude, longitude: point.longitude })));
+        }
+      }
+    }
+
+    void loadDirections();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [points]);
+
   return (
     <View className="relative h-72 overflow-hidden bg-[#E8F0FE]">
-      <Image
-        source={stops[0]?.image}
-        contentFit="cover"
-        style={{ position: 'absolute', inset: 0, opacity: 0.35 }}
+      <AppMap
+        points={points}
+        routeCoordinates={routeCoordinates}
+        height={288}
+        showsUserLocation
       />
-      <View className="absolute inset-0 bg-[#4A80F5]/10" />
-
-      {routeHotspotIds.map((id, index) => {
-        const pos = stopMarkerPositions[index % stopMarkerPositions.length];
-        const done = checkedInIds.includes(id);
-        return (
-          <View
-            key={id}
-            className="absolute h-7 w-7 items-center justify-center rounded-full border-2 border-white"
-            style={{
-              left: pos.x,
-              top: pos.y,
-              backgroundColor: done ? '#F58752' : '#EB489B',
-            }}
-          >
-            {done ? (
-              <SymbolView
-                name={{ ios: 'checkmark', android: 'check', web: 'check' }}
-                size={12}
-                tintColor="#fff"
-              />
-            ) : (
-              <Text className="text-[11px] font-bold text-white">{index + 1}</Text>
-            )}
-          </View>
-        );
-      })}
-
       <LinearGradient
-        colors={['rgba(0,0,0,0.6)', 'transparent']}
-        className="absolute inset-x-0 top-0 h-32"
+        colors={['rgba(0,0,0,0.35)', 'transparent']}
+        className="absolute inset-x-0 top-0 h-24"
         pointerEvents="none"
       />
       <LinearGradient
         colors={['transparent', '#FFFFFF']}
-        className="absolute inset-x-0 bottom-0 h-20"
+        className="absolute inset-x-0 bottom-0 h-16"
         pointerEvents="none"
       />
     </View>
   );
 }
-
 function Stat({
   icon,
   label,
   hint,
-  highlight,
+  highlight = false,
 }: {
-  icon: ReactNode;
+  icon?: ReactNode;
   label: string;
   hint: string;
   highlight?: boolean;
 }) {
   return (
     <View className={`flex-1 rounded-2xl p-2 ${highlight ? 'bg-[#FFF5E8]' : 'bg-[#F4EFF8]'}`}>
-      <View className="mb-0.5 items-center">{icon}</View>
+      {icon ? <View className="mb-0.5 items-center">{icon}</View> : null}
       <Text
         className={`text-center text-[13px] font-bold leading-tight ${highlight ? 'text-[#B86D2A]' : 'text-[#2B2233]'}`}
       >
@@ -272,9 +337,61 @@ function RouteReviewCard({ review }: { review: RouteReview }) {
 export default function RouteDetailScreen() {
   const { id: routeId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const session = useAuthSession();
   const checkins = useCheckins();
+  const [route, setRoute] = useState<RouteDto | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const route = getRoute(routeId ?? '');
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRouteDetail() {
+      if (!routeId) {
+        setError('Thiếu mã tuyến.');
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const accessToken = await getValidAccessToken();
+        const routeDetail = await getRouteById({
+          accessToken,
+          routeId,
+          tokenType: session.tokenType,
+        });
+
+        if (cancelled) return;
+        setRoute(routeDetail);
+      } catch (loadError) {
+        if (cancelled) return;
+        setError(loadError instanceof Error ? loadError.message : 'Không thể tải chi tiết tuyến.');
+        setRoute(null);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    void loadRouteDetail();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routeId, session.tokenType]);
+
+  const checkedInIds = useMemo(() => checkins.map(String), [checkins]);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator color="#EB489B" />
+        <Text className="mt-3 text-[14px] text-[#8E869A]">Đang tải chi tiết tuyến...</Text>
+      </SafeAreaView>
+    );
+  }
 
   if (!route) {
     return (
@@ -287,22 +404,31 @@ export default function RouteDetailScreen() {
     );
   }
 
-  const stops = getRouteHotspots(routeId ?? '');
-  const completed = stops.filter((s) => checkins.includes(s.id)).length;
-  const progress = stops.length > 0 ? (completed / stops.length) * 100 : 0;
-  const reviews = getRouteReviews(routeId ?? '');
-  const rating = getRouteRating(routeId ?? '');
-  const isFinished = completed === stops.length && stops.length > 0;
+  const completed = route.hotspots.filter((stop) => checkedInIds.includes(String(stop.hotspotId))).length;
+  const progress = route.hotspots.length > 0 ? (completed / route.hotspots.length) * 100 : 0;
+  const firstStop = route.hotspots[0];
+  const totalStops = route.hotspots.length;
+  const routeTheme = route.tags[0]?.tagName || 'Di sản';
+  const routeDistanceLabel = `${route.totalDistance || 0} km`;
+  const routeDurationLabel = `${route.estimateTime || 0} phút`;
+  const routeDifficultyLabel = getDifficultyLabel(String(route.difficulty));
+  const isFinished = totalStops > 0 && completed >= totalStops;
+  const rating = { avg: 4.8, count: 0 };
+  const ratingDist = [
+    { star: 5, pct: 72 },
+    { star: 4, pct: 18 },
+    { star: 3, pct: 7 },
+    { star: 2, pct: 2 },
+    { star: 1, pct: 1 },
+  ];
+  const feedbackTags = ['Dễ đi', 'Cảnh đẹp', 'Nội dung hay'];
+  const reviews: RouteReview[] = [];
 
   return (
     <View className="flex-1 bg-white">
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <View className="relative">
-          <RouteMapHero
-            stops={stops}
-            routeHotspotIds={route.hotspotIds}
-            checkedInIds={checkins}
-          />
+          <RouteMapHero route={route} checkedInIds={checkedInIds} />
 
           <SafeAreaView edges={['top']} className="absolute inset-x-0 top-0">
             <View className="flex-row items-center justify-between px-3 pt-2">
@@ -316,21 +442,8 @@ export default function RouteDetailScreen() {
                   tintColor="#fff"
                 />
               </Pressable>
-              <View className="flex-row gap-2">
-                <Pressable className="h-10 w-10 items-center justify-center rounded-full bg-black/30">
-                  <SymbolView
-                    name={{ ios: 'arrow.down.circle', android: 'download', web: 'download' }}
-                    size={16}
-                    tintColor="#fff"
-                  />
-                </Pressable>
-                <Pressable className="h-10 w-10 items-center justify-center rounded-full bg-black/30">
-                  <SymbolView
-                    name={{ ios: 'square.and.arrow.up', android: 'share', web: 'share' }}
-                    size={16}
-                    tintColor="#fff"
-                  />
-                </Pressable>
+              <View className="rounded-full bg-black/30 px-3 py-2">
+                <Text className="text-[11px] font-bold text-white">{route.status}</Text>
               </View>
             </View>
           </SafeAreaView>
@@ -345,13 +458,16 @@ export default function RouteDetailScreen() {
                 tintColor="#EB489B"
               />
               <Text className="text-[11px] font-semibold uppercase tracking-wider text-[#EB489B]">
-                Tuyến chủ đề · {route.era}
+                Tuyến chủ đề · {routeTheme}
               </Text>
             </View>
             <Text className="mt-1 text-[24px] font-extrabold leading-tight text-[#2B2233]">
-              {route.title}
+              {route.routeName}
             </Text>
-            <Text className="mt-1 text-[14px] text-[#8E869A]">{route.subtitle}</Text>
+            <Text className="mt-1 text-[13px] text-[#8E869A]">
+              {route.description || 'Chưa có mô tả cho tuyến này.'}
+            </Text>
+            <Text className="mt-1 text-[14px] text-[#8E869A]">{routeTheme}</Text>
 
             <View className="mt-4 flex-row gap-2">
               <Stat
@@ -362,7 +478,7 @@ export default function RouteDetailScreen() {
                     tintColor="#8E869A"
                   />
                 }
-                label={route.distance}
+                label={routeDistanceLabel}
                 hint="Quãng đường"
               />
               <Stat
@@ -373,7 +489,7 @@ export default function RouteDetailScreen() {
                     tintColor="#8E869A"
                   />
                 }
-                label={route.duration}
+                label={routeDurationLabel}
                 hint="Thời lượng"
               />
               <Stat
@@ -384,7 +500,7 @@ export default function RouteDetailScreen() {
                     tintColor="#8E869A"
                   />
                 }
-                label={route.difficulty}
+                label={routeDifficultyLabel}
                 hint="Độ khó"
               />
               <Stat
@@ -396,9 +512,9 @@ export default function RouteDetailScreen() {
             </View>
 
             <View className="mt-4 flex-row items-center gap-2">
-              <XPBar value={completed} max={stops.length} />
+              <XPBar value={completed} max={totalStops} />
               <Text className="text-[12px] font-bold text-[#2B2233]">
-                {completed}/{stops.length}
+                {completed}/{totalStops}
               </Text>
             </View>
             <Text className="mt-1 text-[11px] text-[#8E869A]">
@@ -407,25 +523,30 @@ export default function RouteDetailScreen() {
           </View>
 
           <View className="mt-4 gap-3">
-            <StoryCard title="Chủ đề tuyến đường" body={route.theme} emoji="🎭" />
-            <StoryCard title="Ý nghĩa lịch sử" body={route.meaning} emoji="🏛️" tone="jade" />
-            <StoryCard title="Câu chuyện hành trình" body={route.story} emoji="📖" tone="sunset" />
-            <StoryCard title="Vì sao kết nối với nhau?" body={route.connection} emoji="🧭" />
+            <View className="rounded-2xl border border-[#E8EDF4] bg-white p-4">
+              <Text className="text-[14px] font-bold text-[#2B2233]">Tag tuyến</Text>
+              <View className="mt-2 flex-row flex-wrap gap-2">
+                {route.tags.length > 0 ? route.tags.map((tag) => (
+                  <View key={tag.tagId} className="rounded-full bg-[#F4EFF8] px-3 py-1">
+                    <Text className="text-[11px] font-semibold text-[#3D3446]/80">#{tag.tagName}</Text>
+                  </View>
+                )) : (
+                  <Text className="text-[12px] text-[#8E869A]">Chưa có tag.</Text>
+                )}
+              </View>
+            </View>
           </View>
 
           <View className="mt-6">
             <Text className="mb-3 text-[19px] font-bold text-[#2B2233]">Hành trình của bạn</Text>
             <View className="pl-7">
               <View className="absolute bottom-2 left-3 top-2 w-px bg-[#EB489B]/40" />
-              {stops.map((stop, index) => {
-                const done = checkins.includes(stop.id);
+             {route.hotspots.map((stop, index) => {
+                const done = checkedInIds.includes(String(stop.hotspotId));
                 return (
                   <Pressable
-                    key={stop.id}
-                    onPress={() => {
-                      const href = getHotspotDetailHref(stop.id);
-                      if (href) router.push(href);
-                    }}
+                    key={`${stop.hotspotId}-${index}`}
+                    onPress={() => router.push(`/hotspot/${stop.hotspotId}` as Href)}
                     className="relative flex-row gap-3 pb-4"
                   >
                     <View
@@ -444,23 +565,23 @@ export default function RouteDetailScreen() {
                       )}
                     </View>
                     <Image
-                      source={stop.image}
+                      source={getStopImage(stop)}
                       contentFit="cover"
                       style={{ width: 64, height: 64, borderRadius: 16 }}
                     />
                     <View className="min-w-0 flex-1">
                       <Text className="text-[15px] font-semibold text-[#2B2233]" numberOfLines={1}>
-                        {stop.name}
+                        {stop.hotspotName || `Điểm #${stop.hotspotId}`}
                       </Text>
                       <Text className="text-[12px] text-[#8E869A]" numberOfLines={1}>
                         {stop.address}
                       </Text>
                       <View className="mt-1.5 flex-row items-center gap-2">
                         <View className="rounded-full bg-[#F4EFF8] px-2 py-0.5">
-                          <Text className="text-[11px] text-[#2B2233]">{stop.distance}</Text>
+                          <Text className="text-[11px] text-[#2B2233]">{formatDistance(getDistanceKm(stop, route.hotspots[index + 1]))}</Text>
                         </View>
                         <View className="rounded-full bg-[#F4EFF8] px-2 py-0.5">
-                          <Text className="text-[11px] text-[#2B2233]">{stop.duration}</Text>
+                          <Text className="text-[11px] text-[#2B2233]">{`Thứ tự ${stop.orderIndex ?? stop.sequenceNumber ?? index + 1}`}</Text>
                         </View>
                         <Text className="ml-auto text-[11px] font-bold text-[#EB489B]">
                           +{stop.xp} XP
@@ -577,7 +698,7 @@ export default function RouteDetailScreen() {
                 <Text className="text-[11px] text-[#8E869A]">
                   {isFinished
                     ? '+50 XP cho đánh giá có ảnh'
-                    : `Còn ${stops.length - completed} điểm check-in`}
+                    : `Còn ${Math.max(totalStops - completed, 0)} điểm check-in`}
                 </Text>
               </View>
               {isFinished && (
@@ -595,22 +716,22 @@ export default function RouteDetailScreen() {
       </ScrollView>
 
       <View className="absolute inset-x-0 bottom-0 px-4 pb-6 pt-2">
-        <View
-          className="flex-row gap-2 rounded-2xl bg-white/95 p-2.5"
-          style={cardShadow}
-        >
+        <View className="flex-row gap-2 rounded-2xl bg-white/95 p-2.5" style={cardShadow}>
           <Pressable className="h-12 w-12 items-center justify-center rounded-xl bg-[#F4EFF8]">
             <SymbolView
-              name={{ ios: 'lock.fill', android: 'lock', web: 'lock' }}
+              name={{ ios: 'bookmark', android: 'bookmark_border', web: 'bookmark_border' }}
               size={16}
               tintColor="#8E869A"
             />
           </Pressable>
           <Pressable
-            onPress={() =>
-              router.push(`/checkin/${stops[0]?.id}?routeId=${routeId}` as Href)
-            }
-            className="flex-1 overflow-hidden rounded-xl"
+            disabled={!firstStop}
+            onPress={() => {
+              if (firstStop) {
+                router.push(`/checkin/${firstStop.hotspotId}?routeId=${route.routeId}` as Href);
+              }
+            }}
+            className={`flex-1 overflow-hidden rounded-xl ${firstStop ? '' : 'opacity-60'}`}
             style={glowShadow}
           >
             <LinearGradient

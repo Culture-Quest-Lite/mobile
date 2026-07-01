@@ -7,6 +7,7 @@ const rawUseDevLocationOverride =
   process.env.EXPO_PUBLIC_USE_DEV_LOCATION_OVERRIDE?.trim() ?? '';
 const devLatitude = process.env.EXPO_PUBLIC_DEV_LATITUDE?.trim() ?? '';
 const devLongitude = process.env.EXPO_PUBLIC_DEV_LONGITUDE?.trim() ?? '';
+const goongApiKey = process.env.EXPO_PUBLIC_GOONG_API_KEY?.trim() ?? '';
 
 function normalizeUrlPart(value: string) {
   return value.endsWith('/') ? value.slice(0, -1) : value;
@@ -40,6 +41,7 @@ export const PublicEnv = {
   keycloakRealm,
   keycloakUrl,
   googleRedirectUri,
+  goongApiKey,
 } as const;
 
 export function buildApiUrl(path: string) {
@@ -84,6 +86,10 @@ function collectEnvWarnings() {
 
   if (!PublicEnv.googleRedirectUri) {
     warnings.push('EXPO_PUBLIC_GOOGLE_REDIRECT_URI is missing.');
+  }
+
+  if (!PublicEnv.goongApiKey) {
+    warnings.push('EXPO_PUBLIC_GOONG_API_KEY is missing. Route polyline will fall back to straight lines.');
   }
 
   if (

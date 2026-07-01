@@ -31,9 +31,9 @@ type SymbolName = ComponentProps<typeof SymbolView>["name"];
 const cardShadow = {
   shadowColor: "rgba(28, 45, 80, 0.10)",
   shadowOpacity: 1,
-  shadowRadius: 16,
-  shadowOffset: { width: 0, height: 8 },
-  elevation: 5,
+  shadowRadius: 20,
+  shadowOffset: { width: 0, height: 10 },
+  elevation: 10,
 } as const;
 
 const heroGradientColors = ["#20476B", "#4F87B2", "#F7F8FC"] as const;

@@ -17,13 +17,18 @@ function readFirstDefinedEnv(...keys) {
 }
 
 const expoConfig = appJson.expo ?? {};
-// Expo SDK 56 only inlines EXPO_PUBLIC_* into app code. Native config can still
-// read regular .env keys here, so keep the non-public key name as the primary source.
+
+// Expo SDK only inlines EXPO_PUBLIC_* into app code.
+// Native config can still read regular .env keys here.
 const googleMapsApiKey = readFirstDefinedEnv(
   "GOOGLE_MAPS_API_KEY",
-  "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY",
+  "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
 );
-const existingPlugins = Array.isArray(expoConfig.plugins) ? expoConfig.plugins : [];
+
+const existingPlugins = Array.isArray(expoConfig.plugins)
+  ? expoConfig.plugins
+  : [];
+
 const filteredPlugins = existingPlugins.filter((plugin) => {
   if (typeof plugin === "string") {
     return plugin !== "react-native-maps";
@@ -49,6 +54,7 @@ module.exports = {
   ...appJson,
   expo: {
     ...expoConfig,
+
     android: {
       ...expoConfig.android,
       config: googleMapsApiKey
@@ -60,6 +66,7 @@ module.exports = {
           }
         : expoConfig.android?.config,
     },
+
     ios: {
       ...expoConfig.ios,
       config: googleMapsApiKey
@@ -69,6 +76,7 @@ module.exports = {
           }
         : expoConfig.ios?.config,
     },
+
     plugins,
   },
 };
