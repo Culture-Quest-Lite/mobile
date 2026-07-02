@@ -1,16 +1,16 @@
-import * as Location from 'expo-location';
+import { SymbolView } from '@/components/ui/symbol-view';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SymbolView } from '@/components/ui/symbol-view';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import {
-  Animated,
-  Easing,
-  ActivityIndicator,
-  Pressable,
-  Text,
-  View,
+    ActivityIndicator,
+    Animated,
+    Easing,
+    Pressable,
+    Text,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -336,6 +336,16 @@ export default function CheckinScreen() {
       cancelled = true;
     };
   }, [hotspotId, session.tokenType, stage]);
+
+  useEffect(() => {
+    if (stage !== 'success' || !activeRouteId) return;
+
+    const redirectTimeout = setTimeout(() => {
+      router.replace(`/route/${activeRouteId}`);
+    }, 600);
+
+    return () => clearTimeout(redirectTimeout);
+  }, [activeRouteId, router, stage]);
 
   if (!h && activeRouteId) {
     return (

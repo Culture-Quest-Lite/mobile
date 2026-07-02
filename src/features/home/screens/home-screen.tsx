@@ -3,72 +3,72 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
 import * as Location from "expo-location";
-import { useFocusEffect, useRouter } from "expo-router";
+import { Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
+    ActivityIndicator,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    Text,
+    View,
 } from "react-native";
 import MapView, {
-  Marker,
-  PROVIDER_GOOGLE,
-  type Region,
+    Marker,
+    PROVIDER_GOOGLE,
+    type Region,
 } from "react-native-maps";
 import Animated, {
-  Easing,
-  ReduceMotion,
-  cancelAnimation,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
+    Easing,
+    ReduceMotion,
+    cancelAnimation,
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
-  getValidAccessToken,
-  useAuthSession,
+    getValidAccessToken,
+    useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 import { getGamificationLevels } from "@/features/profile/api/get-levels";
 import { getMyProfile } from "@/features/profile/api/get-me";
 import { applyLevelProgressToProfile } from "@/features/profile/lib/level-progress";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import {
-  type AppCoordinate,
-  formatCoordinateLabel,
-  getDevelopmentLocationOverride,
-  getDeviceCoordinate,
+    type AppCoordinate,
+    formatCoordinateLabel,
+    getDevelopmentLocationOverride,
+    getDeviceCoordinate,
 } from "@/lib/location";
 
 import {
-  type NearbyHotspotDto,
-  getNearbyHotspots,
+    type NearbyHotspotDto,
+    getNearbyHotspots,
 } from "../api/get-nearby-hotspots";
 import { getActiveTagNames } from "../api/get-tags";
 import {
-  type CommunityBoardTab,
-  type NearbyCategoryCard,
-  type NearbyPlaceCard,
-  type RouteDifficulty,
-  activeJourney,
-  communityBoards,
-  communityTabs,
-  featuredRoutes,
-  nearbyCategories,
-  nearbyPlaces,
-  nearbyRoutes,
-  voucherMerchants,
+    type CommunityBoardTab,
+    type NearbyCategoryCard,
+    type NearbyPlaceCard,
+    type RouteDifficulty,
+    activeJourney,
+    communityBoards,
+    communityTabs,
+    featuredRoutes,
+    nearbyCategories,
+    nearbyPlaces,
+    nearbyRoutes,
+    voucherMerchants,
 } from "../data/home-screen.mock";
 import {
-  findMatchingHotspotByNameOrCoordinate,
-  getApiHotspotRouteSlug,
-  getHotspotHref,
-  getNearbyHotspotsFromCoordinate,
+    findMatchingHotspotByNameOrCoordinate,
+    getApiHotspotRouteSlug,
+    getHotspotHref,
+    getNearbyHotspotsFromCoordinate,
 } from "../data/hotspots";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
@@ -1224,6 +1224,7 @@ function ExplorerHeaderActions({
   onLocationPress: () => void;
   onSearchPress: () => void;
 }) {
+  const router = useRouter();
   return (
     <View className="flex-row items-center gap-2.5">
       <Pressable
@@ -1272,6 +1273,18 @@ function ExplorerHeaderActions({
           }}
           size={16}
           tintColor="#EB489B"
+        />
+      </Pressable>
+
+      <Pressable
+        accessibilityLabel="Mở trang Subscription"
+        className="h-10 w-10 items-center justify-center rounded-full bg-[#F3F8FF]"
+        onPress={() => router.push('/subscription' as Href)}
+      >
+        <SymbolView
+          name={{ ios: 'card', android: 'credit_card', web: 'credit_card' }}
+          size={16}
+          tintColor="#3B82F6"
         />
       </Pressable>
     </View>

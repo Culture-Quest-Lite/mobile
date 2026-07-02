@@ -3,7 +3,14 @@ import { Platform } from "react-native";
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 
 export type RouteDifficulty = "EASY" | "MEDIUM" | "HARD" | string;
-export type RouteStatus = "DRAFT" | "PENDING" | "PUBLISHED" | "APPROVED" | "REJECTED" | "DELETED" | string;
+export type RouteStatus =
+  | "DRAFT"
+  | "PENDING"
+  | "PUBLISHED"
+  | "APPROVED"
+  | "REJECTED"
+  | "DELETED"
+  | string;
 
 export type RouteTagDto = {
   createdAt?: string;
@@ -65,7 +72,8 @@ export type RoutePageDto = {
   totalPages: number;
 };
 
-export type ProgressStatus = "IN_PROGRESS" | "COMPLETED" | "ABANDONED" | "ON_HOLD" | string;
+export type ProgressStatus =
+  "IN_PROGRESS" | "COMPLETED" | "ABANDONED" | "ON_HOLD" | string;
 
 export type HotspotProgressDto = {
   hotspotId: number;
@@ -186,19 +194,27 @@ function readString(value: unknown, fallback = "") {
   return typeof value === "string" ? value : fallback;
 }
 
-
-function normalizeLatitudeLongitude(latitudeValue: unknown, longitudeValue: unknown) {
+function normalizeLatitudeLongitude(
+  latitudeValue: unknown,
+  longitudeValue: unknown,
+) {
   let latitude = readNullableNumber(latitudeValue);
   let longitude = readNullableNumber(longitudeValue);
 
   // Một số API trả nhầm thứ tự longitude/latitude. Ví dụ latitude=105, longitude=21.
   // MapView cần latitude nằm trong [-90, 90] và longitude nằm trong [-180, 180].
-  if (latitude !== null && longitude !== null && Math.abs(latitude) > 90 && Math.abs(longitude) <= 90) {
+  if (
+    latitude !== null &&
+    longitude !== null &&
+    Math.abs(latitude) > 90 &&
+    Math.abs(longitude) <= 90
+  ) {
     [latitude, longitude] = [longitude, latitude];
   }
 
   if (latitude !== null && (latitude < -90 || latitude > 90)) latitude = null;
-  if (longitude !== null && (longitude < -180 || longitude > 180)) longitude = null;
+  if (longitude !== null && (longitude < -180 || longitude > 180))
+    longitude = null;
 
   return { latitude, longitude };
 }
@@ -207,7 +223,10 @@ function parseMedia(value: unknown): RouteMediaDto | null {
   if (!isObject(value)) return null;
 
   const mediaId = readNumber(value.mediaId, -1);
-  const fileUrl = readString(value.fileUrl) || readString(value.mediaUrl) || readString(value.url);
+  const fileUrl =
+    readString(value.fileUrl) ||
+    readString(value.mediaUrl) ||
+    readString(value.url);
 
   if (mediaId < 0 || !fileUrl.trim()) return null;
 
@@ -249,7 +268,10 @@ function parseHotspot(value: unknown): RouteHotspotDto | null {
 
   if (hotspotId < 0) return null;
 
-  const { latitude, longitude } = normalizeLatitudeLongitude(value.latitude, value.longitude);
+  const { latitude, longitude } = normalizeLatitudeLongitude(
+    value.latitude,
+    value.longitude,
+  );
 
   return {
     address: readString(value.address),
@@ -260,7 +282,9 @@ function parseHotspot(value: unknown): RouteHotspotDto | null {
     index: readNullableNumber(value.index),
     latitude,
     longitude,
-    medias: Array.isArray(value.medias) ? value.medias.map(parseMedia).filter(isNonNull) : [],
+    medias: Array.isArray(value.medias)
+      ? value.medias.map(parseMedia).filter(isNonNull)
+      : [],
     orderIndex: readNullableNumber(value.orderIndex),
     point: readNullableNumber(value.point),
     sequenceNumber: readNullableNumber(value.sequenceNumber),
@@ -280,18 +304,23 @@ export function parseRoute(value: unknown): RouteDto | null {
     description: readString(value.description),
     difficulty: readString(value.difficulty, "EASY"),
     estimateTime: readNumber(value.estimateTime),
-    hotspots: Array.isArray(value.hotspots) ? value.hotspots.map(parseHotspot).filter(isNonNull) : [],
-    medias: Array.isArray(value.medias) ? value.medias.map(parseMedia).filter(isNonNull) : [],
+    hotspots: Array.isArray(value.hotspots)
+      ? value.hotspots.map(parseHotspot).filter(isNonNull)
+      : [],
+    medias: Array.isArray(value.medias)
+      ? value.medias.map(parseMedia).filter(isNonNull)
+      : [],
     point: readNumber(value.point),
     routeId,
     routeName,
     status: readString(value.status, "DRAFT"),
-    tags: Array.isArray(value.tags) ? value.tags.map(parseTag).filter(isNonNull) : [],
+    tags: Array.isArray(value.tags)
+      ? value.tags.map(parseTag).filter(isNonNull)
+      : [],
     totalDistance: readNumber(value.totalDistance),
     xp: readNumber(value.xp),
   };
 }
-
 
 function parseHotspotProgress(value: unknown): HotspotProgressDto | null {
   if (!isObject(value)) return null;
@@ -306,11 +335,18 @@ function parseHotspotProgress(value: unknown): HotspotProgressDto | null {
   };
 }
 
-export function parseUserRouteProgress(value: unknown): UserRouteProgressDto | null {
+export function parseUserRouteProgress(
+  value: unknown,
+): UserRouteProgressDto | null {
   if (!isObject(value)) return null;
 
-  const userRouteProgressId = readNumber(value.userRouteProgressId ?? value.id, -1);
-  const routeFromBody = parseRoute(value.route ?? value.routeResponse ?? value.routeDto);
+  const userRouteProgressId = readNumber(
+    value.userRouteProgressId ?? value.id,
+    -1,
+  );
+  const routeFromBody = parseRoute(
+    value.route ?? value.routeResponse ?? value.routeDto,
+  );
   const routeId = readNumber(value.routeId ?? routeFromBody?.routeId, -1);
 
   if (userRouteProgressId < 0 || routeId < 0) return null;
@@ -334,7 +370,9 @@ export function parseUserRouteProgress(value: unknown): UserRouteProgressDto | n
 function parseSavedRoute(value: unknown): SavedRouteDto | null {
   if (!isObject(value)) return null;
 
-  const route = parseRoute(value.route ?? value.routeResponse ?? value.routeDto);
+  const route = parseRoute(
+    value.route ?? value.routeResponse ?? value.routeDto,
+  );
   const savedRouteId = readNumber(value.savedRouteId ?? value.id, -1);
   const routeId = readNumber(value.routeId ?? route?.routeId, -1);
 
@@ -353,7 +391,10 @@ function parseCheckInResponse(value: unknown): CheckInResponseDto | null {
 
   const checkInId = readNumber(value.checkInId, -1);
   const hotspotId = readNumber(value.hotspotId, -1);
-  const userRouteProgressId = value.userRouteProgressId == null ? null : readNumber(value.userRouteProgressId, -1);
+  const userRouteProgressId =
+    value.userRouteProgressId == null
+      ? null
+      : readNumber(value.userRouteProgressId, -1);
 
   if (checkInId < 0 || hotspotId < 0 || userRouteProgressId === -1) return null;
 
@@ -370,7 +411,8 @@ function parseCheckInResponse(value: unknown): CheckInResponseDto | null {
 function getRouteImageMedia(route: Pick<RouteDto, "medias">) {
   return (
     route.medias.find((media) => {
-      const kind = `${media.mediaType ?? ""} ${media.mimeType ?? ""}`.toLowerCase();
+      const kind =
+        `${media.mediaType ?? ""} ${media.mimeType ?? ""}`.toLowerCase();
       return kind.includes("image");
     }) ?? route.medias[0]
   );
@@ -395,11 +437,38 @@ async function parseResponseBody(response: Response) {
   }
 }
 
+function unwrapApiBody(body: unknown): unknown {
+  if (!isObject(body)) return body;
+
+  for (const key of ["data", "result", "payload", "response"]) {
+    const candidate = body[key];
+    if (candidate !== undefined && candidate !== null) return candidate;
+  }
+
+  return body;
+}
+
+function readPageContent(body: unknown): unknown[] {
+  const unwrapped = unwrapApiBody(body);
+
+  if (Array.isArray(unwrapped)) return unwrapped;
+
+  if (isObject(unwrapped)) {
+    for (const key of ["content", "items", "data", "result", "records"]) {
+      const candidate = unwrapped[key];
+      if (Array.isArray(candidate)) return candidate;
+    }
+  }
+
+  return [];
+}
+
 function getErrorMessage(body: unknown, status: number, fallback: string) {
   if (isObject(body)) {
     for (const key of ["message", "error", "detail", "title"]) {
       const candidate = body[key];
-      if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+      if (typeof candidate === "string" && candidate.trim())
+        return candidate.trim();
     }
   }
 
@@ -426,10 +495,13 @@ async function fetchRouteJson(
 
   try {
     response = await fetch(url, {
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body:
+        options.body === undefined ? undefined : JSON.stringify(options.body),
       headers: {
         Accept: "application/json",
-        ...(accessToken ? { Authorization: `${tokenType ?? "Bearer"} ${accessToken}` } : {}),
+        ...(accessToken
+          ? { Authorization: `${tokenType ?? "Bearer"} ${accessToken}` }
+          : {}),
         "Content-Type": "application/json",
         "X-Client-Type": "mobile",
       },
@@ -443,8 +515,18 @@ async function fetchRouteJson(
   const responseBody = await parseResponseBody(response);
 
   if (!response.ok) {
-    console.warn("[route] rejected", { body: responseBody, status: response.status, url });
-    throw new Error(getErrorMessage(responseBody, response.status, "Không thể tải dữ liệu tuyến"));
+    console.warn("[route] rejected", {
+      body: responseBody,
+      status: response.status,
+      url,
+    });
+    throw new Error(
+      getErrorMessage(
+        responseBody,
+        response.status,
+        "Không thể tải dữ liệu tuyến",
+      ),
+    );
   }
 
   return responseBody;
@@ -484,22 +566,29 @@ export async function searchRoutes({
   const url = `${resolveRouteUrl("/api/v1/routes/search")}?${params.toString()}`;
   const body = await fetchRouteJson(url, accessToken, tokenType);
 
-  const rawContent = isObject(body) && Array.isArray(body.content) ? body.content : [];
+  const rawContent =
+    isObject(body) && Array.isArray(body.content) ? body.content : [];
   const content = rawContent.map(parseRoute).filter(isNonNull);
 
   return {
     content,
     number: isObject(body) ? readNumber(body.number, page) : page,
     size: isObject(body) ? readNumber(body.size, size) : size,
-    totalElements: isObject(body) ? readNumber(body.totalElements, content.length) : content.length,
+    totalElements: isObject(body)
+      ? readNumber(body.totalElements, content.length)
+      : content.length,
     totalPages: isObject(body) ? readNumber(body.totalPages, 1) : 1,
   };
 }
 
-export async function getRouteById({ accessToken, routeId, tokenType }: RouteDetailRequest) {
+export async function getRouteById({
+  accessToken,
+  routeId,
+  tokenType,
+}: RouteDetailRequest) {
   const url = resolveRouteUrl(`/api/v1/routes/${routeId}`);
   const body = await fetchRouteJson(url, accessToken, tokenType);
-  const route = parseRoute(body);
+  const route = parseRoute(unwrapApiBody(body));
 
   if (!route) {
     throw new Error("API Route detail trả về dữ liệu không đúng định dạng.");
@@ -539,22 +628,33 @@ export function mapRouteToRouteItem(route: RouteDto) {
     era: firstTag,
     hotspotIds: route.hotspots.map((hotspot) => String(hotspot.hotspotId)),
     id: String(route.routeId),
-    meaning: route.description || "Tuyến tham quan được lấy trực tiếp từ hệ thống CultureQuest Lite.",
+    meaning:
+      route.description ||
+      "Tuyến tham quan được lấy trực tiếp từ hệ thống CultureQuest Lite.",
     rating: 4.8,
-    story: route.description || "Mỗi điểm dừng trong tuyến mở ra một lớp câu chuyện văn hoá khác nhau.",
-    subtitle: route.description || `${route.hotspots.length} điểm dừng · ${route.totalDistance || 0} km`,
+    story:
+      route.description ||
+      "Mỗi điểm dừng trong tuyến mở ra một lớp câu chuyện văn hoá khác nhau.",
+    subtitle:
+      route.description ||
+      `${route.hotspots.length} điểm dừng · ${route.totalDistance || 0} km`,
     theme: route.description || firstTag,
     title: route.routeName,
     xp: route.xp || route.point || 0,
   };
 }
 
-
-export async function startRouteProgress({ accessToken, routeId, tokenType }: RouteIdRequest) {
+export async function startRouteProgress({
+  accessToken,
+  routeId,
+  tokenType,
+}: RouteIdRequest) {
   requireAccessToken(accessToken);
   const url = resolveRouteUrl(`/api/v1/user-route-progress/start/${routeId}`);
-  const body = await fetchRouteJson(url, accessToken, tokenType, { method: "POST" });
-  const progress = parseUserRouteProgress(body);
+  const body = await fetchRouteJson(url, accessToken, tokenType, {
+    method: "POST",
+  });
+  const progress = parseUserRouteProgress(unwrapApiBody(body));
 
   if (!progress) {
     throw new Error("API bắt đầu tuyến trả về dữ liệu không đúng định dạng.");
@@ -563,11 +663,17 @@ export async function startRouteProgress({ accessToken, routeId, tokenType }: Ro
   return progress;
 }
 
-export async function abandonRouteProgress({ accessToken, routeId, tokenType }: RouteIdRequest) {
+export async function abandonRouteProgress({
+  accessToken,
+  routeId,
+  tokenType,
+}: RouteIdRequest) {
   requireAccessToken(accessToken);
   const url = resolveRouteUrl(`/api/v1/user-route-progress/abandon/${routeId}`);
-  const body = await fetchRouteJson(url, accessToken, tokenType, { method: "PUT" });
-  return parseUserRouteProgress(body) ?? body;
+  const body = await fetchRouteJson(url, accessToken, tokenType, {
+    method: "PUT",
+  });
+  return parseUserRouteProgress(unwrapApiBody(body)) ?? body;
 }
 
 export async function getUserRouteProgressList({
@@ -591,15 +697,22 @@ export async function getUserRouteProgressList({
 
   const url = `${resolveRouteUrl("/api/v1/user-route-progress")}?${params.toString()}`;
   const body = await fetchRouteJson(url, accessToken, tokenType);
-  const rawContent = isObject(body) && Array.isArray(body.content) ? body.content : Array.isArray(body) ? body : [];
+  const unwrappedBody = unwrapApiBody(body);
+  const rawContent = readPageContent(body);
   const content = rawContent.map(parseUserRouteProgress).filter(isNonNull);
 
   return {
     content,
-    number: isObject(body) ? readNumber(body.number, page) : page,
-    size: isObject(body) ? readNumber(body.size, size) : size,
-    totalElements: isObject(body) ? readNumber(body.totalElements, content.length) : content.length,
-    totalPages: isObject(body) ? readNumber(body.totalPages, 1) : 1,
+    number: isObject(unwrappedBody)
+      ? readNumber(unwrappedBody.number, page)
+      : page,
+    size: isObject(unwrappedBody) ? readNumber(unwrappedBody.size, size) : size,
+    totalElements: isObject(unwrappedBody)
+      ? readNumber(unwrappedBody.totalElements, content.length)
+      : content.length,
+    totalPages: isObject(unwrappedBody)
+      ? readNumber(unwrappedBody.totalPages, 1)
+      : 1,
   };
 }
 
@@ -611,19 +724,27 @@ export async function getUserRouteProgressById({
   requireAccessToken(accessToken);
   const url = resolveRouteUrl(`/api/v1/user-route-progress/${progressId}`);
   const body = await fetchRouteJson(url, accessToken, tokenType);
-  const progress = parseUserRouteProgress(body);
+  const progress = parseUserRouteProgress(unwrapApiBody(body));
 
   if (!progress) {
-    throw new Error("API chi tiết tiến độ tuyến trả về dữ liệu không đúng định dạng.");
+    throw new Error(
+      "API chi tiết tiến độ tuyến trả về dữ liệu không đúng định dạng.",
+    );
   }
 
   return progress;
 }
 
-export async function saveRoute({ accessToken, routeId, tokenType }: RouteIdRequest) {
+export async function saveRoute({
+  accessToken,
+  routeId,
+  tokenType,
+}: RouteIdRequest) {
   requireAccessToken(accessToken);
   const url = resolveRouteUrl(`/api/v1/saved-routes/save/${routeId}`);
-  const body = await fetchRouteJson(url, accessToken, tokenType, { method: "POST" });
+  const body = await fetchRouteJson(url, accessToken, tokenType, {
+    method: "POST",
+  });
   return parseSavedRoute(body) ?? body;
 }
 
@@ -637,11 +758,14 @@ export async function unSaveRoute({
   return fetchRouteJson(url, accessToken, tokenType, { method: "DELETE" });
 }
 
-export async function getSavedRoutes({ accessToken, tokenType }: AuthenticatedRouteRequest = {}) {
+export async function getSavedRoutes({
+  accessToken,
+  tokenType,
+}: AuthenticatedRouteRequest = {}) {
   requireAccessToken(accessToken);
   const url = resolveRouteUrl("/api/v1/saved-routes");
   const body = await fetchRouteJson(url, accessToken, tokenType);
-  const rawList = isObject(body) && Array.isArray(body.content) ? body.content : Array.isArray(body) ? body : [];
+  const rawList = readPageContent(body);
   return rawList.map(parseSavedRoute).filter(isNonNull);
 }
 
