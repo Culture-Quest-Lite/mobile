@@ -167,6 +167,7 @@ function mapGetMeResponseToProfile(response: GetMeResponse): Profile {
     following: response.totalFollowing,
     id: response.userId.toString(),
     isPremium: response.isPremium,
+    isMaxLevel: false,
     level: extractLevel(response.levelName),
     levelName: response.levelName,
     name: normalizedDisplayName || normalizedUsername,

@@ -13,8 +13,8 @@ const profiles: Profile[] = [
     totalXp: 2840,
     level: 12,
     levelName: "Level 12",
-    currentLevelXp: 2840,
-    xpToNext: 3200,
+    currentLevelXp: 240,
+    xpToNext: 600,
     avatar:
       "https://i.pinimg.com/736x/4a/c2/3c/4ac23cc90bf76e56e8f38d1c57756957.jpg",
     cover:
@@ -22,6 +22,7 @@ const profiles: Profile[] = [
     createdAt: "2026-01-15T09:00:00.000Z",
     followers: 342,
     following: 128,
+    isMaxLevel: false,
     totalPosts: 2,
     isPremium: true,
     role: "EXPLORER",

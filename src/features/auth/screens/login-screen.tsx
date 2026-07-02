@@ -31,6 +31,7 @@ import { signInWithPassword } from "@/features/auth/hooks/use-auth-session";
 import { hasAnyFieldError, validateLoginForm } from "@/features/auth/utils/validation";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
+const authLogoSource = require("../../../../assets/images/logo2-cropped.png");
 
 const cardShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.22)",
@@ -68,6 +69,7 @@ export default function LoginScreen() {
   const logoFloat = useSharedValue(0);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [didAttemptSubmit, setDidAttemptSubmit] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -242,7 +244,7 @@ export default function LoginScreen() {
 
               <Animated.View style={animatedLogoStyle}>
                 <Image
-                  source={require("../../../../assets/images/logo2.png")}
+                  source={authLogoSource}
                   style={{ height: logoSize, width: logoSize }}
                   resizeMode="contain"
                 />
@@ -307,8 +309,33 @@ export default function LoginScreen() {
                         void handleLogin();
                       }}
                       placeholder="Nhập mật khẩu"
+                      rightAccessory={
+                        <Pressable
+                          accessibilityLabel={
+                            isPasswordVisible ? "Ẩn mật khẩu" : "Hiện mật khẩu"
+                          }
+                          className="h-9 w-9 items-center justify-center"
+                          disabled={isSubmitting}
+                          hitSlop={8}
+                          onPress={() => {
+                            setIsPasswordVisible((currentValue) => !currentValue);
+                          }}
+                        >
+                          <SymbolView
+                            name={{
+                              ios: isPasswordVisible ? "eye.slash" : "eye",
+                              android: isPasswordVisible
+                                ? "visibility_off"
+                                : "visibility",
+                              web: isPasswordVisible ? "visibility_off" : "visibility",
+                            }}
+                            size={18}
+                            tintColor="#8E869A"
+                          />
+                        </Pressable>
+                      }
                       returnKeyType="done"
-                      secureTextEntry
+                      secureTextEntry={!isPasswordVisible}
                       textContentType="password"
                       value={password}
                       onBlur={() => markFieldTouched("password")}
