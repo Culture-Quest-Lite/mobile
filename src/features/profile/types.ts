@@ -24,12 +24,39 @@ export type Profile = {
   createdAt: string | null;
 };
 
+export type ProfilePostTag = {
+  id: number;
+  name: string;
+};
+
+export type ProfilePostMedia = {
+  id: number;
+  type: string;
+  mimeType: string;
+  url: string;
+  fileName: string;
+  fileSize: number | null;
+  displayOrder: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
 export type ProfilePost = {
   id: string;
   userId: string;
+  username: string;
+  displayName: string;
   text: string;
-  image?: string;
-  time: string;
-  likes: number;
-  comments: number;
+  image: string | null;
+  visibility: string;
+  status: string;
+  reason: string | null;
+  isTaggedHotspot: boolean;
+  isTaggedRoute: boolean;
+  hotspotIds: number[];
+  routeIds: number[];
+  tags: ProfilePostTag[];
+  medias: ProfilePostMedia[];
+  createdAt: string | null;
+  pointRemaining: number | null;
 };
