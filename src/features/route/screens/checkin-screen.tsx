@@ -1,3 +1,4 @@
+import * as Location from 'expo-location';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -6,12 +7,15 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   Animated,
   Easing,
+  ActivityIndicator,
   Pressable,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getValidAccessToken, useAuthSession } from '@/features/auth/hooks/use-auth-session';
+import { createRouteCheckIn, getRouteById, type RouteHotspotDto } from '@/features/route/api/route-api';
 import { addCheckin, useCheckins } from '@/lib/checkin-store';
 import { getHotspot, getRouteHotspots } from '@/lib/demo-data';
 import { getHotspotDetailHref, getHotspotStoriesHref } from '@/lib/hotspot-navigation';
@@ -236,12 +240,50 @@ function RewardRow({
 export default function CheckinScreen() {
   const { id, routeId } = useLocalSearchParams<{ id: string; routeId?: string }>();
   const router = useRouter();
+  const session = useAuthSession();
   const checkins = useCheckins();
   const [stage, setStage] = useState<Stage>('idle');
+  const [apiHotspot, setApiHotspot] = useState<RouteHotspotDto | null>(null);
+  const [checkInError, setCheckInError] = useState<string | null>(null);
+  const [reward, setReward] = useState<{ pointEarned: number; xpEarned: number } | null>(null);
 
   const hotspotId = Array.isArray(id) ? id[0] : id;
   const activeRouteId = Array.isArray(routeId) ? routeId[0] : routeId;
-  const h = hotspotId ? getHotspot(hotspotId) : undefined;
+  const demoHotspot = hotspotId ? getHotspot(hotspotId) : undefined;
+  const h = demoHotspot ?? (apiHotspot
+    ? {
+        address: apiHotspot.address || '',
+        id: String(apiHotspot.hotspotId),
+        image: apiHotspot.medias?.[0]?.fileUrl || 'https://i.pinimg.com/736x/f3/0f/e8/f30fe84218790e6ffd25f987d434eb13.jpg',
+        name: apiHotspot.hotspotName || `Hotspot #${apiHotspot.hotspotId}`,
+        xp: apiHotspot.xp ?? apiHotspot.point ?? 0,
+      }
+    : undefined);
+
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadApiHotspot() {
+      if (!activeRouteId || !hotspotId || demoHotspot) return;
+
+      try {
+        const accessToken = await getValidAccessToken();
+        const route = await getRouteById({ accessToken, routeId: activeRouteId, tokenType: session.tokenType });
+        const matchedHotspot = route.hotspots.find((stop) => String(stop.hotspotId) === String(hotspotId));
+        if (!cancelled) setApiHotspot(matchedHotspot ?? null);
+      } catch (error) {
+        console.warn('[checkin] load API hotspot failed', error);
+        if (!cancelled) setApiHotspot(null);
+      }
+    }
+
+    void loadApiHotspot();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRouteId, demoHotspot, hotspotId, session.tokenType]);
 
   const routeProgress = useMemo(() => {
     if (!activeRouteId) return null;
@@ -252,16 +294,57 @@ export default function CheckinScreen() {
     return { completed, total: stops.length };
   }, [activeRouteId, checkins, hotspotId, stage]);
 
-  // Giả lập scan GPS 1.8 giây
   useEffect(() => {
-    if (stage === 'scanning' && hotspotId) {
-      const t = setTimeout(() => {
+    let cancelled = false;
+
+    async function submitCheckIn() {
+      if (stage !== 'scanning' || !hotspotId) return;
+
+      setCheckInError(null);
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status !== 'granted') {
+          throw new Error('Bạn cần cho phép quyền vị trí để check-in.');
+        }
+
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        const accessToken = await getValidAccessToken();
+        const result = await createRouteCheckIn({
+          accessToken,
+          hotspotId: Number(hotspotId),
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          tokenType: session.tokenType,
+        });
+
+        if (cancelled) return;
         addCheckin(hotspotId);
+        setReward({ pointEarned: result.pointEarned, xpEarned: result.xpEarned });
         setStage('success');
-      }, 1800);
-      return () => clearTimeout(t);
+      } catch (error) {
+        if (cancelled) return;
+        setCheckInError(error instanceof Error ? error.message : 'Check-in thất bại.');
+        setStage('idle');
+      }
     }
-  }, [stage, hotspotId]);
+
+    void submitCheckIn();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hotspotId, session.tokenType, stage]);
+
+  if (!h && activeRouteId) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-[#1A1525]">
+        <ActivityIndicator color="#EB489B" />
+        <Text className="mt-3 text-white/70">Đang tải địa điểm...</Text>
+      </SafeAreaView>
+    );
+  }
 
   // Fallback
   if (!h) {
@@ -357,6 +440,12 @@ export default function CheckinScreen() {
                 </View>
               </View>
 
+              {checkInError ? (
+                <View className="mt-3 w-full rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3">
+                  <Text className="text-center text-[12px] font-semibold text-red-100">{checkInError}</Text>
+                </View>
+              ) : null}
+
               {/* CTA button */}
               <Pressable
                 onPress={() => setStage('scanning')}
@@ -435,7 +524,7 @@ export default function CheckinScreen() {
                     <Text className="text-[13px] font-extrabold text-white">XP</Text>
                   }
                   label="Phần thưởng"
-                  value={`+${h.xp} XP`}
+                  value={`+${reward?.xpEarned ?? h.xp} XP`}
                   badge="+1"
                 />
                 <View className="h-px bg-white/10" />

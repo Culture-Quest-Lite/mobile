@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getValidAccessToken, useAuthSession } from '@/features/auth/hooks/use-auth-session';
@@ -11,6 +11,8 @@ import { getGoongRouteCoordinates } from '@/features/map/api/goong-directions';
 import { AppMap } from '@/features/map/components/app-map';
 import {
   getRouteById,
+  saveRoute,
+  startRouteProgress,
   type RouteDto,
   type RouteHotspotDto
 } from '@/features/route/api/route-api';
@@ -342,6 +344,9 @@ export default function RouteDetailScreen() {
   const [route, setRoute] = useState<RouteDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSavingRoute, setIsSavingRoute] = useState(false);
+  const [isStartingRoute, setIsStartingRoute] = useState(false);
+  const [isSavedRoute, setIsSavedRoute] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -423,6 +428,43 @@ export default function RouteDetailScreen() {
   ];
   const feedbackTags = ['Dễ đi', 'Cảnh đẹp', 'Nội dung hay'];
   const reviews: RouteReview[] = [];
+
+  async function handleSaveRoute() {
+    if (!route || isSavingRoute) return;
+
+    setIsSavingRoute(true);
+    try {
+      const accessToken = await getValidAccessToken();
+      await saveRoute({ accessToken, routeId: route.routeId, tokenType: session.tokenType });
+      setIsSavedRoute(true);
+      Alert.alert('Đã lưu tuyến', 'Tuyến này đã được thêm vào danh sách đã lưu.');
+    } catch (saveError) {
+      Alert.alert(
+        'Không thể lưu tuyến',
+        saveError instanceof Error ? saveError.message : 'Vui lòng thử lại sau.',
+      );
+    } finally {
+      setIsSavingRoute(false);
+    }
+  }
+
+  async function handleStartRoute() {
+    if (!route || !firstStop || isStartingRoute) return;
+
+    setIsStartingRoute(true);
+    try {
+      const accessToken = await getValidAccessToken();
+      await startRouteProgress({ accessToken, routeId: route.routeId, tokenType: session.tokenType });
+      router.push(`/checkin/${firstStop.hotspotId}?routeId=${route.routeId}` as Href);
+    } catch (startError) {
+      Alert.alert(
+        'Không thể bắt đầu tuyến',
+        startError instanceof Error ? startError.message : 'Vui lòng thử lại sau.',
+      );
+    } finally {
+      setIsStartingRoute(false);
+    }
+  }
 
   return (
     <View className="flex-1 bg-white">
@@ -717,21 +759,21 @@ export default function RouteDetailScreen() {
 
       <View className="absolute inset-x-0 bottom-0 px-4 pb-6 pt-2">
         <View className="flex-row gap-2 rounded-2xl bg-white/95 p-2.5" style={cardShadow}>
-          <Pressable className="h-12 w-12 items-center justify-center rounded-xl bg-[#F4EFF8]">
+          <Pressable
+            disabled={isSavingRoute}
+            onPress={handleSaveRoute}
+            className={`h-12 w-12 items-center justify-center rounded-xl ${isSavedRoute ? 'bg-[#FFF4EF]' : 'bg-[#F4EFF8]'} ${isSavingRoute ? 'opacity-60' : ''}`}
+          >
             <SymbolView
-              name={{ ios: 'bookmark', android: 'bookmark_border', web: 'bookmark_border' }}
+              name={{ ios: isSavedRoute ? 'bookmark.fill' : 'bookmark', android: isSavedRoute ? 'bookmark' : 'bookmark_border', web: isSavedRoute ? 'bookmark' : 'bookmark_border' }}
               size={16}
-              tintColor="#8E869A"
+              tintColor={isSavedRoute ? '#F58752' : '#8E869A'}
             />
           </Pressable>
           <Pressable
-            disabled={!firstStop}
-            onPress={() => {
-              if (firstStop) {
-                router.push(`/checkin/${firstStop.hotspotId}?routeId=${route.routeId}` as Href);
-              }
-            }}
-            className={`flex-1 overflow-hidden rounded-xl ${firstStop ? '' : 'opacity-60'}`}
+            disabled={!firstStop || isStartingRoute}
+            onPress={handleStartRoute}
+            className={`flex-1 overflow-hidden rounded-xl ${firstStop && !isStartingRoute ? '' : 'opacity-60'}`}
             style={glowShadow}
           >
             <LinearGradient
@@ -745,7 +787,7 @@ export default function RouteDetailScreen() {
                 size={16}
                 tintColor="#fff"
               />
-              <Text className="text-[15px] font-bold text-white">Bắt đầu hành trình</Text>
+              <Text className="text-[15px] font-bold text-white">{isStartingRoute ? 'Đang bắt đầu...' : 'Bắt đầu hành trình'}</Text>
             </LinearGradient>
           </Pressable>
         </View>

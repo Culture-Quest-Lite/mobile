@@ -26,7 +26,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { getValidAccessToken, useAuthSession } from "@/features/auth/hooks/use-auth-session";
 import { GoongStaticMap } from "@/features/map/components/goong-static-map";
-import { getRoutes, mapRouteToRouteItem, type RouteDto } from "@/features/route/api/route-api";
+import {
+  getRoutes,
+  getSavedRoutes,
+  getUserRouteProgressList,
+  mapRouteToRouteItem,
+  type RouteDto,
+} from "@/features/route/api/route-api";
 
 type Tab = "official" | "active" | "completed" | "bookmarked" | "community";
 type RouteVariant =
@@ -92,6 +98,9 @@ export default function RouteScreen() {
   const [officialRoutes, setOfficialRoutes] = useState<RouteItem[]>([]);
   const [isLoadingRoutes, setIsLoadingRoutes] = useState(true);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const [activeRoutesFromApi, setActiveRoutesFromApi] = useState<RouteItem[]>([]);
+  const [completedRoutesFromApi, setCompletedRoutesFromApi] = useState<RouteItem[]>([]);
+  const [savedRoutesFromApi, setSavedRoutesFromApi] = useState<RouteItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,10 +119,53 @@ export default function RouteScreen() {
           tokenType: session.tokenType,
         });
         const mappedRoutes = response.content.map(mapRouteToRouteItem);
+        const [activeProgress, completedProgress, savedRoutes] = accessToken
+          ? await Promise.allSettled([
+              getUserRouteProgressList({
+                accessToken,
+                page: 0,
+                size: 20,
+                status: "IN_PROGRESS",
+                tokenType: session.tokenType,
+              }),
+              getUserRouteProgressList({
+                accessToken,
+                page: 0,
+                size: 20,
+                status: "COMPLETED",
+                tokenType: session.tokenType,
+              }),
+              getSavedRoutes({ accessToken, tokenType: session.tokenType }),
+            ])
+          : [null, null, null];
 
         if (!cancelled) {
           setOfficialRouteDtos(response.content);
           setOfficialRoutes(mappedRoutes);
+          setActiveRoutesFromApi(
+            activeProgress?.status === "fulfilled"
+              ? activeProgress.value.content
+                  .map((progress) => progress.route)
+                  .filter(Boolean)
+                  .map((route) => mapRouteToRouteItem(route as RouteDto))
+              : [],
+          );
+          setCompletedRoutesFromApi(
+            completedProgress?.status === "fulfilled"
+              ? completedProgress.value.content
+                  .map((progress) => progress.route)
+                  .filter(Boolean)
+                  .map((route) => mapRouteToRouteItem(route as RouteDto))
+              : [],
+          );
+          setSavedRoutesFromApi(
+            savedRoutes?.status === "fulfilled"
+              ? savedRoutes.value
+                  .map((savedRoute) => savedRoute.route)
+                  .filter(Boolean)
+                  .map((route) => mapRouteToRouteItem(route as RouteDto))
+              : [],
+          );
         }
       } catch (error) {
         console.warn("[route-screen] load official routes failed", error);
@@ -143,20 +195,26 @@ export default function RouteScreen() {
 
   const activeList = useMemo(
     () =>
-      myRoutes.active.map((id) => getRoute(id)).filter(Boolean) as RouteItem[],
-    [],
+      activeRoutesFromApi.length
+        ? activeRoutesFromApi
+        : (myRoutes.active.map((id) => getRoute(id)).filter(Boolean) as RouteItem[]),
+    [activeRoutesFromApi],
   );
   const completedList = useMemo(
     () =>
-      myRoutes.completed
-        .map((id) => getRoute(id))
-        .filter(Boolean) as RouteItem[],
-    [],
+      completedRoutesFromApi.length
+        ? completedRoutesFromApi
+        : (myRoutes.completed
+            .map((id) => getRoute(id))
+            .filter(Boolean) as RouteItem[]),
+    [completedRoutesFromApi],
   );
   const savedList = useMemo(
     () =>
-      myRoutes.saved.map((id) => getRoute(id)).filter(Boolean) as RouteItem[],
-    [],
+      savedRoutesFromApi.length
+        ? savedRoutesFromApi
+        : (myRoutes.saved.map((id) => getRoute(id)).filter(Boolean) as RouteItem[]),
+    [savedRoutesFromApi],
   );
 
   return (
