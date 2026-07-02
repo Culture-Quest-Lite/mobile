@@ -1,20 +1,31 @@
 import { SymbolView } from '@/components/ui/symbol-view';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { type Href, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getValidAccessToken, useAuthSession } from '@/features/auth/hooks/use-auth-session';
+import {
+  findMatchingHotspotByNameOrCoordinate,
+  getApiHotspotRouteSlug,
+  getHotspotHref,
+} from '@/features/home/data/hotspots';
 import { getGoongRouteCoordinates } from '@/features/map/api/goong-directions';
 import { AppMap } from '@/features/map/components/app-map';
 import {
   getRouteById,
+  getUserRouteProgressById,
+  getUserRouteProgressList,
   type RouteDto,
-  type RouteHotspotDto
+  type RouteHotspotDto,
+  saveRoute,
+  startRouteProgress,
+  type UserRouteProgressDto,
 } from '@/features/route/api/route-api';
 import { useCheckins } from '@/lib/checkin-store';
+import { getHotspotDetailHref } from '@/lib/hotspot-navigation';
 
 const fallbackRouteImage =
   'https://i.pinimg.com/1200x/80/69/f9/8069f9581583a196f9f39bda000b9312.jpg';
@@ -109,6 +120,37 @@ function getStopImage(stop: RouteHotspotDto) {
   return image?.fileUrl || fallbackStopImage;
 }
 
+function getRouteHotspotOrder(stop: RouteHotspotDto, fallbackIndex: number) {
+  return stop.orderIndex ?? stop.sequenceNumber ?? stop.index ?? fallbackIndex + 1;
+}
+
+function getOrderedRouteHotspots(hotspots: RouteHotspotDto[]) {
+  return hotspots
+    .map((stop, index) => ({ stop, index }))
+    .sort((a, b) => {
+      const orderDiff = getRouteHotspotOrder(a.stop, a.index) - getRouteHotspotOrder(b.stop, b.index);
+      return orderDiff !== 0 ? orderDiff : a.index - b.index;
+    })
+    .map((item) => item.stop);
+}
+
+function resolveRouteHotspotHref(stop: RouteHotspotDto): Href {
+  const matchedHotspot = findMatchingHotspotByNameOrCoordinate({
+    hotspotName: stop.hotspotName ?? '',
+    latitude: Number(stop.latitude ?? 0),
+    longitude: Number(stop.longitude ?? 0),
+  });
+
+  if (matchedHotspot) {
+    return getHotspotHref(matchedHotspot.slug, stop.hotspotId);
+  }
+
+  return (
+    getHotspotDetailHref(String(stop.hotspotId)) ??
+    getHotspotHref(getApiHotspotRouteSlug(stop.hotspotId), stop.hotspotId)
+  );
+}
+
 function XPBar({ value, max }: { value: number; max: number }) {
   const percent = max > 0 ? Math.min(Math.max((value / max) * 100, 0), 100) : 0;
 
@@ -127,9 +169,11 @@ function XPBar({ value, max }: { value: number; max: number }) {
 function RouteMapHero({
   checkedInIds,
   route,
+  height,
 }: {
   checkedInIds: string[];
   route: RouteDto;
+  height: number;
 }) {
   const points = useMemo(
     () =>
@@ -182,11 +226,11 @@ function RouteMapHero({
   }, [points]);
 
   return (
-    <View className="relative h-72 overflow-hidden bg-[#E8F0FE]">
+    <View className="relative overflow-hidden bg-[#E8F0FE]" style={{ height }}>
       <AppMap
         points={points}
         routeCoordinates={routeCoordinates}
-        height={288}
+        height={height}
         showsUserLocation
       />
       <LinearGradient
@@ -342,47 +386,121 @@ export default function RouteDetailScreen() {
   const [route, setRoute] = useState<RouteDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSavingRoute, setIsSavingRoute] = useState(false);
+  const [isStartingRoute, setIsStartingRoute] = useState(false);
+  const [isSavedRoute, setIsSavedRoute] = useState(false);
+  const [activeRouteProgress, setActiveRouteProgress] = useState<UserRouteProgressDto | null>(null);
+  const [mapHeight, setMapHeight] = useState(240);
 
-  useEffect(() => {
-    let cancelled = false;
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
 
-    async function loadRouteDetail() {
-      if (!routeId) {
-        setError('Thiếu mã tuyến.');
-        setIsLoading(false);
-        return;
+      async function loadRouteDetail() {
+        if (!routeId) {
+          setError('Thiếu mã tuyến.');
+          setIsLoading(false);
+          return;
+        }
+
+        setIsLoading(true);
+        setError(null);
+        setActiveRouteProgress(null);
+
+        try {
+          const accessToken = await getValidAccessToken();
+          const [routeDetail, progressPage] = await Promise.all([
+            getRouteById({
+              accessToken,
+              routeId,
+              tokenType: session.tokenType,
+            }),
+            accessToken
+              ? getUserRouteProgressList({
+                  accessToken,
+                  page: 0,
+                  size: 50,
+                  sortBy: 'startedAt',
+                  sortDirection: 'DESC',
+                  tokenType: session.tokenType,
+                })
+              : Promise.resolve({
+                  content: [],
+                  number: 0,
+                  size: 0,
+                  totalElements: 0,
+                  totalPages: 0,
+                }),
+          ]);
+
+          if (cancelled) return;
+
+          let startedProgress = progressPage.content.find((progress) => {
+            const sameRoute = Number(progress.routeId) === Number(routeId);
+            const status = `${progress.status ?? ''}`.toUpperCase();
+            return sameRoute && (status === 'IN_PROGRESS' || status === 'COMPLETED');
+          });
+
+          if (startedProgress?.userRouteProgressId && accessToken) {
+            try {
+              const detailedProgress = await getUserRouteProgressById({
+                accessToken,
+                progressId: startedProgress.userRouteProgressId,
+                tokenType: session.tokenType,
+              });
+              if (!cancelled) {
+                startedProgress = detailedProgress;
+              }
+            } catch (progressDetailError) {
+              console.warn('[route-detail] load progress detail failed', progressDetailError);
+            }
+          }
+
+          setRoute(routeDetail);
+          setActiveRouteProgress(startedProgress ?? null);
+        } catch (loadError) {
+          if (cancelled) return;
+          setError(loadError instanceof Error ? loadError.message : 'Không thể tải chi tiết tuyến.');
+          setRoute(null);
+        } finally {
+          if (!cancelled) setIsLoading(false);
+        }
       }
 
-      setIsLoading(true);
-      setError(null);
+      void loadRouteDetail();
 
-      try {
-        const accessToken = await getValidAccessToken();
-        const routeDetail = await getRouteById({
-          accessToken,
-          routeId,
-          tokenType: session.tokenType,
-        });
+      return () => {
+        cancelled = true;
+      };
+    }, [routeId, session.tokenType]),
+  );
 
-        if (cancelled) return;
-        setRoute(routeDetail);
-      } catch (loadError) {
-        if (cancelled) return;
-        setError(loadError instanceof Error ? loadError.message : 'Không thể tải chi tiết tuyến.');
-        setRoute(null);
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    }
+  const checkedInIdsFromProgress = useMemo(() => {
+    return (
+      activeRouteProgress?.hotspotProgressList
+        ?.filter((item) => item.isCheckedIn)
+        .map((item) => String(item.hotspotId)) ?? []
+    );
+  }, [activeRouteProgress]);
+  const checkedInIds = useMemo(() => {
+    const ids = new Set<string>([...checkins.map(String), ...checkedInIdsFromProgress]);
+    return Array.from(ids);
+  }, [checkins, checkedInIdsFromProgress]);
+  const orderedStops = useMemo(
+    () => (route ? getOrderedRouteHotspots(route.hotspots) : []),
+    [route],
+  );
+  const hasStartedRoute = Boolean(activeRouteProgress);
+  const nextStop = useMemo(() => {
+    if (!orderedStops.length) return undefined;
+    return orderedStops.find((stop) => !checkedInIds.includes(String(stop.hotspotId))) ?? orderedStops[0];
+  }, [checkedInIds, orderedStops]);
 
-    void loadRouteDetail();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [routeId, session.tokenType]);
-
-  const checkedInIds = useMemo(() => checkins.map(String), [checkins]);
+  const handleMapScroll = useCallback((event: any) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    const nextHeight = Math.min(420, Math.max(240, 240 + offsetY * 0.6));
+    setMapHeight(nextHeight);
+  }, []);
 
   if (isLoading) {
     return (
@@ -404,10 +522,10 @@ export default function RouteDetailScreen() {
     );
   }
 
-  const completed = route.hotspots.filter((stop) => checkedInIds.includes(String(stop.hotspotId))).length;
-  const progress = route.hotspots.length > 0 ? (completed / route.hotspots.length) * 100 : 0;
-  const firstStop = route.hotspots[0];
-  const totalStops = route.hotspots.length;
+  const completed = orderedStops.filter((stop) => checkedInIds.includes(String(stop.hotspotId))).length;
+  const progress = orderedStops.length > 0 ? (completed / orderedStops.length) * 100 : 0;
+  const totalStops = orderedStops.length;
+  const continueHref = nextStop ? resolveRouteHotspotHref(nextStop) : undefined;
   const routeTheme = route.tags[0]?.tagName || 'Di sản';
   const routeDistanceLabel = `${route.totalDistance || 0} km`;
   const routeDurationLabel = `${route.estimateTime || 0} phút`;
@@ -424,11 +542,56 @@ export default function RouteDetailScreen() {
   const feedbackTags = ['Dễ đi', 'Cảnh đẹp', 'Nội dung hay'];
   const reviews: RouteReview[] = [];
 
+  async function handleSaveRoute() {
+    if (!route || isSavingRoute) return;
+
+    setIsSavingRoute(true);
+    try {
+      const accessToken = await getValidAccessToken();
+      await saveRoute({ accessToken, routeId: route.routeId, tokenType: session.tokenType });
+      setIsSavedRoute(true);
+      Alert.alert('Đã lưu tuyến', 'Tuyến này đã được thêm vào danh sách đã lưu.');
+    } catch (saveError) {
+      Alert.alert(
+        'Không thể lưu tuyến',
+        saveError instanceof Error ? saveError.message : 'Vui lòng thử lại sau.',
+      );
+    } finally {
+      setIsSavingRoute(false);
+    }
+  }
+
+  async function handleStartRoute() {
+    if (!route || !continueHref || isStartingRoute) return;
+
+    setIsStartingRoute(true);
+    try {
+      const accessToken = await getValidAccessToken();
+      if (!hasStartedRoute) {
+        await startRouteProgress({ accessToken, routeId: route.routeId, tokenType: session.tokenType });
+      }
+      router.push(continueHref);
+    } catch (startError) {
+      Alert.alert(
+        'Không thể bắt đầu tuyến',
+        startError instanceof Error ? startError.message : 'Vui lòng thử lại sau.',
+      );
+    } finally {
+      setIsStartingRoute(false);
+    }
+  }
+
   return (
     <View className="flex-1 bg-white">
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={handleMapScroll}
+      >
         <View className="relative">
-          <RouteMapHero route={route} checkedInIds={checkedInIds} />
+          <RouteMapHero route={route} checkedInIds={checkedInIds} height={mapHeight} />
 
           <SafeAreaView edges={['top']} className="absolute inset-x-0 top-0">
             <View className="flex-row items-center justify-between px-3 pt-2">
@@ -541,22 +704,24 @@ export default function RouteDetailScreen() {
             <Text className="mb-3 text-[19px] font-bold text-[#2B2233]">Hành trình của bạn</Text>
             <View className="pl-7">
               <View className="absolute bottom-2 left-3 top-2 w-px bg-[#EB489B]/40" />
-             {route.hotspots.map((stop, index) => {
+              {orderedStops.map((stop, index) => {
                 const done = checkedInIds.includes(String(stop.hotspotId));
                 return (
                   <Pressable
                     key={`${stop.hotspotId}-${index}`}
-                    onPress={() => router.push(`/hotspot/${stop.hotspotId}` as Href)}
+                    onPress={() => {
+                      router.push(resolveRouteHotspotHref(stop));
+                    }}
                     className="relative flex-row gap-3 pb-4"
                   >
                     <View
                       className={`absolute -left-7 top-2 h-6 w-6 items-center justify-center rounded-full border-2 border-white ${
-                        done ? 'bg-[#F58752]' : 'bg-[#EB489B]'
+                        done ? 'bg-[#34C759]' : 'bg-[#EB489B]'
                       }`}
                     >
                       {done ? (
                         <SymbolView
-                          name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
+                          name={{ ios: 'checkmark', android: 'check', web: 'check' }}
                           size={12}
                           tintColor="#fff"
                         />
@@ -578,7 +743,7 @@ export default function RouteDetailScreen() {
                       </Text>
                       <View className="mt-1.5 flex-row items-center gap-2">
                         <View className="rounded-full bg-[#F4EFF8] px-2 py-0.5">
-                          <Text className="text-[11px] text-[#2B2233]">{formatDistance(getDistanceKm(stop, route.hotspots[index + 1]))}</Text>
+                          <Text className="text-[11px] text-[#2B2233]">{formatDistance(getDistanceKm(stop, orderedStops[index + 1]))}</Text>
                         </View>
                         <View className="rounded-full bg-[#F4EFF8] px-2 py-0.5">
                           <Text className="text-[11px] text-[#2B2233]">{`Thứ tự ${stop.orderIndex ?? stop.sequenceNumber ?? index + 1}`}</Text>
@@ -717,21 +882,21 @@ export default function RouteDetailScreen() {
 
       <View className="absolute inset-x-0 bottom-0 px-4 pb-6 pt-2">
         <View className="flex-row gap-2 rounded-2xl bg-white/95 p-2.5" style={cardShadow}>
-          <Pressable className="h-12 w-12 items-center justify-center rounded-xl bg-[#F4EFF8]">
+          <Pressable
+            disabled={isSavingRoute}
+            onPress={handleSaveRoute}
+            className={`h-12 w-12 items-center justify-center rounded-xl ${isSavedRoute ? 'bg-[#FFF4EF]' : 'bg-[#F4EFF8]'} ${isSavingRoute ? 'opacity-60' : ''}`}
+          >
             <SymbolView
-              name={{ ios: 'bookmark', android: 'bookmark_border', web: 'bookmark_border' }}
+              name={{ ios: isSavedRoute ? 'bookmark.fill' : 'bookmark', android: isSavedRoute ? 'bookmark' : 'bookmark_border', web: isSavedRoute ? 'bookmark' : 'bookmark_border' }}
               size={16}
-              tintColor="#8E869A"
+              tintColor={isSavedRoute ? '#F58752' : '#8E869A'}
             />
           </Pressable>
           <Pressable
-            disabled={!firstStop}
-            onPress={() => {
-              if (firstStop) {
-                router.push(`/checkin/${firstStop.hotspotId}?routeId=${route.routeId}` as Href);
-              }
-            }}
-            className={`flex-1 overflow-hidden rounded-xl ${firstStop ? '' : 'opacity-60'}`}
+            disabled={!continueHref || isStartingRoute}
+            onPress={handleStartRoute}
+            className={`flex-1 overflow-hidden rounded-xl ${continueHref && !isStartingRoute ? '' : 'opacity-60'}`}
             style={glowShadow}
           >
             <LinearGradient
@@ -745,7 +910,9 @@ export default function RouteDetailScreen() {
                 size={16}
                 tintColor="#fff"
               />
-              <Text className="text-[15px] font-bold text-white">Bắt đầu hành trình</Text>
+              <Text className="text-[15px] font-bold text-white">
+                {isStartingRoute ? 'Đang bắt đầu...' : hasStartedRoute ? 'Tiếp tục hành trình' : 'Bắt đầu hành trình'}
+              </Text>
             </LinearGradient>
           </Pressable>
         </View>
