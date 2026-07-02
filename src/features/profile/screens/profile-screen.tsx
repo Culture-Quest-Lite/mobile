@@ -83,6 +83,12 @@ const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
     icon: { ios: "heart", android: "favorite_border", web: "favorite_border" },
   },
 ];
+const fallbackPostImageUri =
+  "https://i.pinimg.com/1200x/6d/cd/14/6dcd140b80b210ac445a0eddfc40784a.jpg";
+const fallbackPostAuthorName = "Minh Anh";
+const fallbackPostTimestamp = "09:30, 02/07/2026";
+const fallbackPostLikeCount = 128;
+const fallbackPostCommentCount = 14;
 
 const GUEST_MENU_ITEMS: {
   label: string;
@@ -171,6 +177,54 @@ function getProfileInitials(name: string, username: string) {
   const firstInitial = parts[0][0] ?? "";
   const lastInitial = parts[parts.length - 1][0] ?? "";
   return `${firstInitial}${lastInitial}`.toUpperCase();
+}
+
+function formatPostTimestamp(value: string | null) {
+  if (!value) {
+    return fallbackPostTimestamp;
+  }
+
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return fallbackPostTimestamp;
+  }
+
+  const dateText = new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(parsedDate);
+  const timeText = new Intl.DateTimeFormat("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(parsedDate);
+
+  return `${timeText},${dateText}`;
+}
+
+function getPostVisibilityLabel(visibility: string) {
+  switch (visibility.toUpperCase()) {
+    case "PRIVATE":
+      return "Riêng tư";
+    case "FOLLOWER":
+      return "Chỉ follower";
+    case "PUBLIC":
+      return "Công khai";
+    default:
+      return visibility || "Công khai";
+  }
+}
+
+function buildPostHashtags(post: ProfilePost) {
+  const hashtags = [
+    post.isTaggedHotspot ? "#Hotspot" : null,
+    post.isTaggedRoute ? "#Tuyến" : null,
+    ...post.tags.map((tag) => `#${tag.name}`),
+  ].filter(Boolean) as string[];
+
+  return hashtags.length > 0 ? hashtags : ["#Thiên nhiên"];
 }
 
 export default function ProfileScreen() {
@@ -277,7 +331,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView
       className="flex-1 bg-[#F7F8FC]"
-      edges={["left", "right", "bottom"]}
+      edges={["left", "right"]}
     >
       <ScrollView
         className="flex-1"
@@ -451,7 +505,13 @@ export default function ProfileScreen() {
               ) : (
                 <View className="gap-3">
                   {posts.map((post) => (
-                    <PostCard key={post.id} post={post} />
+                    <PostCard
+                      key={post.id}
+                      post={post}
+                      profileAvatar={profile.avatar}
+                      profileName={profile.name}
+                      profileUsername={profile.username}
+                    />
                   ))}
                 </View>
               )
@@ -508,7 +568,7 @@ function GuestProfileScreen({
   return (
     <SafeAreaView
       className="flex-1 bg-[#FFF1F8]"
-      edges={["top", "left", "right", "bottom"]}
+      edges={["top", "left", "right"]}
     >
       <View className="absolute inset-0">
         <LinearGradient
@@ -915,29 +975,205 @@ function InlineNotice({ message }: { message: string }) {
   );
 }
 
-function PostCard({ post }: { post: ProfilePost }) {
+function PostAuthorAvatar({
+  avatar,
+  name,
+  username,
+}: {
+  avatar: string | null;
+  name: string;
+  username: string;
+}) {
+  const [hasError, setHasError] = useState(!avatar);
+  const initials = getProfileInitials(name, username);
+
   return (
-    <View className="rounded-2xl bg-white p-3" style={cardShadow}>
-      <Text className="text-[13px] leading-relaxed text-[#2B2233]">
-        {post.text}
-      </Text>
-      {post.image ? (
+    <View
+      className="h-12 w-12 overflow-hidden rounded-full border-2 border-white bg-white"
+      style={cardShadow}
+    >
+      {hasError || !avatar ? (
+        <LinearGradient
+          colors={avatarFallbackColors}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}
+        >
+          <Text className="text-[16px] font-black text-white">{initials}</Text>
+        </LinearGradient>
+      ) : (
         <Image
-          source={post.image}
+          source={avatar}
+          contentFit="cover"
+          transition={180}
+          cachePolicy="memory-disk"
+          onError={() => setHasError(true)}
+          style={{ width: "100%", height: "100%" }}
+        />
+      )}
+    </View>
+  );
+}
+
+function PostAction({
+  icon,
+  tintColor = "#2B2233",
+  value,
+}: {
+  icon: SymbolName;
+  tintColor?: string;
+  value?: number;
+}) {
+  return (
+    <View className="flex-row items-center gap-2">
+      <SymbolView name={icon} size={18} tintColor={tintColor} />
+      {typeof value === "number" ? (
+        <Text className="text-[15px] font-semibold text-[#2B2233]">
+          {value}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function PostCard({
+  post,
+  profileAvatar,
+  profileName,
+  profileUsername,
+}: {
+  post: ProfilePost;
+  profileAvatar: string | null;
+  profileName: string;
+  profileUsername: string;
+}) {
+  const hashtagChips = buildPostHashtags(post);
+  const imageBadgeLabel =
+    post.tags[0]?.name ||
+    (post.isTaggedHotspot ? "Hotspot" : "") ||
+    (post.isTaggedRoute ? "Tuyến" : "") ||
+    "Thiên nhiên";
+  const authorName =
+    post.displayName.trim() ||
+    profileName.trim() ||
+    fallbackPostAuthorName;
+  const authorUsername = post.username.trim() || profileUsername.trim();
+  const postContent = post.text.trim() || "Chuyến đi hôm nay rất đáng nhớ.";
+  const postImage = post.image || fallbackPostImageUri;
+
+  return (
+    <View
+      className="rounded-[28px] border border-[#F1E7EB] bg-white p-4"
+      style={cardShadow}
+    >
+      <View className="flex-row items-start justify-between gap-3">
+        <View className="min-w-0 flex-1 flex-row items-center gap-3">
+          <PostAuthorAvatar
+            avatar={profileAvatar}
+            name={authorName}
+            username={authorUsername}
+          />
+
+          <View className="min-w-0 flex-1">
+            <Text
+              className="text-[16px] font-extrabold leading-5 text-[#1D2A44]"
+              numberOfLines={1}
+            >
+              {authorName}
+            </Text>
+
+            <Text className="mt-1 text-[13px] leading-4 text-[#6D7486]">
+              {formatPostTimestamp(post.createdAt)}
+            </Text>
+          </View>
+        </View>
+
+        <View className="flex-row items-center gap-2 self-start">
+          <View className="rounded-full bg-[#EAFBF2] px-3 py-1.5">
+            <Text className="text-[13px] font-medium text-[#34B76F]">
+              {getPostVisibilityLabel(post.visibility)}
+            </Text>
+          </View>
+          <Pressable className="h-7 w-7 items-center justify-center rounded-full">
+            <SymbolView
+              name={{ ios: "ellipsis", android: "more_horiz", web: "more_horiz" }}
+              size={18}
+              tintColor="#7D7382"
+            />
+          </Pressable>
+        </View>
+      </View>
+
+      <Text className="mt-4 text-[15px] leading-6 text-[#1D2A44]">
+        {postContent}
+      </Text>
+
+      <View className="mt-4 overflow-hidden rounded-[30px]">
+        <Image
+          source={postImage}
           contentFit="cover"
           transition={180}
           cachePolicy="memory-disk"
           style={{
-            marginTop: 8,
             width: "100%",
-            aspectRatio: 4 / 3,
-            borderRadius: 12,
+            aspectRatio: 1.12,
+            borderRadius: 30,
           }}
         />
+
+        <View
+          className="absolute left-4 top-4 rounded-full px-3 py-2"
+          style={{ backgroundColor: "rgba(57, 71, 96, 0.85)" }}
+        >
+          <View className="flex-row items-center gap-1.5">
+            <SymbolView
+              name={{
+                ios: "mappin.and.ellipse",
+                android: "place",
+                web: "place",
+              }}
+              size={14}
+              tintColor="#FFFFFF"
+            />
+            <Text className="text-[14px] font-bold text-white">
+              {imageBadgeLabel}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <View className="mt-4 flex-row items-center justify-between">
+        <View className="flex-row items-center gap-5">
+          <PostAction
+            icon={{ ios: "heart", android: "favorite_border", web: "favorite_border" }}
+            value={fallbackPostLikeCount}
+          />
+          <PostAction
+            icon={{ ios: "bubble.left", android: "chat_bubble_outline", web: "chat_bubble_outline" }}
+            value={fallbackPostCommentCount}
+          />
+          <PostAction
+            icon={{ ios: "paperplane", android: "send", web: "send" }}
+          />
+        </View>
+        <PostAction
+          icon={{ ios: "bookmark", android: "bookmark_border", web: "bookmark_border" }}
+        />
+      </View>
+
+      <View className="mt-4 flex-row flex-wrap gap-2">
+        {hashtagChips.map((label) => (
+          <View key={`${post.id}-${label}`} className="rounded-full bg-[#FDEAF4] px-3 py-1.5">
+            <Text className="text-[14px] font-medium text-[#B14F84]">{label}</Text>
+          </View>
+        ))}
+      </View>
+
+      {post.reason ? (
+        <Text className="mt-3 text-[12px] font-semibold text-[#C24F3B]">
+          Lý do: {post.reason}
+        </Text>
       ) : null}
-      <Text className="mt-2 text-[11px] text-[#8E869A]">
-        {post.time} · {post.likes} thích · {post.comments} bình luận
-      </Text>
     </View>
   );
 }

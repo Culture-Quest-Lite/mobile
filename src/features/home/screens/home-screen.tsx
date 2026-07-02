@@ -3,7 +3,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
 import * as Location from "expo-location";
-import { useFocusEffect, useRouter } from "expo-router";
+import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,6 +11,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StatusBar as RNStatusBar,
   Text,
   View,
 } from "react-native";
@@ -28,12 +29,18 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
+import {
+  getRouteCoverUrl,
+  getRouteStopCount,
+  getRoutesByHotspot,
+  type RouteDto,
+} from "@/features/route/api/route-api";
 import { getGamificationLevels } from "@/features/profile/api/get-levels";
 import { getMyProfile } from "@/features/profile/api/get-me";
 import { applyLevelProgressToProfile } from "@/features/profile/lib/level-progress";
@@ -54,6 +61,7 @@ import {
   type CommunityBoardTab,
   type NearbyCategoryCard,
   type NearbyPlaceCard,
+  type NearbyRouteCard,
   type RouteDifficulty,
   activeJourney,
   communityBoards,
@@ -61,7 +69,7 @@ import {
   featuredRoutes,
   nearbyCategories,
   nearbyPlaces,
-  nearbyRoutes,
+  nearbyRoutes as fallbackNearbyRoutes,
   voucherMerchants,
 } from "../data/home-screen.mock";
 import {
@@ -372,14 +380,24 @@ type NearbyPlaceListItem = {
 };
 
 type NearbyPlacesSectionStatus = "empty" | "fallback" | "loading" | "ready";
+type SuggestedRoutesSectionStatus = "empty" | "fallback" | "loading" | "ready";
+type SuggestedRouteCard = NearbyRouteCard & {
+  id: string | null;
+};
 
 const defaultNearbySearchDistanceMeters = 20;
 const nearbyDistanceSliderMinimumMeters = 20;
 const nearbyDistanceSliderMaximumMeters = 1000;
 const nearbyDistanceSliderStepMeters = 20;
+const suggestedRouteCardImageHeight = 128;
+const suggestedRouteSubtitleHeight = 36;
+const suggestedRouteCardHeight = 254;
 const nearbyPlaceFallbackImageUri =
   nearbyPlaces[0]?.imageUri ??
   "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
+const suggestedRouteFallbackImageUri =
+  fallbackNearbyRoutes[0]?.imageUri ??
+  "https://i.pinimg.com/1200x/b9/05/dd/b905ddb3d6e87ba4f85692125c1eec2a.jpg";
 const defaultLocationPreviewRegion: Region = {
   latitude: 10.8414,
   longitude: 106.8288,
@@ -457,6 +475,100 @@ function formatCompactCount(value: number | null | undefined) {
   }
 
   return `${Math.round(value)}`;
+}
+
+function trimTrailingZeroDecimal(value: number) {
+  if (!Number.isFinite(value)) {
+    return "0";
+  }
+
+  if (Number.isInteger(value)) {
+    return `${value}`;
+  }
+
+  return value.toFixed(value >= 10 ? 0 : 1).replace(/\.0$/, "");
+}
+
+function formatRouteDistanceLabel(distanceKm: number) {
+  if (!Number.isFinite(distanceKm) || distanceKm <= 0) {
+    return "0 km";
+  }
+
+  return `${trimTrailingZeroDecimal(distanceKm)} km`;
+}
+
+function formatRouteDurationLabel(estimateTime: number) {
+  if (!Number.isFinite(estimateTime) || estimateTime <= 0) {
+    return "0 phút";
+  }
+
+  const unit = estimateTime <= 12 ? "giờ" : "phút";
+  return `${trimTrailingZeroDecimal(estimateTime)} ${unit}`;
+}
+
+function mapApiRouteDifficultyToCardDifficulty(
+  difficulty: string,
+): RouteDifficulty {
+  switch (difficulty.trim().toUpperCase()) {
+    case "EASY":
+      return "Dễ";
+    case "HARD":
+      return "Khó";
+    default:
+      return "Trung bình";
+  }
+}
+
+function buildFallbackSuggestedRoutes(): SuggestedRouteCard[] {
+  return fallbackNearbyRoutes.map((route) => ({
+    ...route,
+    id: null,
+  }));
+}
+
+function sortNearbyHotspotsByDistance(
+  hotspots: NearbyHotspotDto[],
+  currentCoordinate: Pick<AppCoordinate, "latitude" | "longitude">,
+) {
+  return [...hotspots].sort(
+    (left, right) =>
+      getDistanceMeters(currentCoordinate, {
+        latitude: left.latitude,
+        longitude: left.longitude,
+      }) -
+      getDistanceMeters(currentCoordinate, {
+        latitude: right.latitude,
+        longitude: right.longitude,
+      }),
+  );
+}
+
+function dedupeRoutesById(routes: RouteDto[]) {
+  const routeById = new Map<number, RouteDto>();
+
+  routes.forEach((route) => {
+    if (!routeById.has(route.routeId)) {
+      routeById.set(route.routeId, route);
+    }
+  });
+
+  return [...routeById.values()];
+}
+
+function mapRouteToSuggestedRouteCard(route: RouteDto): SuggestedRouteCard {
+  return {
+    difficulty: mapApiRouteDifficultyToCardDifficulty(route.difficulty),
+    distance: formatRouteDistanceLabel(route.totalDistance),
+    duration: formatRouteDurationLabel(route.estimateTime),
+    id: String(route.routeId),
+    imageUri: getRouteCoverUrl(route) || suggestedRouteFallbackImageUri,
+    stops: `${getRouteStopCount(route).toString().padStart(2, "0")} điểm`,
+    subtitle:
+      route.description ||
+      `${getRouteStopCount(route)} điểm dừng phù hợp để bắt đầu từ hotspot gần bạn.`,
+    title: route.routeName,
+    xp: `${formatRewardLabel(route.xp || route.point, "+0")} XP`,
+  };
 }
 
 function getProfileInitials(name: string, username: string) {
@@ -1098,7 +1210,7 @@ function GuestWelcomeHeader({
       <View className="flex-1 gap-1">
         <View className="flex-row items-center justify-between gap-3">
           <Pressable className="flex-1" hitSlop={8} onPress={onGreetingPress}>
-            <Text className="text-[19px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
+            <Text className="text-[18px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
               Xin chào bạn
             </Text>
           </Pressable>
@@ -1155,7 +1267,7 @@ function GuestWelcomeHeader({
             size={14}
             tintColor="#F7B500"
           />
-          <Text className="text-[14px] font-bold text-[#8E869A]">
+          <Text className="text-[13px] font-bold text-[#8E869A]">
             Đăng nhập để lưu hành trình
           </Text>
         </View>
@@ -1506,6 +1618,7 @@ function LocationMapModal({
 }
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const authSession = useAuthSession();
   const { contentWidth, gutter, safeWidth } = useScreenLayout({
@@ -1537,21 +1650,35 @@ export default function HomeScreen() {
   const [resolvedNearbyPlaces, setResolvedNearbyPlaces] = useState<
     NearbyPlaceListItem[]
   >([]);
+  const [suggestedRoutes, setSuggestedRoutes] = useState<SuggestedRouteCard[]>(
+    () => buildFallbackSuggestedRoutes(),
+  );
+  const [suggestedRoutesNote, setSuggestedRoutesNote] = useState<string | null>(
+    null,
+  );
+  const [suggestedRoutesStatus, setSuggestedRoutesStatus] =
+    useState<SuggestedRoutesSectionStatus>("loading");
   const [themeCategories, setThemeCategories] = useState<NearbyCategoryCard[]>(
     [],
   );
   const [activeCommunityTab, setActiveCommunityTab] =
     useState<CommunityBoardTab>("community");
   const isGuest = authSession.role === "guest";
+  const homeHeaderTopPadding =
+    Platform.OS === "android"
+      ? isGuest
+        ? 18
+        : insets.top + 12
+      : insets.top + 4;
   const routeCardLeftInset = gutter;
   const routeCardWidth = Math.max(contentWidth, 264);
   const nearbyRouteCardWidth = Math.min(
-    Math.max(contentWidth * 0.72, 220),
-    252,
+    Math.max(safeWidth * 0.72, 236),
+    272,
   );
   const nearbyPlaceCardWidth = Math.min(
-    Math.max(contentWidth * 0.46, 156),
-    170,
+    Math.max(safeWidth * 0.42, 160),
+    186,
   );
   const nearbyPlaceImageHeight = Math.round(nearbyPlaceCardWidth * 0.8);
   const voucherMerchantCircleSize = Math.min(
@@ -1582,6 +1709,9 @@ export default function HomeScreen() {
     explorerName;
   const handleOpenHotspots = () => {
     router.push("/hotspots");
+  };
+  const handleOpenRoutes = () => {
+    router.push("/route");
   };
   const handleOpenRegister = () => {
     router.push("/login?entry=home");
@@ -1662,6 +1792,8 @@ export default function HomeScreen() {
     async function loadNearbyPlaces() {
       setNearbyPlacesStatus("loading");
       setNearbyPlacesNote(null);
+      setSuggestedRoutesStatus("loading");
+      setSuggestedRoutesNote(null);
 
       try {
         const { coordinate, fallbackMessage } =
@@ -1676,6 +1808,11 @@ export default function HomeScreen() {
           setResolvedNearbyPlaces(fallbackNearbyPlaces);
           setNearbyPlacesNote(fallbackMessage);
           setNearbyPlacesStatus("fallback");
+          setSuggestedRoutes(buildFallbackSuggestedRoutes());
+          setSuggestedRoutesNote(
+            "Không xác định được hotspot gần bạn để gợi ý tuyến. Đang hiển thị dữ liệu demo.",
+          );
+          setSuggestedRoutesStatus("fallback");
           return;
         }
 
@@ -1702,6 +1839,11 @@ export default function HomeScreen() {
               : `Không có hotspot trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh vị trí hiện tại.`,
           );
           setNearbyPlacesStatus("empty");
+          setSuggestedRoutes([]);
+          setSuggestedRoutesNote(
+            "Chưa có hotspot gần bạn nên chưa thể gợi ý tuyến đường.",
+          );
+          setSuggestedRoutesStatus("empty");
           return;
         }
 
@@ -1714,6 +1856,80 @@ export default function HomeScreen() {
             : null,
         );
         setNearbyPlacesStatus("ready");
+
+        const nearbyHotspotsByDistance = sortNearbyHotspotsByDistance(
+          apiNearbyHotspots,
+          coordinate,
+        );
+
+        try {
+          const hotspotRouteResults = await Promise.allSettled(
+            nearbyHotspotsByDistance.map((hotspot) =>
+              getRoutesByHotspot({
+                accessToken,
+                hotspotId: hotspot.hotspotId,
+                routeStatus: "PUBLISHED",
+                tokenType: authSession.tokenType,
+              }),
+            ),
+          );
+
+          if (!isActive) {
+            return;
+          }
+
+          const failedRouteLookups = hotspotRouteResults.filter(
+            (result) => result.status === "rejected",
+          );
+          const mergedRoutes = dedupeRoutesById(
+            hotspotRouteResults.flatMap((result) =>
+              result.status === "fulfilled" ? result.value : [],
+            ),
+          );
+
+          if (mergedRoutes.length === 0) {
+            if (failedRouteLookups.length === hotspotRouteResults.length) {
+              throw new Error("Không tải được tuyến gợi ý cho các hotspot gần bạn.");
+            }
+
+            setSuggestedRoutes([]);
+            setSuggestedRoutesNote(
+              "Các hotspot gần bạn hiện chưa có tuyến published để gợi ý.",
+            );
+            setSuggestedRoutesStatus("empty");
+            return;
+          }
+
+          setSuggestedRoutes(mergedRoutes.map(mapRouteToSuggestedRouteCard));
+          setSuggestedRoutesNote(
+            failedRouteLookups.length > 0
+              ? `Đang hiển thị ${mergedRoutes.length} tuyến từ các hotspot gần bạn. ${failedRouteLookups.length} hotspot chưa tải được route.`
+              : coordinate.source === "dev-override"
+                ? `Đang hiển thị ${mergedRoutes.length} tuyến gợi ý tổng hợp từ ${nearbyHotspotsByDistance.length} hotspot gần tọa độ test ${formatCoordinateLabel(coordinate)}.`
+                : null,
+          );
+          setSuggestedRoutesStatus("ready");
+        } catch (routeError) {
+          console.warn("[home] load suggested routes failed", {
+            error:
+              routeError instanceof Error ? routeError.message : routeError,
+            hotspotIds: nearbyHotspotsByDistance.map((hotspot) => hotspot.hotspotId),
+          });
+
+          if (!isActive) {
+            return;
+          }
+
+          setSuggestedRoutes(buildFallbackSuggestedRoutes());
+          setSuggestedRoutesNote(
+            `${
+              routeError instanceof Error
+                ? routeError.message
+                : "Không tải được tuyến gợi ý theo hotspot."
+            } Đang hiển thị dữ liệu demo.`,
+          );
+          setSuggestedRoutesStatus("fallback");
+        }
       } catch (error) {
         console.warn("[home] load nearby places failed", {
           error: error instanceof Error ? error.message : error,
@@ -1732,6 +1948,11 @@ export default function HomeScreen() {
           } Đang hiển thị dữ liệu demo.`,
         );
         setNearbyPlacesStatus("fallback");
+        setSuggestedRoutes(buildFallbackSuggestedRoutes());
+        setSuggestedRoutesNote(
+          "Không lấy được hotspot gần bạn để gợi ý tuyến. Đang hiển thị dữ liệu demo.",
+        );
+        setSuggestedRoutesStatus("fallback");
       }
     }
 
@@ -1882,14 +2103,26 @@ export default function HomeScreen() {
   return (
     <SafeAreaView
       className="flex-1 bg-white"
-      edges={["top", "left", "right", "bottom"]}
+      edges={["left", "right"]}
     >
+      <RNStatusBar
+        animated
+        backgroundColor="transparent"
+        barStyle="dark-content"
+        translucent={Platform.OS === "android"}
+      />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 0 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-6 pt-1" style={{ paddingHorizontal: gutter }}>
+        <View
+          className="gap-6"
+          style={{
+            paddingHorizontal: gutter,
+            paddingTop: homeHeaderTopPadding,
+          }}
+        >
           {isGuest ? (
             <GuestWelcomeHeader
               onGreetingPress={handleOpenRegister}
@@ -2275,8 +2508,15 @@ export default function HomeScreen() {
             ) : (
               <ScrollView
                 horizontal
-                contentContainerStyle={{ paddingRight: 8 }}
+                contentContainerStyle={{
+                  paddingLeft: gutter,
+                  paddingRight: gutter,
+                }}
                 showsHorizontalScrollIndicator={false}
+                style={{
+                  marginHorizontal: -gutter,
+                  width: safeWidth,
+                }}
               >
                 {resolvedNearbyPlaces.map((place, index) => (
                   <Pressable
@@ -2420,92 +2660,154 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
 
-            <Text className="text-[18px] font-extrabold text-[#2B2233]">
-              Đề xuất tuyến đường
-            </Text>
-
-            <ScrollView
-              horizontal
-              contentContainerStyle={{ paddingRight: 8 }}
-              showsHorizontalScrollIndicator={false}
-            >
-              {nearbyRoutes.map((route, index) => (
+            <View className="flex-row items-center justify-between">
+              <Text className="text-[18px] font-extrabold text-[#2B2233]">
+                Đề xuất tuyến đường
+              </Text>
+              {suggestedRoutes.length > 1 ? (
                 <Pressable
-                  key={route.title}
-                  className={index === nearbyRoutes.length - 1 ? "" : "mr-4"}
-                  style={{ width: nearbyRouteCardWidth }}
+                  className="rounded-full bg-[#FFF4EF] px-3.5 py-2"
+                  onPress={handleOpenRoutes}
                 >
-                  <View
-                    className="overflow-hidden rounded-[24px] border border-[#EEF1F4] bg-white"
-                    style={cardShadowStyle}
-                  >
-                    <View className="relative">
-                      <Image
-                        source={route.imageUri}
-                        contentFit="cover"
-                        transition={220}
-                        cachePolicy="memory-disk"
-                        style={{ height: 128, width: "100%" }}
-                      />
+                  <Text className="text-[12px] font-bold text-[#F58752]">
+                    Xem tất cả
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
 
-                      <View className="absolute right-3 top-3 rounded-full bg-[#FFF1F6] px-2.5 py-1">
-                        <Text className="text-[11px] font-extrabold text-[#EB489B]">
-                          {route.xp}
+            {suggestedRoutesStatus !== "empty" && suggestedRoutesNote ? (
+              <Text className="text-[13px] leading-5 text-[#8E869A]">
+                {suggestedRoutesNote}
+              </Text>
+            ) : null}
+
+            {suggestedRoutesStatus === "loading" ? (
+              <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
+                <Text className="text-[15px] font-bold text-[#3B4454]">
+                  Đang tải tuyến gợi ý...
+                </Text>
+                <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+                  App đang lấy hotspotId từ nearby API rồi gọi route API cho mục
+                  đề xuất tuyến đường.
+                </Text>
+              </View>
+            ) : suggestedRoutesStatus === "empty" ? (
+              <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
+                <Text className="text-[15px] font-bold text-[#3B4454]">
+                  Chưa có tuyến phù hợp
+                </Text>
+                <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+                  {suggestedRoutesNote ??
+                    "Hotspot gần bạn hiện chưa có route published để gợi ý."}
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                horizontal
+                contentContainerStyle={{
+                  paddingLeft: gutter,
+                  paddingRight: gutter,
+                }}
+                showsHorizontalScrollIndicator={false}
+                style={{
+                  marginHorizontal: -gutter,
+                  width: safeWidth,
+                }}
+              >
+                {suggestedRoutes.map((route, index) => (
+                  <Pressable
+                    key={route.id ?? `${route.title}-${index}`}
+                    className={
+                      index === suggestedRoutes.length - 1 ? "" : "mr-4"
+                    }
+                    disabled={!route.id}
+                    onPress={() => {
+                      if (route.id) {
+                        router.push(`/route/${route.id}` as Href);
+                      }
+                    }}
+                    style={{ width: nearbyRouteCardWidth }}
+                  >
+                    <View
+                      className="overflow-hidden rounded-[24px] border border-[#EEF1F4] bg-white"
+                      style={[cardShadowStyle, { height: suggestedRouteCardHeight }]}
+                    >
+                      <View className="relative">
+                        <Image
+                          source={route.imageUri}
+                          contentFit="cover"
+                          transition={220}
+                          cachePolicy="memory-disk"
+                          style={{
+                            height: suggestedRouteCardImageHeight,
+                            width: "100%",
+                          }}
+                        />
+
+                        <View className="absolute right-3 top-3 rounded-full bg-[#FFF1F6] px-2.5 py-1">
+                          <Text className="text-[11px] font-extrabold text-[#EB489B]">
+                            {route.xp}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View className="flex-1 gap-2.5 px-4 pb-4 pt-3.5">
+                        <View
+                          className="flex-row flex-wrap items-center gap-2"
+                          style={{ minHeight: 26 }}
+                        >
+                          <View className="rounded-full bg-[#FFF1F6] px-2.5 py-1">
+                            <Text className="text-[11px] font-extrabold text-[#EB489B]">
+                              {route.distance}
+                            </Text>
+                          </View>
+                          <View className="rounded-full bg-[#FFF4EF] px-2.5 py-1">
+                            <Text className="text-[11px] font-extrabold text-[#F58752]">
+                              {route.duration}
+                            </Text>
+                          </View>
+
+                          <View
+                            className="rounded-full px-2.5 py-1"
+                            style={{
+                              backgroundColor:
+                                routeDifficultyStyles[route.difficulty]
+                                  .background,
+                            }}
+                          >
+                            <Text
+                              className="text-[11px] font-extrabold"
+                              style={{
+                                color:
+                                  routeDifficultyStyles[route.difficulty].color,
+                              }}
+                            >
+                              {route.difficulty}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <Text
+                          className="text-[16px] font-extrabold leading-4 text-[#2B2233]"
+                          numberOfLines={1}
+                        >
+                          {route.title}
+                        </Text>
+
+                        <Text
+                          className="text-[13px] leading-[18px] text-[#8E869A]"
+                          numberOfLines={2}
+                          style={{ height: suggestedRouteSubtitleHeight }}
+                        >
+                          {route.subtitle}
                         </Text>
                       </View>
                     </View>
-
-                    <View className="gap-2.5 px-4 pb-4 pt-3.5">
-                      <View className="flex-row flex-wrap items-center gap-2">
-                        <View className="rounded-full bg-[#FFF1F6] px-2.5 py-1">
-                          <Text className="text-[11px] font-extrabold text-[#EB489B]">
-                            {route.distance}
-                          </Text>
-                        </View>
-                        <View className="rounded-full bg-[#FFF4EF] px-2.5 py-1">
-                          <Text className="text-[11px] font-extrabold text-[#F58752]">
-                            {route.duration}
-                          </Text>
-                        </View>
-
-                        <View
-                          className="rounded-full px-2.5 py-1"
-                          style={{
-                            backgroundColor:
-                              routeDifficultyStyles[route.difficulty]
-                                .background,
-                          }}
-                        >
-                          <Text
-                            className="text-[11px] font-extrabold"
-                            style={{
-                              color:
-                                routeDifficultyStyles[route.difficulty].color,
-                            }}
-                          >
-                            {route.difficulty}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <Text
-                        className="text-[16px] font-extrabold leading-4 text-[#2B2233]"
-                        numberOfLines={1}
-                      >
-                        {route.title}
-                      </Text>
-
-                      <Text
-                        className="text-[13px] leading-[18px] text-[#8E869A]"
-                        numberOfLines={2}
-                      >
-                        {route.subtitle}
-                      </Text>
-                    </View>
-                  </View>
-                </Pressable>
-              ))}
-            </ScrollView>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
 
             <View className="gap-4">
               <View className="flex-row items-start justify-between gap-3">

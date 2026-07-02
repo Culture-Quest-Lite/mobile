@@ -6,6 +6,7 @@ import { routes, type RouteItem } from "@/lib/demo-data";
 
 import { getGamificationLevels } from "../api/get-levels";
 import { getMyProfile } from "../api/get-me";
+import { getMyProfilePosts } from "../api/get-profile-posts";
 import { CURRENT_USER_ID, getProfileById, getProfilePosts } from "../data/profile-demo";
 import { applyLevelProgressToProfile } from "../lib/level-progress";
 import type { Profile, ProfilePost } from "../types";
@@ -41,6 +42,7 @@ export function useProfile(userId?: string): UseProfileResult {
     [userId],
   );
   const [profile, setProfile] = useState<Profile | undefined>();
+  const [posts, setPosts] = useState<ProfilePost[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -64,13 +66,18 @@ export function useProfile(userId?: string): UseProfileResult {
           throw new Error("Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.");
         }
 
-        const [profileResult, levelsResult] = await Promise.allSettled([
+        const [profileResult, levelsResult, postsResult] = await Promise.allSettled([
           getMyProfile({
             accessToken,
             tokenType: authSession.tokenType,
           }),
           getGamificationLevels({
             accessToken,
+            tokenType: authSession.tokenType,
+          }),
+          getMyProfilePosts({
+            accessToken,
+            size: 50,
             tokenType: authSession.tokenType,
           }),
         ]);
@@ -105,6 +112,25 @@ export function useProfile(userId?: string): UseProfileResult {
         }
 
         setProfile(mergeProfileWithFallback(resolvedProfile, fallbackProfile));
+
+        if (postsResult.status === "fulfilled") {
+          setPosts(postsResult.value);
+        } else {
+          const postsError =
+            postsResult.reason instanceof Error
+              ? postsResult.reason
+              : new Error("Không thể tải bài viết.");
+
+          console.warn("[profile] posts unavailable", {
+            error: {
+              message: postsError.message,
+              name: postsError.name,
+              stack: postsError.stack,
+            },
+          });
+          setPosts([]);
+          setError(postsError);
+        }
       } catch (nextError) {
         if (!isActive) {
           return;
@@ -116,6 +142,7 @@ export function useProfile(userId?: string): UseProfileResult {
             : new Error("Không thể tải hồ sơ."),
         );
         setProfile(fallbackProfile);
+        setPosts([]);
       } finally {
         if (isActive) {
           setIsLoading(false);
@@ -134,10 +161,11 @@ export function useProfile(userId?: string): UseProfileResult {
   const resolvedError = authSession.isAuthenticated ? error : null;
   const resolvedIsLoading = authSession.isAuthenticated ? isLoading : false;
 
-  const posts = useMemo(
+  const fallbackPosts = useMemo(
     () => (resolvedProfile ? getProfilePosts(resolvedProfile.id) : []),
     [resolvedProfile],
   );
+  const resolvedPosts = authSession.isAuthenticated ? posts : fallbackPosts;
 
   const userRoutes = useMemo(() => {
     if (!resolvedProfile) return [];
@@ -156,7 +184,7 @@ export function useProfile(userId?: string): UseProfileResult {
   return {
     likedHotspots,
     profile: resolvedProfile,
-    posts,
+    posts: resolvedPosts,
     userRoutes,
     isLoading: resolvedIsLoading,
     error: resolvedError,

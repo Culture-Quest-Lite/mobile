@@ -352,7 +352,7 @@ export default function ExploreScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['top', 'left', 'right', 'bottom']}>
+    <SafeAreaView className="flex-1 bg-white" edges={['top', 'left', 'right']}>
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}
