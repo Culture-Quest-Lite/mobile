@@ -7,6 +7,7 @@ export type Profile = {
   totalXp: number;
   level: number | null;
   levelName: string | null;
+  isMaxLevel: boolean;
   currentLevelXp: number | null;
   xpToNext: number | null;
   avatar: string | null;

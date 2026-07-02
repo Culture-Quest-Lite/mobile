@@ -236,20 +236,29 @@ export default function ProfileScreen() {
   }
 
   const levelNumber = typeof profile.level === "number" ? profile.level : null;
+  const isMaxLevel = profile.isMaxLevel === true;
   const currentLevelXp =
     typeof profile.currentLevelXp === "number" ? profile.currentLevelXp : null;
   const xpToNext =
     typeof profile.xpToNext === "number" ? profile.xpToNext : null;
+  const resolvedCurrentLevelXp = currentLevelXp ?? 0;
+  const resolvedXpToNext = xpToNext ?? 0;
   const canShowLevelProgress =
     levelNumber !== null &&
-    currentLevelXp !== null &&
-    xpToNext !== null &&
-    xpToNext > 0;
+    (isMaxLevel ||
+      (currentLevelXp !== null && xpToNext !== null && xpToNext > 0));
   const levelProgressPercent = canShowLevelProgress
-    ? Math.min(Math.max((currentLevelXp / xpToNext) * 100, 0), 100)
+    ? isMaxLevel
+      ? 100
+      : Math.min(
+          Math.max((resolvedCurrentLevelXp / resolvedXpToNext) * 100, 0),
+          100,
+        )
     : 0;
   const remainingXp = canShowLevelProgress
-    ? Math.max(xpToNext - currentLevelXp, 0)
+    ? isMaxLevel
+      ? 0
+      : Math.max(resolvedXpToNext - resolvedCurrentLevelXp, 0)
     : 0;
   const postCount =
     typeof profile.totalPosts === "number" ? profile.totalPosts : posts.length;
@@ -354,7 +363,7 @@ export default function ProfileScreen() {
             <View className="min-w-0 flex-1 pt-10">
               <View className="flex-row items-center">
                 <Text
-                  className="text-[20px] font-extrabold leading-tight text-[#2B2233]"
+                  className="text-[18px] font-extrabold leading-tight text-[#2B2233]"
                   numberOfLines={1}
                 >
                   {profile.name}
@@ -362,37 +371,39 @@ export default function ProfileScreen() {
               </View>
 
               {canShowLevelProgress ? (
-                <View className="mt-3">
-                  <View className="mb-1.5 flex-row items-center justify-between gap-3">
-                    <Text className="text-[14px] font-extrabold text-[#2B2233]">
+                <View className="mt-1.5">
+                  <View className="mb-1 flex-row items-center justify-between gap-2">
+                    <Text className="text-[13px] font-bold text-[#2B2233]">
                       Level
                     </Text>
-                    <View className="flex-row items-center gap-1 rounded-full bg-[#FFF4EF] px-2.5 py-1">
+                    <View className="flex-row items-center gap-1 rounded-full bg-[#FFF4EF] px-2 py-0.5">
                       <SymbolView
                         name={{
                           ios: "sparkles",
                           android: "auto_awesome",
                           web: "auto_awesome",
                         }}
-                        size={13}
+                        size={12}
                         tintColor="#F58752"
                       />
-                      <Text className="text-[12px] font-extrabold text-[#F58752]">
+                      <Text className="text-[11px] font-extrabold text-[#F58752]">
                         Cấp {levelNumber}
                       </Text>
                     </View>
                   </View>
                   <XPBar
-                    value={currentLevelXp}
-                    max={xpToNext}
-                    height={10}
+                    value={isMaxLevel ? 1 : currentLevelXp ?? 0}
+                    max={isMaxLevel ? 1 : xpToNext ?? 1}
+                    height={8}
                     trackColor="#F4EAF0"
                   />
-                  <View className="mt-1.5 flex-row items-center justify-between">
-                    <Text className="flex-1 pr-3 text-[11px] text-[#8E869A]">
-                      Còn {remainingXp} XP để lên cấp {levelNumber + 1}
+                  <View className="mt-1 flex-row items-center justify-between">
+                    <Text className="flex-1 pr-2 text-[10px] text-[#8E869A]">
+                      {isMaxLevel
+                        ? "Đã đạt cấp tối đa"
+                        : `Còn ${remainingXp} XP để lên cấp ${levelNumber + 1}`}
                     </Text>
-                    <Text className="text-[11px] font-extrabold text-[#F58752]">
+                    <Text className="text-[10px] font-extrabold text-[#F58752]">
                       {Math.round(levelProgressPercent)}%
                     </Text>
                   </View>
@@ -857,21 +868,21 @@ function AccountAvatar({
           end={{ x: 1, y: 1 }}
           style={{
             position: "absolute",
-            bottom: -6,
-            right: -6,
-            width: 54,
-            height: 54,
-            borderRadius: 27,
+            bottom: -4,
+            right: -4,
+            width: 48,
+            height: 48,
+            borderRadius: 24,
             alignItems: "center",
             justifyContent: "center",
-            borderWidth: 4,
+            borderWidth: 3,
             borderColor: "#F7F8FC",
             ...cardShadow,
           }}
         >
           <Text
             className="font-extrabold text-white"
-            style={{ fontSize: badgeLabel.length > 2 ? 14 : 24 }}
+            style={{ fontSize: badgeLabel.length > 2 ? 13 : 21 }}
           >
             {badgeLabel}
           </Text>

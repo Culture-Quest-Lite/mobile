@@ -1,19 +1,24 @@
+import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
 import * as Location from "expo-location";
 import { useFocusEffect, useRouter } from "expo-router";
-import { SymbolView } from "@/components/ui/symbol-view";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Modal,
   Platform,
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
+import MapView, {
+  Marker,
+  PROVIDER_GOOGLE,
+  type Region,
+} from "react-native-maps";
 import Animated, {
   Easing,
   ReduceMotion,
@@ -29,7 +34,9 @@ import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
+import { getGamificationLevels } from "@/features/profile/api/get-levels";
 import { getMyProfile } from "@/features/profile/api/get-me";
+import { applyLevelProgressToProfile } from "@/features/profile/lib/level-progress";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import {
   type AppCoordinate,
@@ -49,7 +56,6 @@ import {
   type NearbyPlaceCard,
   type RouteDifficulty,
   activeJourney,
-  avatarImageUri,
   communityBoards,
   communityTabs,
   featuredRoutes,
@@ -344,21 +350,11 @@ const communityRowShadowStyle = {
   elevation: 2,
 } as const;
 
-type GuestLocationMode =
-  | "error"
-  | "loading"
-  | "permission-denied"
-  | "ready"
-  | "services-disabled";
-
-type GuestLocationState = {
-  label: string;
-  mode: GuestLocationMode;
-};
-
 type ExplorerSummary = {
+  avatar: string | null;
   level: number | null;
   name: string;
+  username: string;
 };
 
 type NearbyPlaceListItem = {
@@ -377,19 +373,19 @@ type NearbyPlaceListItem = {
 
 type NearbyPlacesSectionStatus = "empty" | "fallback" | "loading" | "ready";
 
-const guestLocationLoadingState: GuestLocationState = {
-  label: "Đang định vị...",
-  mode: "loading",
-};
-
 const defaultNearbySearchDistanceMeters = 20;
 const nearbyDistanceSliderMinimumMeters = 20;
 const nearbyDistanceSliderMaximumMeters = 1000;
 const nearbyDistanceSliderStepMeters = 20;
-const nearbyDistancePresetMeters = [20, 100, 300, 500, 1000] as const;
 const nearbyPlaceFallbackImageUri =
   nearbyPlaces[0]?.imageUri ??
   "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
+const defaultLocationPreviewRegion: Region = {
+  latitude: 10.8414,
+  longitude: 106.8288,
+  latitudeDelta: 0.015,
+  longitudeDelta: 0.015,
+};
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -461,6 +457,24 @@ function formatCompactCount(value: number | null | undefined) {
   }
 
   return `${Math.round(value)}`;
+}
+
+function getProfileInitials(name: string, username: string) {
+  const source = name.trim() || username.replace(/^@+/, "").trim();
+
+  if (!source) {
+    return "ME";
+  }
+
+  const parts = source.split(/\s+/).filter(Boolean);
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  const firstInitial = parts[0][0] ?? "";
+  const lastInitial = parts[parts.length - 1][0] ?? "";
+  return `${firstInitial}${lastInitial}`.toUpperCase();
 }
 
 function getPrimaryNearbyCategory(
@@ -574,115 +588,18 @@ function buildApiNearbyPlaceItems(
     .map(({ sortDistanceMeters: _sortDistanceMeters, ...item }) => item);
 }
 
-function formatGuestLocationLabel(
-  address?: Location.LocationGeocodedAddress | null,
-) {
-  if (!address) {
-    return "Vị trí của bạn";
+function getLocationPreviewRegion(
+  coordinate: Pick<AppCoordinate, "latitude" | "longitude"> | null,
+): Region {
+  if (!coordinate) {
+    return defaultLocationPreviewRegion;
   }
-
-  const district = address.district?.trim();
-  const subregion = address.subregion?.trim();
-  const city = address.city?.trim();
-  const region = address.region?.trim();
-  const country = address.country?.trim();
-
-  const primary = district || subregion || city || region || country;
-
-  if (!primary) {
-    return "Vị trí của bạn";
-  }
-
-  if (city && primary !== city) {
-    return `${primary}, ${city}`;
-  }
-
-  return primary;
-}
-
-async function resolveGuestLocationState(): Promise<GuestLocationState> {
-  const developmentLocation = getDevelopmentLocationOverride();
-
-  if (developmentLocation) {
-    const fallbackLabel = `Test: ${formatCoordinateLabel(developmentLocation)}`;
-
-    if (Platform.OS === "web") {
-      return {
-        label: fallbackLabel,
-        mode: "ready",
-      };
-    }
-
-    try {
-      const addresses = await Location.reverseGeocodeAsync({
-        latitude: developmentLocation.latitude,
-        longitude: developmentLocation.longitude,
-      });
-
-      return {
-        label: `Test: ${formatGuestLocationLabel(addresses[0])}`,
-        mode: "ready",
-      };
-    } catch {
-      return {
-        label: fallbackLabel,
-        mode: "ready",
-      };
-    }
-  }
-
-  const servicesEnabled = await Location.hasServicesEnabledAsync();
-
-  if (!servicesEnabled) {
-    return {
-      label: "Mở GPS",
-      mode: "services-disabled",
-    };
-  }
-
-  const permission = await Location.getForegroundPermissionsAsync();
-
-  const permissionResponse =
-    permission.granted || !permission.canAskAgain
-      ? permission
-      : await Location.requestForegroundPermissionsAsync();
-
-  if (permissionResponse.status !== "granted") {
-    return {
-      label: "Bật vị trí",
-      mode: "permission-denied",
-    };
-  }
-
-  const currentLocation = await getDeviceCoordinate({
-    accuracy: Location.Accuracy.Balanced,
-    maxAge: 60_000,
-    mayShowUserSettingsDialog: Platform.OS === "android",
-    requiredAccuracy: 150,
-  });
-
-  if (!currentLocation) {
-    return {
-      label: "Thử lại",
-      mode: "error",
-    };
-  }
-
-  if (Platform.OS === "web") {
-    return {
-      label: "Vị trí hiện tại",
-      mode: "ready",
-    };
-  }
-
-  const addresses = await Location.reverseGeocodeAsync({
-    latitude: currentLocation.latitude,
-    longitude: currentLocation.longitude,
-  });
 
   return {
-    label: formatGuestLocationLabel(addresses[0]),
-    mode: "ready",
+    latitude: coordinate.latitude,
+    longitude: coordinate.longitude,
+    latitudeDelta: 0.01,
+    longitudeDelta: 0.01,
   };
 }
 
@@ -750,408 +667,6 @@ async function resolveNearbyRequestCoordinate(): Promise<{
     coordinate: currentLocation,
     fallbackMessage: null,
   };
-}
-
-function useGuestLocationPill(onDevelopmentLocationPress?: () => void) {
-  const [locationState, setLocationState] = useState<GuestLocationState>(
-    guestLocationLoadingState,
-  );
-  const requestIdRef = useRef(0);
-  const developmentLocation = getDevelopmentLocationOverride();
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function refreshLocation() {
-      const requestId = ++requestIdRef.current;
-
-      if (isMounted) {
-        setLocationState(guestLocationLoadingState);
-      }
-
-      try {
-        const nextState = await resolveGuestLocationState();
-
-        if (isMounted && requestId === requestIdRef.current) {
-          setLocationState(nextState);
-        }
-      } catch {
-        if (isMounted && requestId === requestIdRef.current) {
-          setLocationState({
-            label: "Thử lại",
-            mode: "error",
-          });
-        }
-      }
-    }
-
-    void refreshLocation();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const handlePress = async () => {
-    if (developmentLocation && onDevelopmentLocationPress) {
-      onDevelopmentLocationPress?.();
-      return;
-    }
-
-    if (locationState.mode === "permission-denied") {
-      await Linking.openSettings();
-      return;
-    }
-
-    if (locationState.mode === "services-disabled") {
-      if (Platform.OS === "android") {
-        try {
-          await Location.enableNetworkProviderAsync();
-        } catch {
-          await Linking.openSettings();
-          return;
-        }
-      } else {
-        await Linking.openSettings();
-        return;
-      }
-    }
-
-    const requestId = ++requestIdRef.current;
-    setLocationState(guestLocationLoadingState);
-
-    try {
-      const nextState = await resolveGuestLocationState();
-
-      if (requestId === requestIdRef.current) {
-        setLocationState(nextState);
-      }
-    } catch {
-      if (requestId === requestIdRef.current) {
-        setLocationState({
-          label: "Thử lại",
-          mode: "error",
-        });
-      }
-    }
-  };
-
-  return {
-    handlePress,
-    locationState,
-  };
-}
-
-type NearbyDistanceSliderProps = {
-  max: number;
-  min: number;
-  onChange: (nextValue: number) => void;
-  value: number;
-};
-
-function NearbyDistanceSlider({
-  max,
-  min,
-  onChange,
-  value,
-}: NearbyDistanceSliderProps) {
-  const [trackWidth, setTrackWidth] = useState(0);
-  const progress = (value - min) / Math.max(1, max - min);
-  const thumbSize = 28;
-  const fillWidth = trackWidth * progress;
-  const thumbLeft = clamp(
-    fillWidth - thumbSize / 2,
-    0,
-    Math.max(0, trackWidth - thumbSize),
-  );
-
-  const updateValueFromTrackPosition = (locationX: number) => {
-    if (trackWidth <= 0) {
-      return;
-    }
-
-    const nextProgress = clamp(locationX / trackWidth, 0, 1);
-    const nextValue = min + nextProgress * (max - min);
-    onChange(snapDistanceMeters(nextValue));
-  };
-
-  return (
-    <View className="gap-2">
-      <View className="flex-row items-center justify-between">
-        <Text className="text-[12px] font-semibold text-[#8E869A]">
-          {formatDistanceMeters(min)}
-        </Text>
-        <Text className="text-[12px] font-semibold text-[#8E869A]">
-          {formatDistanceMeters(max)}
-        </Text>
-      </View>
-
-      <View
-        className="relative h-10 justify-center"
-        onLayout={(event) => {
-          setTrackWidth(event.nativeEvent.layout.width);
-        }}
-        onMoveShouldSetResponder={() => true}
-        onStartShouldSetResponder={() => true}
-        onResponderGrant={(event) => {
-          updateValueFromTrackPosition(event.nativeEvent.locationX);
-        }}
-        onResponderMove={(event) => {
-          updateValueFromTrackPosition(event.nativeEvent.locationX);
-        }}
-      >
-        <View className="h-2 rounded-full bg-[#F6DDD0]" />
-        <View
-          className="absolute left-0 top-1/2 h-2 rounded-full bg-[#F58752]"
-          style={{
-            transform: [{ translateY: -4 }],
-            width: fillWidth,
-          }}
-        />
-        <View
-          className="absolute top-1/2 h-7 w-7 rounded-full border-4 border-white bg-[#EB489B]"
-          style={{
-            left: thumbLeft,
-            shadowColor: "rgba(235, 72, 155, 0.28)",
-            shadowOpacity: 1,
-            shadowRadius: 10,
-            shadowOffset: {
-              width: 0,
-              height: 4,
-            },
-            elevation: 6,
-            transform: [{ translateY: -14 }],
-          }}
-        />
-      </View>
-    </View>
-  );
-}
-
-type NearbyDistanceSheetProps = {
-  currentDistanceMeters: number;
-  isLoading: boolean;
-  onApply: (nextDistanceMeters: number) => void;
-  onChangeDistance: (nextValue: number) => void;
-  onClose: () => void;
-  selectedDistanceMeters: number;
-  visible: boolean;
-};
-
-function NearbyDistanceSheet({
-  currentDistanceMeters,
-  isLoading,
-  onApply,
-  onChangeDistance,
-  onClose,
-  selectedDistanceMeters,
-  visible,
-}: NearbyDistanceSheetProps) {
-  const [draftDistanceInputValue, setDraftDistanceInputValue] = useState<
-    string | null
-  >(null);
-  const distanceInputValue =
-    draftDistanceInputValue ?? `${selectedDistanceMeters}`;
-
-  const commitDistanceInput = useCallback(() => {
-    const sanitizedValue = distanceInputValue.replace(/\D/g, "");
-
-    if (!sanitizedValue) {
-      setDraftDistanceInputValue(null);
-      return selectedDistanceMeters;
-    }
-
-    const normalizedDistance = clampDistanceMeters(Number(sanitizedValue));
-    onChangeDistance(normalizedDistance);
-    setDraftDistanceInputValue(`${normalizedDistance}`);
-
-    return normalizedDistance;
-  }, [distanceInputValue, onChangeDistance, selectedDistanceMeters]);
-
-  const handleClose = () => {
-    setDraftDistanceInputValue(null);
-    onClose();
-  };
-
-  const handleApply = () => {
-    const nextDistanceMeters = commitDistanceInput();
-    setDraftDistanceInputValue(null);
-    onApply(nextDistanceMeters);
-  };
-
-  const handleSelectDistance = (nextDistance: number) => {
-    onChangeDistance(nextDistance);
-    setDraftDistanceInputValue(`${nextDistance}`);
-  };
-
-  return (
-    <Modal
-      transparent
-      visible={visible}
-      animationType="slide"
-      onRequestClose={handleClose}
-    >
-      <View className="flex-1 justify-end bg-black/55">
-        <Pressable
-          onPress={handleClose}
-          style={{
-            position: "absolute",
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-          }}
-        />
-
-        <View className="rounded-t-[32px] bg-[#FFF9F5] px-5 pb-7 pt-4">
-          <View className="items-center">
-            <View className="h-1.5 w-14 rounded-full bg-[#E7D8CD]" />
-          </View>
-
-          <View className="mt-4 flex-row items-start justify-between gap-4">
-            <View className="flex-1 gap-1">
-              <Text className="text-[19px] font-extrabold text-[#2B2233]">
-                Chọn bán kính nearby
-              </Text>
-              <Text className="text-[13px] leading-5 text-[#8E869A]">
-                Nhập hoặc chọn khoảng cách để gọi nearby API quanh vị trí hiện tại.
-              </Text>
-            </View>
-
-            <Pressable
-              onPress={handleClose}
-              className="h-10 w-10 items-center justify-center rounded-full bg-white"
-            >
-              <SymbolView
-                name={{ ios: "xmark", android: "close", web: "close" }}
-                size={16}
-                tintColor="#8E869A"
-              />
-            </Pressable>
-          </View>
-
-          <View className="mt-6 rounded-[24px] border border-[#F6DDD0] bg-white px-4 py-4">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-[13px] font-semibold uppercase tracking-[0.5px] text-[#D9587F]">
-                Distance
-              </Text>
-              <View className="rounded-full bg-[#FFF1F6] px-3 py-1.5">
-                <Text className="text-[17px] font-extrabold text-[#EB489B]">
-                  {formatDistanceMeters(selectedDistanceMeters)}
-                </Text>
-              </View>
-            </View>
-
-            <View className="mt-4">
-              <NearbyDistanceSlider
-                max={nearbyDistanceSliderMaximumMeters}
-                min={nearbyDistanceSliderMinimumMeters}
-                onChange={handleSelectDistance}
-                value={selectedDistanceMeters}
-              />
-            </View>
-
-            <View className="mt-4 gap-2">
-              <Text className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[#D9587F]">
-                Nhập thủ công
-              </Text>
-
-              <View className="flex-row items-center rounded-[18px] border border-[#F4DCCF] bg-[#FFF9F5] px-4">
-                <TextInput
-                  accessibilityLabel="Nhập bán kính nearby theo mét"
-                  className="flex-1 py-3.5 text-[16px] font-bold text-[#2B2233]"
-                  inputMode="numeric"
-                  keyboardType={Platform.OS === "ios" ? "number-pad" : "numeric"}
-                  onBlur={commitDistanceInput}
-                  onChangeText={(value) => {
-                    setDraftDistanceInputValue(value.replace(/\D/g, ""));
-                  }}
-                  onSubmitEditing={commitDistanceInput}
-                  placeholder="Nhập số mét"
-                  placeholderTextColor="#C1AFA3"
-                  returnKeyType="done"
-                  selectionColor="#EB489B"
-                  value={distanceInputValue}
-                />
-                <View className="rounded-full bg-white px-3 py-1.5">
-                  <Text className="text-[12px] font-extrabold uppercase tracking-[0.4px] text-[#8E869A]">
-                    mét
-                  </Text>
-                </View>
-              </View>
-
-              <Text className="text-[12px] leading-5 text-[#8E869A]">
-                Nhập từ {nearbyDistanceSliderMinimumMeters} đến{" "}
-                {nearbyDistanceSliderMaximumMeters} mét.
-              </Text>
-            </View>
-
-            <View className="mt-4 flex-row flex-wrap gap-2">
-              {nearbyDistancePresetMeters.map((presetDistance) => {
-                const isActive = presetDistance === selectedDistanceMeters;
-
-                return (
-                  <Pressable
-                    key={presetDistance}
-                    className={`rounded-full border px-3.5 py-2 ${
-                      isActive
-                        ? "border-[#EB489B] bg-[#FFF1F6]"
-                        : "border-[#F4DCCF] bg-[#FFF9F5]"
-                    }`}
-                    onPress={() => {
-                      handleSelectDistance(presetDistance);
-                    }}
-                  >
-                    <Text
-                      className={`text-[13px] font-bold ${
-                        isActive ? "text-[#EB489B]" : "text-[#8E869A]"
-                      }`}
-                    >
-                      {formatDistanceMeters(presetDistance)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <Text className="mt-4 text-[13px] leading-5 text-[#8E869A]">
-              Hiện tại Home đang gọi nearby API với bán kính{" "}
-              {formatDistanceMeters(currentDistanceMeters)}.
-            </Text>
-          </View>
-
-          <View className="mt-5 flex-row gap-3">
-            <Pressable
-              className="flex-1 rounded-[18px] border border-[#F4DCCF] bg-white px-4 py-3.5"
-              onPress={handleClose}
-            >
-              <Text className="text-center text-[15px] font-bold text-[#8E869A]">Đóng</Text>
-            </Pressable>
-
-            <Pressable
-              className={`flex-1 overflow-hidden rounded-[18px] ${
-                isLoading ? "opacity-70" : ""
-              }`}
-              disabled={isLoading}
-              onPress={handleApply}
-            >
-              <LinearGradient
-                colors={gradientColors}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                locations={[0, 0.58, 1]}
-                className="items-center justify-center px-4 py-3.5"
-              >
-                <Text className="text-[15px] font-extrabold text-white">
-                  {isLoading ? "Đang tải..." : "Áp dụng"}
-                </Text>
-              </LinearGradient>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
 }
 
 function GuestAccessCard({ onPress }: { onPress: () => void }) {
@@ -1298,17 +813,247 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
   );
 }
 
+type NearbyDistanceSliderProps = {
+  max: number;
+  min: number;
+  onChange: (nextValue: number) => void;
+  value: number;
+};
+
+function NearbyDistanceSlider({
+  max,
+  min,
+  onChange,
+  value,
+}: NearbyDistanceSliderProps) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const progress = (value - min) / Math.max(1, max - min);
+  const thumbSize = 24;
+  const fillWidth = trackWidth * progress;
+  const thumbLeft = clamp(
+    fillWidth - thumbSize / 2,
+    0,
+    Math.max(0, trackWidth - thumbSize),
+  );
+
+  const updateValueFromTrackPosition = (locationX: number) => {
+    if (trackWidth <= 0) {
+      return;
+    }
+
+    const nextProgress = clamp(locationX / trackWidth, 0, 1);
+    const nextValue = min + nextProgress * (max - min);
+    onChange(snapDistanceMeters(nextValue));
+  };
+
+  return (
+    <View className="gap-1.5">
+      <View
+        className="relative h-7 justify-center"
+        onLayout={(event) => {
+          setTrackWidth(event.nativeEvent.layout.width);
+        }}
+        onMoveShouldSetResponder={() => true}
+        onStartShouldSetResponder={() => true}
+        onResponderGrant={(event) => {
+          updateValueFromTrackPosition(event.nativeEvent.locationX);
+        }}
+        onResponderMove={(event) => {
+          updateValueFromTrackPosition(event.nativeEvent.locationX);
+        }}
+      >
+        <View className="h-1.5 rounded-full bg-[#E6ECF2]" />
+        <View
+          className="absolute left-0 top-1/2 h-1.5 rounded-full bg-[#FF6F7D]"
+          style={{
+            transform: [{ translateY: -3 }],
+            width: fillWidth,
+          }}
+        />
+        <View
+          className="absolute top-1/2 rounded-full border-[3px] border-white bg-[#EB489B]"
+          style={{
+            height: thumbSize,
+            left: thumbLeft,
+            shadowColor: "rgba(235, 72, 155, 0.28)",
+            shadowOpacity: 1,
+            shadowRadius: 12,
+            shadowOffset: {
+              width: 0,
+              height: 4,
+            },
+            elevation: 6,
+            transform: [{ translateY: -(thumbSize / 2) }],
+            width: thumbSize,
+          }}
+        />
+      </View>
+
+      <View className="flex-row items-center justify-between">
+        <Text className="text-[11px] font-semibold text-[#A29AA8]">
+          {formatDistanceMeters(min)}
+        </Text>
+        <Text className="text-[11px] font-semibold text-[#A29AA8]">
+          {formatDistanceMeters(max)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function NearbyDistanceDropdown({
+  currentDistanceMeters,
+  draftDistanceMeters,
+  isLoading,
+  onApply,
+  onChangeDistance,
+  onOpenMap,
+}: {
+  currentDistanceMeters: number;
+  draftDistanceMeters: number;
+  isLoading: boolean;
+  onApply: () => void;
+  onChangeDistance: (nextDistanceMeters: number) => void;
+  onOpenMap: () => void;
+}) {
+  return (
+    <View
+      className="overflow-hidden rounded-[28px] border border-[#F6DDD0] bg-white px-4 py-3"
+      style={cardShadowStyle}
+    >
+      <LinearGradient
+        colors={["#FFFFFF", "#FFF7FB", "#FFF7F1"]}
+        end={{ x: 1, y: 1 }}
+        start={{ x: 0, y: 0 }}
+        className="absolute inset-0"
+      />
+
+      <View className="flex-row items-start gap-2.5">
+        <LinearGradient
+          colors={["#FF8A50", "#FF5F87"]}
+          end={{ x: 1, y: 1 }}
+          start={{ x: 0, y: 0 }}
+          className="h-10 w-10 items-center justify-center rounded-full"
+        >
+          <SymbolView
+            name={{
+              ios: "flame.fill",
+              android: "local_fire_department",
+              web: "local_fire_department",
+            }}
+            size={16}
+            tintColor="#FFFFFF"
+          />
+        </LinearGradient>
+
+        <View className="flex-1">
+          <Text className="text-[18px] font-extrabold tracking-[-0.2px] text-[#2B2233]">
+            Hotspot gần bạn
+          </Text>
+          <Text className="mt-0.5 text-[12px] font-medium text-[#9C94A5]">
+            Bán kính tìm kiếm
+          </Text>
+        </View>
+
+        <LinearGradient
+          colors={gradientColors}
+          end={{ x: 1, y: 0.5 }}
+          locations={[0, 0.58, 1]}
+          start={{ x: 0, y: 0.5 }}
+          className="rounded-full px-3 py-1.5"
+        >
+          <Text className="text-[13px] font-extrabold text-white">
+            {formatDistanceMeters(draftDistanceMeters)}
+          </Text>
+        </LinearGradient>
+      </View>
+
+      <View className="mt-4">
+        <NearbyDistanceSlider
+          max={nearbyDistanceSliderMaximumMeters}
+          min={nearbyDistanceSliderMinimumMeters}
+          onChange={onChangeDistance}
+          value={draftDistanceMeters}
+        />
+      </View>
+
+      <View className="mt-4 flex-row gap-2.5">
+        <Pressable
+          className="flex-1 flex-row items-center justify-center rounded-[16px] border border-[#E3E7EF] bg-white px-3.5 py-3"
+          onPress={onOpenMap}
+        >
+          <SymbolView
+            name={{ ios: "map.fill", android: "map", web: "map" }}
+            size={14}
+            tintColor="#374151"
+          />
+          <Text className="ml-1.5 text-[14px] font-bold text-[#2F3947]">
+            Xem bản đồ
+          </Text>
+        </Pressable>
+
+        <Pressable
+          className={`flex-1 overflow-hidden rounded-[16px] ${
+            isLoading ? "opacity-70" : ""
+          }`}
+          disabled={isLoading}
+          onPress={onApply}
+        >
+          <LinearGradient
+            colors={gradientColors}
+            end={{ x: 1, y: 0.5 }}
+            start={{ x: 0, y: 0.5 }}
+            locations={[0, 0.58, 1]}
+            className="flex-row items-center justify-center rounded-[16px] px-3.5 py-3"
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <SymbolView
+                  name={{
+                    ios: "checkmark",
+                    android: "check",
+                    web: "check",
+                  }}
+                  size={14}
+                  tintColor="#FFFFFF"
+                />
+                <Text className="ml-1.5 text-[14px] font-extrabold text-white">
+                  Áp dụng
+                </Text>
+              </>
+            )}
+          </LinearGradient>
+        </Pressable>
+      </View>
+
+      <View className="mt-2.5 flex-row items-center justify-end">
+        <Text className="text-[11px] font-medium text-[#B3A6AF]">
+          Đang áp dụng:{" "}
+        </Text>
+        <Text className="text-[11px] font-bold text-[#8E869A]">
+          {formatDistanceMeters(currentDistanceMeters)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function GuestWelcomeHeader({
   onGreetingPress,
-  onLocationPillPress,
+  isDistanceDropdownVisible,
+  onLocationPress,
+  onSearchPress,
+  isLocationLoading,
 }: {
   onGreetingPress: () => void;
-  onLocationPillPress?: () => void;
+  isDistanceDropdownVisible: boolean;
+  onLocationPress: () => void;
+  onSearchPress: () => void;
+  isLocationLoading: boolean;
 }) {
   const logoOffset = useSharedValue(0);
-  const { handlePress, locationState } = useGuestLocationPill(
-    onLocationPillPress,
-  );
 
   useEffect(() => {
     logoOffset.set(
@@ -1358,28 +1103,46 @@ function GuestWelcomeHeader({
             </Text>
           </Pressable>
 
-          <Pressable
-            className="max-w-[48%] flex-row items-center gap-1.5 rounded-full border border-[#F5D7C7] bg-white px-3 py-2"
-            onPress={() => {
-              void handlePress();
-            }}
-          >
-            <SymbolView
-              name={{
-                ios: "location",
-                android: "my_location",
-                web: "my_location",
-              }}
-              size={14}
-              tintColor="#F58752"
-            />
-            <Text
-              className="text-[12px] font-semibold text-[#8E869A]"
-              numberOfLines={1}
+          <View className="flex-row items-center gap-2.5">
+            <Pressable
+              accessibilityLabel="Mở bộ lọc nearby"
+              className={`h-10 w-10 items-center justify-center rounded-full border ${
+                isDistanceDropdownVisible
+                  ? "border-[#EB489B] bg-[#FFF1F6]"
+                  : "border-[#F5D7C7] bg-white"
+              } ${isLocationLoading ? "opacity-70" : ""}`}
+              disabled={isLocationLoading}
+              hitSlop={8}
+              onPress={onLocationPress}
             >
-              {locationState.label}
-            </Text>
-          </Pressable>
+              <SymbolView
+                name={{
+                  ios: "location",
+                  android: "my_location",
+                  web: "my_location",
+                }}
+                size={16}
+                tintColor={isDistanceDropdownVisible ? "#EB489B" : "#F58752"}
+              />
+            </Pressable>
+
+            <Pressable
+              accessibilityLabel="Mở danh sách địa danh"
+              className="h-10 w-10 items-center justify-center rounded-full border border-[#ECE1E9] bg-[#FAF7FC]"
+              hitSlop={8}
+              onPress={onSearchPress}
+            >
+              <SymbolView
+                name={{
+                  ios: "magnifyingglass",
+                  android: "search",
+                  web: "search",
+                }}
+                size={16}
+                tintColor="#8E869A"
+              />
+            </Pressable>
+          </View>
         </View>
 
         <View className="flex-row items-center gap-1.5">
@@ -1401,119 +1164,344 @@ function GuestWelcomeHeader({
   );
 }
 
-function ExplorerHeaderActions() {
-  const { handlePress, locationState } = useGuestLocationPill();
-  const [isLocationDropdownVisible, setIsLocationDropdownVisible] =
-    useState(false);
-
-  const handleLocationPress = async () => {
-    if (locationState.mode === "ready") {
-      setIsLocationDropdownVisible((currentValue) => !currentValue);
-      return;
-    }
-
-    setIsLocationDropdownVisible(true);
-    await handlePress();
-  };
+function ExplorerHeaderAvatar({
+  avatar,
+  level,
+  name,
+  username,
+}: ExplorerSummary) {
+  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
+  const initials = getProfileInitials(name, username);
+  const shouldShowFallback = !avatar || failedAvatar === avatar;
 
   return (
-    <View className="relative z-20">
-      <View className="flex-row items-center gap-2.5">
-        <Pressable
-          className={`h-10 flex-row items-center gap-1 rounded-full px-2.5 ${
-            isLocationDropdownVisible ? "bg-[#FFE8DE]" : "bg-[#FFF4EF]"
-          }`}
-          onPress={() => {
-            void handleLocationPress();
-          }}
-        >
-          <SymbolView
-            name={{
-              ios: "location",
-              android: "my_location",
-              web: "my_location",
-            }}
-            size={16}
-            tintColor="#F58752"
-          />
-          <SymbolView
-            name={{
-              ios: "expand_more",
-              android: "expand_more",
-              web: "expand_more",
-            }}
-            size={15}
-            tintColor="#F58752"
-            style={{
-              transform: [
-                {
-                  rotate: isLocationDropdownVisible ? "180deg" : "0deg",
-                },
-              ],
-            }}
-          />
-        </Pressable>
-
-        <Pressable className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]">
-          <SymbolView
-            name={{
-              ios: "bell",
-              android: "notifications",
-              web: "notifications",
-            }}
-            size={16}
-            tintColor="#EB489B"
-          />
-        </Pressable>
-      </View>
-
-      {isLocationDropdownVisible ? (
-        <View
-          className="absolute right-0 top-[52px] w-[198px] rounded-[20px] border border-[#F6DDD0] bg-white px-3.5 py-3"
-          style={[
-            cardShadowStyle,
-            {
-              elevation: 14,
-              shadowColor: "rgba(43, 34, 51, 0.16)",
-              zIndex: 30,
-            },
-          ]}
-        >
-          <View className="flex-row items-start gap-2.5">
-            <View className="mt-0.5 h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF]">
-              <SymbolView
-                name={{
-                  ios: "location.fill",
-                  android: "my_location",
-                  web: "my_location",
-                }}
-                size={14}
-                tintColor="#F58752"
-              />
-            </View>
-
-            <View className="flex-1">
-              <Text className="text-[10px] font-extrabold uppercase tracking-[0.5px] text-[#D9587F]">
-                {locationState.mode === "ready" ? "Vị trí hiện tại" : "Đang định vị"}
-              </Text>
-              <Text
-                className="mt-1 text-[13px] font-bold leading-5 text-[#2B2233]"
-                numberOfLines={2}
-              >
-                {locationState.label}
+    <View className="relative">
+      <LinearGradient
+        colors={gradientColors}
+        end={{ x: 1, y: 0.9 }}
+        start={{ x: 0, y: 0.1 }}
+        className="h-16 w-16 rounded-full p-[2px]"
+      >
+        <View className="flex-1 rounded-full bg-white p-[3px]">
+          {shouldShowFallback ? (
+            <View className="flex-1 items-center justify-center rounded-full bg-[#FFF1F6]">
+              <Text className="text-[18px] font-black text-[#D9587F]">
+                {initials}
               </Text>
             </View>
-          </View>
+          ) : (
+            <Image
+              source={avatar}
+              contentFit="cover"
+              transition={180}
+              cachePolicy="memory-disk"
+              onError={() => setFailedAvatar(avatar)}
+              style={{ flex: 1, borderRadius: 999 }}
+            />
+          )}
+        </View>
+      </LinearGradient>
 
-          <View
-            className="absolute -top-2 right-7 h-4 w-4 rotate-45 border-l border-t border-[#F6DDD0] bg-white"
-            style={{
-              shadowColor: "transparent",
-            }}
-          />
+      {typeof level === "number" ? (
+        <View className="absolute -bottom-1 -right-2 rounded-full border-2 border-white bg-[#b1741e] px-2.5 py-1">
+          <Text className="text-[11px] font-extrabold text-white">
+            {`Lv.${level}`}
+          </Text>
         </View>
       ) : null}
     </View>
+  );
+}
+
+function ExplorerHeaderActions({
+  isDistanceDropdownVisible,
+  isLocationLoading,
+  onLocationPress,
+  onSearchPress,
+}: {
+  isDistanceDropdownVisible: boolean;
+  isLocationLoading: boolean;
+  onLocationPress: () => void;
+  onSearchPress: () => void;
+}) {
+  return (
+    <View className="flex-row items-center gap-2.5">
+      <Pressable
+        accessibilityLabel="Mở bộ lọc nearby"
+        className={`h-10 w-10 items-center justify-center rounded-full ${
+          isDistanceDropdownVisible ? "bg-[#FFF1F6]" : "bg-[#FFF4EF]"
+        } ${isLocationLoading ? "opacity-70" : ""}`}
+        disabled={isLocationLoading}
+        hitSlop={8}
+        onPress={onLocationPress}
+      >
+        <SymbolView
+          name={{
+            ios: "location",
+            android: "my_location",
+            web: "my_location",
+          }}
+          size={16}
+          tintColor={isDistanceDropdownVisible ? "#EB489B" : "#F58752"}
+        />
+      </Pressable>
+
+      <Pressable
+        accessibilityLabel="Mở danh sách địa danh"
+        className="h-10 w-10 items-center justify-center rounded-full bg-[#FAF7FC]"
+        hitSlop={8}
+        onPress={onSearchPress}
+      >
+        <SymbolView
+          name={{
+            ios: "magnifyingglass",
+            android: "search",
+            web: "search",
+          }}
+          size={16}
+          tintColor="#8E869A"
+        />
+      </Pressable>
+
+      <Pressable className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]">
+        <SymbolView
+          name={{
+            ios: "bell",
+            android: "notifications",
+            web: "notifications",
+          }}
+          size={16}
+          tintColor="#EB489B"
+        />
+      </Pressable>
+    </View>
+  );
+}
+
+function LocationMapModal({
+  coordinate,
+  errorMessage,
+  isLocationLoading,
+  onClose,
+  onOpenSettings,
+  onRetry,
+  visible,
+}: {
+  coordinate: AppCoordinate | null;
+  errorMessage: string | null;
+  isLocationLoading: boolean;
+  onClose: () => void;
+  onOpenSettings: () => void;
+  onRetry: () => void;
+  visible: boolean;
+}) {
+  const mapRef = useRef<MapView | null>(null);
+  const previewRegion = getLocationPreviewRegion(coordinate);
+
+  useEffect(() => {
+    if (!visible || !coordinate || Platform.OS === "web") {
+      return;
+    }
+
+    const timerId = setTimeout(() => {
+      mapRef.current?.animateToRegion(
+        getLocationPreviewRegion(coordinate),
+        260,
+      );
+    }, 60);
+
+    return () => {
+      clearTimeout(timerId);
+    };
+  }, [coordinate, visible]);
+
+  return (
+    <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
+      <View className="flex-1 bg-[#F7F6F2]">
+        {Platform.OS === "web" ? (
+          <View className="flex-1 items-center justify-center bg-[#E8F0FE] px-8">
+            <View className="w-full max-w-[320px] rounded-[28px] bg-white px-5 py-6">
+              <Text className="text-center text-[17px] font-extrabold text-[#2B2233]">
+                Bản đồ chỉ hỗ trợ trên Android/iOS
+              </Text>
+              <Text className="mt-2 text-center text-[13px] leading-5 text-[#8E869A]">
+                Hãy mở app trên điện thoại để xem bản đồ vị trí hiện tại full
+                màn hình.
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <MapView
+            key={
+              coordinate
+                ? `${coordinate.latitude.toFixed(5)}-${coordinate.longitude.toFixed(5)}`
+                : "home-location-preview"
+            }
+            ref={mapRef}
+            provider={PROVIDER_GOOGLE}
+            initialRegion={previewRegion}
+            loadingEnabled
+            loadingBackgroundColor="#E8F0FE"
+            loadingIndicatorColor="#EB489B"
+            mapType="standard"
+            showsBuildings
+            showsCompass
+            showsMyLocationButton={false}
+            showsUserLocation={Boolean(coordinate)}
+            style={{ flex: 1 }}
+          >
+            {coordinate ? (
+              <Marker
+                anchor={{ x: 0.5, y: 0.5 }}
+                coordinate={{
+                  latitude: coordinate.latitude,
+                  longitude: coordinate.longitude,
+                }}
+              >
+                <View className="h-5 w-5 rounded-full border-4 border-white bg-[#2563EB]" />
+              </Marker>
+            ) : null}
+          </MapView>
+        )}
+
+        <SafeAreaView
+          pointerEvents="box-none"
+          className="absolute inset-0"
+          edges={["top", "left", "right", "bottom"]}
+        >
+          <View
+            className="flex-1 justify-between px-4 pb-6 pt-2"
+            pointerEvents="box-none"
+          >
+            <View
+              className="flex-row items-center justify-between"
+              pointerEvents="box-none"
+            >
+              <Pressable
+                className="h-11 w-11 items-center justify-center rounded-full bg-white"
+                onPress={onClose}
+                style={cardShadowStyle}
+              >
+                <SymbolView
+                  name={{
+                    ios: "chevron.left",
+                    android: "arrow_back",
+                    web: "arrow_back",
+                  }}
+                  size={18}
+                  tintColor="#2B2233"
+                />
+              </Pressable>
+
+              <View
+                className="rounded-full bg-white px-4 py-2"
+                style={cardShadowStyle}
+              >
+                <Text className="text-[13px] font-bold text-[#2B2233]">
+                  Vị trí hiện tại
+                </Text>
+              </View>
+
+              <View className="w-11" />
+            </View>
+
+            <View className="items-end" pointerEvents="box-none">
+              {coordinate ? (
+                <Pressable
+                  className="h-12 w-12 items-center justify-center rounded-full bg-white"
+                  onPress={() => {
+                    mapRef.current?.animateToRegion(
+                      getLocationPreviewRegion(coordinate),
+                      260,
+                    );
+                  }}
+                  style={cardShadowStyle}
+                >
+                  <SymbolView
+                    name={{
+                      ios: "location.fill",
+                      android: "my_location",
+                      web: "my_location",
+                    }}
+                    size={18}
+                    tintColor="#0F8A83"
+                  />
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        </SafeAreaView>
+
+        {isLocationLoading ? (
+          <View className="absolute inset-0 items-center justify-center bg-[#F7F6F2]/92 px-7">
+            <View className="w-full max-w-[300px] rounded-[28px] bg-white px-5 py-6">
+              <View className="items-center">
+                <ActivityIndicator color="#EB489B" size="small" />
+              </View>
+              <Text className="mt-4 text-center text-[18px] font-extrabold text-[#2B2233]">
+                Đang lấy vị trí GPS
+              </Text>
+              <Text className="mt-2 text-center text-[13px] leading-5 text-[#8E869A]">
+                Bản đồ sẽ tự mở đúng vị trí bạn đang đứng ngay khi định vị xong.
+              </Text>
+            </View>
+          </View>
+        ) : errorMessage ? (
+          <View className="absolute inset-0 items-center justify-center bg-[#F7F6F2]/94 px-7">
+            <View className="w-full max-w-[320px] rounded-[28px] bg-white px-5 py-6">
+              <View className="items-center">
+                <View className="h-12 w-12 items-center justify-center rounded-full bg-[#FFF4EF]">
+                  <SymbolView
+                    name={{
+                      ios: "location.slash.fill",
+                      android: "location_off",
+                      web: "location_off",
+                    }}
+                    size={18}
+                    tintColor="#F58752"
+                  />
+                </View>
+              </View>
+
+              <Text className="mt-4 text-center text-[18px] font-extrabold text-[#2B2233]">
+                Chưa mở được bản đồ vị trí
+              </Text>
+              <Text className="mt-2 text-center text-[13px] leading-5 text-[#8E869A]">
+                {errorMessage}
+              </Text>
+
+              <View className="mt-5 flex-row gap-3">
+                <Pressable
+                  className="flex-1 rounded-[18px] border border-[#F4DCCF] bg-white px-4 py-3.5"
+                  onPress={onOpenSettings}
+                >
+                  <Text className="text-center text-[14px] font-bold text-[#8E869A]">
+                    Mở cài đặt
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  className="flex-1 overflow-hidden rounded-[18px]"
+                  onPress={onRetry}
+                >
+                  <LinearGradient
+                    colors={gradientColors}
+                    end={{ x: 1, y: 0.5 }}
+                    start={{ x: 0, y: 0.5 }}
+                    locations={[0, 0.58, 1]}
+                    className="items-center justify-center px-4 py-3.5"
+                  >
+                    <Text className="text-[14px] font-extrabold text-white">
+                      Thử lại
+                    </Text>
+                  </LinearGradient>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        ) : null}
+      </View>
+    </Modal>
   );
 }
 
@@ -1530,13 +1518,22 @@ export default function HomeScreen() {
   const [nearbyPlacesNote, setNearbyPlacesNote] = useState<string | null>(null);
   const [nearbyPlacesStatus, setNearbyPlacesStatus] =
     useState<NearbyPlacesSectionStatus>("loading");
-  const [isNearbyDistanceSheetVisible, setIsNearbyDistanceSheetVisible] =
+  const [isNearbyDistanceDropdownVisible, setIsNearbyDistanceDropdownVisible] =
     useState(false);
+  const [isLocationMapVisible, setIsLocationMapVisible] = useState(false);
+  const [isLocationMapLoading, setIsLocationMapLoading] = useState(false);
+  const [locationMapCoordinate, setLocationMapCoordinate] =
+    useState<AppCoordinate | null>(null);
+  const [locationMapErrorMessage, setLocationMapErrorMessage] = useState<
+    string | null
+  >(null);
   const [nearbySearchDistanceMeters, setNearbySearchDistanceMeters] = useState(
     defaultNearbySearchDistanceMeters,
   );
-  const [pendingNearbySearchDistanceMeters, setPendingNearbySearchDistanceMeters] =
-    useState(defaultNearbySearchDistanceMeters);
+  const [
+    pendingNearbySearchDistanceMeters,
+    setPendingNearbySearchDistanceMeters,
+  ] = useState(defaultNearbySearchDistanceMeters);
   const [resolvedNearbyPlaces, setResolvedNearbyPlaces] = useState<
     NearbyPlaceListItem[]
   >([]);
@@ -1548,14 +1545,21 @@ export default function HomeScreen() {
   const isGuest = authSession.role === "guest";
   const routeCardLeftInset = gutter;
   const routeCardWidth = Math.max(contentWidth, 264);
-  const nearbyRouteCardWidth = Math.min(Math.max(contentWidth * 0.72, 220), 252);
-  const nearbyPlaceCardWidth = Math.min(Math.max(contentWidth * 0.46, 156), 170);
+  const nearbyRouteCardWidth = Math.min(
+    Math.max(contentWidth * 0.72, 220),
+    252,
+  );
+  const nearbyPlaceCardWidth = Math.min(
+    Math.max(contentWidth * 0.46, 156),
+    170,
+  );
   const nearbyPlaceImageHeight = Math.round(nearbyPlaceCardWidth * 0.8);
-  const voucherMerchantCircleSize = Math.min(Math.max(contentWidth * 0.22, 76), 86);
+  const voucherMerchantCircleSize = Math.min(
+    Math.max(contentWidth * 0.22, 76),
+    86,
+  );
   const voucherMerchantLogoSize = Math.round(voucherMerchantCircleSize * 0.88);
   const voucherMerchantItemWidth = voucherMerchantCircleSize + 14;
-  const isDevelopmentLocationOverrideActive =
-    getDevelopmentLocationOverride() !== null;
   const currentJourney =
     !isGuest && activeJourney && !activeJourney.completed
       ? activeJourney
@@ -1570,26 +1574,73 @@ export default function HomeScreen() {
     authSession.displayName.trim() ||
     authSession.username?.trim() ||
     "Ngọc";
-  const explorerLevel = explorerSummary?.level ?? authSession.level ?? 12;
+  const explorerAvatar = explorerSummary?.avatar ?? null;
+  const explorerLevel = explorerSummary?.level ?? null;
+  const explorerUsername =
+    explorerSummary?.username.trim() ||
+    authSession.username?.trim() ||
+    explorerName;
   const handleOpenHotspots = () => {
     router.push("/hotspots");
   };
   const handleOpenRegister = () => {
     router.push("/login?entry=home");
   };
-  const handleOpenNearbyDistanceSheet = useCallback(() => {
-    setPendingNearbySearchDistanceMeters(nearbySearchDistanceMeters);
-    setIsNearbyDistanceSheetVisible(true);
+  const handleToggleNearbyDistanceDropdown = useCallback(() => {
+    setIsNearbyDistanceDropdownVisible((currentValue) => {
+      if (!currentValue) {
+        setPendingNearbySearchDistanceMeters(nearbySearchDistanceMeters);
+      }
+
+      return !currentValue;
+    });
   }, [nearbySearchDistanceMeters]);
-  const handleCloseNearbyDistanceSheet = useCallback(() => {
-    setPendingNearbySearchDistanceMeters(nearbySearchDistanceMeters);
-    setIsNearbyDistanceSheetVisible(false);
-  }, [nearbySearchDistanceMeters]);
-  const handleApplyNearbyDistance = useCallback((nextDistanceMeters: number) => {
-    setNearbySearchDistanceMeters(nextDistanceMeters);
-    setPendingNearbySearchDistanceMeters(nextDistanceMeters);
-    setIsNearbyDistanceSheetVisible(false);
+  const handleApplyNearbyDistance = useCallback(
+    (nextDistanceMeters: number) => {
+      setNearbySearchDistanceMeters(nextDistanceMeters);
+      setPendingNearbySearchDistanceMeters(nextDistanceMeters);
+      setIsNearbyDistanceDropdownVisible(false);
+    },
+    [],
+  );
+  const handleCloseLocationMap = useCallback(() => {
+    setIsLocationMapVisible(false);
   }, []);
+  const handleOpenLocationSettings = useCallback(() => {
+    void Linking.openSettings();
+  }, []);
+  const handleOpenLocationMap = useCallback(async () => {
+    setIsLocationMapVisible(true);
+    setIsLocationMapLoading(true);
+    setLocationMapErrorMessage(null);
+
+    try {
+      const { coordinate, fallbackMessage } =
+        await resolveNearbyRequestCoordinate();
+
+      setLocationMapCoordinate(coordinate);
+      setLocationMapErrorMessage(
+        coordinate
+          ? null
+          : (fallbackMessage ?? "Không xác định được vị trí hiện tại."),
+      );
+    } catch (error) {
+      setLocationMapCoordinate(null);
+      setLocationMapErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Không thể mở bản đồ vị trí hiện tại.",
+      );
+    } finally {
+      setIsLocationMapLoading(false);
+    }
+  }, []);
+  const handleOpenLocationMapFromDropdown = useCallback(() => {
+    setNearbySearchDistanceMeters(pendingNearbySearchDistanceMeters);
+    setPendingNearbySearchDistanceMeters(pendingNearbySearchDistanceMeters);
+    setIsNearbyDistanceDropdownVisible(false);
+    void handleOpenLocationMap();
+  }, [handleOpenLocationMap, pendingNearbySearchDistanceMeters]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -1755,30 +1806,65 @@ export default function HomeScreen() {
         try {
           const accessToken = await getValidAccessToken();
 
-          if (!accessToken || !isActive) {
+          if (!isActive) {
             return;
           }
 
-          const profile = await getMyProfile({
-            accessToken,
-            tokenType: authSession.tokenType,
-          });
+          if (!accessToken) {
+            setExplorerSummary(null);
+            return;
+          }
+
+          const [profileResult, levelsResult] = await Promise.allSettled([
+            getMyProfile({
+              accessToken,
+              tokenType: authSession.tokenType,
+            }),
+            getGamificationLevels({
+              accessToken,
+              tokenType: authSession.tokenType,
+            }),
+          ]);
+
+          if (profileResult.status !== "fulfilled") {
+            throw profileResult.reason;
+          }
+
+          const profile =
+            levelsResult.status === "fulfilled"
+              ? applyLevelProgressToProfile(
+                  profileResult.value,
+                  levelsResult.value,
+                )
+              : profileResult.value;
 
           if (!isActive) {
             return;
           }
 
+          if (levelsResult.status !== "fulfilled") {
+            console.warn("[home] load explorer levels failed", {
+              error:
+                levelsResult.reason instanceof Error
+                  ? levelsResult.reason.message
+                  : levelsResult.reason,
+            });
+          }
+
           const resolvedName = profile.name.trim() || profile.username.trim();
 
           setExplorerSummary({
+            avatar: profile.avatar?.trim() || null,
             level: profile.level,
             name: resolvedName || "Ngọc",
+            username: profile.username.trim(),
           });
         } catch (error) {
           if (!isActive) {
             return;
           }
 
+          setExplorerSummary(null);
           console.warn("[home] load explorer summary failed", {
             error: error instanceof Error ? error.message : error,
           });
@@ -1807,106 +1893,54 @@ export default function HomeScreen() {
           {isGuest ? (
             <GuestWelcomeHeader
               onGreetingPress={handleOpenRegister}
-              onLocationPillPress={
-                isDevelopmentLocationOverrideActive
-                  ? handleOpenNearbyDistanceSheet
-                  : undefined
-              }
+              isDistanceDropdownVisible={isNearbyDistanceDropdownVisible}
+              isLocationLoading={isLocationMapLoading}
+              onLocationPress={handleToggleNearbyDistanceDropdown}
+              onSearchPress={handleOpenHotspots}
             />
           ) : (
             <View className="flex-row items-center justify-between">
               <View className="flex-1 flex-row items-center gap-3.5 pr-3">
-                <View className="relative">
-                  <LinearGradient
-                    colors={gradientColors}
-                    end={{ x: 1, y: 0.9 }}
-                    start={{ x: 0, y: 0.1 }}
-                    className="h-16 w-16 rounded-full p-[2px]"
-                  >
-                    <View className="flex-1 rounded-full bg-white p-[3px]">
-                      <Image
-                        source={avatarImageUri}
-                        contentFit="cover"
-                        transition={180}
-                        cachePolicy="memory-disk"
-                        style={{ flex: 1, borderRadius: 999 }}
-                      />
-                    </View>
-                  </LinearGradient>
-
-                  <View className="absolute -bottom-1 -right-2 rounded-full border-2 border-white bg-[#b1741e] px-2.5 py-1">
-                    <Text className="text-[11px] font-extrabold text-white">
-                      {`Lv.${explorerLevel}`}
-                    </Text>
-                  </View>
-                </View>
+                <ExplorerHeaderAvatar
+                  avatar={explorerAvatar}
+                  level={explorerLevel}
+                  name={explorerName}
+                  username={explorerUsername}
+                />
 
                 <View className="flex-1 gap-1">
-                  <View className="self-start rounded-full bg-[#FFF1F6] px-2.5 py-1">
-                    <Text className="text-[11px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
-                      Explorer
-                    </Text>
-                  </View>
-
                   <View className="gap-0.5">
-                    <Text className="text-[18px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
+                    <Text className="text-[15px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
                       {`Chào ${explorerName}`}
                     </Text>
-                    <Text className="text-[13px] leading-4 text-[#8E869A]">
-                      Sẵn sàng khám phá hành trình
+                    <Text className="text-[11px] leading-4 text-[#8E869A]">
+                      Sẵn sàng khám phá
                     </Text>
                   </View>
                 </View>
               </View>
 
-              <ExplorerHeaderActions />
+              <ExplorerHeaderActions
+                isDistanceDropdownVisible={isNearbyDistanceDropdownVisible}
+                isLocationLoading={isLocationMapLoading}
+                onLocationPress={handleToggleNearbyDistanceDropdown}
+                onSearchPress={handleOpenHotspots}
+              />
             </View>
           )}
 
-          <View className="flex-row items-center gap-3">
-            <View className="flex-1 flex-row items-center rounded-[18px] bg-[#FAF7FC] px-4 py-3.5">
-              <SymbolView
-                name={{
-                  ios: "magnifyingglass",
-                  android: "search",
-                  web: "search",
-                }}
-                size={15}
-                tintColor="#AA9FB0"
-              />
-              <Text className="ml-2 text-[14px] text-[#AA9FB0]">
-                Tìm địa danh, thử thách...
-              </Text>
-            </View>
-
-            <Pressable
-              accessibilityLabel={`Điều chỉnh bán kính nearby, hiện tại ${formatDistanceMeters(nearbySearchDistanceMeters)}`}
-              className="overflow-hidden rounded-[14px]"
-              hitSlop={8}
-              onPress={handleOpenNearbyDistanceSheet}
-            >
-              <LinearGradient
-                colors={gradientColors}
-                end={{ x: 1, y: 0.5 }}
-                locations={[0, 0.58, 1]}
-                start={{ x: 0, y: 0.5 }}
-                className="h-9 flex-row items-center justify-center gap-1.5 px-3"
-              >
-                <SymbolView
-                  name={{
-                    ios: "slider.horizontal.3",
-                    android: "tune",
-                    web: "tune",
-                  }}
-                  size={14}
-                  tintColor="#FFFFFF"
-                />
-                <Text className="text-[12px] font-extrabold text-white">
-                  {formatDistanceMeters(nearbySearchDistanceMeters)}
-                </Text>
-              </LinearGradient>
-            </Pressable>
-          </View>
+          {isNearbyDistanceDropdownVisible ? (
+            <NearbyDistanceDropdown
+              currentDistanceMeters={nearbySearchDistanceMeters}
+              draftDistanceMeters={pendingNearbySearchDistanceMeters}
+              isLoading={nearbyPlacesStatus === "loading"}
+              onApply={() => {
+                handleApplyNearbyDistance(pendingNearbySearchDistanceMeters);
+              }}
+              onChangeDistance={setPendingNearbySearchDistanceMeters}
+              onOpenMap={handleOpenLocationMapFromDropdown}
+            />
+          ) : null}
 
           <View className="gap-4">
             <Text className="text-[17px] font-extrabold text-[#2B2233]">
@@ -1987,8 +2021,8 @@ export default function HomeScreen() {
                         </View>
                       </View>
 
-                        <View className="h-9 w-9 items-center justify-center rounded-2xl bg-white/16">
-                          <SymbolView
+                      <View className="h-9 w-9 items-center justify-center rounded-2xl bg-white/16">
+                        <SymbolView
                           name={{ ios: "map", android: "map", web: "map" }}
                           size={15}
                           tintColor="#FFFFFF"
@@ -2186,9 +2220,9 @@ export default function HomeScreen() {
                         size={14}
                         tintColor="#FFFFFF"
                       />
-                        <Text className="ml-2 text-[15px] font-extrabold text-white">
-                         Tiếp tục khám phá
-                       </Text>
+                      <Text className="ml-2 text-[15px] font-extrabold text-white">
+                        Tiếp tục khám phá
+                      </Text>
                     </LinearGradient>
                   </Pressable>
                 </View>
@@ -2756,14 +2790,17 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      <NearbyDistanceSheet
-        currentDistanceMeters={nearbySearchDistanceMeters}
-        isLoading={nearbyPlacesStatus === "loading"}
-        onApply={handleApplyNearbyDistance}
-        onChangeDistance={setPendingNearbySearchDistanceMeters}
-        onClose={handleCloseNearbyDistanceSheet}
-        selectedDistanceMeters={pendingNearbySearchDistanceMeters}
-        visible={isNearbyDistanceSheetVisible}
+      <LocationMapModal
+        key={`location-map-${isLocationMapVisible ? "open" : "closed"}`}
+        coordinate={locationMapCoordinate}
+        errorMessage={locationMapErrorMessage}
+        isLocationLoading={isLocationMapLoading}
+        onClose={handleCloseLocationMap}
+        onOpenSettings={handleOpenLocationSettings}
+        onRetry={() => {
+          void handleOpenLocationMap();
+        }}
+        visible={isLocationMapVisible}
       />
     </SafeAreaView>
   );

@@ -5,7 +5,7 @@ function normalizeName(value: string | null) {
   return value?.trim().toLowerCase() ?? "";
 }
 
-function findLevelIndexByProfile(
+function findLevelIndexByMetadata(
   profile: Profile,
   levels: readonly GamificationLevel[],
 ) {
@@ -31,6 +31,13 @@ function findLevelIndexByProfile(
     }
   }
 
+  return -1;
+}
+
+function findLevelIndexByTotalXp(
+  profile: Profile,
+  levels: readonly GamificationLevel[],
+) {
   let matchedIndex = -1;
 
   for (let index = 0; index < levels.length; index += 1) {
@@ -53,15 +60,19 @@ export function applyLevelProgressToProfile(
     return profile;
   }
 
-  const currentLevelIndex = findLevelIndexByProfile(profile, levels);
+  const metadataLevelIndex = findLevelIndexByMetadata(profile, levels);
+  const xpLevelIndex = findLevelIndexByTotalXp(profile, levels);
+  const currentLevelIndex = Math.max(metadataLevelIndex, xpLevelIndex);
   const currentLevel = levels[currentLevelIndex];
   const nextLevel = levels[currentLevelIndex + 1];
-  const resolvedLevelNumber =
-    typeof profile.level === "number" ? profile.level : currentLevel.levelNumber;
+  const resolvedLevelNumber = currentLevel.levelNumber;
+  const currentTotalXp = Math.max(profile.totalXp, 0);
+  const currentLevelRequiredXp = Math.max(currentLevel.requiredXp, 0);
 
   if (!nextLevel) {
     return {
       ...profile,
+      isMaxLevel: true,
       currentLevelXp: null,
       level: resolvedLevelNumber,
       levelName: currentLevel.name,
@@ -71,9 +82,10 @@ export function applyLevelProgressToProfile(
 
   return {
     ...profile,
-    currentLevelXp: Math.max(profile.totalXp, 0),
+    isMaxLevel: false,
+    currentLevelXp: Math.max(currentTotalXp - currentLevelRequiredXp, 0),
     level: resolvedLevelNumber,
     levelName: currentLevel.name,
-    xpToNext: Math.max(nextLevel.requiredXp, Math.max(profile.totalXp, 0)),
+    xpToNext: Math.max(nextLevel.requiredXp - currentLevelRequiredXp, 0),
   };
 }

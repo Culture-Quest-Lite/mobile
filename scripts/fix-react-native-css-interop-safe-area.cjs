@@ -26,6 +26,15 @@ const patches = [
       },
     ],
   },
+  {
+    file: path.join(root, 'node_modules', '@react-native', 'gradle-plugin', 'settings.gradle.kts'),
+    replacements: [
+      {
+        from: 'plugins { id("org.gradle.toolchains.foojay-resolver-convention").version("0.5.0") }\n',
+        to: 'plugins { id("org.gradle.toolchains.foojay-resolver-convention").version("1.0.0") }\n',
+      },
+    ],
+  },
 ];
 
 for (const patch of patches) {
