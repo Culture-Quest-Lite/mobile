@@ -34,6 +34,7 @@ import {
 } from "@/features/auth/utils/validation";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
+const authLogoSource = require("../../../../assets/images/logo2-cropped.png");
 
 const cardShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.22)",
@@ -290,7 +291,7 @@ export default function RegisterScreen() {
 
               <Animated.View style={animatedLogoStyle}>
                 <Image
-                  source={require("../../../../assets/images/logo2.png")}
+                  source={authLogoSource}
                   style={{ height: logoSize, width: logoSize }}
                   resizeMode="contain"
                 />

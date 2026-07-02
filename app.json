@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Trải nghiệm cùng chúng tôi",
+    "name": "Culture Quest Lite",
     "slug": "Culture_quest_lite_mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,10 +9,10 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "com.anonymous.Culture_quest_lite_mobile",
-      "icon": "./assets/images/logo2-app-icon-v2.png",
+      "icon": "./assets/images/logo2-app-icon-android-smaller.png",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/images/logo2-adaptive-foreground.png"
+        "foregroundImage": "./assets/images/logo2-adaptive-foreground-smaller.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -30,9 +30,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#FFFFFF",
-          "image": "./assets/images/logo2-cropped.png",
-          "imageWidth": 320,
+          "backgroundColor": "#F7F6F2",
+          "image": "./assets/images/logo2-splash-card.png",
+          "imageWidth": 250,
           "resizeMode": "contain"
         }
       ],

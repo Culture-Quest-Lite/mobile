@@ -19,7 +19,9 @@ import MapView, {
   type Region,
 } from "react-native-maps";
 import Animated, {
+  Easing,
   Extrapolation,
+  ReduceMotion,
   cancelAnimation,
   interpolate,
   runOnJS,
@@ -28,8 +30,8 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
-  withSequence,
   withTiming,
+  type SharedValue,
 } from "react-native-reanimated";
 import {
   SafeAreaView,
@@ -504,6 +506,39 @@ function getRewardValue(reward: string) {
   return `${resolvedValue}`;
 }
 
+function getSummaryOpenTimeValue({
+  apiHotspot,
+  hotspot,
+}: {
+  apiHotspot: NearbyHotspotDto | null;
+  hotspot: HotspotDetail;
+}) {
+  const remoteScheduleValue =
+    formatApiTimeWindow(apiHotspot?.openingTime, apiHotspot?.closingTime) ??
+    formatApiTimeWindow(apiHotspot?.startTime, apiHotspot?.endTime);
+
+  if (remoteScheduleValue) {
+    return remoteScheduleValue;
+  }
+
+  const scheduleValue =
+    readMeaningfulApiText(hotspot.scheduleLabel) ??
+    hotspot.scheduleLabel.trim();
+  const timeRangeMatch = scheduleValue.match(
+    /\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}/,
+  );
+
+  if (timeRangeMatch?.[0]) {
+    return timeRangeMatch[0].replace(/\s+/g, " ");
+  }
+
+  if (normalizeLookupText(scheduleValue).includes("ca ngay")) {
+    return "Cả ngày";
+  }
+
+  return scheduleValue;
+}
+
 function buildSummaryStats({
   apiHotspot,
   hotspot,
@@ -515,39 +550,35 @@ function buildSummaryStats({
   matchedLocalHotspot?: HotspotDetail | null;
   rewardXp: string;
 }): SummaryStatItem[] {
-  const remoteScheduleValue = formatApiTimeWindow(
-    apiHotspot?.openingTime,
-    apiHotspot?.closingTime,
-  );
-  const secondaryValue =
-    matchedLocalHotspot?.distance ?? remoteScheduleValue ?? hotspot.district;
-  const secondaryLabel = matchedLocalHotspot?.distance
-    ? "Distance"
-    : remoteScheduleValue
-      ? "Giờ mở"
-      : "Khu vực";
+  const scoreValue =
+    apiHotspot?.point !== null && apiHotspot?.point !== undefined
+      ? `${Math.max(0, Math.round(apiHotspot.point))}`
+      : matchedLocalHotspot
+        ? hotspot.rating.toFixed(1)
+        : "0";
 
   return [
     {
       icon: {
-        ios: matchedLocalHotspot ? "star.fill" : "chart.bar.fill",
-        android: matchedLocalHotspot ? "star" : "bar_chart",
-        web: matchedLocalHotspot ? "star" : "bar_chart",
+        ios: "star.fill",
+        android: "star",
+        web: "star",
       } as SymbolName,
-      label: matchedLocalHotspot ? "Rating" : "Điểm",
-      value: matchedLocalHotspot
-        ? hotspot.rating.toFixed(1)
-        : `${Math.max(0, Math.round(apiHotspot?.point ?? 0))}`,
+      label: "Điểm thưởng",
+      value: scoreValue,
     },
     {
       icon: {
-        ios: matchedLocalHotspot ? "location.fill" : "clock.fill",
-        android: matchedLocalHotspot ? "place" : "schedule",
-        web: matchedLocalHotspot ? "place" : "schedule",
+        ios: "clock.fill",
+        android: "schedule",
+        web: "schedule",
       } as SymbolName,
-      isCompactValue: !matchedLocalHotspot,
-      label: secondaryLabel,
-      value: secondaryValue,
+      isCompactValue: true,
+      label: "Giờ mở cửa",
+      value: getSummaryOpenTimeValue({
+        apiHotspot,
+        hotspot,
+      }),
     },
     {
       icon: {
@@ -555,39 +586,14 @@ function buildSummaryStats({
         android: "redeem",
         web: "redeem",
       } as SymbolName,
-      label: "XP",
+      label: "Điểm XP",
       value: `+${rewardXp}`,
     },
   ];
 }
 
-function getBestTimeWindow(bestTimeLabel: string) {
-  const [timeRange] = bestTimeLabel.split(" de ");
-
-  return timeRange?.trim() || bestTimeLabel;
-}
-
 function getGalleryPreviewImages(hotspot: HotspotDetail) {
   return [hotspot.imageUri, ...hotspot.gallery].slice(0, 4);
-}
-
-function buildHeroLocationLabel({
-  distance,
-  district,
-}: {
-  distance?: string;
-  district: string;
-}) {
-  const resolvedDistance = readMeaningfulApiText(distance);
-  const resolvedDistrict = readMeaningfulApiText(district);
-  const shouldHideDistance =
-    resolvedDistance?.toLowerCase().includes("api") ?? false;
-  const labels = [
-    shouldHideDistance ? null : resolvedDistance,
-    resolvedDistrict,
-  ].filter((label): label is string => Boolean(label));
-
-  return labels[0] ?? "Đang cập nhật";
 }
 
 function normalizeLookupText(value: string) {
@@ -793,17 +799,6 @@ function getAudioStoryDurationLabel(story: string) {
   return `${minutes} min nghe`;
 }
 
-function HeroChip({ icon, label }: { icon: SymbolName; label: string }) {
-  return (
-    <View className="flex-row items-center rounded-full bg-black/24 px-3 py-2">
-      <SymbolView name={icon} size={13} tintColor="#FFFFFF" />
-      <Text className="ml-1.5 text-[14px] font-semibold text-white">
-        {label}
-      </Text>
-    </View>
-  );
-}
-
 function HeroGalleryThumb({
   imageUri,
   isActive = false,
@@ -848,112 +843,6 @@ function HeroGalleryThumb({
   );
 }
 
-function SingleArrow({ size = 15 }: { size?: number }) {
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1200 }),
-        withTiming(0, { duration: 1200 }),
-      ),
-      -1,
-      false,
-    );
-
-    return () => {
-      cancelAnimation(progress);
-    };
-  }, [progress]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      progress.value,
-      [0, 0.5, 1],
-      [0.7, 1, 0.7],
-      Extrapolation.CLAMP,
-    ),
-    transform: [
-      {
-        translateY: interpolate(
-          progress.value,
-          [0, 1],
-          [1.5, -3],
-          Extrapolation.CLAMP,
-        ),
-      },
-    ],
-  }));
-
-  return (
-    <Animated.View style={animatedStyle}>
-      <SymbolView name="keyboard_arrow_up" size={size} tintColor="#FFFFFF" />
-    </Animated.View>
-  );
-}
-
-function ScrollDownHint({ scrollY }: { scrollY: { value: number } }) {
-  const floatOffset = useSharedValue(0);
-
-  useEffect(() => {
-    floatOffset.value = withRepeat(
-      withSequence(
-        withTiming(-4, { duration: 720 }),
-        withTiming(0, { duration: 720 }),
-      ),
-      -1,
-      false,
-    );
-
-    return () => {
-      cancelAnimation(floatOffset);
-    };
-  }, [floatOffset]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      scrollY.value,
-      [0, 40, 88],
-      [1, 0.74, 0],
-      Extrapolation.CLAMP,
-    ),
-    transform: [
-      {
-        translateY:
-          floatOffset.value +
-          interpolate(scrollY.value, [0, 88], [0, -10], Extrapolation.CLAMP),
-      },
-    ],
-  }));
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[animatedStyle, { alignItems: "center" }]}
-    >
-      <View
-        className="rounded-full px-4 py-2.5"
-        style={{ backgroundColor: "transparent" }}
-      >
-        <View className="flex-row items-center">
-          <View
-            style={{
-              height: 20,
-              marginRight: 8,
-              width: 20,
-            }}
-          >
-            <SingleArrow size={15} />
-          </View>
-          <Text className="text-[13px] font-semibold text-white">
-            Vuốt lên để xem thêm thông tin
-          </Text>
-        </View>
-      </View>
-    </Animated.View>
-  );
-}
-
 function SummaryStat({
   icon,
   isCompactValue = false,
@@ -966,25 +855,48 @@ function SummaryStat({
   value: string;
 }) {
   return (
-    <View className="flex-row items-center">
-      <View className="h-7 w-7 items-center justify-center rounded-full bg-[#FFF0F6]">
-        <SymbolView name={icon} size={13} tintColor="#EB489B" />
-      </View>
-      <View className="ml-2 flex-1">
-        <Text
-          className={
-            isCompactValue
-              ? "text-[12px] font-black leading-4 text-[#1E3142]"
-              : "text-[15px] font-black text-[#1E3142]"
-          }
-          numberOfLines={1}
-        >
-          {value}
-        </Text>
-        <Text className="text-[12px] font-semibold uppercase tracking-[0.8px] text-[#9B91A0]">
+    <View className="w-full items-center px-1 py-1">
+      <View className="flex-row items-center justify-center gap-1.5">
+        <SymbolView name={icon} size={11} tintColor="#EB489B" />
+        <Text className="text-[10px] font-semibold uppercase tracking-[0.6px] text-[#9B91A0]">
           {label}
         </Text>
       </View>
+
+      <Text
+        adjustsFontSizeToFit={isCompactValue}
+        className="mt-1.5 text-center text-[12px] font-black leading-4 text-[#1E3142]"
+        minimumFontScale={0.84}
+        numberOfLines={1}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function SummaryStatDivider() {
+  return <View className="h-10 w-px self-center bg-[#F0E4EA]" />;
+}
+
+function SummaryStatsRow({ items }: { items: SummaryStatItem[] }) {
+  return (
+    <View className="mt-5 flex-row items-start">
+      {items.map((item, index) => (
+        <View
+          key={`summary-stat-${item.label}-${index}`}
+          className="flex-1 flex-row items-center"
+          style={{ minWidth: 0 }}
+        >
+          <SummaryStat
+            icon={item.icon}
+            isCompactValue={item.isCompactValue}
+            label={item.label}
+            value={item.value}
+          />
+          {index < items.length - 1 ? <SummaryStatDivider /> : null}
+        </View>
+      ))}
     </View>
   );
 }
@@ -1014,22 +926,157 @@ function AvatarPreview({
 
 function TagChip({
   backgroundColor = "#FFF0F6",
+  isUppercase = true,
   label,
   textColor = "#EB489B",
 }: {
   backgroundColor?: string;
+  isUppercase?: boolean;
   label: string;
   textColor?: string;
 }) {
   return (
     <View className="rounded-full px-3 py-2" style={{ backgroundColor }}>
       <Text
-        className="text-[13px] font-semibold uppercase tracking-[0.8px]"
+        className={`text-[13px] font-semibold ${
+          isUppercase ? "uppercase tracking-[0.8px]" : ""
+        }`}
         style={{ color: textColor }}
       >
         {label}
       </Text>
     </View>
+  );
+}
+
+const atmosphereTagPalettes = [
+  { backgroundColor: "#FFF0F6", textColor: "#EB489B" },
+  { backgroundColor: "#FFF4E8", textColor: "#D97706" },
+  { backgroundColor: "#E8F4FF", textColor: "#2563EB" },
+  { backgroundColor: "#E8FBF3", textColor: "#0F8A5F" },
+] as const;
+
+function getAtmosphereTagColors(label: string, index: number) {
+  const normalizedLabel = normalizeLookupText(label);
+
+  if (normalizedLabel.includes("lich su")) {
+    return { backgroundColor: "#FFE8D9", textColor: "#C66A1B" };
+  }
+
+  if (normalizedLabel.includes("kien truc")) {
+    return { backgroundColor: "#E8F4FF", textColor: "#3557C8" };
+  }
+
+  if (normalizedLabel.includes("nghe thuat")) {
+    return { backgroundColor: "#E8FBF3", textColor: "#0F8A5F" };
+  }
+
+  if (normalizedLabel.includes("am thuc")) {
+    return { backgroundColor: "#FFF4E8", textColor: "#D97706" };
+  }
+
+  if (normalizedLabel.includes("check in")) {
+    return { backgroundColor: "#FFF0F6", textColor: "#EB489B" };
+  }
+
+  if (normalizedLabel.includes("van hoa")) {
+    return { backgroundColor: "#FFF7D7", textColor: "#A16207" };
+  }
+
+  if (normalizedLabel.includes("thien nhien")) {
+    return { backgroundColor: "#ECFDF3", textColor: "#15803D" };
+  }
+
+  return atmosphereTagPalettes[index % atmosphereTagPalettes.length];
+}
+
+function HeroScrollHint({
+  bottomOffset,
+  scrollY,
+}: {
+  bottomOffset: number;
+  scrollY: SharedValue<number>;
+}) {
+  const arrowOffset = useSharedValue(0);
+
+  useEffect(() => {
+    arrowOffset.set(
+      withRepeat(
+        withTiming(10, {
+          duration: 900,
+          easing: Easing.inOut(Easing.quad),
+          reduceMotion: ReduceMotion.System,
+        }),
+        -1,
+        true,
+        undefined,
+        ReduceMotion.System,
+      ),
+    );
+
+    return () => {
+      cancelAnimation(arrowOffset);
+      arrowOffset.set(0);
+    };
+  }, [arrowOffset]);
+
+  const hintContainerStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      scrollY.value,
+      [0, 48, 110],
+      [1, 0.72, 0],
+      Extrapolation.CLAMP,
+    ),
+    transform: [
+      {
+        translateY: interpolate(
+          scrollY.value,
+          [0, 110],
+          [0, -18],
+          Extrapolation.CLAMP,
+        ),
+      },
+    ],
+  }));
+
+  const arrowAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: arrowOffset.get() }],
+  }));
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        hintContainerStyle,
+        {
+          alignItems: "center",
+          bottom: bottomOffset,
+          left: 20,
+          position: "absolute",
+          right: 20,
+          zIndex: 2,
+        },
+      ]}
+    >
+      <Animated.View style={arrowAnimatedStyle}>
+        <LinearGradient
+          colors={["rgba(255,255,255,0.28)", "rgba(255,255,255,0.12)"]}
+          end={{ x: 0.5, y: 1 }}
+          start={{ x: 0.5, y: 0 }}
+          className="h-12 w-12 items-center justify-center rounded-full border border-white/35"
+        >
+          <SymbolView
+            name={{
+              ios: "chevron.down",
+              android: "keyboard_arrow_down",
+              web: "keyboard_arrow_down",
+            }}
+            size={24}
+            tintColor="#FFFFFF"
+          />
+        </LinearGradient>
+      </Animated.View>
+    </Animated.View>
   );
 }
 
@@ -1293,12 +1340,12 @@ function DirectionMapCard({
 function LocationInformationSection({
   access,
   address,
-  atmosphere,
+  atmosphereTags,
   bestTime,
 }: {
   access: string;
   address: string;
-  atmosphere: string;
+  atmosphereTags: string[];
   bestTime: string;
 }) {
   const items = [
@@ -1336,7 +1383,7 @@ function LocationInformationSection({
         web: "auto_awesome",
       } as SymbolName,
       label: "Không gian",
-      value: atmosphere,
+      tags: atmosphereTags.filter((tag) => tag.trim()),
     },
   ];
 
@@ -1363,14 +1410,62 @@ function LocationInformationSection({
                 <Text className="text-[12px] font-medium uppercase tracking-[1px] text-[#8FA6BA]">
                   {item.label}
                 </Text>
-                <Text className="mt-1 text-[15px] leading-6 text-[#526879]">
-                  {item.value}
-                </Text>
+                {"tags" in item ? (
+                  <View className="mt-2 flex-row flex-wrap gap-2">
+                    {((item.tags ?? []).length > 0
+                      ? (item.tags ?? [])
+                      : ["Đang cập nhật"]
+                    ).map((tag, index) => {
+                      const chipColors = getAtmosphereTagColors(tag, index);
+
+                      return (
+                        <TagChip
+                          key={`${item.label}-${tag}-${index}`}
+                          backgroundColor={chipColors.backgroundColor}
+                          isUppercase={false}
+                          label={tag}
+                          textColor={chipColors.textColor}
+                        />
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <Text className="mt-1 text-[15px] leading-6 text-[#526879]">
+                    {item.value}
+                  </Text>
+                )}
               </View>
             </View>
           ))}
         </View>
       </View>
+    </View>
+  );
+}
+
+function HotspotOverviewSection({ text }: { text: string }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const shouldShowToggle = text.trim().length > 150;
+
+  return (
+    <View className="mt-4">
+      <Text
+        className="text-[15px] leading-6 text-[#677C8E]"
+        numberOfLines={isExpanded ? undefined : 4}
+      >
+        {text}
+      </Text>
+
+      {shouldShowToggle ? (
+        <Pressable
+          className="mt-3 self-end"
+          onPress={() => setIsExpanded((value) => !value)}
+        >
+          <Text className="text-[13px] font-bold text-[#7E6F82]">
+            {isExpanded ? "Thu gọn" : "Xem thêm"}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -1408,7 +1503,7 @@ function HistoricalInfoSection({ text }: { text: string }) {
 
         {shouldShowToggle ? (
           <Pressable
-            className="mt-3 self-start"
+            className="mt-3 self-end"
             onPress={() => setIsExpanded((value) => !value)}
           >
             <Text className="text-[13px] font-bold text-[#7E6F82]">
@@ -2204,7 +2299,11 @@ export default function HotspotDetailScreen() {
     1,
   );
   const contentOverlap = 28;
-  const stickyCheckinRevealOffset = Math.max(heroHeightCollapsed * 0.34, 96);
+  const stickyCheckinRevealOffset = Math.max(
+    heroHeightExpanded - screenHeight + 220,
+    collapseDistance * 0.42,
+    220,
+  );
 
   const heroContainerStyle = useAnimatedStyle(() => ({
     height: interpolate(
@@ -2222,44 +2321,6 @@ export default function HotspotDetailScreen() {
           scrollY.value,
           [-heroHeightExpanded, 0, collapseDistance],
           [heroHeightExpanded * 0.08, 0, -24],
-          Extrapolation.CLAMP,
-        ),
-      },
-    ],
-  }));
-
-  const heroContentStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      scrollY.value,
-      [0, collapseDistance * 0.48, collapseDistance],
-      [1, 0.58, 0],
-      Extrapolation.CLAMP,
-    ),
-    transform: [
-      {
-        translateY: interpolate(
-          scrollY.value,
-          [0, collapseDistance],
-          [0, -28],
-          Extrapolation.CLAMP,
-        ),
-      },
-    ],
-  }));
-
-  const compactHeaderStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      scrollY.value,
-      [collapseDistance * 0.58, collapseDistance],
-      [0, 1],
-      Extrapolation.CLAMP,
-    ),
-    transform: [
-      {
-        translateY: interpolate(
-          scrollY.value,
-          [collapseDistance * 0.58, collapseDistance],
-          [10, 0],
           Extrapolation.CLAMP,
         ),
       },
@@ -2538,6 +2599,12 @@ export default function HotspotDetailScreen() {
     gallerySelection.slugKey === resolvedSlug ? gallerySelection.index : 0;
   const activeHeroImageUri =
     galleryPreviewImages[activeGalleryIndex] ?? hotspot.imageUri;
+  const heroGalleryBottomOffset = Math.max(
+    contentOverlap + insets.bottom + 12,
+    42,
+  );
+  const heroScrollHintBottom =
+    galleryPreviewImages.length > 1 ? heroGalleryBottomOffset + 152 : 108;
   const rewardXp = getRewardValue(hotspot.reward);
   const canOpenStories =
     resolvedHotspotId !== null ? hasApiStories : Boolean(matchedLocalHotspot);
@@ -2672,20 +2739,14 @@ export default function HotspotDetailScreen() {
                 />
               </Pressable>
 
-              <Animated.View
-                pointerEvents="none"
-                style={[compactHeaderStyle, { flex: 1, marginHorizontal: 18 }]}
-              >
+              <View className="flex-1 px-4">
                 <Text
-                  className="text-center text-[16px] font-black text-white"
+                  className="text-center text-[14px] font-bold text-white"
                   numberOfLines={1}
                 >
                   {hotspot.title}
                 </Text>
-                <Text className="mt-0.5 text-center text-[12px] font-semibold uppercase tracking-[1px] text-[#C3EAF5]">
-                  {hotspot.category}
-                </Text>
-              </Animated.View>
+              </View>
 
               <Pressable
                 className="h-[52px] w-[52px] items-center justify-center rounded-full bg-black/22"
@@ -2707,6 +2768,8 @@ export default function HotspotDetailScreen() {
         </View>
       </View>
 
+      <HeroScrollHint bottomOffset={heroScrollHintBottom} scrollY={scrollY} />
+
       <SafeAreaView className="flex-1" edges={["left", "right", "bottom"]}>
         <Animated.ScrollView
           style={{
@@ -2715,7 +2778,7 @@ export default function HotspotDetailScreen() {
             zIndex: 1,
           }}
           contentContainerStyle={{
-            paddingBottom: Math.max(insets.bottom + 98, 114),
+            paddingBottom: Math.max(insets.bottom + 172, 188),
             paddingTop: heroHeightExpanded - contentOverlap,
           }}
           onScroll={handleScroll}
@@ -2723,100 +2786,52 @@ export default function HotspotDetailScreen() {
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
-          <Animated.View
-            pointerEvents="box-none"
-            style={[
-              heroContentStyle,
-              {
+          {galleryPreviewImages.length > 1 ? (
+            <View
+              pointerEvents="box-none"
+              style={{
                 left: 0,
+                minHeight: heroHeightExpanded,
                 position: "absolute",
                 right: 0,
                 top: 0,
-              },
-            ]}
-          >
-            <View
-              className="px-5"
-              style={{
-                justifyContent: "center",
-                minHeight: heroHeightExpanded,
-                paddingBottom: Math.max(insets.bottom + 110, 128),
-                paddingTop: insets.top + 72,
-                width: "100%",
               }}
             >
-              <View style={{ maxWidth: 360 }}>
-                <View className="flex-row flex-wrap gap-2">
-                  <HeroChip
-                    icon={{
-                      ios: "clock.fill",
-                      android: "schedule",
-                      web: "schedule",
-                    }}
-                    label={getBestTimeWindow(hotspot.bestTimeLabel)}
-                  />
-                  <HeroChip
-                    icon={{
-                      ios: "location.fill",
-                      android: "place",
-                      web: "place",
-                    }}
-                    label={buildHeroLocationLabel({
-                      distance: hotspot.distance,
-                      district: hotspot.district,
-                    })}
-                  />
-                </View>
-
-                <Text className="mt-3 text-[30px] font-black leading-[34px] text-white">
-                  {hotspot.title}
-                </Text>
+              <View
+                className="absolute inset-x-0"
+                style={{
+                  bottom: Math.max(contentOverlap + insets.bottom + 12, 42),
+                }}
+              >
+                <ScrollView
+                  horizontal
+                  nestedScrollEnabled
+                  contentContainerStyle={{ paddingLeft: 20, paddingRight: 30 }}
+                  showsHorizontalScrollIndicator={false}
+                >
+                  {galleryPreviewImages.map((imageUri, index) => (
+                    <View
+                      key={`${hotspot.slug}-hero-gallery-${index}`}
+                      className={
+                        index === galleryPreviewImages.length - 1 ? "" : "mr-3"
+                      }
+                    >
+                      <HeroGalleryThumb
+                        imageUri={imageUri}
+                        isActive={index === activeGalleryIndex}
+                        onPress={() =>
+                          setGallerySelection({
+                            index,
+                            slugKey: resolvedSlug,
+                          })
+                        }
+                      />
+                    </View>
+                  ))}
+                </ScrollView>
               </View>
             </View>
-
-            <View
-              className="absolute inset-x-0"
-              style={{
-                bottom: Math.max(contentOverlap + insets.bottom + 12, 42),
-              }}
-            >
-              <ScrollView
-                horizontal
-                nestedScrollEnabled
-                contentContainerStyle={{ paddingLeft: 20, paddingRight: 30 }}
-                showsHorizontalScrollIndicator={false}
-              >
-                {galleryPreviewImages.map((imageUri, index) => (
-                  <View
-                    key={`${hotspot.slug}-hero-gallery-${index}`}
-                    className={
-                      index === galleryPreviewImages.length - 1 ? "" : "mr-3"
-                    }
-                  >
-                    <HeroGalleryThumb
-                      imageUri={imageUri}
-                      isActive={index === activeGalleryIndex}
-                      onPress={() =>
-                        setGallerySelection({
-                          index,
-                          slugKey: resolvedSlug,
-                        })
-                      }
-                    />
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-
-            <View
-              className="absolute inset-x-0 items-center"
-              style={{
-                bottom: Math.max(contentOverlap + insets.bottom + 164, 190),
-              }}
-            >
-              <ScrollDownHint scrollY={scrollY} />
-            </View>
-          </Animated.View>
+          ) : null}
 
           <Animated.View
             className="rounded-t-[34px] rounded-b-[34px] px-5 pb-6 pt-4"
@@ -2856,27 +2871,16 @@ export default function HotspotDetailScreen() {
             </Pressable>
 
             <View className="mt-5">
-              <View className="flex-row items-center justify-between gap-3">
-                <View className="flex-1">
-                  <Text className="text-[13px] font-extrabold uppercase tracking-[1.2px] text-[#EB489B]">
-                    Hotspot detail
-                  </Text>
-                  <Text className="mt-2 text-[26px] font-black leading-[30px] text-[#1E3142]">
-                    {hotspot.title}
-                  </Text>
-                </View>
-                <View className="rounded-full bg-[#FFF0F6] px-3 py-2">
-                  <Text className="text-[13px] font-semibold uppercase tracking-[0.8px] text-[#EB489B]">
-                    {hotspot.category}
-                  </Text>
-                </View>
-              </View>
-
-              <View className="mt-4">
-                <Text className="text-[15px] leading-6 text-[#677C8E]">
-                  {hotspot.overview}
+              <View className="gap-3">
+                <Text className="text-[13px] font-extrabold uppercase tracking-[1.2px] text-[#EB489B]">
+                  Thông tin địa điểm
+                </Text>
+                <Text className="text-[26px] font-black leading-[30px] text-[#1E3142]">
+                  {hotspot.title}
                 </Text>
               </View>
+
+              <HotspotOverviewSection text={hotspot.overview} />
 
               {remoteHotspotError && localHotspot ? (
                 <View className="mt-4 rounded-[22px] bg-[#FFF4E8] px-4 py-3">
@@ -2886,21 +2890,7 @@ export default function HotspotDetailScreen() {
                 </View>
               ) : null}
 
-              <View className="mt-5 flex-row flex-wrap justify-between gap-y-3">
-                {summaryStats.map((item, index) => (
-                  <View
-                    key={`${hotspot.slug}-summary-${index}`}
-                    style={{ width: "31.5%" }}
-                  >
-                    <SummaryStat
-                      icon={item.icon}
-                      isCompactValue={item.isCompactValue}
-                      label={item.label}
-                      value={item.value}
-                    />
-                  </View>
-                ))}
-              </View>
+              <SummaryStatsRow items={summaryStats} />
 
               <View className="mt-5 flex-row items-center justify-between">
                 <View className="flex-row items-center">
@@ -2933,7 +2923,7 @@ export default function HotspotDetailScreen() {
               <LocationInformationSection
                 access={`${hotspot.scheduleLabel} · ${hotspot.ticketLabel}`}
                 address={hotspot.address}
-                atmosphere={hotspot.vibeTags.join(" • ")}
+                atmosphereTags={hotspot.vibeTags}
                 bestTime={hotspot.bestTimeLabel}
               />
             </View>

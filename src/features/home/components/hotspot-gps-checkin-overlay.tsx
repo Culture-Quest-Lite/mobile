@@ -37,6 +37,7 @@ import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
+import { useProfile } from "@/features/profile/hooks/use-profile";
 import {
   getDevelopmentLocationOverride,
   getDeviceCoordinate,
@@ -60,6 +61,11 @@ type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type Coordinate = {
   latitude: number;
   longitude: number;
+};
+
+type ScreenPoint = {
+  x: number;
+  y: number;
 };
 
 type CheckinVerifyStatus =
@@ -103,6 +109,7 @@ const SUCCESS_SECONDARY_BUTTON_BACKGROUND = "rgba(255, 245, 250, 0.92)";
 const SUCCESS_SECONDARY_BUTTON_BORDER = "rgba(235, 72, 155, 0.16)";
 const SUCCESS_CHECK_ICON_COLOR = "#22C55E";
 const SUCCESS_CHECK_ICON_BORDER = "rgba(255, 255, 255, 0.92)";
+const HOTSPOT_MARKER_LOGO = require("../../../../assets/images/logo3.png");
 
 function isAlwaysReadyHotspot(hotspot: HotspotDetail) {
   return hotspot.checkinMode === "always-ready";
@@ -298,15 +305,23 @@ function VerificationMapPreview({
   currentCoordinate,
   distanceMeters,
   hotspotCoordinate,
+  userAvatarUri,
   verificationStatus,
 }: {
   currentCoordinate: Coordinate | null;
   distanceMeters: number | null;
   hotspotCoordinate: Coordinate | null;
+  userAvatarUri: string | null;
   verificationStatus: CheckinVerifyStatus;
 }) {
   const mapRef = useRef<MapView | null>(null);
   const [pulse] = useState(() => new Animated.Value(0));
+  const [hotspotFloat] = useState(() => new Animated.Value(0));
+  const [failedUserAvatarUri, setFailedUserAvatarUri] = useState<string | null>(
+    null,
+  );
+  const [currentScreenPoint, setCurrentScreenPoint] =
+    useState<ScreenPoint | null>(null);
   const {
     latitude: mapLatitude,
     latitudeDelta: mapLatitudeDelta,
@@ -344,6 +359,34 @@ function VerificationMapPreview({
   const activeMapError =
     mapError?.key === mapStateKey ? mapError.message : null;
   const showMapFallback = Boolean(activeMapError);
+  const hasUserAvatarError =
+    !userAvatarUri || failedUserAvatarUri === userAvatarUri;
+
+  const updateCurrentScreenPoint = useCallback(async () => {
+    if (
+      Platform.OS === "web" ||
+      !hasMapLoaded ||
+      !resolvedCurrentCoordinate ||
+      !mapRef.current
+    ) {
+      setCurrentScreenPoint(null);
+      return;
+    }
+
+    try {
+      const nextPoint =
+        await mapRef.current.pointForCoordinate(resolvedCurrentCoordinate);
+
+      if (Number.isFinite(nextPoint.x) && Number.isFinite(nextPoint.y)) {
+        setCurrentScreenPoint({
+          x: nextPoint.x,
+          y: nextPoint.y,
+        });
+      }
+    } catch {
+      setCurrentScreenPoint(null);
+    }
+  }, [hasMapLoaded, resolvedCurrentCoordinate]);
 
   useEffect(() => {
     const animation = Animated.loop(
@@ -372,6 +415,32 @@ function VerificationMapPreview({
   }, [pulse]);
 
   useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(hotspotFloat, {
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          toValue: 1,
+          useNativeDriver: true,
+        }),
+        Animated.timing(hotspotFloat, {
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          toValue: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+      hotspotFloat.stopAnimation();
+    };
+  }, [hotspotFloat]);
+
+  useEffect(() => {
     if (Platform.OS === "web") {
       return;
     }
@@ -386,6 +455,10 @@ function VerificationMapPreview({
       280,
     );
   }, [mapLatitude, mapLatitudeDelta, mapLongitude, mapLongitudeDelta]);
+
+  useEffect(() => {
+    void updateCurrentScreenPoint();
+  }, [updateCurrentScreenPoint]);
 
   useEffect(() => {
     if (Platform.OS === "web" || hasMapLoaded) {
@@ -410,6 +483,14 @@ function VerificationMapPreview({
   const markerPulseOpacity = pulse.interpolate({
     inputRange: [0, 1],
     outputRange: [0.18, 0.52],
+  });
+  const hotspotFloatTranslateY = hotspotFloat.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -14],
+  });
+  const hotspotFloatScale = hotspotFloat.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.1],
   });
   const distanceBadgeColor =
     verificationStatus === "ready"
@@ -474,16 +555,24 @@ function VerificationMapPreview({
           toolbarEnabled={false}
           zoomControlEnabled={Platform.OS === "android"}
           zoomEnabled
-          onMapReady={() =>
+          onMapReady={() => {
             setMapError((current) =>
               current?.key === mapStateKey ? null : current,
-            )
-          }
+            );
+            void updateCurrentScreenPoint();
+          }}
           onMapLoaded={() => {
             setLoadedMapKey(mapStateKey);
             setMapError((current) =>
               current?.key === mapStateKey ? null : current,
             );
+            void updateCurrentScreenPoint();
+          }}
+          onRegionChange={() => {
+            void updateCurrentScreenPoint();
+          }}
+          onRegionChangeComplete={() => {
+            void updateCurrentScreenPoint();
           }}
         >
           {resolvedHotspotCoordinate ? (
@@ -524,111 +613,29 @@ function VerificationMapPreview({
                     Hotspot
                   </Text>
                 </View>
-                <View
+                <Animated.View
                   style={{
-                    alignItems: "center",
-                    backgroundColor: SOFT_SURFACE_OVERLAY,
-                    borderRadius: 999,
-                    height: 68,
-                    justifyContent: "center",
-                    width: 68,
+                    shadowColor: "rgba(235, 72, 155, 0.42)",
+                    shadowOffset: { width: 0, height: 14 },
+                    shadowOpacity: 1,
+                    shadowRadius: 22,
+                    elevation: 12,
+                    transform: [
+                      { translateY: hotspotFloatTranslateY },
+                      { scale: hotspotFloatScale },
+                    ],
                   }}
                 >
-                  <LinearGradient
-                    colors={LOGIN_GRADIENT_COLORS}
-                    locations={[0, 0.58, 1]}
-                    start={{ x: 0, y: 0.5 }}
-                    end={{ x: 1, y: 0.5 }}
-                    style={{
-                      alignItems: "center",
-                      borderRadius: 999,
-                      height: 52,
-                      justifyContent: "center",
-                      width: 52,
-                    }}
-                  >
-                    <SymbolView
-                      name={
-                        {
-                          ios: "location.fill",
-                          android: "place",
-                          web: "place",
-                        } as SymbolName
-                      }
-                      size={24}
-                      tintColor="#FFFFFF"
-                    />
-                  </LinearGradient>
-                </View>
+                  <Image
+                    contentFit="contain"
+                    source={HOTSPOT_MARKER_LOGO}
+                    style={{ height: 108, width: 108 }}
+                  />
+                </Animated.View>
               </View>
             </Marker>
           ) : null}
 
-          {resolvedCurrentCoordinate ? (
-            <Marker
-              coordinate={resolvedCurrentCoordinate}
-              description="Vị trí hiện tại của bạn"
-              title="Vị trí của bạn"
-            >
-              <View className="items-center">
-                <Animated.View
-                  style={{
-                    backgroundColor: "rgba(34, 197, 94, 0.22)",
-                    borderRadius: 999,
-                    height: 70,
-                    opacity: markerPulseOpacity,
-                    position: "absolute",
-                    top: -7,
-                    transform: [{ scale: markerPulseScale }],
-                    width: 70,
-                  }}
-                />
-                <View
-                  style={{
-                    alignItems: "center",
-                    backgroundColor: "#10B981",
-                    borderColor: "#FFFFFF",
-                    borderRadius: 999,
-                    borderWidth: 4,
-                    height: 56,
-                    justifyContent: "center",
-                    width: 56,
-                  }}
-                >
-                  <View
-                    style={{
-                      alignItems: "center",
-                      backgroundColor: SOFT_SURFACE,
-                      borderRadius: 999,
-                      height: 24,
-                      justifyContent: "center",
-                      width: 24,
-                    }}
-                  >
-                    <SymbolView
-                      name={
-                        {
-                          ios: "person.fill",
-                          android: "person",
-                          web: "person",
-                        } as SymbolName
-                      }
-                      size={14}
-                      tintColor="#10B981"
-                    />
-                  </View>
-                </View>
-                <View
-                  className="mt-2 rounded-full px-3 py-1.5"
-                  style={{ backgroundColor: SOFT_SURFACE_OVERLAY_SOFT }}
-                >
-                  <Text className="text-[11px] font-black uppercase tracking-[0.8px] text-[#10B981]">
-                    Vị trí của bạn
-                  </Text>
-                </View>
-              </View>
-            </Marker>
-          ) : null}
         </MapView>
       )}
 
@@ -711,6 +718,92 @@ function VerificationMapPreview({
             </View>
           </View>
         </LinearGradient>
+      ) : null}
+
+      {!showMapFallback && currentScreenPoint ? (
+        <View
+          pointerEvents="none"
+          style={{
+            left: currentScreenPoint.x - 35,
+            position: "absolute",
+            top: currentScreenPoint.y - 35,
+            zIndex: 18,
+          }}
+        >
+          <View className="items-center">
+            <Animated.View
+              style={{
+                backgroundColor: "rgba(34, 197, 94, 0.22)",
+                borderRadius: 999,
+                height: 70,
+                opacity: markerPulseOpacity,
+                position: "absolute",
+                top: -7,
+                transform: [{ scale: markerPulseScale }],
+                width: 70,
+              }}
+            />
+            <View
+              style={{
+                alignItems: "center",
+                backgroundColor: "#10B981",
+                borderColor: "#FFFFFF",
+                borderRadius: 999,
+                borderWidth: 4,
+                height: 56,
+                justifyContent: "center",
+                overflow: "hidden",
+                width: 56,
+              }}
+            >
+              {!hasUserAvatarError && userAvatarUri ? (
+                <Image
+                  cachePolicy="memory-disk"
+                  contentFit="cover"
+                  onError={() => setFailedUserAvatarUri(userAvatarUri)}
+                  source={userAvatarUri}
+                  transition={180}
+                  style={{
+                    borderRadius: 999,
+                    height: "100%",
+                    width: "100%",
+                  }}
+                />
+              ) : (
+                <View
+                  style={{
+                    alignItems: "center",
+                    backgroundColor: SOFT_SURFACE,
+                    borderRadius: 999,
+                    height: 24,
+                    justifyContent: "center",
+                    width: 24,
+                  }}
+                >
+                  <SymbolView
+                    name={
+                      {
+                        ios: "person.fill",
+                        android: "person",
+                        web: "person",
+                      } as SymbolName
+                    }
+                    size={14}
+                    tintColor="#10B981"
+                  />
+                </View>
+              )}
+            </View>
+            <View
+              className="mt-2 rounded-full px-3 py-1.5"
+              style={{ backgroundColor: SOFT_SURFACE_OVERLAY_SOFT }}
+            >
+              <Text className="text-[11px] font-black uppercase tracking-[0.8px] text-[#10B981]">
+                Vị trí của bạn
+              </Text>
+            </View>
+          </View>
+        </View>
       ) : null}
 
       <View
@@ -828,6 +921,7 @@ export function HotspotGpsCheckinOverlay({
 }) {
   const router = useRouter();
   const authSession = useAuthSession();
+  const { profile } = useProfile();
   const insets = useSafeAreaInsets();
   const [checkinStage, setCheckinStage] = useState<CheckinFlowStage>("verify");
   const [verificationStatus, setVerificationStatus] =
@@ -984,6 +1078,9 @@ export function HotspotGpsCheckinOverlay({
   }, [hotspot]);
 
   const hotspotCoordinate = getHotspotCoordinate(hotspot);
+  const userAvatarUri = authSession.isAuthenticated
+    ? profile?.avatar ?? null
+    : null;
 
   const submitCheckIn = useCallback(async () => {
     if (!authSession.isAuthenticated) {
@@ -1064,6 +1161,13 @@ export function HotspotGpsCheckinOverlay({
     verificationStatus,
     distanceMeters,
     isAlwaysReadyHotspot(hotspot),
+  );
+  const hotspotTags = Array.from(
+    new Set(
+      [hotspot.category, ...hotspot.vibeTags]
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    ),
   );
   const routeProgressLabel =
     typeof totalRouteStopsCount === "number" &&
@@ -1245,7 +1349,7 @@ export function HotspotGpsCheckinOverlay({
                   Check-in thành{"\n"}công!
                 </Text>
                 <Text
-                  className="mt-2 text-[16px] font-semibold"
+                  className="mt-2 text-[14px] font-semibold"
                   style={{ color: SUCCESS_SUBTITLE_COLOR }}
                 >
                   {hotspot.title}
@@ -1398,6 +1502,7 @@ export function HotspotGpsCheckinOverlay({
                   currentCoordinate={currentCoordinate}
                   distanceMeters={distanceMeters}
                   hotspotCoordinate={hotspotCoordinate}
+                  userAvatarUri={userAvatarUri}
                   verificationStatus={verificationStatus}
                 />
 
@@ -1448,7 +1553,7 @@ export function HotspotGpsCheckinOverlay({
                         size={13}
                         tintColor="#FFFFFF"
                       />
-                      <Text className="ml-1.5 text-[13px] font-bold text-white">
+                      <Text className="ml-1.5 text-[12px] font-bold text-white">
                         Đang khám phá
                       </Text>
                     </LinearGradient>
@@ -1470,19 +1575,24 @@ export function HotspotGpsCheckinOverlay({
                   style={{ height: 5, width: 54 }}
                 />
 
-                <View
-                  className="mt-5 self-start rounded-full px-3 py-1.5"
-                  style={{ backgroundColor: SOFT_SURFACE_ELEVATED }}
-                >
-                  <Text className="text-[11px] font-black uppercase tracking-[0.8px] text-[#EB489B]">
-                    {hotspot.category}
-                  </Text>
+                <View className="mt-5 flex-row flex-wrap gap-2">
+                  {hotspotTags.map((tag) => (
+                    <View
+                      key={`${hotspot.slug}-${tag}`}
+                      className="self-start rounded-full px-3 py-1.5"
+                      style={{ backgroundColor: SOFT_SURFACE_ELEVATED }}
+                    >
+                      <Text className="text-[10px] font-black uppercase tracking-[0.8px] text-[#EB489B]">
+                        {tag}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
 
-                <Text className="mt-4 text-[34px] font-black leading-[38px] text-[#2B2233]">
+                <Text className="mt-4 text-[24px] font-black leading-[28px] text-[#2B2233]">
                   {hotspot.title}
                 </Text>
-                <Text className="mt-2 text-[15px] leading-6 text-[#8E869A]">
+                <Text className="mt-2 text-[14px] leading-[22px] text-[#8E869A]">
                   {hotspot.address}
                 </Text>
 
@@ -1502,11 +1612,11 @@ export function HotspotGpsCheckinOverlay({
                       className="h-2.5 w-2.5 rounded-full"
                       style={{ backgroundColor: verificationCopy.accentColor }}
                     />
-                    <Text className="ml-2 text-[11px] font-black uppercase tracking-[0.9px] text-[#EB489B]">
+                    <Text className="ml-2 text-[10px] font-black uppercase tracking-[0.9px] text-[#EB489B]">
                       {verificationCopy.badgeLabel}
                     </Text>
                   </View>
-                  <Text className="mt-2 text-[15px] font-medium leading-5 text-[#6F657A]">
+                  <Text className="mt-2 text-[14px] font-medium leading-5 text-[#6F657A]">
                     {verificationCopy.helperText}
                   </Text>
                 </View>
@@ -1554,19 +1664,19 @@ export function HotspotGpsCheckinOverlay({
                       size={16}
                       tintColor="#FFFFFF"
                     />
-                    <Text className="ml-2 text-[18px] font-black text-white">
+                    <Text className="ml-2 text-[16px] font-black text-white">
                       {primaryButtonLabel}
                     </Text>
                   </LinearGradient>
                 </Pressable>
 
                 {checkInError ? (
-                  <Text className="mt-4 text-center text-[13px] font-medium text-[#D97706]">
+                  <Text className="mt-4 text-center text-[12px] font-medium text-[#D97706]">
                     {checkInError}
                   </Text>
                 ) : null}
 
-                <Text className="mt-4 text-center text-[13px] leading-5 text-[#8E869A]">
+                <Text className="mt-4 text-center text-[12px] leading-5 text-[#8E869A]">
                   {`Mở khóa +${rewardXp} XP, story hotspot và đánh giá địa điểm.`}
                 </Text>
               </View>
