@@ -423,9 +423,6 @@ function getImageMedia(medias?: RouteMediaDto[] | null) {
   return (
     medias.find((media) => {
       const kind = `${media.mediaType ?? ""} ${media.mimeType ?? ""}`.toLowerCase();
-    route.medias.find((media) => {
-      const kind =
-        `${media.mediaType ?? ""} ${media.mimeType ?? ""}`.toLowerCase();
       return kind.includes("image");
     }) ?? medias[0]
   );
