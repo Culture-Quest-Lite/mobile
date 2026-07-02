@@ -135,6 +135,13 @@ type RouteDetailRequest = {
   tokenType?: string | null;
 };
 
+type RoutesByHotspotRequest = {
+  accessToken?: string | null;
+  hotspotId: number | string;
+  routeStatus?: RouteStatus;
+  tokenType?: string | null;
+};
+
 type AuthenticatedRouteRequest = {
   accessToken?: string | null;
   tokenType?: string | null;
@@ -408,17 +415,41 @@ function parseCheckInResponse(value: unknown): CheckInResponseDto | null {
   };
 }
 
-function getRouteImageMedia(route: Pick<RouteDto, "medias">) {
+function getImageMedia(medias?: RouteMediaDto[] | null) {
+  if (!Array.isArray(medias) || medias.length === 0) {
+    return null;
+  }
+
   return (
+    medias.find((media) => {
+      const kind = `${media.mediaType ?? ""} ${media.mimeType ?? ""}`.toLowerCase();
     route.medias.find((media) => {
       const kind =
         `${media.mediaType ?? ""} ${media.mimeType ?? ""}`.toLowerCase();
       return kind.includes("image");
-    }) ?? route.medias[0]
+    }) ?? medias[0]
   );
 }
 
-export function getRouteCoverUrl(route: Pick<RouteDto, "medias">) {
+function getRouteImageMedia(route: Pick<RouteDto, "hotspots" | "medias">) {
+  const routeImageMedia = getImageMedia(route.medias);
+
+  if (routeImageMedia) {
+    return routeImageMedia;
+  }
+
+  for (const hotspot of route.hotspots) {
+    const hotspotImageMedia = getImageMedia(hotspot.medias);
+
+    if (hotspotImageMedia) {
+      return hotspotImageMedia;
+    }
+  }
+
+  return null;
+}
+
+export function getRouteCoverUrl(route: Pick<RouteDto, "hotspots" | "medias">) {
   return getRouteImageMedia(route)?.fileUrl || null;
 }
 
@@ -595,6 +626,31 @@ export async function getRouteById({
   }
 
   return route;
+}
+
+export async function getRoutesByHotspot({
+  accessToken,
+  hotspotId,
+  routeStatus,
+  tokenType,
+}: RoutesByHotspotRequest): Promise<RouteDto[]> {
+  const params = new URLSearchParams();
+
+  if (routeStatus?.trim()) {
+    params.set("routeStatus", routeStatus);
+  }
+
+  const query = params.toString();
+  const url = `${resolveRouteUrl(`/api/v1/routes/hotspot/${hotspotId}`)}${
+    query ? `?${query}` : ""
+  }`;
+  const body = await fetchRouteJson(url, accessToken, tokenType);
+
+  if (!Array.isArray(body)) {
+    throw new Error("API route theo hotspot trả về dữ liệu không đúng định dạng.");
+  }
+
+  return body.map(parseRoute).filter(isNonNull);
 }
 
 function getDifficultyLabel(difficulty?: string) {

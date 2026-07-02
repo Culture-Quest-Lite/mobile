@@ -174,9 +174,11 @@ export default function TabsLayout() {
   const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
-  const bottomInset = Math.max(insets.bottom, Platform.OS === "android" ? 8 : 0);
-  const tabBarBottomPadding = bottomInset + 12;
-  const tabBarHeight = 56 + tabBarBottomPadding + 8;
+  const bottomInset = insets.bottom;
+  const tabBarBottomPadding =
+    Platform.OS === "android" ? bottomInset : bottomInset + 12;
+  const tabBarHeight =
+    Platform.OS === "android" ? 56 + bottomInset : 56 + tabBarBottomPadding + 8;
   const shouldHideTabBarForGuestProfile =
     !authSession.isAuthenticated && pathname === "/profile";
 
@@ -205,7 +207,7 @@ export default function TabsLayout() {
             marginHorizontal: 0,
             minWidth: 0,
             overflow: "hidden",
-            paddingVertical: 4,
+            paddingVertical: Platform.OS === "android" ? 0 : 4,
           },
           tabBarLabel: tab
             ? ({ color, focused }) => renderTabLabel(tab.label, focused, color)
@@ -215,23 +217,23 @@ export default function TabsLayout() {
             ? {
                 display: "none",
               }
-            : {
-                backgroundColor: "#FFFFFF",
-                borderTopColor: "#E8EDF4",
-                borderTopWidth: 1,
-                elevation: 0,
-                height: tabBarHeight,
-                paddingBottom: tabBarBottomPadding,
-                paddingHorizontal: 4,
-                paddingTop: 6,
-                shadowColor: "#1F2A37",
-                shadowOffset: {
-                  width: 0,
-                  height: -4,
+              : {
+                  backgroundColor: "#FFFFFF",
+                  borderTopColor: "#E8EDF4",
+                  borderTopWidth: 1,
+                  elevation: 0,
+                  height: tabBarHeight,
+                  paddingBottom: tabBarBottomPadding,
+                  paddingHorizontal: 4,
+                  paddingTop: Platform.OS === "android" ? 1 : 6,
+                  shadowColor: "#1F2A37",
+                  shadowOffset: {
+                    width: 0,
+                    height: -4,
+                  },
+                  shadowOpacity: 0.04,
+                  shadowRadius: 10,
                 },
-                shadowOpacity: 0.04,
-                shadowRadius: 10,
-              },
         };
       }}
     >
