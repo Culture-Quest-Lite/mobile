@@ -1,14 +1,62 @@
-import { useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from "react";
 
-const checkedInIds = new Set<string>(['ben-thanh']);
-const checkedInApiHotspotIds = new Set<number>();
+import { readStoredJson, writeStoredJson } from "@/lib/persistent-json-storage";
+
+type PersistedCheckinState = {
+  checkedInApiHotspotIds: number[];
+  checkedInIds: string[];
+};
+
+const STORAGE_KEY = "checkins";
+const defaultCheckedInIds = ["ben-thanh"];
 const listeners = new Set<() => void>();
+
+function isValidSlug(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isValidApiHotspotId(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+function loadPersistedCheckins() {
+  const storedValue = readStoredJson<PersistedCheckinState>(STORAGE_KEY, {
+    checkedInApiHotspotIds: [],
+    checkedInIds: [],
+  });
+
+  const checkedInIds = storedValue.checkedInIds.filter(isValidSlug);
+  const checkedInApiHotspotIds =
+    storedValue.checkedInApiHotspotIds.filter(isValidApiHotspotId);
+
+  return {
+    checkedInApiHotspotIds,
+    checkedInIds,
+  };
+}
+
+const persistedCheckins = loadPersistedCheckins();
+const checkedInIds = new Set<string>([
+  ...defaultCheckedInIds,
+  ...persistedCheckins.checkedInIds,
+]);
+const checkedInApiHotspotIds = new Set<number>(
+  persistedCheckins.checkedInApiHotspotIds,
+);
 let snapshot: string[] = Array.from(checkedInIds);
 let apiSnapshot: number[] = Array.from(checkedInApiHotspotIds);
+
+function persist() {
+  writeStoredJson(STORAGE_KEY, {
+    checkedInApiHotspotIds: Array.from(checkedInApiHotspotIds),
+    checkedInIds: Array.from(checkedInIds),
+  } satisfies PersistedCheckinState);
+}
 
 function emit() {
   snapshot = Array.from(checkedInIds);
   apiSnapshot = Array.from(checkedInApiHotspotIds);
+  persist();
   listeners.forEach((listener) => listener());
 }
 

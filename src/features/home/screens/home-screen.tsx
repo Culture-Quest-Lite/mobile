@@ -10,51 +10,54 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StatusBar as RNStatusBar,
+  ScrollView,
   Text,
   View,
 } from "react-native";
 import MapView, {
-    Marker,
-    PROVIDER_GOOGLE,
-    type Region,
+  Marker,
+  PROVIDER_GOOGLE,
+  type Region,
 } from "react-native-maps";
 import Animated, {
-    Easing,
-    ReduceMotion,
-    cancelAnimation,
-    useAnimatedStyle,
-    useSharedValue,
-    withRepeat,
-    withTiming,
+  Easing,
+  ReduceMotion,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
 } from "react-native-reanimated";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import {
-    getValidAccessToken,
-    useAuthSession,
+  getValidAccessToken,
+  useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
-import {
-  getRouteCoverUrl,
-  getRouteStopCount,
-  getRoutesByHotspot,
-  type RouteDto,
-} from "@/features/route/api/route-api";
 import { getGamificationLevels } from "@/features/profile/api/get-levels";
 import { getMyProfile } from "@/features/profile/api/get-me";
 import { applyLevelProgressToProfile } from "@/features/profile/lib/level-progress";
+import {
+  type RouteDto,
+  getRouteCoverUrl,
+  getRouteStopCount,
+  getRoutesByHotspot,
+} from "@/features/route/api/route-api";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import {
-    type AppCoordinate,
-    formatCoordinateLabel,
-    getDevelopmentLocationOverride,
-    getDeviceCoordinate,
+  type AppCoordinate,
+  formatCoordinateLabel,
+  getDevelopmentLocationOverride,
+  getDeviceCoordinate,
 } from "@/lib/location";
 
 import {
-    type NearbyHotspotDto,
-    getNearbyHotspots,
+  type NearbyHotspotDto,
+  getNearbyHotspots,
 } from "../api/get-nearby-hotspots";
 import { getActiveTagNames } from "../api/get-tags";
 import {
@@ -66,17 +69,17 @@ import {
   activeJourney,
   communityBoards,
   communityTabs,
+  nearbyRoutes as fallbackNearbyRoutes,
   featuredRoutes,
   nearbyCategories,
   nearbyPlaces,
-  nearbyRoutes as fallbackNearbyRoutes,
   voucherMerchants,
 } from "../data/home-screen.mock";
 import {
-    findMatchingHotspotByNameOrCoordinate,
-    getApiHotspotRouteSlug,
-    getHotspotHref,
-    getNearbyHotspotsFromCoordinate,
+  findMatchingHotspotByNameOrCoordinate,
+  getApiHotspotRouteSlug,
+  getHotspotHref,
+  getNearbyHotspotsFromCoordinate,
 } from "../data/hotspots";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
@@ -734,7 +737,7 @@ async function resolveNearbyRequestCoordinate(): Promise<{
     return {
       coordinate: null,
       fallbackMessage:
-        "Bật GPS để tải hotspot gần bạn. Đang hiển thị dữ liệu demo.",
+        "Bật GPS để tải địa điểm gần bạn. Đang hiển thị dữ liệu.",
     };
   }
 
@@ -748,7 +751,7 @@ async function resolveNearbyRequestCoordinate(): Promise<{
     return {
       coordinate: null,
       fallbackMessage:
-        "Cho phép truy cập vị trí để tải hotspot gần bạn. Đang hiển thị dữ liệu demo.",
+        "Cho phép truy cập vị trí để tải địa điểm gần bạn. Đang hiển thị dữ liệu.",
     };
   }
 
@@ -771,7 +774,7 @@ async function resolveNearbyRequestCoordinate(): Promise<{
     return {
       coordinate: null,
       fallbackMessage:
-        "Không xác định được vị trí hiện tại. Đang hiển thị dữ liệu demo.",
+        "Không xác định được vị trí hiện tại. Đang hiển thị dữ liệu.",
     };
   }
 
@@ -833,7 +836,7 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
             <View className="flex-1 gap-2">
               <View className="self-start rounded-full bg-white/90 px-3 py-1">
                 <Text className="text-[11px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
-                  Guest mode
+                  Chưa đăng nhập
                 </Text>
               </View>
 
@@ -1060,7 +1063,7 @@ function NearbyDistanceDropdown({
 
         <View className="flex-1">
           <Text className="text-[18px] font-extrabold tracking-[-0.2px] text-[#2B2233]">
-            Hotspot gần bạn
+            Địa điểm gần bạn
           </Text>
           <Text className="mt-0.5 text-[12px] font-medium text-[#9C94A5]">
             Bán kính tìm kiếm
@@ -1336,11 +1339,10 @@ function ExplorerHeaderActions({
   onLocationPress: () => void;
   onSearchPress: () => void;
 }) {
-  const router = useRouter();
   return (
     <View className="flex-row items-center gap-2.5">
       <Pressable
-        accessibilityLabel="Mở bộ lọc nearby"
+        accessibilityLabel="Mở bộ lọc gần đây"
         className={`h-10 w-10 items-center justify-center rounded-full ${
           isDistanceDropdownVisible ? "bg-[#FFF1F6]" : "bg-[#FFF4EF]"
         } ${isLocationLoading ? "opacity-70" : ""}`}
@@ -1385,18 +1387,6 @@ function ExplorerHeaderActions({
           }}
           size={16}
           tintColor="#EB489B"
-        />
-      </Pressable>
-
-      <Pressable
-        accessibilityLabel="Mở trang Subscription"
-        className="h-10 w-10 items-center justify-center rounded-full bg-[#F3F8FF]"
-        onPress={() => router.push('/subscription' as Href)}
-      >
-        <SymbolView
-          name={{ ios: 'card', android: 'credit_card', web: 'credit_card' }}
-          size={16}
-          tintColor="#3B82F6"
         />
       </Pressable>
     </View>
@@ -1447,7 +1437,7 @@ function LocationMapModal({
           <View className="flex-1 items-center justify-center bg-[#E8F0FE] px-8">
             <View className="w-full max-w-[320px] rounded-[28px] bg-white px-5 py-6">
               <Text className="text-center text-[17px] font-extrabold text-[#2B2233]">
-                Bản đồ chỉ hỗ trợ trên Android/iOS
+                Bản đồ chỉ hỗ trợ trên Android
               </Text>
               <Text className="mt-2 text-center text-[13px] leading-5 text-[#8E869A]">
                 Hãy mở app trên điện thoại để xem bản đồ vị trí hiện tại full
@@ -1685,14 +1675,8 @@ export default function HomeScreen() {
       : insets.top + 4;
   const routeCardLeftInset = gutter;
   const routeCardWidth = Math.max(contentWidth, 264);
-  const nearbyRouteCardWidth = Math.min(
-    Math.max(safeWidth * 0.72, 236),
-    272,
-  );
-  const nearbyPlaceCardWidth = Math.min(
-    Math.max(safeWidth * 0.42, 160),
-    186,
-  );
+  const nearbyRouteCardWidth = Math.min(Math.max(safeWidth * 0.72, 236), 272);
+  const nearbyPlaceCardWidth = Math.min(Math.max(safeWidth * 0.42, 160), 186);
   const nearbyPlaceImageHeight = Math.round(nearbyPlaceCardWidth * 0.8);
   const voucherMerchantCircleSize = Math.min(
     Math.max(contentWidth * 0.22, 76),
@@ -1823,7 +1807,7 @@ export default function HomeScreen() {
           setNearbyPlacesStatus("fallback");
           setSuggestedRoutes(buildFallbackSuggestedRoutes());
           setSuggestedRoutesNote(
-            "Không xác định được hotspot gần bạn để gợi ý tuyến. Đang hiển thị dữ liệu demo.",
+            "Không xác định được địa điểm gần bạn để gợi ý tuyến. Đang hiển thị dữ liệu.",
           );
           setSuggestedRoutesStatus("fallback");
           return;
@@ -1854,7 +1838,7 @@ export default function HomeScreen() {
           setNearbyPlacesStatus("empty");
           setSuggestedRoutes([]);
           setSuggestedRoutesNote(
-            "Chưa có hotspot gần bạn nên chưa thể gợi ý tuyến đường.",
+            "Chưa có địa điểm gần bạn nên chưa thể gợi ý tuyến đường.",
           );
           setSuggestedRoutesStatus("empty");
           return;
@@ -1865,7 +1849,7 @@ export default function HomeScreen() {
         );
         setNearbyPlacesNote(
           coordinate.source === "dev-override"
-            ? `Đang hiển thị hotspot API trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
+            ? `Đang hiển thị địa điểm trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
             : null,
         );
         setNearbyPlacesStatus("ready");
@@ -1902,12 +1886,14 @@ export default function HomeScreen() {
 
           if (mergedRoutes.length === 0) {
             if (failedRouteLookups.length === hotspotRouteResults.length) {
-              throw new Error("Không tải được tuyến gợi ý cho các hotspot gần bạn.");
+              throw new Error(
+                "Không tải được tuyến gợi ý cho các địa điểm gần bạn.",
+              );
             }
 
             setSuggestedRoutes([]);
             setSuggestedRoutesNote(
-              "Các hotspot gần bạn hiện chưa có tuyến published để gợi ý.",
+              "Các địa điểm gần bạn hiện chưa có tuyến published để gợi ý.",
             );
             setSuggestedRoutesStatus("empty");
             return;
@@ -1916,7 +1902,7 @@ export default function HomeScreen() {
           setSuggestedRoutes(mergedRoutes.map(mapRouteToSuggestedRouteCard));
           setSuggestedRoutesNote(
             failedRouteLookups.length > 0
-              ? `Đang hiển thị ${mergedRoutes.length} tuyến từ các hotspot gần bạn. ${failedRouteLookups.length} hotspot chưa tải được route.`
+              ? `Đang hiển thị ${mergedRoutes.length} tuyến từ các địa điểm gần bạn. ${failedRouteLookups.length} địa điểm chưa tải được route.`
               : coordinate.source === "dev-override"
                 ? `Đang hiển thị ${mergedRoutes.length} tuyến gợi ý tổng hợp từ ${nearbyHotspotsByDistance.length} hotspot gần tọa độ test ${formatCoordinateLabel(coordinate)}.`
                 : null,
@@ -1926,7 +1912,9 @@ export default function HomeScreen() {
           console.warn("[home] load suggested routes failed", {
             error:
               routeError instanceof Error ? routeError.message : routeError,
-            hotspotIds: nearbyHotspotsByDistance.map((hotspot) => hotspot.hotspotId),
+            hotspotIds: nearbyHotspotsByDistance.map(
+              (hotspot) => hotspot.hotspotId,
+            ),
           });
 
           if (!isActive) {
@@ -2114,10 +2102,7 @@ export default function HomeScreen() {
   );
 
   return (
-    <SafeAreaView
-      className="flex-1 bg-white"
-      edges={["left", "right"]}
-    >
+    <SafeAreaView className="flex-1 bg-white" edges={["left", "right"]}>
       <RNStatusBar
         animated
         backgroundColor="transparent"
@@ -2744,7 +2729,10 @@ export default function HomeScreen() {
                   >
                     <View
                       className="overflow-hidden rounded-[24px] border border-[#EEF1F4] bg-white"
-                      style={[cardShadowStyle, { height: suggestedRouteCardHeight }]}
+                      style={[
+                        cardShadowStyle,
+                        { height: suggestedRouteCardHeight },
+                      ]}
                     >
                       <View className="relative">
                         <Image

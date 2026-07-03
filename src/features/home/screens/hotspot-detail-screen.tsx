@@ -8,6 +8,7 @@ import { useEffect, useState, type ComponentProps } from "react";
 import {
   Platform,
   Pressable,
+  TextInput,
   Text as RNText,
   ScrollView,
   View,
@@ -63,6 +64,11 @@ import {
 } from "../data/home-screen.mock";
 import { cacheHotspotDetail } from "../data/hotspot-detail-cache";
 import {
+  addHotspotPersonalPost,
+  useHotspotPersonalPosts,
+  type HotspotPersonalPost,
+} from "../data/hotspot-post-store";
+import {
   cacheHotspotStories,
   getCachedHotspotStories,
 } from "../data/hotspot-story-cache";
@@ -95,6 +101,16 @@ type SummaryStatItem = {
   isCompactValue?: boolean;
   label: string;
   value: string;
+};
+type PersonalExperienceComposerProps = {
+  canOpenStories: boolean;
+  draftText: string;
+  onChangeDraftText: (text: string) => void;
+  onListenStories: () => void;
+  onRatingChange: (rating: number) => void;
+  onSubmit: () => void;
+  rating: number;
+  submitMessage?: string | null;
 };
 
 const loginGradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
@@ -790,6 +806,56 @@ function buildPersonalExperienceItems(
       user: authors[2]?.name ?? "Đức Huy",
     },
   ];
+}
+
+function formatPersonalExperienceDate(isoTimestamp: string) {
+  const parsedDate = new Date(isoTimestamp);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "Vừa xong";
+  }
+
+  const elapsedMilliseconds = Date.now() - parsedDate.getTime();
+
+  if (elapsedMilliseconds < 60 * 1000) {
+    return "Vừa xong";
+  }
+
+  const elapsedMinutes = Math.floor(elapsedMilliseconds / (60 * 1000));
+
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes} phút trước`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+
+  if (elapsedHours < 24) {
+    return `${elapsedHours} giờ trước`;
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+
+  if (elapsedDays < 7) {
+    return `${elapsedDays} ngày trước`;
+  }
+
+  return `${parsedDate.getDate().toString().padStart(2, "0")}/${(parsedDate.getMonth() + 1)
+    .toString()
+    .padStart(2, "0")}/${parsedDate.getFullYear()}`;
+}
+
+function buildSavedPersonalExperienceItems(
+  posts: HotspotPersonalPost[],
+): PersonalExperienceItem[] {
+  return posts.map((post) => ({
+    avatarUri: post.authorAvatarUri || avatarImageUri,
+    date: formatPersonalExperienceDate(post.createdAt),
+    id: post.id,
+    media: [],
+    rating: post.rating,
+    text: post.text,
+    user: post.authorName,
+  }));
 }
 
 function getAudioStoryDurationLabel(story: string) {
@@ -1635,6 +1701,19 @@ function HiddenStoryCheckinSection({
 
       {isCheckedIn ? (
         checkedInContent
+      ) : isCheckinStatusLoading ? (
+        <View
+          className="rounded-[30px] bg-[#F8FBFF] px-5 py-5"
+          style={cardShadowStyle}
+        >
+          <Text className="text-[16px] font-black text-[#2F242C]">
+            Đang kiểm tra trạng thái check-in
+          </Text>
+          <Text className="mt-2 text-[15px] leading-6 text-[#5E7486]">
+            Hệ thống đang xác nhận từ backend xem bạn đã check-in hotspot này
+            trước đó hay chưa.
+          </Text>
+        </View>
       ) : (
         <LinearGradient
           colors={["#F3E3D9", "#E8E0E5"]}
@@ -1884,6 +1963,41 @@ function PersonalExperienceStars({ rating }: { rating: number }) {
   );
 }
 
+function PersonalExperienceRatingInput({
+  onChange,
+  rating,
+}: {
+  onChange: (rating: number) => void;
+  rating: number;
+}) {
+  return (
+    <View className="flex-row gap-2">
+      {Array.from({ length: 5 }).map((_, index) => {
+        const nextRating = index + 1;
+        const isActive = index < rating;
+
+        return (
+          <Pressable
+            key={`experience-rating-${nextRating}`}
+            className="h-10 w-10 items-center justify-center rounded-full"
+            onPress={() => onChange(nextRating)}
+            style={{ backgroundColor: isActive ? "#FFF1E8" : "#F7EEF4" }}
+          >
+            <Text
+              style={{
+                color: isActive ? "#F97356" : "#D8C8D1",
+                fontSize: 18,
+              }}
+            >
+              ★
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function PersonalExperienceMediaThumb({
   height = 104,
   item,
@@ -1929,6 +2043,136 @@ function PersonalExperienceMediaThumb({
           </View>
         </>
       ) : null}
+    </View>
+  );
+}
+
+function PersonalExperienceComposer({
+  canOpenStories,
+  draftText,
+  onChangeDraftText,
+  onListenStories,
+  onRatingChange,
+  onSubmit,
+  rating,
+  submitMessage,
+}: PersonalExperienceComposerProps) {
+  const isSubmitDisabled = !draftText.trim();
+
+  return (
+    <View className="rounded-[30px] bg-white px-5 py-5" style={cardShadowStyle}>
+      <View className="flex-row items-center justify-between gap-3">
+        <View className="flex-1">
+          <Text className="text-[17px] font-black text-[#2F242C]">
+            Viết bài post của bạn
+          </Text>
+          <Text className="mt-1 text-[14px] leading-5 text-[#7E6F82]">
+            Chia sẻ nhanh cảm nhận sau khi bạn đã check-in hotspot này.
+          </Text>
+        </View>
+
+        <View className="rounded-full bg-[#FFF4E8] px-3 py-2">
+          <Text className="text-[12px] font-black uppercase tracking-[0.7px] text-[#F58752]">
+            Đã mở khóa
+          </Text>
+        </View>
+      </View>
+
+      <View className="mt-5">
+        <Text className="text-[13px] font-black uppercase tracking-[0.8px] text-[#A897B2]">
+          Đánh giá nhanh
+        </Text>
+        <View className="mt-3">
+          <PersonalExperienceRatingInput onChange={onRatingChange} rating={rating} />
+        </View>
+      </View>
+
+      <View className="mt-5 overflow-hidden rounded-[24px] border border-[#F1E4EC] bg-[#FFF9FD] px-4 py-4">
+        <TextInput
+          multiline
+          maxLength={320}
+          onChangeText={onChangeDraftText}
+          placeholder="Điều gì làm bạn ấn tượng nhất ở hotspot này?"
+          placeholderTextColor="#AA9AAA"
+          style={{
+            color: "#2F242C",
+            fontSize: 15,
+            lineHeight: 22,
+            minHeight: 108,
+            padding: 0,
+            textAlignVertical: "top",
+          }}
+          value={draftText}
+        />
+      </View>
+
+      <View className="mt-3 flex-row items-center justify-between">
+        <Text className="text-[12px] font-medium text-[#A897B2]">
+          {`${draftText.trim().length}/320 ký tự`}
+        </Text>
+        <Text className="text-[12px] font-medium text-[#A897B2]">
+          Lưu trên thiết bị
+        </Text>
+      </View>
+
+      {submitMessage ? (
+        <Text className="mt-4 text-[13px] font-medium text-[#1F9D7A]">
+          {submitMessage}
+        </Text>
+      ) : null}
+
+      <View className="mt-5 flex-row flex-wrap gap-3">
+        <Pressable
+          className="overflow-hidden rounded-full"
+          disabled={isSubmitDisabled}
+          onPress={onSubmit}
+          style={buttonShadowStyle}
+        >
+          <LinearGradient
+            colors={
+              isSubmitDisabled
+                ? ["#D7D3E1", "#C8C1D6", "#BBB3CB"]
+                : loginGradientColors
+            }
+            end={{ x: 1, y: 0.5 }}
+            locations={[0, 0.58, 1]}
+            start={{ x: 0, y: 0.5 }}
+            className="flex-row items-center px-5 py-3.5"
+            style={{ opacity: isSubmitDisabled ? 0.88 : 1 }}
+          >
+            <SymbolView
+              name={{
+                ios: "square.and.pencil",
+                android: "edit_note",
+                web: "edit_note",
+              }}
+              size={16}
+              tintColor="#FFFFFF"
+            />
+            <Text className="ml-2 text-[16px] font-black text-white">
+              Đăng bài
+            </Text>
+          </LinearGradient>
+        </Pressable>
+
+        <Pressable
+          className="items-center rounded-full border px-5 py-3.5"
+          disabled={!canOpenStories}
+          onPress={onListenStories}
+          style={{
+            backgroundColor: canOpenStories ? "#FFF0F6" : "#F5F2F7",
+            borderColor: canOpenStories ? "#F2CFE1" : "#E3DDE8",
+            opacity: canOpenStories ? 1 : 0.72,
+          }}
+        >
+          <Text
+            className="text-[16px] font-black"
+            style={{ color: canOpenStories ? "#EB489B" : "#9E93A7" }}
+          >
+            Xem story
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -2006,15 +2250,30 @@ function EmptyPersonalExperienceCard({
 }
 
 function PersonalExperienceSection({
+  composer,
   isCheckedIn,
   items,
 }: {
+  composer?: PersonalExperienceComposerProps | null;
   isCheckedIn: boolean;
   items: PersonalExperienceItem[];
 }) {
   return (
     <View className="mt-8 gap-5">
       <PersonalExperienceSectionHeader isCheckedIn={isCheckedIn} />
+
+      {isCheckedIn && composer ? (
+        <PersonalExperienceComposer
+          canOpenStories={composer.canOpenStories}
+          draftText={composer.draftText}
+          onChangeDraftText={composer.onChangeDraftText}
+          onListenStories={composer.onListenStories}
+          onRatingChange={composer.onRatingChange}
+          onSubmit={composer.onSubmit}
+          rating={composer.rating}
+          submitMessage={composer.submitMessage}
+        />
+      ) : null}
 
       <View className="gap-4">
         {items.length > 0 ? (
@@ -2288,6 +2547,12 @@ export default function HotspotDetailScreen() {
     index: 0,
     slugKey: resolvedSlug,
   }));
+  const [personalPostComposer, setPersonalPostComposer] = useState(() => ({
+    draftText: "",
+    rating: 5,
+    slugKey: resolvedSlug,
+    submitMessage: null as string | null,
+  }));
   const heroHeightExpanded = clampNumber(
     screenHeight + insets.bottom + 12,
     640,
@@ -2486,7 +2751,7 @@ export default function HotspotDetailScreen() {
     };
   }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId]);
 
-  const localHotspot = getHotspotBySlug(slug);
+  const localHotspot = getHotspotBySlug(resolvedSlug);
   const remoteHotspotResult = remoteHotspot
     ? buildHotspotFromApi({
         apiHotspot: remoteHotspot,
@@ -2497,6 +2762,17 @@ export default function HotspotDetailScreen() {
   const hotspot = remoteHotspotResult?.hotspot ?? localHotspot ?? null;
   const matchedLocalHotspot =
     remoteHotspotResult?.matchedLocalHotspot ?? localHotspot ?? null;
+  const savedPersonalPosts = useHotspotPersonalPosts(hotspot?.slug ?? resolvedSlug);
+  const personalPostDraft =
+    personalPostComposer.slugKey === resolvedSlug
+      ? personalPostComposer.draftText
+      : "";
+  const personalPostRating =
+    personalPostComposer.slugKey === resolvedSlug ? personalPostComposer.rating : 5;
+  const personalPostSubmitMessage =
+    personalPostComposer.slugKey === resolvedSlug
+      ? personalPostComposer.submitMessage
+      : null;
 
   useEffect(() => {
     if (!hotspot) {
@@ -2609,10 +2885,18 @@ export default function HotspotDetailScreen() {
   const canOpenStories =
     resolvedHotspotId !== null ? hasApiStories : Boolean(matchedLocalHotspot);
   const hotspotCheckinId = hotspot.slug;
+  const isCheckedInFromRemoteHotspot = remoteHotspot?.isCheckedIn === true;
+  const isCheckedInFromApiStore =
+    resolvedHotspotId !== null && checkedInApiHotspots.includes(resolvedHotspotId);
   const isCheckedIn =
-    checkins.includes(hotspotCheckinId) ||
-    (resolvedHotspotId !== null &&
-      checkedInApiHotspots.includes(resolvedHotspotId));
+    isCheckedInFromRemoteHotspot ||
+    isCheckedInFromApiStore ||
+    checkins.includes(hotspotCheckinId);
+  const isCheckinUiPending =
+    authSession.isAuthenticated &&
+    resolvedHotspotId !== null &&
+    !isCheckedIn &&
+    (isRemoteHotspotLoading || isRemoteCheckinStatusLoading);
   const audioStoryDurationLabel = getAudioStoryDurationLabel(hotspot.story);
   const hotspotStoriesHref =
     resolvedHotspotId !== null
@@ -2637,10 +2921,43 @@ export default function HotspotDetailScreen() {
         visitedRouteProgressIds.has(routeHotspotId),
       ).length
     : undefined;
-  const personalExperienceItems = buildPersonalExperienceItems(
+  const savedPersonalExperienceItems = buildSavedPersonalExperienceItems(
+    savedPersonalPosts,
+  );
+  const samplePersonalExperienceItems = buildPersonalExperienceItems(
     hotspot,
     galleryPreviewImages,
   );
+  const personalExperienceItems = [
+    ...savedPersonalExperienceItems,
+    ...samplePersonalExperienceItems,
+  ];
+  const personalPostAuthorName = authSession.displayName.trim()
+    ? authSession.displayName.trim().replace(/^./, (value) => value.toUpperCase())
+    : "Bạn";
+  const handleSubmitPersonalPost = () => {
+    const normalizedDraft = personalPostDraft.trim();
+
+    if (!normalizedDraft) {
+      return;
+    }
+
+    addHotspotPersonalPost({
+      authorAvatarUri: avatarImageUri,
+      authorName: personalPostAuthorName,
+      hotspotId: resolvedHotspotId,
+      hotspotSlug: hotspot.slug,
+      rating: personalPostRating,
+      text: normalizedDraft,
+    });
+
+    setPersonalPostComposer({
+      draftText: "",
+      rating: 5,
+      slugKey: resolvedSlug,
+      submitMessage: "Bài post của bạn đã được lưu cho hotspot này.",
+    });
+  };
   const reviewSummaryLabel = buildReviewSummaryLabel({
     apiHotspot: remoteHotspot,
     matchedLocalHotspot,
@@ -2934,7 +3251,7 @@ export default function HotspotDetailScreen() {
               <HiddenStoryCheckinSection
                 audioStoryDurationLabel={audioStoryDurationLabel}
                 isCheckedIn={isCheckedIn}
-                isCheckinStatusLoading={isRemoteCheckinStatusLoading}
+                isCheckinStatusLoading={isCheckinUiPending}
                 isStoryAvailabilityLoading={isStoryAvailabilityLoading}
                 isStoryAvailable={canOpenStories}
                 onCheckinPress={() => setIsCheckinOverlayVisible(true)}
@@ -2979,6 +3296,34 @@ export default function HotspotDetailScreen() {
             </View>
 
             <PersonalExperienceSection
+              composer={
+                isCheckedIn
+                  ? {
+                      canOpenStories,
+                      draftText: personalPostDraft,
+                      onChangeDraftText: (text) => {
+                        setPersonalPostComposer({
+                          draftText: text,
+                          rating: personalPostRating,
+                          slugKey: resolvedSlug,
+                          submitMessage: null,
+                        });
+                      },
+                      onListenStories: () => router.push(hotspotStoriesHref),
+                      onRatingChange: (rating) => {
+                        setPersonalPostComposer({
+                          draftText: personalPostDraft,
+                          rating,
+                          slugKey: resolvedSlug,
+                          submitMessage: null,
+                        });
+                      },
+                      onSubmit: handleSubmitPersonalPost,
+                      rating: personalPostRating,
+                      submitMessage: personalPostSubmitMessage,
+                    }
+                  : null
+              }
               isCheckedIn={isCheckedIn}
               items={personalExperienceItems}
             />
@@ -2997,20 +3342,22 @@ export default function HotspotDetailScreen() {
           </Animated.View>
         </Animated.ScrollView>
 
-        <Animated.View
-          pointerEvents={isStickyCheckinVisible ? "box-none" : "none"}
-          style={[
-            stickyCheckinBarStyle,
-            { bottom: 0, left: 0, position: "absolute", right: 0, zIndex: 6 },
-          ]}
-        >
-          <StickyCheckinBar
-            bottomInset={insets.bottom}
-            isCheckedIn={isCheckedIn}
-            isCheckinStatusLoading={isRemoteCheckinStatusLoading}
-            onPress={() => setIsCheckinOverlayVisible(true)}
-          />
-        </Animated.View>
+        {!isCheckedIn && !isCheckinUiPending ? (
+          <Animated.View
+            pointerEvents={isStickyCheckinVisible ? "box-none" : "none"}
+            style={[
+              stickyCheckinBarStyle,
+              { bottom: 0, left: 0, position: "absolute", right: 0, zIndex: 6 },
+            ]}
+          >
+            <StickyCheckinBar
+              bottomInset={insets.bottom}
+              isCheckedIn={isCheckedIn}
+              isCheckinStatusLoading={isCheckinUiPending}
+              onPress={() => setIsCheckinOverlayVisible(true)}
+            />
+          </Animated.View>
+        ) : null}
 
         {isCheckinOverlayVisible ? (
           <HotspotGpsCheckinOverlay
