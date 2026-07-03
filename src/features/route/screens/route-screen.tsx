@@ -1,20 +1,19 @@
 import {
   activeRouteState,
+  type CommunityJourney,
   communityJourneys,
   currentUser,
-  getRoute,
   leaderboard,
-  myRoutes,
-  routes,
-  type CommunityJourney,
   type RouteItem,
+  routes
 } from "@/lib/demo-data";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { type Href, useRouter } from "expo-router";
+import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { type ComponentProps, useEffect, useMemo, useState } from "react";
+import { type ComponentProps, useCallback, useMemo, useState } from "react";
 import {
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -24,9 +23,19 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { getValidAccessToken, useAuthSession } from "@/features/auth/hooks/use-auth-session";
-import { GoongStaticMap } from "@/features/map/components/goong-static-map";
-import { getRoutes, mapRouteToRouteItem, type RouteDto } from "@/features/route/api/route-api";
+import {
+  getValidAccessToken,
+  useAuthSession,
+} from "@/features/auth/hooks/use-auth-session";
+import {
+  abandonRouteProgress,
+  getRoutes,
+  getSavedRoutes,
+  getUserRouteProgressList,
+  mapRouteToRouteItem,
+  type RouteDto,
+  type UserRouteProgressDto,
+} from "@/features/route/api/route-api";
 
 type Tab = "official" | "active" | "completed" | "bookmarked" | "community";
 type RouteVariant =
@@ -84,6 +93,56 @@ function XPBar({
   );
 }
 
+function normalizeProgressStatus(status?: string | null) {
+  return (status ?? "").trim().toUpperCase();
+}
+
+function isRouteProgressActive(progress: UserRouteProgressDto) {
+  return normalizeProgressStatus(progress.status) === "IN_PROGRESS";
+}
+
+function isRouteProgressCompleted(progress: UserRouteProgressDto) {
+  return normalizeProgressStatus(progress.status) === "COMPLETED";
+}
+
+function makeFallbackRouteItemFromProgress(
+  progress: UserRouteProgressDto,
+): RouteItem {
+  return {
+    connection:
+      "Bạn đang thực hiện tuyến này. Nhấn tiếp tục để mở chi tiết hành trình.",
+    cover:
+      "https://i.pinimg.com/1200x/80/69/f9/8069f9581583a196f9f39bda000b9312.jpg",
+    difficulty: "Đang đi",
+    distance: `${progress.completedStops}/${progress.totalStops || "?"} điểm`,
+    duration: progress.startedAt
+      ? `Bắt đầu ${new Date(progress.startedAt).toLocaleDateString("vi-VN")}`
+      : "Đang thực hiện",
+    era: "Đang đi",
+    hotspotIds: progress.hotspotProgressList.map((item) =>
+      String(item.hotspotId),
+    ),
+    id: String(progress.routeId),
+    meaning: "Tiến độ được lấy từ /api/v1/user-route-progress.",
+    rating: 4.8,
+    story: "Tiếp tục check-in các hotspot còn lại để hoàn thành tuyến.",
+    subtitle: `${Math.round(progress.progressPercentage || 0)}% hoàn thành`,
+    theme: "User Route Progress",
+    title: progress.route?.routeName || `Tuyến #${progress.routeId}`,
+    xp: progress.route?.xp || progress.route?.point || 0,
+  };
+}
+
+function mapProgressToRouteItem(
+  progress: UserRouteProgressDto,
+  routeLookup: Record<string, RouteDto>,
+) {
+  const route = progress.route ?? routeLookup[String(progress.routeId)];
+  return route
+    ? mapRouteToRouteItem(route)
+    : makeFallbackRouteItemFromProgress(progress);
+}
+
 export default function RouteScreen() {
   const [tab, setTab] = useState<Tab>("official");
   const [showLeaderboard, setShowLeaderboard] = useState(false);
@@ -92,72 +151,220 @@ export default function RouteScreen() {
   const [officialRoutes, setOfficialRoutes] = useState<RouteItem[]>([]);
   const [isLoadingRoutes, setIsLoadingRoutes] = useState(true);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const [activeRoutesFromApi, setActiveRoutesFromApi] = useState<RouteItem[]>(
+    [],
+  );
+  const [activeRouteProgresses, setActiveRouteProgresses] = useState<
+    UserRouteProgressDto[]
+  >([]);
+  const [completedRoutesFromApi, setCompletedRoutesFromApi] = useState<
+    RouteItem[]
+  >([]);
+  const [savedRoutesFromApi, setSavedRoutesFromApi] = useState<RouteItem[]>([]);
+  const [abandoningProgressId, setAbandoningProgressId] = useState<
+    number | null
+  >(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
 
-    async function loadRoutes() {
-      setIsLoadingRoutes(true);
-      setRouteError(null);
+      async function loadRoutes() {
+        setIsLoadingRoutes(true);
+        setRouteError(null);
 
-      try {
-        const accessToken = await getValidAccessToken();
-        const response = await getRoutes({
-          accessToken,
-          page: 0,
-          size: 20,
-          status: "PUBLISHED",
-          tokenType: session.tokenType,
-        });
-        const mappedRoutes = response.content.map(mapRouteToRouteItem);
+        try {
+          const accessToken = await getValidAccessToken();
 
-        if (!cancelled) {
-          setOfficialRouteDtos(response.content);
-          setOfficialRoutes(mappedRoutes);
-        }
-      } catch (error) {
-        console.warn("[route-screen] load official routes failed", error);
+          const [officialResult, progressResult, savedResult] =
+            await Promise.allSettled([
+              getRoutes({
+                accessToken,
+                page: 0,
+                size: 50,
+                status: "PUBLISHED",
+                tokenType: session.tokenType,
+              }),
+              accessToken
+                ? getUserRouteProgressList({
+                    accessToken,
+                    page: 0,
+                    size: 50,
+                    sortBy: "startedAt",
+                    sortDirection: "DESC",
+                    tokenType: session.tokenType,
+                  })
+                : Promise.resolve({
+                    content: [],
+                    number: 0,
+                    size: 0,
+                    totalElements: 0,
+                    totalPages: 0,
+                  }),
+              accessToken
+                ? getSavedRoutes({ accessToken, tokenType: session.tokenType })
+                : Promise.resolve([]),
+            ]);
 
-        if (!cancelled) {
-          setOfficialRouteDtos([]);
-          setOfficialRoutes(routes);
-          setRouteError(
-            error instanceof Error
-              ? error.message
-              : "Không thể tải tuyến từ API.",
+          if (cancelled) return;
+
+          const routeDtos =
+            officialResult.status === "fulfilled"
+              ? officialResult.value.content
+              : [];
+          const routeLookup = routeDtos.reduce<Record<string, RouteDto>>(
+            (accumulator, route) => {
+              accumulator[String(route.routeId)] = route;
+              return accumulator;
+            },
+            {},
           );
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingRoutes(false);
+          const progresses =
+            progressResult.status === "fulfilled"
+              ? progressResult.value.content
+              : [];
+          const activeProgresses = progresses.filter(isRouteProgressActive);
+          const completedProgresses = progresses.filter(isRouteProgressCompleted);
+
+          setOfficialRouteDtos(routeDtos);
+          setOfficialRoutes(routeDtos.map(mapRouteToRouteItem));
+          setActiveRouteProgresses(activeProgresses);
+          setActiveRoutesFromApi(
+            activeProgresses.map((progress) =>
+              mapProgressToRouteItem(progress, routeLookup),
+            ),
+          );
+          setCompletedRoutesFromApi(
+            completedProgresses.map((progress) =>
+              mapProgressToRouteItem(progress, routeLookup),
+            ),
+          );
+          setSavedRoutesFromApi(
+            savedResult.status === "fulfilled"
+              ? savedResult.value
+                  .map((savedRoute) => savedRoute.route)
+                  .filter(Boolean)
+                  .map((route) => mapRouteToRouteItem(route as RouteDto))
+              : [],
+          );
+
+          if (officialResult.status === "rejected") {
+            setRouteError(
+              officialResult.reason instanceof Error
+                ? officialResult.reason.message
+                : "Không thể tải tuyến chính thức từ API.",
+            );
+          }
+        } catch (error) {
+          console.warn("[route-screen] load routes failed", error);
+
+          if (!cancelled) {
+            setOfficialRouteDtos([]);
+            setOfficialRoutes(routes);
+            setActiveRouteProgresses([]);
+            setActiveRoutesFromApi([]);
+            setRouteError(
+              error instanceof Error
+                ? error.message
+                : "Không thể tải tuyến từ API.",
+            );
+          }
+        } finally {
+          if (!cancelled) {
+            setIsLoadingRoutes(false);
+          }
         }
       }
-    }
 
-    void loadRoutes();
+      void loadRoutes();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [session.tokenType]);
-
-  const activeList = useMemo(
-    () =>
-      myRoutes.active.map((id) => getRoute(id)).filter(Boolean) as RouteItem[],
-    [],
+      return () => {
+        cancelled = true;
+      };
+    }, [session.tokenType]),
   );
+
+  const activeList = useMemo(() => activeRoutesFromApi, [activeRoutesFromApi]);
+
+  const activeProgressMap = useMemo(() => {
+    return activeRouteProgresses.reduce<Record<string, number>>(
+      (accumulator, progress) => {
+        if (progress.routeId) {
+          accumulator[String(progress.routeId)] = progress.progressPercentage;
+        }
+        return accumulator;
+      },
+      {},
+    );
+  }, [activeRouteProgresses]);
+
+  const activeProgressByRouteId = useMemo(() => {
+    return activeRouteProgresses.reduce<Record<string, UserRouteProgressDto>>(
+      (accumulator, progress) => {
+        if (progress.routeId) {
+          accumulator[String(progress.routeId)] = progress;
+        }
+        return accumulator;
+      },
+      {},
+    );
+  }, [activeRouteProgresses]);
+
+  async function handleAbandonRoute(progressId: number) {
+    const targetProgress = activeRouteProgresses.find(
+      (progress) => progress.userRouteProgressId === progressId,
+    );
+    const routeName = targetProgress?.route?.routeName || "tuyến này";
+
+    Alert.alert(
+      "Xác nhận bỏ tuyến",
+      `Bạn có chắc chắn muốn bỏ ${routeName}? Tiến độ hiện tại sẽ bị dừng lại.`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Bỏ tuyến",
+          style: "destructive",
+          onPress: async () => {
+            setAbandoningProgressId(progressId);
+            try {
+              const accessToken = await getValidAccessToken();
+              await abandonRouteProgress({
+                accessToken,
+                routeId: targetProgress?.routeId ?? progressId,
+                tokenType: session.tokenType,
+              });
+              setActiveRouteProgresses((current) =>
+                current.filter(
+                  (progress) => progress.userRouteProgressId !== progressId,
+                ),
+              );
+              setActiveRoutesFromApi((current) =>
+                current.filter(
+                  (route) =>
+                    route.id !== String(targetProgress?.routeId ?? progressId),
+                ),
+              );
+              Alert.alert("Đã bỏ tuyến", "Tiến độ tuyến này đã được dừng.");
+            } catch (error) {
+              Alert.alert(
+                "Không thể bỏ tuyến",
+                error instanceof Error
+                  ? error.message
+                  : "Vui lòng thử lại sau.",
+              );
+            } finally {
+              setAbandoningProgressId(null);
+            }
+          },
+        },
+      ],
+    );
+  }
   const completedList = useMemo(
-    () =>
-      myRoutes.completed
-        .map((id) => getRoute(id))
-        .filter(Boolean) as RouteItem[],
-    [],
+    () => completedRoutesFromApi,
+    [completedRoutesFromApi],
   );
-  const savedList = useMemo(
-    () =>
-      myRoutes.saved.map((id) => getRoute(id)).filter(Boolean) as RouteItem[],
-    [],
-  );
+  const savedList = useMemo(() => savedRoutesFromApi, [savedRoutesFromApi]);
 
   return (
     <SafeAreaView
@@ -222,23 +429,15 @@ export default function RouteScreen() {
           </View>
         </LinearGradient>
 
-        <View className="px-4 pt-4">
-          <GoongStaticMap
-            height={210}
-            points={(officialRouteDtos[0]?.hotspots ?? []).map((hotspot) => ({
-              id: hotspot.hotspotId,
-              latitude: hotspot.latitude,
-              longitude: hotspot.longitude,
-              title: hotspot.hotspotName,
-            }))}
-            subtitle={
-              officialRouteDtos[0]
-                ? `${officialRouteDtos[0].hotspots.length} điểm · ${officialRouteDtos[0].totalDistance || 0} km`
-                : "Dữ liệu tuyến chính thức"
-            }
-            title={officialRouteDtos[0]?.routeName || "Goong Route Map"}
-          />
-        </View>
+        {activeRouteProgresses.length > 0 ? (
+          <View className="px-4 pt-4">
+            <ActiveProgressSummary
+              progress={activeRouteProgresses[0]}
+              onAbandonRoute={handleAbandonRoute}
+              abandoningProgressId={abandoningProgressId}
+            />
+          </View>
+        ) : null}
 
         <View className="px-4 pt-4">
           <ScrollView
@@ -297,6 +496,10 @@ export default function RouteScreen() {
                 list={activeList}
                 variant="active"
                 progress={activeRouteState.progress}
+                progressMap={activeProgressMap}
+                progressByRouteId={activeProgressByRouteId}
+                onAbandonRoute={handleAbandonRoute}
+                abandoningProgressId={abandoningProgressId}
               />
             ) : (
               <EmptyState text="Bạn chưa tham gia tuyến nào" />
@@ -321,6 +524,89 @@ export default function RouteScreen() {
         <LeaderboardSheet onClose={() => setShowLeaderboard(false)} />
       )}
     </SafeAreaView>
+  );
+}
+
+function ActiveProgressSummary({
+  progress,
+  onAbandonRoute,
+  abandoningProgressId,
+}: {
+  progress: UserRouteProgressDto;
+  onAbandonRoute: (progressId: number) => void;
+  abandoningProgressId: number | null;
+}) {
+  const router = useRouter();
+  const routeName = progress.route?.routeName || `Tuyến #${progress.routeId}`;
+  const progressValue = Math.round(progress.progressPercentage || 0);
+  const isAbandoning = abandoningProgressId === progress.userRouteProgressId;
+
+  return (
+    <View
+      className="overflow-hidden rounded-3xl border border-[#F7C7D1] bg-white"
+      style={cardShadowStyle}
+    >
+      <LinearGradient
+        colors={["#FFF5F8", "#FFFFFF"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        className="p-4"
+      >
+        <View className="flex-row items-start justify-between gap-3">
+          <View className="flex-1">
+            <Text className="text-[11px] font-extrabold uppercase tracking-wider text-[#EB489B]">
+              Đang thực hiện
+            </Text>
+            <Text
+              className="mt-1 text-[18px] font-extrabold text-[#2B2233]"
+              numberOfLines={2}
+            >
+              {routeName}
+            </Text>
+            <Text className="mt-1 text-[12px] text-[#8E869A]">
+              {progress.completedStops}/{progress.totalStops} điểm ·{" "}
+              {progressValue}% hoàn thành
+            </Text>
+          </View>
+
+          <View className="rounded-2xl bg-[#FFF4EF] px-3 py-2">
+            <Text className="text-[12px] font-extrabold text-[#F58752]">
+              {progressValue}%
+            </Text>
+          </View>
+        </View>
+
+        <View className="mt-3">
+          <XPBar
+            value={progressValue}
+            max={100}
+            trackColor="#ECEEF4"
+            height={8}
+          />
+        </View>
+
+        <View className="mt-3 flex-row gap-2">
+          <Pressable
+            className="flex-1 rounded-2xl bg-[#F58752] py-3"
+            onPress={() => router.push(`/route/${progress.routeId}` as Href)}
+          >
+            <Text className="text-center text-[13px] font-extrabold text-white">
+              Tiếp tục hành trình
+            </Text>
+          </Pressable>
+
+          <Pressable
+            className={`rounded-2xl border border-[#F7C7D1] bg-white px-4 py-3 ${isAbandoning ? "opacity-70" : ""}`}
+            onPress={() => onAbandonRoute(progress.userRouteProgressId)}
+            disabled={isAbandoning}
+          >
+            <Text className="text-center text-[13px] font-extrabold text-[#B42345]">
+              {isAbandoning ? "Đang bỏ..." : "Bỏ tuyến"}
+            </Text>
+          </Pressable>
+        </View>
+      </LinearGradient>
+    </View>
   );
 }
 
@@ -570,10 +856,18 @@ function RouteList({
   list,
   variant,
   progress,
+  progressMap,
+  progressByRouteId,
+  onAbandonRoute,
+  abandoningProgressId,
 }: {
   list: RouteItem[];
   variant: RouteVariant;
   progress?: number;
+  progressMap?: Record<string, number>;
+  progressByRouteId?: Record<string, UserRouteProgressDto>;
+  onAbandonRoute?: (progressId: number) => void;
+  abandoningProgressId?: number | null;
 }) {
   return (
     <View className="gap-3">
@@ -582,7 +876,11 @@ function RouteList({
           key={route.id}
           route={route}
           variant={variant}
-          progress={progress}
+          progress={progressMap?.[route.id] ?? progress}
+          progressInfo={progressByRouteId?.[route.id]}
+          progressId={progressByRouteId?.[route.id]?.userRouteProgressId}
+          onAbandonRoute={onAbandonRoute}
+          abandoningProgressId={abandoningProgressId}
         />
       ))}
     </View>
@@ -593,10 +891,18 @@ function RouteCard({
   route,
   variant,
   progress,
+  progressId,
+  progressInfo,
+  onAbandonRoute,
+  abandoningProgressId,
 }: {
   route: RouteItem;
   variant: RouteVariant;
   progress?: number;
+  progressId?: number;
+  progressInfo?: UserRouteProgressDto;
+  onAbandonRoute?: (progressId: number) => void;
+  abandoningProgressId?: number | null;
 }) {
   const router = useRouter();
 
@@ -668,15 +974,41 @@ function RouteCard({
 
       {variant === "active" && progress !== undefined && (
         <View className="px-3 pb-3">
-          <Text className="mb-1 text-[11px] font-bold text-[#2B2233]">
-            Tiến độ {progress}%
-          </Text>
-          <XPBar value={progress} max={100} trackColor="#ECEEF4" height={6} />
-          <Pressable className="mt-2 rounded-xl bg-[#F58752] py-2">
-            <Text className="text-center text-[12px] font-bold text-white">
-              Tiếp tục
+          <View className="mb-1 flex-row items-center justify-between">
+            <Text className="text-[11px] font-bold text-[#2B2233]">
+              Tiến độ {Math.round(progress)}%
             </Text>
-          </Pressable>
+            {progressInfo ? (
+              <Text className="text-[11px] font-semibold text-[#8E869A]">
+                {progressInfo.completedStops}/{progressInfo.totalStops} điểm
+              </Text>
+            ) : null}
+          </View>
+          <XPBar value={progress} max={100} trackColor="#ECEEF4" height={6} />
+
+          <View className="mt-2 flex-row gap-2">
+            <Pressable
+              className="flex-1 rounded-xl bg-[#F58752] py-2"
+              onPress={() => router.push(`/route/${route.id}` as Href)}
+            >
+              <Text className="text-center text-[12px] font-bold text-white">
+                Tiếp tục
+              </Text>
+            </Pressable>
+            {progressId !== undefined && onAbandonRoute ? (
+              <Pressable
+                className={`flex-1 rounded-xl border border-[#F7C7D1] bg-[#FFF5F8] py-2 ${abandoningProgressId === progressId ? "opacity-70" : ""}`}
+                onPress={() => onAbandonRoute(progressId)}
+                disabled={abandoningProgressId === progressId}
+              >
+                <Text className="text-center text-[12px] font-bold text-[#B42345]">
+                  {abandoningProgressId === progressId
+                    ? "Đang bỏ..."
+                    : "Bỏ tuyến"}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       )}
     </View>

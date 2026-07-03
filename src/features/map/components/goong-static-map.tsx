@@ -95,7 +95,11 @@ export function GoongStaticMap({
         const top = `${20 + ((index * 19) % 54)}%`;
 
         return (
-          <View key={`${point.id}-${index}`} className="absolute items-center" style={{ left, top }}>
+          <View
+            key={`${point.id}-${index}`}
+            className="absolute items-center"
+            style={{ left: `${left}` as unknown as number, top: `${top}` as unknown as number }}
+          >
             <View className="h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-[#EB489B] shadow">
               <Text className="text-[11px] font-extrabold text-white">{index + 1}</Text>
             </View>
