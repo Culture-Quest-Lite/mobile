@@ -935,6 +935,7 @@ export function HotspotGpsCheckinOverlay({
     null,
   );
   const [isSubmittingCheckIn, setIsSubmittingCheckIn] = useState(false);
+  const [isExistingCheckIn, setIsExistingCheckIn] = useState(false);
   const [checkInError, setCheckInError] = useState<string | null>(null);
   const [checkInResult, setCheckInResult] = useState<CheckInResponse | null>(
     null,
@@ -1120,14 +1121,18 @@ export function HotspotGpsCheckinOverlay({
         tokenType: authSession.tokenType,
       });
 
+      setIsExistingCheckIn(false);
       setCheckInResult(nextCheckInResult);
       onSuccess();
       setCheckinStage("success");
       void prefetchUnlockedStories();
     } catch (error) {
       if (isDuplicateCheckInError(error)) {
+        setIsExistingCheckIn(true);
+        setCheckInResult(null);
         onSuccess();
-        onClose();
+        setCheckinStage("success");
+        void prefetchUnlockedStories();
         return;
       }
 
@@ -1173,21 +1178,29 @@ export function HotspotGpsCheckinOverlay({
     typeof totalRouteStopsCount === "number" &&
     typeof visitedRouteStopsCount === "number"
       ? `${visitedRouteStopsCount}/${totalRouteStopsCount} chặng đã ghé`
-      : "Đã xác minh tại hotspot này";
+      : isExistingCheckIn
+        ? "Đã ghi nhận check-in trước đó"
+        : "Đã xác minh tại hotspot này";
   const parsedRewardXp = Number(rewardXp.replace(/\D/g, ""));
   const xpEarned =
-    checkInResult?.xpEarned ??
-    (Number.isFinite(parsedRewardXp) ? parsedRewardXp : 0);
-  const pointEarned = checkInResult?.pointEarned ?? null;
-  const checkInMetaLabel = checkInResult
-    ? [
-        `Check-in #${checkInResult.checkInId}`,
-        `Hotspot #${checkInResult.hotspotId}`,
-        formatCheckInTimestamp(checkInResult.checkInAt),
-      ]
-        .filter(Boolean)
-        .join(" · ")
-    : null;
+    isExistingCheckIn
+      ? 0
+      : (checkInResult?.xpEarned ??
+          (Number.isFinite(parsedRewardXp) ? parsedRewardXp : 0));
+  const pointEarned = isExistingCheckIn
+    ? null
+    : (checkInResult?.pointEarned ?? null);
+  const checkInMetaLabel = isExistingCheckIn
+    ? "Hệ thống xác nhận bạn đã check-in hotspot này trước đó."
+    : checkInResult
+      ? [
+          `Check-in #${checkInResult.checkInId}`,
+          `Hotspot #${checkInResult.hotspotId}`,
+          formatCheckInTimestamp(checkInResult.checkInAt),
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : null;
   const isSuccessStage = checkinStage === "success";
   const verifyButtonColors = verificationCopy.primaryDisabled
     ? VERIFY_BUTTON_DISABLED_COLORS
@@ -1199,17 +1212,33 @@ export function HotspotGpsCheckinOverlay({
       ? "Đang check-in..."
       : verificationCopy.primaryLabel;
   const successRows = [
-    {
-      icon: {
-        ios: "sparkles",
-        android: "auto_awesome",
-        web: "auto_awesome",
-      } as SymbolName,
-      iconBackground: "#FFC93C",
-      label: "Phần thưởng",
-      trailing: `+${formatNumericValue(xpEarned)}`,
-      value: `+${formatNumericValue(xpEarned)} XP`,
-    },
+    ...(isExistingCheckIn
+      ? [
+          {
+            icon: {
+              ios: "checkmark.seal.fill",
+              android: "verified",
+              web: "verified",
+            } as SymbolName,
+            iconBackground: SUCCESS_CHECK_ICON_COLOR,
+            label: "Trạng thái",
+            trailing: "✓",
+            value: "Hotspot này đã được check-in trước đó",
+          },
+        ]
+      : [
+          {
+            icon: {
+              ios: "sparkles",
+              android: "auto_awesome",
+              web: "auto_awesome",
+            } as SymbolName,
+            iconBackground: "#FFC93C",
+            label: "Phần thưởng",
+            trailing: `+${formatNumericValue(xpEarned)}`,
+            value: `+${formatNumericValue(xpEarned)} XP`,
+          },
+        ]),
     ...(pointEarned !== null
       ? [
           {
@@ -1346,7 +1375,9 @@ export function HotspotGpsCheckinOverlay({
                   className="mt-3 text-center text-[22px] font-black leading-8"
                   style={{ color: SUCCESS_TITLE_COLOR }}
                 >
-                  Check-in thành{"\n"}công!
+                  {isExistingCheckIn
+                    ? "Bạn đã check-in\ntrước đó"
+                    : "Check-in thành\ncông!"}
                 </Text>
                 <Text
                   className="mt-2 text-[14px] font-semibold"
@@ -1469,9 +1500,13 @@ export function HotspotGpsCheckinOverlay({
               ) : null}
 
               <Text className="mt-6 text-center text-[13px] leading-5 text-[#8E869A]">
-                {isStoryAvailable
-                  ? `Mở khóa +${formatNumericValue(xpEarned)} XP, story hotspot và đánh giá địa điểm.`
-                  : `Mở khóa +${formatNumericValue(xpEarned)} XP và hoàn tất check-in cho địa điểm này.`}
+                {isExistingCheckIn
+                  ? isStoryAvailable
+                    ? "Hotspot này đã ở trạng thái đã check-in. Bạn có thể xem story ngay bây giờ."
+                    : "Hotspot này đã ở trạng thái đã check-in. Story riêng cho điểm đến này đang được cập nhật."
+                  : isStoryAvailable
+                    ? `Mở khóa +${formatNumericValue(xpEarned)} XP, story hotspot và đánh giá địa điểm.`
+                    : `Mở khóa +${formatNumericValue(xpEarned)} XP và hoàn tất check-in cho địa điểm này.`}
               </Text>
 
               <Pressable
