@@ -15,7 +15,7 @@ import {
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 
-import { getHotspotStories } from "../api/get-hotspot-stories";
+import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
 import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
 import {
   cacheHotspotStories,
@@ -29,6 +29,7 @@ import {
   type StoryThemeTag,
 } from "../data/hotspot-theme-stories";
 import { getHotspotBySlug } from "../data/hotspots";
+import { resolveSelectedHotspotId } from "../utils/resolve-selected-hotspot-id";
 
 const cardShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.16)",
@@ -59,17 +60,30 @@ function getFallbackStoryThemeTag(index: number) {
   return fallbackStoryThemeOrder[index % fallbackStoryThemeOrder.length] ?? "history";
 }
 
-function resolveHotspotIdParam(value?: string | string[]) {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-  const parsedValue = Number(rawValue);
-
-  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
-}
-
 function normalizeApiTagId(value?: number | null) {
   return typeof value === "number" && Number.isInteger(value) && value > 0
     ? value
     : null;
+}
+
+function buildStoryThemeLookupKey({
+  label,
+  tagId,
+}: {
+  label: string;
+  tagId?: number | null;
+}) {
+  const normalizedTagId = normalizeApiTagId(tagId);
+
+  if (normalizedTagId !== null) {
+    return `tag-${normalizedTagId}`;
+  }
+
+  return `label-${label
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")}`;
 }
 
 function buildStoryThemeTabsFromStories(stories: HotspotThemeStory[]) {
@@ -84,10 +98,10 @@ function buildStoryThemeTabsFromStories(stories: HotspotThemeStory[]) {
 
     const tagId = normalizeApiTagId(story.tagId);
     const resolvedTag = story.tag ?? getFallbackStoryThemeTag(index);
-    const tabId =
-      tagId !== null
-        ? `tag-${tagId}`
-        : `label-${label.trim().toLowerCase()}`;
+    const tabId = buildStoryThemeLookupKey({
+      label,
+      tagId,
+    });
 
     if (tabsById.has(tabId)) {
       return;
@@ -159,63 +173,89 @@ function StoryCard({
   onPress: () => void;
 }) {
   return (
-    <Pressable className="pb-5 pr-9 pt-6" onPress={onPress}>
-      <LinearGradient
-        colors={[item.cardColors[0], item.cardColors[1]]}
-        end={{ x: 1, y: 0.5 }}
-        start={{ x: 0, y: 0.5 }}
-        className="overflow-hidden rounded-[30px] px-5 py-4"
-        style={[cardShadowStyle, { minHeight: item.cardHeight }]}
-      >
-        <View
-          className="absolute rounded-full"
-          style={{
-            backgroundColor: "rgba(255,255,255,0.18)",
-            height: 136,
-            right: -24,
-            top: -18,
-            width: 136,
-          }}
-        />
-        <View
-          className="absolute rounded-full"
-          style={{
-            backgroundColor: "rgba(255,255,255,0.10)",
-            bottom: -44,
-            height: 110,
-            right: 36,
-            width: 110,
-          }}
-        />
-
-        <View style={{ maxWidth: `${item.textWidth}%` }}>
-          <Text
-            className="text-[20px] font-black leading-6 text-white"
-            style={{
-              textShadowColor: "rgba(76, 53, 76, 0.12)",
-              textShadowOffset: { width: 0, height: 1 },
-              textShadowRadius: 8,
-            }}
-          >
-            {item.title}
-          </Text>
-        </View>
-      </LinearGradient>
-
-      <Image
-        source={item.imageSource}
-        contentFit="contain"
-        transition={120}
-        cachePolicy="memory-disk"
+    <Pressable
+      className="pb-5 pt-6"
+      onPress={onPress}
+      style={{ overflow: "visible" }}
+    >
+      <View
         style={{
-          borderRadius: 26,
-          bottom: item.imageBottom,
-          height: item.imageHeight,
-          position: "absolute",
-          right: item.imageRight,
-          width: item.imageWidth,
+          minHeight: Math.max(item.cardHeight + 24, item.imageHeight - 32),
+          overflow: "visible",
+          position: "relative",
         }}
-      />
+      >
+        <LinearGradient
+          colors={[item.cardColors[0], item.cardColors[1]]}
+          end={{ x: 1, y: 0.5 }}
+          start={{ x: 0, y: 0.5 }}
+          className="overflow-hidden rounded-[30px] px-5 py-4"
+          style={[
+            cardShadowStyle,
+            {
+              minHeight: item.cardHeight,
+              paddingRight: 120,
+            },
+          ]}
+        >
+          <View
+            className="absolute rounded-full"
+            style={{
+              backgroundColor: "rgba(255,255,255,0.18)",
+              height: 136,
+              right: -24,
+              top: -18,
+              width: 136,
+            }}
+          />
+          <View
+            className="absolute rounded-full"
+            style={{
+              backgroundColor: "rgba(255,255,255,0.10)",
+              bottom: -44,
+              height: 110,
+              right: 36,
+              width: 110,
+            }}
+          />
+
+          <View style={{ maxWidth: `${item.textWidth}%` }}>
+            <Text
+              className="text-[20px] font-black leading-6 text-white"
+              style={{
+                textShadowColor: "rgba(76, 53, 76, 0.12)",
+                textShadowOffset: { width: 0, height: 1 },
+                textShadowRadius: 8,
+              }}
+            >
+              {item.title}
+            </Text>
+          </View>
+        </LinearGradient>
+
+        <View
+          pointerEvents="none"
+          style={{
+            bottom: item.imageBottom + 10,
+            elevation: 18,
+            position: "absolute",
+            right: item.imageRight + 6,
+            zIndex: 8,
+          }}
+        >
+          <Image
+            source={item.imageSource}
+            contentFit="contain"
+            transition={120}
+            cachePolicy="memory-disk"
+            style={{
+              borderRadius: 26,
+              height: item.imageHeight,
+              width: item.imageWidth,
+            }}
+          />
+        </View>
+      </View>
     </Pressable>
   );
 }
@@ -281,7 +321,10 @@ export default function HotspotStoriesScreen() {
     slug: string;
   }>();
   const resolvedSlug = Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "");
-  const resolvedHotspotId = resolveHotspotIdParam(hotspotId);
+  const resolvedHotspotId = resolveSelectedHotspotId({
+    hotspotId,
+    slug: resolvedSlug,
+  });
   const cachedHotspotEntry = getCachedHotspotDetail({
     hotspotId: resolvedHotspotId,
     slug: resolvedSlug,
@@ -302,14 +345,11 @@ export default function HotspotStoriesScreen() {
   const fallbackStoryCards =
     hotspot && resolvedHotspotId === null ? buildHotspotThemeStories(hotspot) : [];
   const storyCards = apiStoryCards ?? fallbackStoryCards;
-  const storyDrivenThemeTabs = buildStoryThemeTabsFromStories(storyCards);
-  const resolvedThemeTabs =
-    storyDrivenThemeTabs;
+  const resolvedThemeTabs = buildStoryThemeTabsFromStories(storyCards);
   const resolvedActiveTab =
     resolvedThemeTabs.find((tab) => tab.id === activeTabId) ??
     resolvedThemeTabs[0] ??
     null;
-  const selectedTagId = resolvedActiveTab?.tagId ?? null;
 
   useEffect(() => {
     if (!hotspot) {
@@ -356,10 +396,9 @@ export default function HotspotStoriesScreen() {
         const accessToken = authSession.isAuthenticated
           ? await getValidAccessToken()
           : null;
-        const stories = await getHotspotStories({
+        const stories = await getUnlockedHotspotStories({
           accessToken,
           hotspotId: resolvedHotspotId,
-          status: "DRAFT",
           tokenType: authSession.tokenType,
         });
         const mappedStories = buildHotspotThemeStoriesFromApi(
@@ -422,10 +461,14 @@ export default function HotspotStoriesScreen() {
   }
 
   const visibleStories =
-    selectedTagId === null
+    resolvedActiveTab === null
       ? storyCards
       : storyCards.filter(
-          (item) => normalizeApiTagId(item.tagId) === selectedTagId,
+          (item) =>
+            buildStoryThemeLookupKey({
+              label: item.tagLabel,
+              tagId: item.tagId,
+            }) === resolvedActiveTab.id,
         );
 
   return (
@@ -524,10 +567,10 @@ export default function HotspotStoriesScreen() {
           ) : (
             <EmptyStoriesState
               message={
-                selectedTagId !== null
-                  ? `Hotspot này chưa có story DRAFT cho tag "${resolvedActiveTab?.label ?? ""}".`
+                resolvedActiveTab !== null
+                  ? `Hotspot này chưa có story cho tag "${resolvedActiveTab.label}".`
                   : apiStoryCards !== null
-                    ? "Hotspot này chưa có story DRAFT để hiển thị."
+                    ? "Hotspot này chưa có story để hiển thị."
                     : "Chưa có story phù hợp cho bộ lọc đang chọn."
               }
             />

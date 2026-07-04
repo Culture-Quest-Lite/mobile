@@ -54,6 +54,11 @@ import {
   getDevelopmentLocationOverride,
   getDeviceCoordinate,
 } from "@/lib/location";
+import {
+  mergeApiCheckins,
+  useCheckedInApiHotspots,
+  useCheckins,
+} from "@/lib/checkin-store";
 
 import {
   type NearbyHotspotDto,
@@ -376,6 +381,7 @@ type NearbyPlaceListItem = {
   distance: string;
   hotspotId: number | null;
   imageUri: string;
+  isCheckedIn: boolean;
   key: string;
   reward: string;
   slug: string | null;
@@ -395,6 +401,10 @@ const nearbyDistanceSliderStepMeters = 20;
 const suggestedRouteCardImageHeight = 128;
 const suggestedRouteSubtitleHeight = 36;
 const suggestedRouteCardHeight = 254;
+const nearbyPlaceTitleHeight = 34;
+const nearbyPlaceCategoryHeight = 20;
+const nearbyPlaceDetailRowHeight = 22;
+const nearbyPlaceContentHeight = 124;
 const nearbyPlaceFallbackImageUri =
   nearbyPlaces[0]?.imageUri ??
   "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
@@ -630,6 +640,7 @@ function mapLocalNearbyPlaceItem(place: NearbyPlaceCard): NearbyPlaceListItem {
     distance: place.distance,
     hotspotId: null,
     imageUri: place.imageUri,
+    isCheckedIn: false,
     key: place.slug,
     reward: place.reward,
     slug: place.slug,
@@ -691,6 +702,7 @@ function buildApiNearbyPlaceItems(
           hotspot,
           matchedLocalHotspot?.imageUri,
         ),
+        isCheckedIn: hotspot.isCheckedIn === true,
         key: `${hotspot.hotspotId}-${index}`,
         reward: formatRewardLabel(hotspot.xp, matchedLocalHotspot?.reward),
         slug: matchedLocalHotspot?.slug ?? null,
@@ -701,6 +713,26 @@ function buildApiNearbyPlaceItems(
     })
     .sort((left, right) => left.sortDistanceMeters - right.sortDistanceMeters)
     .map(({ sortDistanceMeters: _sortDistanceMeters, ...item }) => item);
+}
+
+function isNearbyPlaceCheckedIn(
+  place: NearbyPlaceListItem,
+  checkedInApiHotspotIds: readonly number[],
+  checkedInHotspotSlugs: readonly string[],
+) {
+  if (place.isCheckedIn) {
+    return true;
+  }
+
+  if (place.hotspotId !== null && checkedInApiHotspotIds.includes(place.hotspotId)) {
+    return true;
+  }
+
+  if (place.slug && checkedInHotspotSlugs.includes(place.slug)) {
+    return true;
+  }
+
+  return false;
 }
 
 function getLocationPreviewRegion(
@@ -1624,6 +1656,8 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const authSession = useAuthSession();
+  const checkedInHotspotSlugs = useCheckins();
+  const checkedInApiHotspotIds = useCheckedInApiHotspots();
   const { contentWidth, gutter, safeWidth } = useScreenLayout({
     maxContentWidth: 640,
   });
@@ -1678,6 +1712,7 @@ export default function HomeScreen() {
   const nearbyRouteCardWidth = Math.min(Math.max(safeWidth * 0.72, 236), 272);
   const nearbyPlaceCardWidth = Math.min(Math.max(safeWidth * 0.42, 160), 186);
   const nearbyPlaceImageHeight = Math.round(nearbyPlaceCardWidth * 0.8);
+  const nearbyPlaceCardHeight = nearbyPlaceImageHeight + nearbyPlaceContentHeight;
   const voucherMerchantCircleSize = Math.min(
     Math.max(contentWidth * 0.22, 76),
     86,
@@ -1844,6 +1879,11 @@ export default function HomeScreen() {
           return;
         }
 
+        mergeApiCheckins(
+          apiNearbyHotspots
+            .filter((hotspot) => hotspot.isCheckedIn === true)
+            .map((hotspot) => hotspot.hotspotId),
+        );
         setResolvedNearbyPlaces(
           buildApiNearbyPlaceItems(apiNearbyHotspots, coordinate),
         );
@@ -2515,109 +2555,169 @@ export default function HomeScreen() {
                   marginHorizontal: -gutter,
                   width: safeWidth,
                 }}
-              >
-                {resolvedNearbyPlaces.map((place, index) => (
-                  <Pressable
-                    key={place.key}
-                    className={
-                      index === resolvedNearbyPlaces.length - 1 ? "" : "mr-3.5"
-                    }
-                    disabled={!place.slug && place.hotspotId === null}
-                    onPress={() => {
-                      const hotspotId = place.hotspotId;
-                      const routeSlug =
-                        place.slug ??
-                        (hotspotId !== null
-                          ? getApiHotspotRouteSlug(hotspotId)
-                          : null);
+                >
+                  {resolvedNearbyPlaces.map((place, index) => {
+                    const isPlaceCheckedIn = isNearbyPlaceCheckedIn(
+                      place,
+                      checkedInApiHotspotIds,
+                      checkedInHotspotSlugs,
+                    );
 
-                      if (routeSlug) {
-                        router.push(getHotspotHref(routeSlug, hotspotId));
-                      }
-                    }}
-                    style={{ width: nearbyPlaceCardWidth }}
-                  >
-                    <View
-                      className="overflow-hidden rounded-[22px] border border-[#EEF1F4] bg-white"
-                      style={nearbyPlaceShadowStyle}
-                    >
-                      <View className="relative">
-                        <Image
-                          source={place.imageUri}
-                          contentFit="cover"
-                          transition={220}
-                          cachePolicy="memory-disk"
-                          style={{
-                            height: nearbyPlaceImageHeight,
-                            width: "100%",
-                          }}
-                        />
+                    return (
+                      <Pressable
+                        key={place.key}
+                        className={
+                          index === resolvedNearbyPlaces.length - 1 ? "" : "mr-3.5"
+                        }
+                        disabled={!place.slug && place.hotspotId === null}
+                        onPress={() => {
+                          const hotspotId = place.hotspotId;
+                          const routeSlug =
+                            place.slug ??
+                            (hotspotId !== null
+                              ? getApiHotspotRouteSlug(hotspotId)
+                              : null);
 
-                        <View className="absolute inset-x-2.5 top-2.5 flex-row items-center justify-between">
-                          <View className="rounded-full bg-[#45414D]/92 px-2.5 py-1">
-                            <Text className="text-[11px] font-extrabold text-white">
-                              {place.distance}
-                            </Text>
-                          </View>
-
-                          <View className="rounded-full bg-[#f0af16] px-2.5 py-1">
-                            <Text className="text-[11px] font-extrabold text-[#2B2233]">
-                              {place.reward} XP
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-
-                      <View className="gap-2 px-3.5 pb-3.5 pt-3">
-                        <Text
-                          className="text-[14px] font-extrabold leading-[18px] text-[#3B4454]"
-                          numberOfLines={2}
+                          if (routeSlug) {
+                            router.push(getHotspotHref(routeSlug, hotspotId));
+                          }
+                        }}
+                        style={{ width: nearbyPlaceCardWidth }}
+                      >
+                        <View
+                          className="overflow-hidden rounded-[22px] border border-[#EEF1F4] bg-white"
+                          style={[
+                            nearbyPlaceShadowStyle,
+                            { height: nearbyPlaceCardHeight },
+                          ]}
                         >
-                          {place.title}
-                        </Text>
-
-                        <Text className="text-[13px] text-[#A39AAB]">
-                          {place.category}
-                        </Text>
-
-                        <View className="flex-row items-center gap-1">
-                          {place.detailIcon === "star" ? (
-                            <Text className="text-[12px] text-[#F58752]">
-                              ★
-                            </Text>
-                          ) : (
-                            <SymbolView
-                              name={{
-                                ios: "location.fill",
-                                android: "place",
-                                web: "place",
+                          <View className="relative">
+                            <Image
+                              source={place.imageUri}
+                              contentFit="cover"
+                              transition={220}
+                              cachePolicy="memory-disk"
+                              style={{
+                                height: nearbyPlaceImageHeight,
+                                width: "100%",
                               }}
-                              size={11}
-                              tintColor="#8E869A"
                             />
-                          )}
-                          <Text
-                            className={
-                              place.detailIcon === "star"
-                                ? "text-[12px] font-bold text-[#F58752]"
-                                : "flex-1 text-[12px] text-[#8E869A]"
-                            }
-                            numberOfLines={1}
+
+                            <View className="absolute inset-x-2.5 top-2.5 flex-row items-center justify-between">
+                              <View className="rounded-full bg-[#45414D]/92 px-2.5 py-1">
+                                <Text className="text-[11px] font-extrabold text-white">
+                                  {place.distance}
+                                </Text>
+                              </View>
+
+                              <View
+                                className={`rounded-full px-2.5 py-1 ${
+                                  isPlaceCheckedIn ? "bg-[#DCFCE7]" : "bg-[#f0af16]"
+                                }`}
+                              >
+                                <Text
+                                  className={`text-[11px] font-extrabold ${
+                                    isPlaceCheckedIn
+                                      ? "text-[#15803D]"
+                                      : "text-[#2B2233]"
+                                  }`}
+                                >
+                                  {isPlaceCheckedIn ? "Đã check-in" : `${place.reward} XP`}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+
+                          <View
+                            className="flex-1 gap-2 px-3.5 pb-3.5 pt-3"
+                            style={{ minHeight: nearbyPlaceContentHeight }}
                           >
-                            {place.detailPrimaryText}
-                          </Text>
-                          {place.detailSecondaryText ? (
-                            <Text className="text-[12px] text-[#8E869A]">
-                              {place.detailSecondaryText}
+                            <Text
+                              className="text-[13px] font-extrabold leading-[16px] text-[#3B4454]"
+                              numberOfLines={2}
+                              style={{ minHeight: nearbyPlaceTitleHeight }}
+                            >
+                              {place.title}
                             </Text>
-                          ) : null}
+
+                            <Text
+                              className="text-[13px] text-[#A39AAB]"
+                              numberOfLines={1}
+                              style={{ minHeight: nearbyPlaceCategoryHeight }}
+                            >
+                              {place.category}
+                            </Text>
+
+                            {isPlaceCheckedIn ? (
+                              <View
+                                className="flex-row items-center gap-1.5"
+                                style={{ minHeight: nearbyPlaceDetailRowHeight }}
+                              >
+                                <View className="h-5 w-5 items-center justify-center rounded-full bg-[#DCFCE7]">
+                                  <SymbolView
+                                    name={{
+                                      ios: "checkmark",
+                                      android: "check",
+                                      web: "check",
+                                    }}
+                                    size={11}
+                                    tintColor="#15803D"
+                                  />
+                                </View>
+                                <Text
+                                  className="flex-1 text-[12px] font-bold text-[#15803D]"
+                                  numberOfLines={1}
+                                >
+                                  Story đã mở khóa
+                                </Text>
+                              </View>
+                            ) : (
+                              <View
+                                className="flex-row items-center gap-1"
+                                style={{ minHeight: nearbyPlaceDetailRowHeight }}
+                              >
+                                {place.detailIcon === "star" ? (
+                                  <Text className="text-[12px] text-[#F58752]">
+                                    ★
+                                  </Text>
+                                ) : (
+                                  <SymbolView
+                                    name={{
+                                      ios: "location.fill",
+                                      android: "place",
+                                      web: "place",
+                                    }}
+                                    size={11}
+                                    tintColor="#8E869A"
+                                  />
+                                )}
+                                <Text
+                                  className={
+                                    place.detailIcon === "star"
+                                      ? "text-[12px] font-bold text-[#F58752]"
+                                      : "flex-1 text-[12px] text-[#8E869A]"
+                                  }
+                                  numberOfLines={1}
+                                >
+                                  {place.detailPrimaryText}
+                                </Text>
+                                {place.detailSecondaryText ? (
+                                  <Text
+                                    className="text-[12px] text-[#8E869A]"
+                                    numberOfLines={1}
+                                  >
+                                    {place.detailSecondaryText}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            )}
+                          </View>
                         </View>
-                      </View>
-                    </View>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              )}
 
             <Text className="text-[18px] font-extrabold text-[#2B2233]">
               Chủ đề

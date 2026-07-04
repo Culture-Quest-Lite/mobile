@@ -25,7 +25,7 @@ import {
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 
-import { getHotspotStories } from "../api/get-hotspot-stories";
+import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
 import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
 import {
   cacheHotspotStories,
@@ -38,6 +38,7 @@ import {
   type StoryThemeTag,
 } from "../data/hotspot-theme-stories";
 import { getHotspotBySlug } from "../data/hotspots";
+import { resolveSelectedHotspotId } from "../utils/resolve-selected-hotspot-id";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 
@@ -51,35 +52,6 @@ const screenShadowStyle = {
   },
   elevation: 10,
 } as const;
-
-const heroShadowStyle = {
-  shadowColor: "rgba(15, 23, 42, 0.20)",
-  shadowOpacity: 1,
-  shadowRadius: 22,
-  shadowOffset: {
-    width: 0,
-    height: 14,
-  },
-  elevation: 8,
-} as const;
-
-const sheetShadowStyle = {
-  shadowColor: "rgba(15, 23, 42, 0.12)",
-  shadowOpacity: 1,
-  shadowRadius: 18,
-  shadowOffset: {
-    width: 0,
-    height: -6,
-  },
-  elevation: 6,
-} as const;
-
-function resolveHotspotIdParam(value?: string | string[]) {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-  const parsedValue = Number(rawValue);
-
-  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
-}
 
 function isHttpUrl(value?: string | null): value is string {
   return typeof value === "string" && /^https?:\/\//i.test(value.trim());
@@ -273,14 +245,12 @@ function WaveformPreview({ accent }: { accent: string }) {
 }
 
 function StoryHeroSection({
-  heroHeight,
   insetsTop,
   onBack,
   onNext,
   onPrevious,
   totalImages,
 }: {
-  heroHeight: number;
   insetsTop: number;
   onBack: () => void;
   onNext: () => void;
@@ -296,7 +266,7 @@ function StoryHeroSection({
     >
       <View className="px-5" style={{ paddingTop: insetsTop + 12 }}>
         <Pressable
-          className="h-11 w-11 items-center justify-center rounded-full"
+          className="h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/24"
           hitSlop={8}
           onPress={onBack}
         >
@@ -317,10 +287,13 @@ function StoryHeroSection({
       {totalImages > 1 ? (
         <>
           <Pressable
-            className="absolute left-4 h-12 w-12 items-center justify-center rounded-full"
+            className="absolute left-4 h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/24"
             hitSlop={8}
             onPress={onPrevious}
-            style={{ top: heroHeight * 0.48 }}
+            style={{
+              top: "50%",
+              transform: [{ translateY: -24 }],
+            }}
           >
             <SymbolView
               name={
@@ -336,10 +309,13 @@ function StoryHeroSection({
           </Pressable>
 
           <Pressable
-            className="absolute right-4 h-12 w-12 items-center justify-center rounded-full"
+            className="absolute right-4 h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/24"
             hitSlop={8}
             onPress={onNext}
-            style={{ top: heroHeight * 0.48 }}
+            style={{
+              top: "50%",
+              transform: [{ translateY: -24 }],
+            }}
           >
             <SymbolView
               name={
@@ -431,7 +407,10 @@ export default function HotspotStoryDetailScreen() {
     storyId: string;
   }>();
   const resolvedSlug = Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "");
-  const resolvedHotspotId = resolveHotspotIdParam(hotspotId);
+  const resolvedHotspotId = resolveSelectedHotspotId({
+    hotspotId,
+    slug: resolvedSlug,
+  });
   const resolvedStoryId = Array.isArray(storyId)
     ? (storyId[0] ?? "")
     : (storyId ?? "");
@@ -484,10 +463,9 @@ export default function HotspotStoryDetailScreen() {
         const accessToken = authSession.isAuthenticated
           ? await getValidAccessToken()
           : null;
-        const stories = await getHotspotStories({
+        const stories = await getUnlockedHotspotStories({
           accessToken,
           hotspotId: resolvedHotspotId,
-          status: "DRAFT",
           tokenType: authSession.tokenType,
         });
         const mappedStories = buildHotspotThemeStoriesFromApi(
@@ -551,26 +529,39 @@ export default function HotspotStoryDetailScreen() {
       : story?.videoPoster
         ? [story.videoPoster]
         : [];
-  const [activeIndex, setActiveIndex] = useState(0);
   const safeTotalImages = Math.max(gallery.length, 1);
+  const [gallerySelection, setGallerySelection] = useState<{
+    index: number;
+    storyId: string;
+  }>({
+    index: 0,
+    storyId: resolvedStoryId,
+  });
+  const activeIndex =
+    gallerySelection.storyId === resolvedStoryId
+      ? clampNumber(gallerySelection.index, 0, safeTotalImages - 1)
+      : 0;
   const activeHeroImage = gallery[activeIndex] ?? gallery[0];
-  const heroHeightExpanded = screenHeight;
-  const heroHeightCollapsed = Math.max(Math.min(screenHeight * 0.42, 360), 300);
+  const heroHeightExpanded = screenHeight + insets.bottom;
+  const heroHeightCollapsed = clampNumber(screenHeight * 0.34, 250, 320);
   const collapseDistance = Math.max(
     heroHeightExpanded - heroHeightCollapsed,
     1,
   );
-  const contentOverlap = 0;
+  const detailTopSpacing = 0;
   const scrollY = useSharedValue(0);
 
-  const cycleSlide = useCallback(
-    (direction: -1 | 1) => {
-      setActiveIndex(
-        (current) => (current + direction + safeTotalImages) % safeTotalImages,
-      );
-    },
-    [safeTotalImages],
-  );
+  const cycleSlide = (direction: -1 | 1) => {
+    setGallerySelection((current) => {
+      const currentIndex =
+        current.storyId === resolvedStoryId ? current.index : 0;
+
+      return {
+        index: (currentIndex + direction + safeTotalImages) % safeTotalImages,
+        storyId: resolvedStoryId,
+      };
+    });
+  };
   const heroContainerStyle = useAnimatedStyle(() => ({
     height: interpolate(
       scrollY.value,
@@ -586,18 +577,6 @@ export default function HotspotStoryDetailScreen() {
           scrollY.value,
           [-heroHeightExpanded, 0, collapseDistance],
           [heroHeightExpanded * 0.06, 0, -22],
-          Extrapolation.CLAMP,
-        ),
-      },
-    ],
-  }));
-  const sheetLiftStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY: interpolate(
-          scrollY.value,
-          [0, collapseDistance],
-          [0, -44],
           Extrapolation.CLAMP,
         ),
       },
@@ -732,7 +711,6 @@ export default function HotspotStoryDetailScreen() {
       <Animated.View
         pointerEvents="none"
         style={[
-          heroShadowStyle,
           heroContainerStyle,
           {
             left: 0,
@@ -764,6 +742,7 @@ export default function HotspotStoryDetailScreen() {
             style={{ height: "100%", width: "100%" }}
           />
         </Animated.View>
+
       </Animated.View>
 
       <SafeAreaView className="flex-1" edges={["left", "right", "bottom"]}>
@@ -783,7 +762,6 @@ export default function HotspotStoryDetailScreen() {
           ]}
         >
           <StoryHeroSection
-            heroHeight={heroHeightExpanded}
             insetsTop={insets.top}
             onBack={() => router.back()}
             onNext={() => cycleSlide(1)}
@@ -794,33 +772,26 @@ export default function HotspotStoryDetailScreen() {
 
         <Animated.ScrollView
           className="flex-1"
+          bounces={false}
           contentContainerStyle={{
             paddingBottom: Math.max(insets.bottom + 8, 12),
-            paddingTop: heroHeightExpanded - contentOverlap,
+            paddingTop: heroHeightExpanded + detailTopSpacing,
           }}
           onScroll={handleScroll}
+          overScrollMode="never"
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
           <Animated.View
-            className="rounded-t-[36px] bg-[#FFF9FD] px-5 pb-3 pt-7"
-            style={[
-              sheetShadowStyle,
-              sheetLiftStyle,
-            ]}
+            className="bg-[#FFF9FD] px-5 pb-4 pt-5"
+            style={{
+              minHeight: screenHeight + 120,
+              overflow: "hidden",
+            }}
           >
             <View className="bg-[#FFF9FD]" style={{ minHeight: 0 }}>
-              <View className="flex-row items-start justify-between">
-                <View className="flex-1 pr-4">
-                  <StoryTagPill story={story} />
-                  <Text className="mt-5 text-[28px] font-black leading-9 text-[#2B2233]">
-                    {story.title}
-                  </Text>
-                  <Text className="mt-3 text-[16px] leading-7 text-[#6F657A]">
-                    {story.summary}
-                  </Text>
-                </View>
-
+              <View className="flex-row items-center justify-between gap-3">
+                <StoryTagPill story={story} />
                 <View
                   className="rounded-full px-3 py-2"
                   style={{ backgroundColor: palette.accentSoft }}
@@ -830,31 +801,16 @@ export default function HotspotStoryDetailScreen() {
                   </Text>
                 </View>
               </View>
-            </View>
 
-            <View
-              className="mt-7 rounded-[32px] border border-[#F4DCE6] bg-white px-5 py-5"
-              style={screenShadowStyle}
-            >
-              <SectionHeading
-                title="Thông tin câu chuyện"
-                description="Nội dung chi tiết của story nằm ngay dưới phần ảnh lớn, sau đó mới tới phần audio và video."
-              />
-
-              <View className="mt-4">
-                {story.scriptParagraphs.map((paragraph, index) => (
-                  <Text
-                    key={`${story.id}-script-${index}`}
-                    className={
-                      index === story.scriptParagraphs.length - 1
-                        ? "text-[16px] leading-7 text-[#51435B]"
-                        : "mb-4 text-[16px] leading-7 text-[#51435B]"
-                    }
-                  >
-                    {paragraph}
-                  </Text>
-                ))}
-              </View>
+              <Text className="mt-5 text-[28px] font-black leading-9 text-[#2B2233]">
+                {story.title}
+              </Text>
+              <Text
+                className="mt-3 text-[16px] leading-7 text-[#6F657A]"
+                style={{ textAlign: "justify" }}
+              >
+                {story.summary}
+              </Text>
             </View>
 
             <View
@@ -1006,6 +962,32 @@ export default function HotspotStoryDetailScreen() {
                   </Text>
                 ) : null}
               </LinearGradient>
+            </View>
+
+            <View
+              className="mt-7 rounded-[32px] border border-[#F4DCE6] bg-white px-5 py-5"
+              style={screenShadowStyle}
+            >
+              <SectionHeading
+                title="Thông tin câu chuyện"
+                description="Nội dung chi tiết của story nằm dưới phần audio, sau đó mới tới video."
+              />
+
+              <View className="mt-4">
+                {story.scriptParagraphs.map((paragraph, index) => (
+                  <Text
+                    key={`${story.id}-script-${index}`}
+                    className={
+                      index === story.scriptParagraphs.length - 1
+                        ? "text-[16px] leading-7 text-[#51435B]"
+                        : "mb-4 text-[16px] leading-7 text-[#51435B]"
+                    }
+                    style={{ textAlign: "justify" }}
+                  >
+                    {paragraph}
+                  </Text>
+                ))}
+              </View>
             </View>
 
             <View

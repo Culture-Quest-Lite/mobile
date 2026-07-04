@@ -1,6 +1,7 @@
 import type { Href } from 'expo-router';
 
-import { getHotspotBySlug } from '@/features/home/data/hotspots';
+import { getCachedHotspotDetail } from '@/features/home/data/hotspot-detail-cache';
+import { getHotspotBySlug, getHotspotHref } from '@/features/home/data/hotspots';
 
 
 const ROUTE_HOTSPOT_SLUG_MAP: Record<string, string> = {
@@ -19,12 +20,42 @@ export function resolveHotspotDetailSlug(routeHotspotId: string): string | undef
   return getHotspotBySlug(slug) ? slug : undefined;
 }
 
+function resolveKnownHotspotId(routeHotspotId: string, slug: string) {
+  const parsedHotspotId = Number(routeHotspotId);
+
+  if (Number.isInteger(parsedHotspotId) && parsedHotspotId > 0) {
+    return parsedHotspotId;
+  }
+
+  return getCachedHotspotDetail({ slug })?.hotspotId ?? null;
+}
+
 export function getHotspotDetailHref(routeHotspotId: string): Href | undefined {
   const slug = resolveHotspotDetailSlug(routeHotspotId);
-  return slug ? (`/hotspot/${slug}` as Href) : undefined;
+
+  if (!slug) {
+    return undefined;
+  }
+
+  return getHotspotHref(slug, resolveKnownHotspotId(routeHotspotId, slug));
 }
 
 export function getHotspotStoriesHref(routeHotspotId: string): Href | undefined {
   const slug = resolveHotspotDetailSlug(routeHotspotId);
-  return slug ? (`/hotspot/${slug}/stories` as Href) : undefined;
+
+  if (!slug) {
+    return undefined;
+  }
+
+  const hotspotId = resolveKnownHotspotId(routeHotspotId, slug);
+
+  return hotspotId !== null
+    ? ({
+        params: {
+          hotspotId: `${hotspotId}`,
+          slug,
+        },
+        pathname: '/hotspot/[slug]/stories',
+      } as Href)
+    : (`/hotspot/${slug}/stories` as Href);
 }

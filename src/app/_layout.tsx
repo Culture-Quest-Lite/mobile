@@ -49,6 +49,7 @@ export default function RootLayout() {
           <Stack.Screen name="route/[id]" />
           <Stack.Screen name="checkin/[id]" />
           <Stack.Screen name="hotspot/[slug]" />
+          <Stack.Screen name="hotspot/[slug]/review-compose" />
           <Stack.Screen name="hotspot/[slug]/stories" />
           <Stack.Screen name="hotspots" />
           <Stack.Screen name="+not-found" />

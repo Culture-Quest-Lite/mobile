@@ -42,6 +42,14 @@
           "locationWhenInUsePermission": "Cho phép Culture Quest truy cập vị trí của bạn để xác minh check-in gần hotspot."
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": false,
+          "microphonePermission": false,
+          "photosPermission": "Cho phép Culture Quest truy cập thư viện của bạn để thêm ảnh và video vào bài đánh giá hotspot."
+        }
+      ],
       "expo-audio",
       "expo-video"
     ],

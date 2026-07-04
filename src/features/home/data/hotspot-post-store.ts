@@ -9,8 +9,15 @@ export type HotspotPersonalPost = {
   hotspotId: number | null;
   hotspotSlug: string;
   id: string;
+  media: HotspotPersonalPostMedia[];
   rating: number;
   text: string;
+};
+
+export type HotspotPersonalPostMedia = {
+  durationLabel?: string;
+  type: "image" | "video";
+  uri: string;
 };
 
 type AddHotspotPersonalPostInput = {
@@ -18,6 +25,7 @@ type AddHotspotPersonalPostInput = {
   authorName?: string | null;
   hotspotId?: number | null;
   hotspotSlug: string;
+  media?: HotspotPersonalPostMedia[];
   rating?: number;
   text: string;
 };
@@ -45,6 +53,36 @@ function clampRating(value: number) {
   return Math.min(Math.max(Math.round(value), 1), 5);
 }
 
+function parseStoredPostMedia(value: unknown): HotspotPersonalPostMedia | null {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  const uri = readString(value.uri);
+  const durationLabel = readString(value.durationLabel);
+  const mediaType = value.type === "video" ? "video" : value.type === "image" ? "image" : null;
+
+  if (!uri || !mediaType) {
+    return null;
+  }
+
+  return {
+    durationLabel: durationLabel || undefined,
+    type: mediaType,
+    uri,
+  };
+}
+
+function normalizeMediaItems(media: HotspotPersonalPostMedia[] | undefined) {
+  if (!Array.isArray(media)) {
+    return [];
+  }
+
+  return media
+    .map((item) => parseStoredPostMedia(item))
+    .filter(isNonNull);
+}
+
 function parseStoredPost(value: unknown): HotspotPersonalPost | null {
   if (!isObject(value)) {
     return null;
@@ -54,8 +92,11 @@ function parseStoredPost(value: unknown): HotspotPersonalPost | null {
   const hotspotSlug = readString(value.hotspotSlug);
   const text = readString(value.text);
   const createdAt = readString(value.createdAt);
+  const media = Array.isArray(value.media)
+    ? value.media.map(parseStoredPostMedia).filter(isNonNull)
+    : [];
 
-  if (!id || !hotspotSlug || !text || !createdAt) {
+  if (!id || !hotspotSlug || !createdAt || (!text && media.length === 0)) {
     return null;
   }
 
@@ -66,6 +107,7 @@ function parseStoredPost(value: unknown): HotspotPersonalPost | null {
     hotspotId: readNullableNumber(value.hotspotId),
     hotspotSlug,
     id,
+    media,
     rating: clampRating(readNullableNumber(value.rating) ?? 5),
     text,
   };
@@ -109,13 +151,15 @@ export function addHotspotPersonalPost({
   authorName,
   hotspotId = null,
   hotspotSlug,
+  media,
   rating = 5,
   text,
 }: AddHotspotPersonalPostInput) {
   const normalizedHotspotSlug = hotspotSlug.trim();
   const normalizedText = text.trim();
+  const normalizedMedia = normalizeMediaItems(media);
 
-  if (!normalizedHotspotSlug || !normalizedText) {
+  if (!normalizedHotspotSlug || (!normalizedText && normalizedMedia.length === 0)) {
     return null;
   }
 
@@ -129,6 +173,7 @@ export function addHotspotPersonalPost({
         : null,
     hotspotSlug: normalizedHotspotSlug,
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    media: normalizedMedia,
     rating: clampRating(rating),
     text: normalizedText,
   };
@@ -137,4 +182,17 @@ export function addHotspotPersonalPost({
   emit();
 
   return nextPost;
+}
+
+export function upsertHotspotPersonalPost(post: HotspotPersonalPost) {
+  const normalizedPost = parseStoredPost(post);
+
+  if (!normalizedPost) {
+    return null;
+  }
+
+  posts = [normalizedPost, ...posts.filter((currentPost) => currentPost.id !== normalizedPost.id)];
+  emit();
+
+  return normalizedPost;
 }

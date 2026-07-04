@@ -43,7 +43,7 @@ import {
   getDeviceCoordinate,
 } from "@/lib/location";
 
-import { getHotspotStories } from "../api/get-hotspot-stories";
+import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
 import {
   createCheckIn,
   isDuplicateCheckInError,
@@ -960,10 +960,9 @@ export function HotspotGpsCheckinOverlay({
       const accessToken = authSession.isAuthenticated
         ? await getValidAccessToken()
         : null;
-      const stories = await getHotspotStories({
+      const stories = await getUnlockedHotspotStories({
         accessToken,
         hotspotId,
-        status: "DRAFT",
         tokenType: authSession.tokenType,
       });
       const mappedStories = buildHotspotThemeStoriesFromApi(hotspot, stories);
