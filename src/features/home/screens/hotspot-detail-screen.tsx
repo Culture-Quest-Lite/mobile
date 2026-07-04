@@ -4,11 +4,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState, type ComponentProps } from "react";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
-  TextInput,
   Text as RNText,
   ScrollView,
   View,
@@ -51,9 +51,13 @@ import {
   useCheckins,
 } from "@/lib/checkin-store";
 import { getRoutesForHotspot, routes, type RouteItem } from "@/lib/demo-data";
+import {
+  getRoutesByHotspot,
+  mapRouteToRouteItem,
+} from "@/features/route/api/route-api";
 import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
-import { getHotspotStories } from "../api/get-hotspot-stories";
+import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
 import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
 import { HiddenStoryUnlockedContent } from "../components/hidden-story-unlocked-content";
 import { HotspotGpsCheckinOverlay } from "../components/hotspot-gps-checkin-overlay";
@@ -64,7 +68,6 @@ import {
 } from "../data/home-screen.mock";
 import { cacheHotspotDetail } from "../data/hotspot-detail-cache";
 import {
-  addHotspotPersonalPost,
   useHotspotPersonalPosts,
   type HotspotPersonalPost,
 } from "../data/hotspot-post-store";
@@ -78,6 +81,7 @@ import {
   getHotspotBySlug,
   type HotspotDetail,
 } from "../data/hotspots";
+import { resolveSelectedHotspotId } from "../utils/resolve-selected-hotspot-id";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type HotspotCoordinate = NonNullable<HotspotDetail["coordinate"]>;
@@ -103,15 +107,15 @@ type SummaryStatItem = {
   value: string;
 };
 type PersonalExperienceComposerProps = {
-  canOpenStories: boolean;
-  draftText: string;
-  onChangeDraftText: (text: string) => void;
-  onListenStories: () => void;
-  onRatingChange: (rating: number) => void;
-  onSubmit: () => void;
-  rating: number;
-  submitMessage?: string | null;
+  avatarUri: string;
+  onPressCompose: () => void;
 };
+type RelatedRoutesSectionStatus =
+  | "idle"
+  | "loading"
+  | "ready"
+  | "empty"
+  | "fallback";
 
 const loginGradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const screenBackground = "#FFFFFF";
@@ -125,6 +129,7 @@ const defaultRemoteHotspotImageUri =
   "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
 const meaninglessApiTextValues = new Set(["", "string", "null", "undefined"]);
 const mapLoadTimeoutMs = 6000;
+const recentReviewPreviewCount = 2;
 
 const heroShadowStyle = {
   shadowColor: "rgba(15, 23, 42, 0.20)",
@@ -170,29 +175,16 @@ const buttonShadowStyle = {
   elevation: 6,
 } as const;
 
-const routeCarouselShadowStyle = {
-  shadowColor: "rgba(31, 41, 55, 0.26)",
-  shadowOpacity: 1,
-  shadowRadius: 28,
-  shadowOffset: {
-    width: 0,
-    height: 18,
-  },
-  elevation: 12,
-} as const;
+const relatedRouteCardImageHeight = 128;
+const relatedRouteCardMinHeight = 254;
+const relatedRouteScrollInset = 20;
+const relatedRouteSubtitleHeight = 36;
 
 function Text({
   maxFontSizeMultiplier = detailTextMaxFontSizeMultiplier,
   ...props
 }: TextProps) {
   return <RNText maxFontSizeMultiplier={maxFontSizeMultiplier} {...props} />;
-}
-
-function resolveHotspotIdParam(value?: string | string[]) {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-  const parsedValue = Number(rawValue);
-
-  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
 }
 
 function readMeaningfulApiText(value?: string | null) {
@@ -512,6 +504,31 @@ function buildReviewSummaryLabel({
   return "Chi tiết từ API";
 }
 
+function clampReviewRatingValue(value: number) {
+  return Number.isFinite(value) ? clampNumber(value, 0, 5) : 0;
+}
+
+function formatReviewRatingValue(value: number) {
+  return clampReviewRatingValue(value).toFixed(1);
+}
+
+function getAveragePersonalExperienceRating(
+  items: PersonalExperienceItem[],
+  fallbackRating: number,
+) {
+  const ratedItems = items
+    .map((item) => clampReviewRatingValue(item.rating))
+    .filter((rating) => rating > 0);
+
+  if (ratedItems.length === 0) {
+    return clampReviewRatingValue(fallbackRating);
+  }
+
+  const totalRating = ratedItems.reduce((sum, rating) => sum + rating, 0);
+
+  return clampReviewRatingValue(totalRating / ratedItems.length);
+}
+
 function getRewardValue(reward: string) {
   const resolvedValue = Number(reward.replace(/\D/g, ""));
 
@@ -741,6 +758,12 @@ function getRelatedRoutesForHotspot(hotspot: HotspotDetail, limit = 4) {
     .map((item) => item.route);
 }
 
+function dedupeRouteItemsById(items: RouteItem[]) {
+  return Array.from(
+    new Map(items.map((item) => [item.id, item] as const)).values(),
+  );
+}
+
 function buildPersonalExperienceItems(
   hotspot: HotspotDetail,
   galleryImages: string[],
@@ -851,7 +874,11 @@ function buildSavedPersonalExperienceItems(
     avatarUri: post.authorAvatarUri || avatarImageUri,
     date: formatPersonalExperienceDate(post.createdAt),
     id: post.id,
-    media: [],
+    media: post.media.map((media) => ({
+      duration: media.durationLabel,
+      type: media.type,
+      uri: media.uri,
+    })),
     rating: post.rating,
     text: post.text,
     user: post.authorName,
@@ -986,6 +1013,108 @@ function AvatarPreview({
         cachePolicy="memory-disk"
         style={{ height: "100%", width: "100%" }}
       />
+    </View>
+  );
+}
+
+function RatingStars({
+  activeTintColor = "#FFC93C",
+  inactiveTintColor = "#E8D8E1",
+  rating,
+  size = 14,
+}: {
+  activeTintColor?: string;
+  inactiveTintColor?: string;
+  rating: number;
+  size?: number;
+}) {
+  const roundedRating = Math.round(clampReviewRatingValue(rating));
+
+  return (
+    <View className="flex-row items-center gap-1">
+      {Array.from({ length: 5 }).map((_, index) => {
+        const isFilled = index < roundedRating;
+
+        return (
+          <SymbolView
+            key={`rating-star-${size}-${index}`}
+            name={
+              isFilled
+                ? {
+                    ios: "star.fill",
+                    android: "star",
+                    web: "star",
+                  }
+                : "star-border"
+            }
+            size={size}
+            tintColor={isFilled ? activeTintColor : inactiveTintColor}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+function ReviewSummaryCard({
+  averageRating,
+  previewEntries,
+  reviewCountLabel,
+  reviewSummaryLabel,
+}: {
+  averageRating: number;
+  previewEntries: CommunityBoardEntry[];
+  reviewCountLabel: string;
+  reviewSummaryLabel: string;
+}) {
+  return (
+    <View className="rounded-[30px] bg-[#FFF8FC] px-5 py-5" style={cardShadowStyle}>
+      <View className="flex-row items-start justify-between gap-3">
+        <View className="flex-1">
+          <Text className="text-[12px] font-semibold uppercase tracking-[1px] text-[#9D7E8F]">
+            Xếp hạng cộng đồng
+          </Text>
+          <View className="mt-2 flex-row items-end gap-3">
+            <Text className="text-[36px] font-black leading-none text-[#2F242C]">
+              {formatReviewRatingValue(averageRating)}
+            </Text>
+            <View className="pb-1">
+              <RatingStars rating={averageRating} size={15} />
+              <Text className="mt-1 text-[13px] font-semibold text-[#7A6673]">
+                {reviewCountLabel}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View className="self-start rounded-full bg-white px-3 py-2">
+          <Text className="text-[13px] font-bold text-[#7E6F82]">
+            {reviewSummaryLabel}
+          </Text>
+        </View>
+      </View>
+
+      <View className="mt-4 h-px bg-[#F0E4EA]" />
+
+      <View className="mt-4 gap-3">
+        {previewEntries.length > 0 ? (
+          <View className="flex-row items-center">
+            {previewEntries.map((entry, index) => (
+              <AvatarPreview
+                key={`review-summary-avatar-${index}`}
+                imageUri={entry.avatarUri}
+                index={index}
+              />
+            ))}
+          </View>
+        ) : null}
+
+        <Text className="text-[13px] leading-5 text-[#7A6673]">
+          {previewEntries.length > 0
+            ? "Những cảm nhận mới nhất từ cộng đồng đang được hiển thị bên dưới."
+            : "Check-in để mở bài đánh giá đầu tiên cho hotspot này."}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -1791,115 +1920,96 @@ function HiddenStoryCheckinSection({
   );
 }
 
-function HotspotRouteCarouselCard({ route }: { route: RouteItem }) {
+function HotspotRouteCarouselCard({
+  route,
+  width,
+}: {
+  route: RouteItem;
+  width: number;
+}) {
   const router = useRouter();
-  const eraBadgeColors = getRouteBadgeColors(route.era);
   const difficultyBadgeColors = getRouteBadgeColors(route.difficulty);
+  const ratingLabel = route.rating.toFixed(1);
 
   return (
     <Pressable
-      className="overflow-hidden rounded-[30px] bg-white"
       onPress={() => router.push(`/route/${route.id}` as Href)}
-      style={[routeCarouselShadowStyle, { width: 274 }]}
+      style={{ width }}
     >
-      <View style={{ height: 174 }}>
-        <Image
-          source={route.cover}
-          contentFit="cover"
-          transition={180}
-          cachePolicy="memory-disk"
-          style={{ height: "100%", width: "100%" }}
-        />
-        <LinearGradient
-          colors={["rgba(0,0,0,0.06)", "rgba(0,0,0,0.72)"]}
-          locations={[0.15, 1]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
-        />
+      <View
+        className="overflow-hidden rounded-[24px] border border-[#EEF1F4] bg-white"
+        style={[cardShadowStyle, { minHeight: relatedRouteCardMinHeight }]}
+      >
+        <View className="relative">
+          <Image
+            source={route.cover}
+            contentFit="cover"
+            transition={180}
+            cachePolicy="memory-disk"
+            style={{ height: relatedRouteCardImageHeight, width: "100%" }}
+          />
 
-        <View className="absolute inset-x-4 top-4 flex-row gap-2">
-          <TagChip
-            backgroundColor={eraBadgeColors.backgroundColor}
-            label={route.era}
-            textColor={eraBadgeColors.textColor}
-          />
-          <TagChip
-            backgroundColor={difficultyBadgeColors.backgroundColor}
-            label={route.difficulty}
-            textColor={difficultyBadgeColors.textColor}
-          />
+          <View className="absolute right-3 top-3 rounded-full bg-[#FFF1F6] px-2.5 py-1">
+            <Text className="text-[11px] font-extrabold text-[#EB489B]">
+              +{route.xp} XP
+            </Text>
+          </View>
         </View>
 
-        <View className="absolute inset-x-4 bottom-4">
-          <Text className="text-[20px] font-black leading-6 text-white">
+        <View className="flex-1 gap-2.5 px-4 pb-4 pt-3.5">
+          <View className="flex-row flex-wrap items-center gap-2" style={{ minHeight: 26 }}>
+            <View className="rounded-full bg-[#FFF1F6] px-2.5 py-1">
+              <Text className="text-[11px] font-extrabold text-[#EB489B]">
+                {route.distance}
+              </Text>
+            </View>
+            <View className="rounded-full bg-[#FFF4EF] px-2.5 py-1">
+              <Text className="text-[11px] font-extrabold text-[#F58752]">
+                {route.duration}
+              </Text>
+            </View>
+            <View
+              className="rounded-full px-2.5 py-1"
+              style={{ backgroundColor: difficultyBadgeColors.backgroundColor }}
+            >
+              <Text
+                className="text-[11px] font-extrabold"
+                style={{ color: difficultyBadgeColors.textColor }}
+              >
+                {route.difficulty}
+              </Text>
+            </View>
+            <View className="rounded-full bg-[#FFF9E6] px-2.5 py-1">
+              <Text className="text-[11px] font-extrabold text-[#B7791F]">
+                ★ {ratingLabel}
+              </Text>
+            </View>
+          </View>
+
+          <Text
+            className="text-[16px] font-extrabold leading-4 text-[#2B2233]"
+            numberOfLines={1}
+          >
             {route.title}
           </Text>
+
           <Text
-            className="mt-1 text-[14px] leading-5 text-[#F5E8EE]"
+            className="text-[13px] leading-[18px] text-[#8E869A]"
             numberOfLines={2}
+            style={{ height: relatedRouteSubtitleHeight }}
           >
             {route.subtitle}
           </Text>
-        </View>
-      </View>
 
-      <View className="px-4 py-4">
-        <View className="flex-row flex-wrap items-center gap-x-3 gap-y-2">
-          <View className="flex-row items-center">
-            <SymbolView
-              name={{
-                ios: "location.fill",
-                android: "place",
-                web: "place",
-              }}
-              size={11}
-              tintColor="#EB489B"
-            />
-            <Text className="ml-1.5 text-[13px] font-semibold text-[#6D8194]">
-              {route.distance}
+          <View className="mt-auto flex-row items-center justify-between gap-3">
+            <Text className="text-[13px] font-semibold text-[#5E7486]">
+              {route.hotspotIds.length} điểm dừng
             </Text>
-          </View>
-
-          <View className="flex-row items-center">
-            <SymbolView
-              name={{
-                ios: "clock.fill",
-                android: "schedule",
-                web: "schedule",
-              }}
-              size={11}
-              tintColor="#F58752"
-            />
-            <Text className="ml-1.5 text-[13px] font-semibold text-[#6D8194]">
-              {route.duration}
-            </Text>
-          </View>
-
-          <View className="flex-row items-center">
-            <SymbolView
-              name={{
-                ios: "star.fill",
-                android: "star",
-                web: "star",
-              }}
-              size={11}
-              tintColor="#FFC93C"
-            />
-            <Text className="ml-1.5 text-[13px] font-semibold text-[#6D8194]">
-              {route.rating.toFixed(1)}
-            </Text>
-          </View>
-        </View>
-
-        <View className="mt-4 flex-row items-center justify-between">
-          <Text className="text-[14px] font-semibold text-[#44596B]">
-            {route.hotspotIds.length} diem dung
-          </Text>
-          <View className="rounded-full bg-[#FFF0F6] px-3 py-2">
-            <Text className="text-[13px] font-black uppercase tracking-[0.8px] text-[#EB489B]">
-              +{route.xp} XP
-            </Text>
+            <View className="rounded-full bg-[#F6F1F8] px-2.5 py-1">
+              <Text className="text-[11px] font-extrabold text-[#7D7281]">
+                {route.era}
+              </Text>
+            </View>
           </View>
         </View>
       </View>
@@ -1928,72 +2038,27 @@ function RouteMatchesSectionHeader() {
   );
 }
 
-function PersonalExperienceSectionHeader({
-  isCheckedIn,
-}: {
-  isCheckedIn: boolean;
-}) {
+function PersonalExperienceSectionHeader() {
   return (
-    <View className="flex-row items-center justify-between gap-3">
+    <View>
       <Text className="text-[18px] font-black text-[#3C2D34]">
-        Trải nghiệm cá nhân
-      </Text>
-      <Text className="text-[14px] font-semibold text-[#8A736A]">
-        {isCheckedIn ? "Bạn có thể chia sẻ" : "Check-in để chia sẻ"}
+        Xếp hạng và đánh giá
       </Text>
     </View>
   );
 }
 
-function PersonalExperienceStars({ rating }: { rating: number }) {
+function PersonalExperienceComposerStars() {
   return (
-    <View className="flex-row gap-0.5">
+    <View className="flex-row gap-1.5">
       {Array.from({ length: 5 }).map((_, index) => (
-        <Text
-          key={index}
-          style={{
-            color: index < rating ? "#F97356" : "#E2D6D0",
-            fontSize: 13,
-          }}
-        >
-          ★
-        </Text>
+        <SymbolView
+          key={`personal-review-star-${index}`}
+          name="star-border"
+          size={20}
+          tintColor="#9EA6AE"
+        />
       ))}
-    </View>
-  );
-}
-
-function PersonalExperienceRatingInput({
-  onChange,
-  rating,
-}: {
-  onChange: (rating: number) => void;
-  rating: number;
-}) {
-  return (
-    <View className="flex-row gap-2">
-      {Array.from({ length: 5 }).map((_, index) => {
-        const nextRating = index + 1;
-        const isActive = index < rating;
-
-        return (
-          <Pressable
-            key={`experience-rating-${nextRating}`}
-            className="h-10 w-10 items-center justify-center rounded-full"
-            onPress={() => onChange(nextRating)}
-            style={{ backgroundColor: isActive ? "#FFF1E8" : "#F7EEF4" }}
-          >
-            <Text
-              style={{
-                color: isActive ? "#F97356" : "#D8C8D1",
-                fontSize: 18,
-              }}
-            >
-              ★
-            </Text>
-          </Pressable>
-        );
-      })}
     </View>
   );
 }
@@ -2038,7 +2103,7 @@ function PersonalExperienceMediaThumb({
           </View>
           <View className="absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-1">
             <Text className="text-[12px] font-black text-white">
-              {item.duration ?? "0:30"}
+              {item.duration ?? "Video"}
             </Text>
           </View>
         </>
@@ -2048,131 +2113,47 @@ function PersonalExperienceMediaThumb({
 }
 
 function PersonalExperienceComposer({
-  canOpenStories,
-  draftText,
-  onChangeDraftText,
-  onListenStories,
-  onRatingChange,
-  onSubmit,
-  rating,
-  submitMessage,
+  avatarUri,
+  onPressCompose,
 }: PersonalExperienceComposerProps) {
-  const isSubmitDisabled = !draftText.trim();
-
   return (
-    <View className="rounded-[30px] bg-white px-5 py-5" style={cardShadowStyle}>
-      <View className="flex-row items-center justify-between gap-3">
-        <View className="flex-1">
-          <Text className="text-[17px] font-black text-[#2F242C]">
-            Viết bài post của bạn
-          </Text>
-          <Text className="mt-1 text-[14px] leading-5 text-[#7E6F82]">
-            Chia sẻ nhanh cảm nhận sau khi bạn đã check-in hotspot này.
-          </Text>
-        </View>
-
-        <View className="rounded-full bg-[#FFF4E8] px-3 py-2">
-          <Text className="text-[12px] font-black uppercase tracking-[0.7px] text-[#F58752]">
-            Đã mở khóa
-          </Text>
-        </View>
-      </View>
-
-      <View className="mt-5">
-        <Text className="text-[13px] font-black uppercase tracking-[0.8px] text-[#A897B2]">
-          Đánh giá nhanh
-        </Text>
-        <View className="mt-3">
-          <PersonalExperienceRatingInput onChange={onRatingChange} rating={rating} />
-        </View>
-      </View>
-
-      <View className="mt-5 overflow-hidden rounded-[24px] border border-[#F1E4EC] bg-[#FFF9FD] px-4 py-4">
-        <TextInput
-          multiline
-          maxLength={320}
-          onChangeText={onChangeDraftText}
-          placeholder="Điều gì làm bạn ấn tượng nhất ở hotspot này?"
-          placeholderTextColor="#AA9AAA"
-          style={{
-            color: "#2F242C",
-            fontSize: 15,
-            lineHeight: 22,
-            minHeight: 108,
-            padding: 0,
-            textAlignVertical: "top",
-          }}
-          value={draftText}
+    <View className="rounded-[30px] bg-white px-4 py-4" style={cardShadowStyle}>
+      <View className="flex-row items-center gap-3">
+        <Image
+          source={avatarUri}
+          contentFit="cover"
+          transition={120}
+          cachePolicy="memory-disk"
+          style={{ height: 44, width: 44, borderRadius: 22 }}
         />
+        <View className="flex-1">
+          <PersonalExperienceComposerStars />
+        </View>
       </View>
 
-      <View className="mt-3 flex-row items-center justify-between">
-        <Text className="text-[12px] font-medium text-[#A897B2]">
-          {`${draftText.trim().length}/320 ký tự`}
-        </Text>
-        <Text className="text-[12px] font-medium text-[#A897B2]">
-          Lưu trên thiết bị
-        </Text>
-      </View>
-
-      {submitMessage ? (
-        <Text className="mt-4 text-[13px] font-medium text-[#1F9D7A]">
-          {submitMessage}
-        </Text>
-      ) : null}
-
-      <View className="mt-5 flex-row flex-wrap gap-3">
-        <Pressable
-          className="overflow-hidden rounded-full"
-          disabled={isSubmitDisabled}
-          onPress={onSubmit}
-          style={buttonShadowStyle}
+      <Pressable
+        className="mt-4 overflow-hidden rounded-full"
+        onPress={onPressCompose}
+        style={buttonShadowStyle}
+      >
+        <View
+          className="flex-row items-center justify-center px-5 py-4"
+          style={{ backgroundColor: "#D8F2F9" }}
         >
-          <LinearGradient
-            colors={
-              isSubmitDisabled
-                ? ["#D7D3E1", "#C8C1D6", "#BBB3CB"]
-                : loginGradientColors
-            }
-            end={{ x: 1, y: 0.5 }}
-            locations={[0, 0.58, 1]}
-            start={{ x: 0, y: 0.5 }}
-            className="flex-row items-center px-5 py-3.5"
-            style={{ opacity: isSubmitDisabled ? 0.88 : 1 }}
-          >
-            <SymbolView
-              name={{
-                ios: "square.and.pencil",
-                android: "edit_note",
-                web: "edit_note",
-              }}
-              size={16}
-              tintColor="#FFFFFF"
-            />
-            <Text className="ml-2 text-[16px] font-black text-white">
-              Đăng bài
-            </Text>
-          </LinearGradient>
-        </Pressable>
-
-        <Pressable
-          className="items-center rounded-full border px-5 py-3.5"
-          disabled={!canOpenStories}
-          onPress={onListenStories}
-          style={{
-            backgroundColor: canOpenStories ? "#FFF0F6" : "#F5F2F7",
-            borderColor: canOpenStories ? "#F2CFE1" : "#E3DDE8",
-            opacity: canOpenStories ? 1 : 0.72,
-          }}
-        >
-          <Text
-            className="text-[16px] font-black"
-            style={{ color: canOpenStories ? "#EB489B" : "#9E93A7" }}
-          >
-            Xem story
+          <SymbolView
+            name={{
+              ios: "camera",
+              android: "photo_camera",
+              web: "photo_camera",
+            }}
+            size={16}
+            tintColor="#2A6B80"
+          />
+          <Text className="ml-2 text-[16px] font-black text-[#2A6B80]">
+            Thêm ảnh và video
           </Text>
-        </Pressable>
-      </View>
+        </View>
+      </Pressable>
     </View>
   );
 }
@@ -2186,33 +2167,36 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
         : "31.5%";
   const mediaHeight =
     item.media.length === 1 ? 180 : item.media.length === 2 ? 132 : 104;
+  const hasText = item.text.trim().length > 0;
 
   return (
     <View className="rounded-[30px] bg-white px-4 py-4" style={cardShadowStyle}>
-      <View className="flex-row items-start justify-between gap-3">
-        <View className="flex-row flex-1 items-center">
-          <Image
-            source={item.avatarUri}
-            contentFit="cover"
-            transition={120}
-            cachePolicy="memory-disk"
-            style={{ height: 44, width: 44, borderRadius: 22 }}
-          />
-          <View className="ml-3 flex-1">
-            <Text className="text-[16px] font-black text-[#2F242C]">
-              {item.user}
-            </Text>
-            <Text className="mt-0.5 text-[14px] text-[#8A7B83]">
-              {item.date}
-            </Text>
-          </View>
+      <View className="flex-row items-start">
+        <Image
+          source={item.avatarUri}
+          contentFit="cover"
+          transition={120}
+          cachePolicy="memory-disk"
+          style={{ height: 44, width: 44, borderRadius: 22 }}
+        />
+        <View className="ml-3 flex-1">
+          <Text className="text-[16px] font-black text-[#2F242C]">
+            {item.user}
+          </Text>
+          <Text className="mt-0.5 text-[14px] text-[#8A7B83]">
+            {item.date}
+          </Text>
         </View>
-        <PersonalExperienceStars rating={item.rating} />
       </View>
 
-      <Text className="mt-4 text-[15px] leading-6 text-[#554751]">
-        {item.text}
-      </Text>
+      <View className="mt-3 flex-row items-center justify-between gap-3">
+        <RatingStars rating={item.rating} size={13} />
+        <View className="rounded-full bg-[#FFF3DE] px-3 py-1.5">
+          <Text className="text-[12px] font-black text-[#B86D2A]">
+            {formatReviewRatingValue(item.rating)}/5
+          </Text>
+        </View>
+      </View>
 
       {item.media.length > 0 ? (
         <View className="mt-4 flex-row flex-wrap gap-3">
@@ -2226,6 +2210,12 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
           ))}
         </View>
       ) : null}
+
+      {hasText ? (
+        <Text className="mt-4 text-[15px] leading-6 text-[#554751]">
+          {item.text}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -2238,46 +2228,56 @@ function EmptyPersonalExperienceCard({
   return (
     <View className="rounded-[30px] bg-white px-5 py-5" style={cardShadowStyle}>
       <Text className="text-[16px] font-black text-[#2F242C]">
-        Chưa có trải nghiệm cá nhân
+        Chưa có bài đánh giá
       </Text>
       <Text className="mt-2 text-[15px] leading-6 text-[#6A5964]">
         {isCheckedIn
           ? "Bạn là người đầu tiên có thể để lại cảm nhận cho hotspot này."
-          : "Check-in tại hotspot để mở quyền chia sẻ trải nghiệm cá nhân."}
+          : "Check-in tại hotspot để mở quyền chia sẻ bài đánh giá của bạn."}
       </Text>
     </View>
   );
 }
 
 function PersonalExperienceSection({
+  averageRating,
   composer,
   isCheckedIn,
   items,
+  previewEntries,
+  reviewSummaryLabel,
 }: {
+  averageRating: number;
   composer?: PersonalExperienceComposerProps | null;
   isCheckedIn: boolean;
   items: PersonalExperienceItem[];
+  previewEntries: CommunityBoardEntry[];
+  reviewSummaryLabel: string;
 }) {
+  const [isShowingAllReviews, setIsShowingAllReviews] = useState(false);
+  const canToggleAllReviews = items.length > recentReviewPreviewCount;
+  const visibleItems =
+    canToggleAllReviews && !isShowingAllReviews
+      ? items.slice(0, recentReviewPreviewCount)
+      : items;
+  const reviewCountLabel =
+    items.length > 0
+      ? `${formatCompactCount(items.length)} cảm nhận đang hiển thị`
+      : "Chưa có cảm nhận nào";
+
   return (
     <View className="mt-8 gap-5">
-      <PersonalExperienceSectionHeader isCheckedIn={isCheckedIn} />
-
-      {isCheckedIn && composer ? (
-        <PersonalExperienceComposer
-          canOpenStories={composer.canOpenStories}
-          draftText={composer.draftText}
-          onChangeDraftText={composer.onChangeDraftText}
-          onListenStories={composer.onListenStories}
-          onRatingChange={composer.onRatingChange}
-          onSubmit={composer.onSubmit}
-          rating={composer.rating}
-          submitMessage={composer.submitMessage}
-        />
-      ) : null}
+      <PersonalExperienceSectionHeader />
+      <ReviewSummaryCard
+        averageRating={averageRating}
+        previewEntries={previewEntries}
+        reviewCountLabel={reviewCountLabel}
+        reviewSummaryLabel={reviewSummaryLabel}
+      />
 
       <View className="gap-4">
         {items.length > 0 ? (
-          items.map((item) => (
+          visibleItems.map((item) => (
             <PersonalExperienceCard key={item.id} item={item} />
           ))
         ) : (
@@ -2285,15 +2285,30 @@ function PersonalExperienceSection({
         )}
       </View>
 
-      {items.length > 0 ? (
+      {canToggleAllReviews ? (
         <Pressable
-          className="self-center rounded-full bg-[#FFF0F6] px-5 py-3"
+          className="self-center rounded-full bg-[#EFF7FB] px-5 py-3.5"
+          onPress={() => setIsShowingAllReviews((current) => !current)}
           style={cardShadowStyle}
         >
-          <Text className="text-[16px] font-black text-[#EB489B]">
-            Xem thêm
+          <Text className="text-[14px] font-black text-[#2A6B80]">
+            {isShowingAllReviews
+              ? "Ẩn bớt bài đánh giá"
+              : "Xem tất cả bài đánh giá"}
           </Text>
         </Pressable>
+      ) : null}
+
+      {isCheckedIn && composer ? (
+        <View className="gap-3">
+          <Text className="text-[16px] font-black text-[#3C2D34]">
+            Chia sẻ bài đánh giá của bạn
+          </Text>
+          <PersonalExperienceComposer
+            avatarUri={composer.avatarUri}
+            onPressCompose={composer.onPressCompose}
+          />
+        </View>
       ) : null}
     </View>
   );
@@ -2438,22 +2453,13 @@ function NotFoundState() {
 
 function LoadingState() {
   return (
-    <View className="flex-1" style={{ backgroundColor: screenBackground }}>
-      <SafeAreaView
-        className="flex-1"
-        edges={["top", "left", "right", "bottom"]}
-      >
+    <View style={{ backgroundColor: screenBackground, flex: 1 }}>
+      <SafeAreaView className="flex-1" edges={["top", "left", "right", "bottom"]}>
         <View className="flex-1 items-center justify-center px-6">
-          <View
-            className="w-full rounded-[32px] bg-[#F4F7FB] px-6 py-8"
-            style={[cardShadowStyle, { maxWidth: 360 }]}
-          >
-            <Text className="text-center text-[24px] font-black text-[#1E3245]">
-              Đang tải hotspot
-            </Text>
-            <Text className="mt-3 text-center text-[15px] leading-6 text-[#5E7486]">
-              App đang gọi API chi tiết hotspot theo id để hiển thị dữ liệu mới
-              nhất.
+          <View className="items-center">
+            <ActivityIndicator color="#F58752" size="large" />
+            <Text className="mt-4 text-center text-[22px] font-bold text-[#6D6278]">
+              Đang tải dữ liệu...
             </Text>
           </View>
         </View>
@@ -2511,7 +2517,7 @@ export default function HotspotDetailScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
-  const { height: screenHeight } = useWindowDimensions();
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const checkins = useCheckins();
   const checkedInApiHotspots = useCheckedInApiHotspots();
   const { hotspotId, slug } = useLocalSearchParams<{
@@ -2527,11 +2533,22 @@ export default function HotspotDetailScreen() {
   const [remoteHotspotError, setRemoteHotspotError] = useState<string | null>(
     null,
   );
+  const [apiRelatedRoutes, setApiRelatedRoutes] = useState<RouteItem[] | null>(
+    null,
+  );
+  const [relatedRoutesError, setRelatedRoutesError] = useState<string | null>(
+    null,
+  );
+  const [relatedRoutesStatus, setRelatedRoutesStatus] =
+    useState<RelatedRoutesSectionStatus>("idle");
   const [isRemoteCheckinStatusLoading, setIsRemoteCheckinStatusLoading] =
     useState(false);
   const [isRemoteHotspotLoading, setIsRemoteHotspotLoading] = useState(false);
   const resolvedSlug = Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "");
-  const resolvedHotspotId = resolveHotspotIdParam(hotspotId);
+  const resolvedHotspotId = resolveSelectedHotspotId({
+    hotspotId,
+    slug: resolvedSlug,
+  });
   const cachedStoriesEntry = getCachedHotspotStories({
     hotspotId: resolvedHotspotId,
     slug: resolvedSlug,
@@ -2546,12 +2563,6 @@ export default function HotspotDetailScreen() {
   const [gallerySelection, setGallerySelection] = useState(() => ({
     index: 0,
     slugKey: resolvedSlug,
-  }));
-  const [personalPostComposer, setPersonalPostComposer] = useState(() => ({
-    draftText: "",
-    rating: 5,
-    slugKey: resolvedSlug,
-    submitMessage: null as string | null,
   }));
   const heroHeightExpanded = clampNumber(
     screenHeight + insets.bottom + 12,
@@ -2751,28 +2762,25 @@ export default function HotspotDetailScreen() {
     };
   }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId]);
 
-  const localHotspot = getHotspotBySlug(resolvedSlug);
-  const remoteHotspotResult = remoteHotspot
-    ? buildHotspotFromApi({
-        apiHotspot: remoteHotspot,
-        fallbackHotspot: localHotspot,
-        routeSlug: resolvedSlug,
-      })
-    : null;
+  const localHotspot = useMemo(
+    () => getHotspotBySlug(resolvedSlug),
+    [resolvedSlug],
+  );
+  const remoteHotspotResult = useMemo(
+    () =>
+      remoteHotspot
+        ? buildHotspotFromApi({
+            apiHotspot: remoteHotspot,
+            fallbackHotspot: localHotspot,
+            routeSlug: resolvedSlug,
+          })
+        : null,
+    [localHotspot, remoteHotspot, resolvedSlug],
+  );
   const hotspot = remoteHotspotResult?.hotspot ?? localHotspot ?? null;
   const matchedLocalHotspot =
     remoteHotspotResult?.matchedLocalHotspot ?? localHotspot ?? null;
   const savedPersonalPosts = useHotspotPersonalPosts(hotspot?.slug ?? resolvedSlug);
-  const personalPostDraft =
-    personalPostComposer.slugKey === resolvedSlug
-      ? personalPostComposer.draftText
-      : "";
-  const personalPostRating =
-    personalPostComposer.slugKey === resolvedSlug ? personalPostComposer.rating : 5;
-  const personalPostSubmitMessage =
-    personalPostComposer.slugKey === resolvedSlug
-      ? personalPostComposer.submitMessage
-      : null;
 
   useEffect(() => {
     if (!hotspot) {
@@ -2785,6 +2793,80 @@ export default function HotspotDetailScreen() {
       slug: hotspot.slug,
     });
   }, [hotspot, resolvedHotspotId]);
+
+  useEffect(() => {
+    if (!hotspot) {
+      return;
+    }
+
+    let isActive = true;
+    const fallbackRoutes = getRelatedRoutesForHotspot(hotspot);
+
+    const loadRelatedRoutes = async () => {
+      if (resolvedHotspotId === null) {
+        setApiRelatedRoutes(null);
+        setRelatedRoutesError(null);
+        setRelatedRoutesStatus("idle");
+        return;
+      }
+
+      setRelatedRoutesStatus("loading");
+      setRelatedRoutesError(null);
+
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const remoteRoutes = await getRoutesByHotspot({
+          accessToken,
+          hotspotId: resolvedHotspotId,
+          routeStatus: "PUBLISHED",
+          tokenType: authSession.tokenType,
+        });
+        const mappedRoutes = dedupeRouteItemsById(
+          remoteRoutes.map(mapRouteToRouteItem),
+        );
+
+        if (!isActive) {
+          return;
+        }
+
+        setApiRelatedRoutes(mappedRoutes);
+        setRelatedRoutesStatus(mappedRoutes.length > 0 ? "ready" : "empty");
+      } catch (error) {
+        console.warn("[hotspot-detail] load related routes failed", {
+          error: error instanceof Error ? error.message : error,
+          hotspotId: resolvedHotspotId,
+          slug: hotspot.slug,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setApiRelatedRoutes(fallbackRoutes);
+        setRelatedRoutesError(
+          `${
+            error instanceof Error
+              ? error.message
+              : "Không tải được tuyến theo hotspotId."
+          } Đang hiển thị dữ liệu cục bộ.`,
+        );
+        setRelatedRoutesStatus("fallback");
+      }
+    };
+
+    void loadRelatedRoutes();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    hotspot,
+    resolvedHotspotId,
+  ]);
 
   useEffect(() => {
     if (!hotspot || resolvedHotspotId === null) {
@@ -2808,10 +2890,9 @@ export default function HotspotDetailScreen() {
         const accessToken = authSession.isAuthenticated
           ? await getValidAccessToken()
           : null;
-        const stories = await getHotspotStories({
+        const stories = await getUnlockedHotspotStories({
           accessToken,
           hotspotId: resolvedHotspotId,
-          status: "DRAFT",
           tokenType: authSession.tokenType,
         });
         const mappedStories = buildHotspotThemeStoriesFromApi(hotspot, stories);
@@ -2897,12 +2978,41 @@ export default function HotspotDetailScreen() {
     resolvedHotspotId !== null &&
     !isCheckedIn &&
     (isRemoteHotspotLoading || isRemoteCheckinStatusLoading);
+  const detailSheetBottomPadding = isCheckedIn
+    ? Math.max(insets.bottom + 28, 44)
+    : Math.max(insets.bottom + 128, 148);
   const audioStoryDurationLabel = getAudioStoryDurationLabel(hotspot.story);
   const hotspotStoriesHref =
     resolvedHotspotId !== null
       ? (`/hotspot/${hotspot.slug}/stories?hotspotId=${resolvedHotspotId}` as Href)
       : (`/hotspot/${hotspot.slug}/stories` as Href);
-  const relatedRoutes = getRelatedRoutesForHotspot(hotspot);
+  const reviewComposeHref = {
+    params: {
+      ...(resolvedHotspotId !== null ? { hotspotId: `${resolvedHotspotId}` } : {}),
+      slug: hotspot.slug,
+      title: hotspot.title,
+    },
+    pathname: "/hotspot/[slug]/review-compose",
+  } as Href;
+  const localRelatedRoutes = getRelatedRoutesForHotspot(hotspot);
+  const hasPersistedRelatedRoutes =
+    Array.isArray(apiRelatedRoutes) && apiRelatedRoutes.length > 0;
+  const isRelatedRoutesLoading =
+    resolvedHotspotId !== null &&
+    relatedRoutesStatus === "loading" &&
+    !hasPersistedRelatedRoutes;
+  const relatedRoutes =
+    resolvedHotspotId === null
+      ? localRelatedRoutes
+      : relatedRoutesStatus === "ready" ||
+          relatedRoutesStatus === "fallback" ||
+          (relatedRoutesStatus === "loading" && hasPersistedRelatedRoutes)
+        ? (apiRelatedRoutes ?? [])
+        : [];
+  const relatedRouteCardWidth = Math.min(
+    Math.max((screenWidth - relatedRouteScrollInset * 2) * 0.72, 236),
+    272,
+  );
   const currentHotspotRouteIds = getRouteLookupIds(hotspot);
   const routeProgressRoute = relatedRoutes.find((route) =>
     route.hotspotIds.some((routeHotspotId) =>
@@ -2932,32 +3042,10 @@ export default function HotspotDetailScreen() {
     ...savedPersonalExperienceItems,
     ...samplePersonalExperienceItems,
   ];
-  const personalPostAuthorName = authSession.displayName.trim()
-    ? authSession.displayName.trim().replace(/^./, (value) => value.toUpperCase())
-    : "Bạn";
-  const handleSubmitPersonalPost = () => {
-    const normalizedDraft = personalPostDraft.trim();
-
-    if (!normalizedDraft) {
-      return;
-    }
-
-    addHotspotPersonalPost({
-      authorAvatarUri: avatarImageUri,
-      authorName: personalPostAuthorName,
-      hotspotId: resolvedHotspotId,
-      hotspotSlug: hotspot.slug,
-      rating: personalPostRating,
-      text: normalizedDraft,
-    });
-
-    setPersonalPostComposer({
-      draftText: "",
-      rating: 5,
-      slugKey: resolvedSlug,
-      submitMessage: "Bài post của bạn đã được lưu cho hotspot này.",
-    });
-  };
+  const personalExperienceAverageRating = getAveragePersonalExperienceRating(
+    personalExperienceItems,
+    hotspot.rating,
+  );
   const reviewSummaryLabel = buildReviewSummaryLabel({
     apiHotspot: remoteHotspot,
     matchedLocalHotspot,
@@ -3089,13 +3177,14 @@ export default function HotspotDetailScreen() {
 
       <SafeAreaView className="flex-1" edges={["left", "right", "bottom"]}>
         <Animated.ScrollView
+          bounces={false}
+          overScrollMode="never"
           style={{
             elevation: Platform.OS === "android" ? 2 : undefined,
             flex: 1,
             zIndex: 1,
           }}
           contentContainerStyle={{
-            paddingBottom: Math.max(insets.bottom + 172, 188),
             paddingTop: heroHeightExpanded - contentOverlap,
           }}
           onScroll={handleScroll}
@@ -3151,13 +3240,14 @@ export default function HotspotDetailScreen() {
           ) : null}
 
           <Animated.View
-            className="rounded-t-[34px] rounded-b-[34px] px-5 pb-6 pt-4"
+            className="rounded-t-[34px] rounded-b-[34px] px-5 pt-4"
             style={[
               sheetShadowStyle,
               sheetLiftStyle,
               {
                 backgroundColor: panelBackground,
                 minHeight: screenHeight,
+                paddingBottom: detailSheetBottomPadding,
                 position: "relative",
                 zIndex: 2,
               },
@@ -3209,24 +3299,6 @@ export default function HotspotDetailScreen() {
 
               <SummaryStatsRow items={summaryStats} />
 
-              <View className="mt-5 flex-row items-center justify-between">
-                <View className="flex-row items-center">
-                  {reviewerPreviewEntries.map((entry, index) => (
-                    <AvatarPreview
-                      key={`${hotspot.slug}-avatar-${index}`}
-                      imageUri={entry.avatarUri}
-                      index={index}
-                    />
-                  ))}
-                </View>
-
-                <View className="rounded-full bg-[#F7EFF6] px-3 py-2">
-                  <Text className="text-[13px] font-bold text-[#7E6F82]">
-                    {reviewSummaryLabel}
-                  </Text>
-                </View>
-              </View>
-
               <View className="mt-5">
                 <DirectionMapCard
                   address={hotspot.address}
@@ -3262,70 +3334,90 @@ export default function HotspotDetailScreen() {
             <View className="mt-8 gap-5">
               <RouteMatchesSectionHeader />
 
-              {relatedRoutes.length > 0 ? (
+              {isRelatedRoutesLoading ? (
+                <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
+                  <Text className="text-[15px] font-bold text-[#3B4454]">
+                    Đang tải tuyến phù hợp
+                  </Text>
+                  <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+                    App đang gọi API route theo hotspotId hiện tại để hiển thị
+                    danh sách published.
+                  </Text>
+                </View>
+              ) : null}
+
+              {relatedRoutesError ? (
+                <View className="rounded-[22px] border border-[#F9E2EA] bg-[#FFF8FC] px-4 py-4">
+                  <Text className="text-[14px] font-bold text-[#C2416C]">
+                    {relatedRoutesError}
+                  </Text>
+                </View>
+              ) : null}
+
+              {!isRelatedRoutesLoading && relatedRoutes.length > 0 ? (
                 <ScrollView
                   horizontal
-                  contentContainerStyle={{ paddingRight: 4 }}
+                  contentContainerStyle={{
+                    paddingLeft: relatedRouteScrollInset,
+                    paddingRight: relatedRouteScrollInset,
+                  }}
+                  nestedScrollEnabled
                   showsHorizontalScrollIndicator={false}
+                  style={{
+                    marginHorizontal: -relatedRouteScrollInset,
+                    width: screenWidth,
+                  }}
                 >
                   {relatedRoutes.map((route, index) => (
                     <View
                       key={`${hotspot.slug}-related-route-${route.id}`}
                       className={
-                        index === relatedRoutes.length - 1 ? "" : "mr-3"
+                        index === relatedRoutes.length - 1 ? "" : "mr-4"
                       }
+                      style={{ width: relatedRouteCardWidth }}
                     >
-                      <HotspotRouteCarouselCard route={route} />
+                      <HotspotRouteCarouselCard
+                        route={route}
+                        width={relatedRouteCardWidth}
+                      />
                     </View>
                   ))}
                 </ScrollView>
-              ) : (
+              ) : !isRelatedRoutesLoading ? (
                 <View
                   className="rounded-[28px] bg-white px-5 py-5"
                   style={cardShadowStyle}
                 >
                   <Text className="text-[16px] font-black text-[#1E3142]">
-                    Chua co route truc tiep
+                    {resolvedHotspotId !== null &&
+                    relatedRoutesStatus === "empty"
+                      ? "Chưa có route published"
+                      : "Chua co route truc tiep"}
                   </Text>
                   <Text className="mt-2 text-[15px] leading-6 text-[#5E7486]">
-                    Hotspot nay hien chua duoc gan vao mot tuyen route cu the
-                    trong du lieu mau.
+                    {resolvedHotspotId !== null &&
+                    relatedRoutesStatus === "empty"
+                      ? `API route theo hotspot/${resolvedHotspotId} hiện chưa trả về tuyến published nào cho điểm đến này.`
+                      : "Hotspot nay hien chua duoc gan vao mot tuyen route cu the trong du lieu mau."}
                   </Text>
                 </View>
-              )}
+              ) : null}
             </View>
 
             <PersonalExperienceSection
+              averageRating={personalExperienceAverageRating}
               composer={
                 isCheckedIn
                   ? {
-                      canOpenStories,
-                      draftText: personalPostDraft,
-                      onChangeDraftText: (text) => {
-                        setPersonalPostComposer({
-                          draftText: text,
-                          rating: personalPostRating,
-                          slugKey: resolvedSlug,
-                          submitMessage: null,
-                        });
-                      },
-                      onListenStories: () => router.push(hotspotStoriesHref),
-                      onRatingChange: (rating) => {
-                        setPersonalPostComposer({
-                          draftText: personalPostDraft,
-                          rating,
-                          slugKey: resolvedSlug,
-                          submitMessage: null,
-                        });
-                      },
-                      onSubmit: handleSubmitPersonalPost,
-                      rating: personalPostRating,
-                      submitMessage: personalPostSubmitMessage,
+                      avatarUri: avatarImageUri,
+                      onPressCompose: () => router.push(reviewComposeHref),
                     }
                   : null
               }
               isCheckedIn={isCheckedIn}
               items={personalExperienceItems}
+              previewEntries={reviewerPreviewEntries}
+              reviewSummaryLabel={reviewSummaryLabel}
             />
 
             <View className="mt-5 gap-3">

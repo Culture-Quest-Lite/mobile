@@ -16,6 +16,7 @@ import {
 } from "react-native-safe-area-context";
 
 import { useAuthSession } from "@/features/auth/hooks/use-auth-session";
+import { getCachedHotspotDetail } from "@/features/home/data/hotspot-detail-cache";
 import {
   getHotspotHref,
   type HotspotDetail,
@@ -537,7 +538,14 @@ export default function ProfileScreen() {
                   <LikedHotspotCard
                     key={hotspot.slug}
                     hotspot={hotspot}
-                    onPress={() => router.push(getHotspotHref(hotspot.slug))}
+                    onPress={() =>
+                      router.push(
+                        getHotspotHref(
+                          hotspot.slug,
+                          getCachedHotspotDetail({ slug: hotspot.slug })?.hotspotId,
+                        ),
+                      )
+                    }
                   />
                 ))}
               </View>

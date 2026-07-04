@@ -10,6 +10,8 @@ type GetHotspotStoriesRequest = {
   tokenType?: string | null;
 };
 
+type GetUnlockedHotspotStoriesRequest = Omit<GetHotspotStoriesRequest, "status">;
+
 export type HotspotStoryTagDto = {
   createdAt: string;
   hotspotCount: number | null;
@@ -317,4 +319,59 @@ export async function getHotspotStories({
 
     return left.storyId - right.storyId;
   });
+}
+
+export async function getUnlockedHotspotStories({
+  accessToken,
+  hotspotId,
+  tagId,
+  tokenType,
+}: GetUnlockedHotspotStoriesRequest): Promise<HotspotStoryDto[]> {
+  try {
+    const publishedStories = await getHotspotStories({
+      accessToken,
+      hotspotId,
+      status: "PUBLISHED",
+      tagId,
+      tokenType,
+    });
+
+    if (publishedStories.length > 0) {
+      return publishedStories;
+    }
+
+    try {
+      const draftStories = await getHotspotStories({
+        accessToken,
+        hotspotId,
+        status: "DRAFT",
+        tagId,
+        tokenType,
+      });
+
+      return draftStories.length > 0 ? draftStories : publishedStories;
+    } catch (draftError) {
+      console.info("[stories] draft fallback failed after empty published result", {
+        error: serializeError(draftError),
+        hotspotId,
+        tagId,
+      });
+
+      return publishedStories;
+    }
+  } catch (publishedError) {
+    console.warn("[stories] published stories load failed, trying draft fallback", {
+      error: serializeError(publishedError),
+      hotspotId,
+      tagId,
+    });
+
+    return getHotspotStories({
+      accessToken,
+      hotspotId,
+      status: "DRAFT",
+      tagId,
+      tokenType,
+    });
+  }
 }

@@ -55,12 +55,12 @@ export const storyThemeTabs: {
 ];
 
 const storyCardBaseLayout = {
-  cardHeight: 138,
-  imageBottom: -50,
-  imageHeight: 246,
-  imageRight: -18,
-  imageWidth: 182,
-  textWidth: 43,
+  cardHeight: 142,
+  imageBottom: -10,
+  imageHeight: 232,
+  imageRight: -6,
+  imageWidth: 176,
+  textWidth: 44,
 } as const;
 
 const storyImageByTag: Record<StoryThemeTag, number> = {
