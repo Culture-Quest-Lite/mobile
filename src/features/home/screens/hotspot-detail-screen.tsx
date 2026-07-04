@@ -55,17 +55,15 @@ import {
   getRoutesByHotspot,
   mapRouteToRouteItem,
 } from "@/features/route/api/route-api";
+import type { ProfilePost } from "@/features/profile/types";
 import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
+import { getHotspotPosts } from "../api/get-hotspot-posts";
 import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
 import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
 import { HiddenStoryUnlockedContent } from "../components/hidden-story-unlocked-content";
 import { HotspotGpsCheckinOverlay } from "../components/hotspot-gps-checkin-overlay";
-import {
-  avatarImageUri,
-  communityBoards,
-  type CommunityBoardEntry,
-} from "../data/home-screen.mock";
+import { avatarImageUri } from "../data/home-screen.mock";
 import { cacheHotspotDetail } from "../data/hotspot-detail-cache";
 import {
   useHotspotPersonalPosts,
@@ -130,6 +128,7 @@ const defaultRemoteHotspotImageUri =
 const meaninglessApiTextValues = new Set(["", "string", "null", "undefined"]);
 const mapLoadTimeoutMs = 6000;
 const recentReviewPreviewCount = 2;
+const hotspotPostsPageSize = 10;
 
 const heroShadowStyle = {
   shadowColor: "rgba(15, 23, 42, 0.20)",
@@ -471,62 +470,12 @@ async function openHotspotDirections(params: {
   }
 }
 
-function formatCompactCount(value: number | string) {
-  const resolvedValue =
-    typeof value === "number" ? value : Number(value.replace(/\D/g, ""));
-
-  if (!Number.isFinite(resolvedValue) || resolvedValue <= 0) {
-    return `${value}`;
-  }
-
-  if (resolvedValue >= 1000) {
-    return `${(resolvedValue / 1000).toFixed(1)}K`;
-  }
-
-  return `${resolvedValue}`;
-}
-
-function buildReviewSummaryLabel({
-  apiHotspot,
-  matchedLocalHotspot,
-}: {
-  apiHotspot: NearbyHotspotDto | null;
-  matchedLocalHotspot?: HotspotDetail | null;
-}) {
-  if (matchedLocalHotspot?.reviews?.trim()) {
-    return `${formatCompactCount(matchedLocalHotspot.reviews)} reviews`;
-  }
-
-  if (apiHotspot?.point !== null && apiHotspot?.point !== undefined) {
-    return `${formatCompactCount(apiHotspot.point)} điểm`;
-  }
-
-  return "Chi tiết từ API";
-}
-
 function clampReviewRatingValue(value: number) {
   return Number.isFinite(value) ? clampNumber(value, 0, 5) : 0;
 }
 
 function formatReviewRatingValue(value: number) {
   return clampReviewRatingValue(value).toFixed(1);
-}
-
-function getAveragePersonalExperienceRating(
-  items: PersonalExperienceItem[],
-  fallbackRating: number,
-) {
-  const ratedItems = items
-    .map((item) => clampReviewRatingValue(item.rating))
-    .filter((rating) => rating > 0);
-
-  if (ratedItems.length === 0) {
-    return clampReviewRatingValue(fallbackRating);
-  }
-
-  const totalRating = ratedItems.reduce((sum, rating) => sum + rating, 0);
-
-  return clampReviewRatingValue(totalRating / ratedItems.length);
 }
 
 function getRewardValue(reward: string) {
@@ -764,73 +713,6 @@ function dedupeRouteItemsById(items: RouteItem[]) {
   );
 }
 
-function buildPersonalExperienceItems(
-  hotspot: HotspotDetail,
-  galleryImages: string[],
-): PersonalExperienceItem[] {
-  const authors = [
-    ...communityBoards.community.entries,
-    ...communityBoards.friends.entries,
-  ];
-  const safeGallery =
-    galleryImages.length > 0 ? galleryImages : [hotspot.imageUri];
-
-  return [
-    {
-      avatarUri: authors[0]?.avatarUri ?? avatarImageUri,
-      date: "3 ngày trước",
-      id: `${hotspot.slug}-experience-0`,
-      media: [
-        { type: "image", uri: safeGallery[0] ?? hotspot.imageUri },
-        {
-          type: "image",
-          uri: safeGallery[1] ?? safeGallery[0] ?? hotspot.imageUri,
-        },
-        {
-          duration: "0:38",
-          type: "video",
-          uri: safeGallery[2] ?? safeGallery[0] ?? hotspot.imageUri,
-        },
-      ],
-      rating: 5,
-      text: `Câu chuyện lịch sử rất xúc động, kiến trúc đẹp vượt thời gian. ${hotspot.tips[0] ?? hotspot.overview}`,
-      user: authors[0]?.name ?? "Minh Anh",
-    },
-    {
-      avatarUri: authors[1]?.avatarUri ?? avatarImageUri,
-      date: "1 tuần trước",
-      id: `${hotspot.slug}-experience-1`,
-      media: [
-        {
-          type: "image",
-          uri: safeGallery[1] ?? safeGallery[0] ?? hotspot.imageUri,
-        },
-      ],
-      rating: 4,
-      text: `Phần audio guide nghe rất tình cảm. ${hotspot.tips[1] ?? hotspot.overview}`,
-      user: authors[1]?.name ?? "Khánh Linh",
-    },
-    {
-      avatarUri: authors[2]?.avatarUri ?? avatarImageUri,
-      date: "2 tuần trước",
-      id: `${hotspot.slug}-experience-2`,
-      media: [
-        {
-          type: "image",
-          uri: safeGallery[3] ?? safeGallery[0] ?? hotspot.imageUri,
-        },
-        {
-          type: "image",
-          uri: safeGallery[2] ?? safeGallery[1] ?? hotspot.imageUri,
-        },
-      ],
-      rating: 5,
-      text: `Đi cùng nhóm bạn, mở khóa story xong cả bọn ngồi lại đọc, cảm giác rất hợp với vibe ${hotspot.category.toLowerCase()} ở đây.`,
-      user: authors[2]?.name ?? "Đức Huy",
-    },
-  ];
-}
-
 function formatPersonalExperienceDate(isoTimestamp: string) {
   const parsedDate = new Date(isoTimestamp);
 
@@ -883,6 +765,51 @@ function buildSavedPersonalExperienceItems(
     text: post.text,
     user: post.authorName,
   }));
+}
+
+function buildApiPersonalExperienceItems(
+  posts: ProfilePost[],
+): PersonalExperienceItem[] {
+  return posts.map((post) => {
+    const resolvedMedia = (post.medias.length > 0
+      ? post.medias.map((media) => ({
+          duration:
+            media.type.trim().toUpperCase() === "VIDEO" ? "Video" : undefined,
+          type:
+            media.type.trim().toUpperCase() === "VIDEO"
+              ? ("video" as const)
+              : ("image" as const),
+          uri: media.url,
+        }))
+      : post.image
+        ? [
+            {
+              type: "image" as const,
+              uri: post.image,
+            },
+          ]
+        : []
+    ).filter((media) => Boolean(readMeaningfulApiText(media.uri)));
+
+    return {
+      avatarUri: avatarImageUri,
+      date: formatPersonalExperienceDate(post.createdAt ?? ""),
+      id: post.id,
+      media: resolvedMedia,
+      rating: 0,
+      text: post.text,
+      user:
+        readMeaningfulApiText(post.displayName) ??
+        readMeaningfulApiText(post.username) ??
+        "Người dùng",
+    };
+  });
+}
+
+function dedupePersonalExperienceItems(items: PersonalExperienceItem[]) {
+  return Array.from(
+    new Map(items.map((item) => [item.id, item] as const)).values(),
+  );
 }
 
 function getAudioStoryDurationLabel(story: string) {
@@ -994,29 +921,6 @@ function SummaryStatsRow({ items }: { items: SummaryStatItem[] }) {
   );
 }
 
-function AvatarPreview({
-  imageUri,
-  index,
-}: {
-  imageUri: string;
-  index: number;
-}) {
-  return (
-    <View
-      className="overflow-hidden rounded-full border-2 border-white"
-      style={{ height: 34, marginLeft: index === 0 ? 0 : -8, width: 34 }}
-    >
-      <Image
-        source={imageUri}
-        contentFit="cover"
-        transition={140}
-        cachePolicy="memory-disk"
-        style={{ height: "100%", width: "100%" }}
-      />
-    </View>
-  );
-}
-
 function RatingStars({
   activeTintColor = "#FFC93C",
   inactiveTintColor = "#E8D8E1",
@@ -1052,69 +956,6 @@ function RatingStars({
           />
         );
       })}
-    </View>
-  );
-}
-
-function ReviewSummaryCard({
-  averageRating,
-  previewEntries,
-  reviewCountLabel,
-  reviewSummaryLabel,
-}: {
-  averageRating: number;
-  previewEntries: CommunityBoardEntry[];
-  reviewCountLabel: string;
-  reviewSummaryLabel: string;
-}) {
-  return (
-    <View className="rounded-[30px] bg-[#FFF8FC] px-5 py-5" style={cardShadowStyle}>
-      <View className="flex-row items-start justify-between gap-3">
-        <View className="flex-1">
-          <Text className="text-[12px] font-semibold uppercase tracking-[1px] text-[#9D7E8F]">
-            Xếp hạng cộng đồng
-          </Text>
-          <View className="mt-2 flex-row items-end gap-3">
-            <Text className="text-[36px] font-black leading-none text-[#2F242C]">
-              {formatReviewRatingValue(averageRating)}
-            </Text>
-            <View className="pb-1">
-              <RatingStars rating={averageRating} size={15} />
-              <Text className="mt-1 text-[13px] font-semibold text-[#7A6673]">
-                {reviewCountLabel}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View className="self-start rounded-full bg-white px-3 py-2">
-          <Text className="text-[13px] font-bold text-[#7E6F82]">
-            {reviewSummaryLabel}
-          </Text>
-        </View>
-      </View>
-
-      <View className="mt-4 h-px bg-[#F0E4EA]" />
-
-      <View className="mt-4 gap-3">
-        {previewEntries.length > 0 ? (
-          <View className="flex-row items-center">
-            {previewEntries.map((entry, index) => (
-              <AvatarPreview
-                key={`review-summary-avatar-${index}`}
-                imageUri={entry.avatarUri}
-                index={index}
-              />
-            ))}
-          </View>
-        ) : null}
-
-        <Text className="text-[13px] leading-5 text-[#7A6673]">
-          {previewEntries.length > 0
-            ? "Những cảm nhận mới nhất từ cộng đồng đang được hiển thị bên dưới."
-            : "Check-in để mở bài đánh giá đầu tiên cho hotspot này."}
-        </Text>
-      </View>
     </View>
   );
 }
@@ -2168,6 +2009,7 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
   const mediaHeight =
     item.media.length === 1 ? 180 : item.media.length === 2 ? 132 : 104;
   const hasText = item.text.trim().length > 0;
+  const hasRating = item.rating > 0;
 
   return (
     <View className="rounded-[30px] bg-white px-4 py-4" style={cardShadowStyle}>
@@ -2189,14 +2031,16 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
         </View>
       </View>
 
-      <View className="mt-3 flex-row items-center justify-between gap-3">
-        <RatingStars rating={item.rating} size={13} />
-        <View className="rounded-full bg-[#FFF3DE] px-3 py-1.5">
-          <Text className="text-[12px] font-black text-[#B86D2A]">
-            {formatReviewRatingValue(item.rating)}/5
-          </Text>
+      {hasRating ? (
+        <View className="mt-3 flex-row items-center justify-between gap-3">
+          <RatingStars rating={item.rating} size={13} />
+          <View className="rounded-full bg-[#FFF3DE] px-3 py-1.5">
+            <Text className="text-[12px] font-black text-[#B86D2A]">
+              {formatReviewRatingValue(item.rating)}/5
+            </Text>
+          </View>
         </View>
-      </View>
+      ) : null}
 
       {item.media.length > 0 ? (
         <View className="mt-4 flex-row flex-wrap gap-3">
@@ -2239,20 +2083,42 @@ function EmptyPersonalExperienceCard({
   );
 }
 
+function PersonalExperienceLoadingCard() {
+  return (
+    <View className="rounded-[30px] bg-white px-5 py-5" style={cardShadowStyle}>
+      <View className="flex-row items-center">
+        <ActivityIndicator color="#EB489B" />
+        <Text className="ml-3 text-[15px] font-bold text-[#2F242C]">
+          Đang tải bài đánh giá từ hotspot
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function PersonalExperienceErrorCard({ message }: { message: string }) {
+  return (
+    <View
+      className="rounded-[30px] border border-[#F9E2EA] bg-[#FFF8FC] px-5 py-5"
+      style={cardShadowStyle}
+    >
+      <Text className="text-[14px] font-bold text-[#C2416C]">{message}</Text>
+    </View>
+  );
+}
+
 function PersonalExperienceSection({
-  averageRating,
   composer,
   isCheckedIn,
+  isLoadingReviews = false,
   items,
-  previewEntries,
-  reviewSummaryLabel,
+  reviewsErrorMessage,
 }: {
-  averageRating: number;
   composer?: PersonalExperienceComposerProps | null;
   isCheckedIn: boolean;
+  isLoadingReviews?: boolean;
   items: PersonalExperienceItem[];
-  previewEntries: CommunityBoardEntry[];
-  reviewSummaryLabel: string;
+  reviewsErrorMessage?: string | null;
 }) {
   const [isShowingAllReviews, setIsShowingAllReviews] = useState(false);
   const canToggleAllReviews = items.length > recentReviewPreviewCount;
@@ -2260,23 +2126,19 @@ function PersonalExperienceSection({
     canToggleAllReviews && !isShowingAllReviews
       ? items.slice(0, recentReviewPreviewCount)
       : items;
-  const reviewCountLabel =
-    items.length > 0
-      ? `${formatCompactCount(items.length)} cảm nhận đang hiển thị`
-      : "Chưa có cảm nhận nào";
 
   return (
     <View className="mt-8 gap-5">
       <PersonalExperienceSectionHeader />
-      <ReviewSummaryCard
-        averageRating={averageRating}
-        previewEntries={previewEntries}
-        reviewCountLabel={reviewCountLabel}
-        reviewSummaryLabel={reviewSummaryLabel}
-      />
+
+      {reviewsErrorMessage ? (
+        <PersonalExperienceErrorCard message={reviewsErrorMessage} />
+      ) : null}
 
       <View className="gap-4">
-        {items.length > 0 ? (
+        {isLoadingReviews && items.length === 0 ? (
+          <PersonalExperienceLoadingCard />
+        ) : items.length > 0 ? (
           visibleItems.map((item) => (
             <PersonalExperienceCard key={item.id} item={item} />
           ))
@@ -2524,6 +2386,11 @@ export default function HotspotDetailScreen() {
     hotspotId?: string;
     slug: string;
   }>();
+  const resolvedSlug = Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "");
+  const resolvedHotspotId = resolveSelectedHotspotId({
+    hotspotId,
+    slug: resolvedSlug,
+  });
   const scrollY = useSharedValue(0);
   const [isCheckinOverlayVisible, setIsCheckinOverlayVisible] = useState(false);
   const [isStickyCheckinVisible, setIsStickyCheckinVisible] = useState(false);
@@ -2544,11 +2411,13 @@ export default function HotspotDetailScreen() {
   const [isRemoteCheckinStatusLoading, setIsRemoteCheckinStatusLoading] =
     useState(false);
   const [isRemoteHotspotLoading, setIsRemoteHotspotLoading] = useState(false);
-  const resolvedSlug = Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "");
-  const resolvedHotspotId = resolveSelectedHotspotId({
-    hotspotId,
-    slug: resolvedSlug,
-  });
+  const [apiHotspotPosts, setApiHotspotPosts] = useState<ProfilePost[]>([]);
+  const [hotspotPostsError, setHotspotPostsError] = useState<string | null>(
+    null,
+  );
+  const [isHotspotPostsLoading, setIsHotspotPostsLoading] = useState(
+    () => resolvedHotspotId !== null,
+  );
   const cachedStoriesEntry = getCachedHotspotStories({
     hotspotId: resolvedHotspotId,
     slug: resolvedSlug,
@@ -2651,6 +2520,69 @@ export default function HotspotDetailScreen() {
       scrollY.value = event.contentOffset.y;
     },
   });
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadHotspotPosts = async () => {
+      if (resolvedHotspotId === null) {
+        setApiHotspotPosts([]);
+        setHotspotPostsError(null);
+        setIsHotspotPostsLoading(false);
+        return;
+      }
+
+      setIsHotspotPostsLoading(true);
+      setApiHotspotPosts([]);
+      setHotspotPostsError(null);
+
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const response = await getHotspotPosts({
+          accessToken,
+          hotspotId: resolvedHotspotId,
+          page: 0,
+          size: hotspotPostsPageSize,
+          tokenType: authSession.tokenType,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setApiHotspotPosts(response.content);
+      } catch (error) {
+        console.warn("[hotspot-detail] load hotspot posts failed", {
+          error: error instanceof Error ? error.message : error,
+          hotspotId: resolvedHotspotId,
+          slug: resolvedSlug,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setApiHotspotPosts([]);
+        setHotspotPostsError(
+          error instanceof Error
+            ? error.message
+            : "Không tải được bài đánh giá theo hotspotId.",
+        );
+      } finally {
+        if (isActive) {
+          setIsHotspotPostsLoading(false);
+        }
+      }
+    };
+
+    void loadHotspotPosts();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId, resolvedSlug]);
 
   useEffect(() => {
     let isActive = true;
@@ -3034,26 +2966,13 @@ export default function HotspotDetailScreen() {
   const savedPersonalExperienceItems = buildSavedPersonalExperienceItems(
     savedPersonalPosts,
   );
-  const samplePersonalExperienceItems = buildPersonalExperienceItems(
-    hotspot,
-    galleryPreviewImages,
+  const apiPersonalExperienceItems = buildApiPersonalExperienceItems(
+    apiHotspotPosts,
   );
-  const personalExperienceItems = [
+  const personalExperienceItems = dedupePersonalExperienceItems([
     ...savedPersonalExperienceItems,
-    ...samplePersonalExperienceItems,
-  ];
-  const personalExperienceAverageRating = getAveragePersonalExperienceRating(
-    personalExperienceItems,
-    hotspot.rating,
-  );
-  const reviewSummaryLabel = buildReviewSummaryLabel({
-    apiHotspot: remoteHotspot,
-    matchedLocalHotspot,
-  });
-  const reviewerPreviewEntries: CommunityBoardEntry[] = [
-    ...communityBoards.community.entries,
-    ...communityBoards.friends.entries,
-  ].slice(0, 3);
+    ...apiPersonalExperienceItems,
+  ]);
   const summaryStats = buildSummaryStats({
     apiHotspot: remoteHotspot,
     hotspot,
@@ -3405,7 +3324,6 @@ export default function HotspotDetailScreen() {
             </View>
 
             <PersonalExperienceSection
-              averageRating={personalExperienceAverageRating}
               composer={
                 isCheckedIn
                   ? {
@@ -3415,9 +3333,9 @@ export default function HotspotDetailScreen() {
                   : null
               }
               isCheckedIn={isCheckedIn}
+              isLoadingReviews={isHotspotPostsLoading}
               items={personalExperienceItems}
-              previewEntries={reviewerPreviewEntries}
-              reviewSummaryLabel={reviewSummaryLabel}
+              reviewsErrorMessage={hotspotPostsError}
             />
 
             <View className="mt-5 gap-3">
