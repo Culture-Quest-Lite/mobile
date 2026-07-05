@@ -1745,6 +1745,9 @@ export default function HomeScreen() {
   const handleOpenRoutes = () => {
     router.push("/route");
   };
+  const handleOpenSubscription = () => {
+    router.push("/subscription");
+  };
   const handleOpenRegister = () => {
     router.push("/login?entry=home");
   };
@@ -2191,12 +2194,23 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <ExplorerHeaderActions
-                isDistanceDropdownVisible={isNearbyDistanceDropdownVisible}
-                isLocationLoading={isLocationMapLoading}
-                onLocationPress={handleToggleNearbyDistanceDropdown}
-                onSearchPress={handleOpenHotspots}
-              />
+              <View className="flex-row items-center gap-2">
+                <Pressable
+                  onPress={handleOpenSubscription}
+                  className="rounded-full bg-[#EB489B] px-3 py-2"
+                >
+                  <Text className="text-[11px] font-bold text-white">
+                    Subscription
+                  </Text>
+                </Pressable>
+
+                <ExplorerHeaderActions
+                  isDistanceDropdownVisible={isNearbyDistanceDropdownVisible}
+                  isLocationLoading={isLocationMapLoading}
+                  onLocationPress={handleToggleNearbyDistanceDropdown}
+                  onSearchPress={handleOpenHotspots}
+                />
+              </View>
             </View>
           )}
 
