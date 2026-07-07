@@ -52,6 +52,7 @@ export default function RootLayout() {
           <Stack.Screen name="hotspot/[slug]/review-compose" />
           <Stack.Screen name="hotspot/[slug]/stories" />
           <Stack.Screen name="hotspots" />
+          <Stack.Screen name="hotspots/search" />
           <Stack.Screen name="+not-found" />
         </Stack>
       </ThemeProvider>
