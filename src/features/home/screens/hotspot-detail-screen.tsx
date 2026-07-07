@@ -50,7 +50,7 @@ import {
   useCheckedInApiHotspots,
   useCheckins,
 } from "@/lib/checkin-store";
-import { getRoutesForHotspot, routes, type RouteItem } from "@/lib/demo-data";
+import { type RouteItem } from "@/lib/demo-data";
 import {
   getRoutesByHotspot,
   mapRouteToRouteItem,
@@ -75,7 +75,6 @@ import {
 } from "../data/hotspot-story-cache";
 import { buildHotspotThemeStoriesFromApi } from "../data/hotspot-theme-stories";
 import {
-  findMatchingHotspotByNameOrCoordinate,
   getHotspotBySlug,
   type HotspotDetail,
 } from "../data/hotspots";
@@ -112,8 +111,7 @@ type RelatedRoutesSectionStatus =
   | "idle"
   | "loading"
   | "ready"
-  | "empty"
-  | "fallback";
+  | "empty";
 
 const loginGradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const screenBackground = "#FFFFFF";
@@ -178,6 +176,10 @@ const relatedRouteCardImageHeight = 128;
 const relatedRouteCardMinHeight = 254;
 const relatedRouteScrollInset = 20;
 const relatedRouteSubtitleHeight = 36;
+const detailSheetHorizontalPadding = 20;
+const reviewCardHorizontalPadding = 16;
+const reviewAuthorRowHorizontalOffset = -6;
+const reviewMediaBorderRadius = 24;
 
 function Text({
   maxFontSizeMultiplier = detailTextMaxFontSizeMultiplier,
@@ -249,7 +251,6 @@ function resolveRemoteDistrictLabel(
 
 function resolveRemoteMediaUris(
   apiHotspot: NearbyHotspotDto,
-  fallbackHotspot?: HotspotDetail | null,
 ) {
   const remoteMediaUris = [...apiHotspot.medias]
     .filter((media) => readMeaningfulApiText(media.fileUrl))
@@ -265,24 +266,10 @@ function resolveRemoteMediaUris(
     return remoteMediaUris;
   }
 
-  const fallbackMediaUris = [
-    fallbackHotspot?.imageUri,
-    ...(fallbackHotspot?.gallery ?? []),
-  ].filter((uri): uri is string => Boolean(readMeaningfulApiText(uri)));
-
-  return fallbackMediaUris.length > 0
-    ? fallbackMediaUris
-    : [defaultRemoteHotspotImageUri];
+  return [defaultRemoteHotspotImageUri];
 }
 
-function buildFallbackTips(
-  overview: string,
-  fallbackHotspot?: HotspotDetail | null,
-) {
-  if (fallbackHotspot?.tips.length) {
-    return fallbackHotspot.tips;
-  }
-
+function buildFallbackTips(overview: string) {
   return [
     "Kiểm tra giờ mở cửa trước khi ghé thăm.",
     "Bật định vị để có thể check-in tại hotspot.",
@@ -292,100 +279,67 @@ function buildFallbackTips(
 
 function buildHotspotFromApi({
   apiHotspot,
-  fallbackHotspot,
   routeSlug,
 }: {
   apiHotspot: NearbyHotspotDto;
-  fallbackHotspot?: HotspotDetail | null;
   routeSlug: string;
 }) {
-  const matchedLocalHotspot =
-    fallbackHotspot ??
-    findMatchingHotspotByNameOrCoordinate({
-      hotspotName: apiHotspot.hotspotName,
-      latitude: apiHotspot.latitude,
-      longitude: apiHotspot.longitude,
-    }) ??
-    null;
   const tagNames = apiHotspot.tags
     .map((tag) => readMeaningfulApiText(tag.tagName))
     .filter((tagName): tagName is string => Boolean(tagName));
-  const category = tagNames[0] ?? matchedLocalHotspot?.category ?? "Hotspot";
+  const category = tagNames[0] ?? "Hotspot";
   const address =
-    readMeaningfulApiText(apiHotspot.address) ??
-    matchedLocalHotspot?.address ??
-    "Địa chỉ đang cập nhật";
-  const imageUris = resolveRemoteMediaUris(apiHotspot, matchedLocalHotspot);
+    readMeaningfulApiText(apiHotspot.address) ?? "Địa chỉ đang cập nhật";
+  const imageUris = resolveRemoteMediaUris(apiHotspot);
   const imageUri = imageUris[0] ?? defaultRemoteHotspotImageUri;
   const gallery = imageUris.slice(1);
   const overview =
     readMeaningfulApiText(apiHotspot.description) ??
-    matchedLocalHotspot?.overview ??
-    `Hotspot ${readMeaningfulApiText(apiHotspot.hotspotName) ?? apiHotspot.hotspotId} đang được cập nhật mô tả từ hệ thống.`;
+    "Không có dữ liệu";
   const story =
     readMeaningfulApiText(apiHotspot.historyInformation) ??
     readMeaningfulApiText(apiHotspot.description) ??
-    matchedLocalHotspot?.story ??
     overview;
   const scheduleLabel =
     formatApiTimeWindow(apiHotspot.openingTime, apiHotspot.closingTime) ??
     formatApiTimeWindow(apiHotspot.startTime, apiHotspot.endTime) ??
-    matchedLocalHotspot?.scheduleLabel ??
     "Giờ mở cửa đang cập nhật";
   const bestTimeLabel =
-    formatApiTimeWindow(apiHotspot.startTime, apiHotspot.endTime) ??
-    matchedLocalHotspot?.bestTimeLabel ??
-    scheduleLabel;
+    formatApiTimeWindow(apiHotspot.startTime, apiHotspot.endTime) ?? scheduleLabel;
 
   return {
     hotspot: {
       address,
       bestTimeLabel,
       category,
-      checkinMode: matchedLocalHotspot?.checkinMode,
       coordinate: {
         latitude: apiHotspot.latitude,
         longitude: apiHotspot.longitude,
       },
-      distance: matchedLocalHotspot?.distance ?? "Từ API",
-      district: resolveRemoteDistrictLabel(
-        address,
-        matchedLocalHotspot?.district,
-      ),
+      distance: "Từ API",
+      district: resolveRemoteDistrictLabel(address),
       gallery,
-      highlights: matchedLocalHotspot?.highlights ?? [
+      highlights: [
         overview,
         story,
         `XP thưởng: +${apiHotspot.xp ?? 0}`,
       ],
       imageUri,
       overview,
-      rating: matchedLocalHotspot?.rating ?? 0,
-      reviews:
-        matchedLocalHotspot?.reviews ??
-        `${Math.max(0, Math.round(apiHotspot.point ?? 0))}`,
-      reward:
-        matchedLocalHotspot?.reward ??
-        `+${Math.max(0, Math.round(apiHotspot.xp ?? 0))}`,
-      routePairing:
-        matchedLocalHotspot?.routePairing ??
-        "Thông tin gợi ý tuyến đường cho hotspot này đang được cập nhật.",
+      rating: 0,
+      reviews: `${Math.max(0, Math.round(apiHotspot.point ?? 0))}`,
+      reward: `+${Math.max(0, Math.round(apiHotspot.xp ?? 0))}`,
+      routePairing: "Không có dữ liệu",
       scheduleLabel,
-      slug: matchedLocalHotspot?.slug ?? routeSlug,
+      slug: routeSlug,
       story,
-      ticketLabel:
-        matchedLocalHotspot?.ticketLabel ?? "Thông tin vé đang được cập nhật.",
-      tips: buildFallbackTips(overview, matchedLocalHotspot),
+      ticketLabel: "Không có dữ liệu",
+      tips: buildFallbackTips(overview),
       title:
         readMeaningfulApiText(apiHotspot.hotspotName) ??
-        matchedLocalHotspot?.title ??
         `Hotspot #${apiHotspot.hotspotId}`,
-      vibeTags:
-        tagNames.length > 0
-          ? tagNames
-          : (matchedLocalHotspot?.vibeTags ?? [category]),
+      vibeTags: tagNames.length > 0 ? tagNames : [category],
     } satisfies HotspotDetail,
-    matchedLocalHotspot,
   };
 }
 
@@ -524,20 +478,16 @@ function getSummaryOpenTimeValue({
 function buildSummaryStats({
   apiHotspot,
   hotspot,
-  matchedLocalHotspot,
   rewardXp,
 }: {
   apiHotspot: NearbyHotspotDto | null;
   hotspot: HotspotDetail;
-  matchedLocalHotspot?: HotspotDetail | null;
   rewardXp: string;
 }): SummaryStatItem[] {
   const scoreValue =
     apiHotspot?.point !== null && apiHotspot?.point !== undefined
       ? `${Math.max(0, Math.round(apiHotspot.point))}`
-      : matchedLocalHotspot
-        ? hotspot.rating.toFixed(1)
-        : "0";
+      : "0";
 
   return [
     {
@@ -583,6 +533,19 @@ function normalizeLookupText(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+function sortAtmosphereTags(tags: string[]) {
+  return [...tags].sort((left, right) => {
+    const leftPriority = normalizeLookupText(left).includes("di san") ? 0 : 1;
+    const rightPriority = normalizeLookupText(right).includes("di san") ? 0 : 1;
+
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+
+    return left.localeCompare(right, "vi");
+  });
 }
 
 function getRouteBadgeColors(label: string) {
@@ -631,81 +594,6 @@ function getRouteLookupIds(hotspot: HotspotDetail) {
   return explicitLookup[hotspot.slug] ?? [];
 }
 
-function getRelatedRoutesForHotspot(hotspot: HotspotDetail, limit = 4) {
-  const directLookupIds = getRouteLookupIds(hotspot);
-  const directRoutes = directLookupIds.flatMap((id) => getRoutesForHotspot(id));
-  const uniqueDirectRoutes = Array.from(
-    new Map(directRoutes.map((route) => [route.id, route])).values(),
-  );
-
-  if (uniqueDirectRoutes.length > 0) {
-    return uniqueDirectRoutes.slice(0, limit);
-  }
-
-  const normalizedDistrict = normalizeLookupText(hotspot.district);
-  const normalizedCategory = normalizeLookupText(hotspot.category);
-
-  return routes
-    .map((route) => {
-      let score = 0;
-
-      if (
-        normalizedDistrict.includes("quan 1") &&
-        route.hotspotIds.some((id) =>
-          [
-            "bao-tang",
-            "buu-dien",
-            "dinh-doc-lap",
-            "nha-tho-duc-ba",
-            "pho-di-bo",
-          ].includes(id),
-        )
-      ) {
-        score += 3;
-      }
-
-      if (
-        normalizedCategory.includes("kien truc") &&
-        ["vinh-ha-long", "mui-ne", "pho-co-dem"].includes(route.id)
-      ) {
-        score += 2;
-      }
-
-      if (
-        normalizedCategory.includes("lich su") &&
-        ["vinh-ha-long", "mui-ne", "cho-lon"].includes(route.id)
-      ) {
-        score += 2;
-      }
-
-      if (
-        normalizedCategory.includes("nghe thuat") &&
-        ["vinh-ha-long", "mui-ne"].includes(route.id)
-      ) {
-        score += 2;
-      }
-
-      if (
-        normalizedCategory.includes("am thuc") &&
-        ["cho-lon", "mui-ne"].includes(route.id)
-      ) {
-        score += 2;
-      }
-
-      if (
-        normalizedCategory.includes("check-in") &&
-        ["pho-co-dem", "vinh-ha-long"].includes(route.id)
-      ) {
-        score += 2;
-      }
-
-      return { route, score };
-    })
-    .sort((left, right) => right.score - left.score)
-    .filter((item) => item.score > 0)
-    .slice(0, limit)
-    .map((item) => item.route);
-}
 
 function dedupeRouteItemsById(items: RouteItem[]) {
   return Array.from(
@@ -1419,7 +1307,7 @@ function LocationInformationSection({
         web: "auto_awesome",
       } as SymbolName,
       label: "Không gian",
-      tags: atmosphereTags.filter((tag) => tag.trim()),
+      tags: sortAtmosphereTags(atmosphereTags.filter((tag) => tag.trim())),
     },
   ];
 
@@ -1577,7 +1465,7 @@ function HiddenStoryCheckinSection({
       <Text className="text-[16px] font-black text-[#2F242C]">
         Đang tải story hotspot
       </Text>
-      <Text className="mt-2 text-[15px] leading-6 text-[#5E7486]">
+      <Text className="mt-2 text-[14px] leading-5 text-[#5E7486]">
         App đang gọi API story cho hotspot này để hiển thị đúng nội dung theo
         từng tag.
       </Text>
@@ -1595,7 +1483,7 @@ function HiddenStoryCheckinSection({
       <Text className="text-[16px] font-black text-[#2F242C]">
         Story chuyên đề đang cập nhật
       </Text>
-      <Text className="mt-2 text-[15px] leading-6 text-[#5E7486]">
+      <Text className="mt-2 text-[14px] leading-5 text-[#5E7486]">
         Hotspot này đã check-in thành công. Nội dung story riêng cho điểm đến
         này sẽ được bổ sung sau.
       </Text>
@@ -1679,7 +1567,7 @@ function HiddenStoryCheckinSection({
           <Text className="text-[16px] font-black text-[#2F242C]">
             Đang kiểm tra trạng thái check-in
           </Text>
-          <Text className="mt-2 text-[15px] leading-6 text-[#5E7486]">
+          <Text className="mt-2 text-[14px] leading-5 text-[#5E7486]">
             Hệ thống đang xác nhận từ backend xem bạn đã check-in hotspot này
             trước đó hay chưa.
           </Text>
@@ -1713,7 +1601,7 @@ function HiddenStoryCheckinSection({
             Câu chuyện đang chờ bạn
           </Text>
 
-          <Text className="mt-3 max-w-[320px] text-center text-[16px] leading-6 text-[#6A5964]">
+          <Text className="mt-3 max-w-[320px] text-center text-[14px] leading-5 text-[#6A5964]">
             {isCheckinStatusLoading
               ? "Đang kiểm tra trạng thái check-in từ hệ thống trước khi mở khóa nội dung."
               : isStoryAvailable
@@ -1748,7 +1636,7 @@ function HiddenStoryCheckinSection({
                 size={15}
                 tintColor="#FFFFFF"
               />
-              <Text className="ml-2 text-[17px] font-black text-white">
+              <Text className="ml-2 text-[15px] font-black text-white">
                 {isCheckinStatusLoading
                   ? "Đang đồng bộ..."
                   : "Check-in tại đây"}
@@ -1889,32 +1777,26 @@ function PersonalExperienceSectionHeader() {
   );
 }
 
-function PersonalExperienceComposerStars() {
-  return (
-    <View className="flex-row gap-1.5">
-      {Array.from({ length: 5 }).map((_, index) => (
-        <SymbolView
-          key={`personal-review-star-${index}`}
-          name="star-border"
-          size={20}
-          tintColor="#9EA6AE"
-        />
-      ))}
-    </View>
-  );
-}
-
 function PersonalExperienceMediaThumb({
   height = 104,
+  isFullBleed = false,
   item,
   width,
 }: {
   height?: number;
+  isFullBleed?: boolean;
   item: PersonalExperienceMediaItem;
   width: number | `${number}%`;
 }) {
   return (
-    <View className="overflow-hidden rounded-[22px]" style={{ height, width }}>
+    <View
+      className="overflow-hidden"
+      style={{
+        borderRadius: reviewMediaBorderRadius,
+        height,
+        width,
+      }}
+    >
       <Image
         source={item.uri}
         contentFit="cover"
@@ -1967,53 +1849,55 @@ function PersonalExperienceComposer({
           cachePolicy="memory-disk"
           style={{ height: 44, width: 44, borderRadius: 22 }}
         />
-        <View className="flex-1">
-          <PersonalExperienceComposerStars />
-        </View>
-      </View>
-
-      <Pressable
-        className="mt-4 overflow-hidden rounded-full"
-        onPress={onPressCompose}
-        style={buttonShadowStyle}
-      >
-        <View
-          className="flex-row items-center justify-center px-5 py-4"
-          style={{ backgroundColor: "#D8F2F9" }}
+        <Pressable
+          className="flex-1 overflow-hidden rounded-full"
+          onPress={onPressCompose}
+          style={buttonShadowStyle}
         >
-          <SymbolView
-            name={{
-              ios: "camera",
-              android: "photo_camera",
-              web: "photo_camera",
-            }}
-            size={16}
-            tintColor="#2A6B80"
-          />
-          <Text className="ml-2 text-[16px] font-black text-[#2A6B80]">
-            Thêm ảnh và video
-          </Text>
-        </View>
-      </Pressable>
+          <View
+            className="flex-row items-center justify-center px-5 py-3.5"
+            style={{ backgroundColor: "#D8F2F9" }}
+          >
+            <SymbolView
+              name={{
+                ios: "camera",
+                android: "photo_camera",
+                web: "photo_camera",
+              }}
+              size={16}
+              tintColor="#2A6B80"
+            />
+            <Text className="ml-2 text-[15px] font-black text-[#2A6B80]">
+              Thêm ảnh và video
+            </Text>
+          </View>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
 function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
+  const { width: screenWidth } = useWindowDimensions();
+  const hasSingleMedia = item.media.length === 1;
+  const singleMediaHeight = Math.min(Math.max(screenWidth * 0.64, 220), 280);
   const mediaWidth =
-    item.media.length === 1
+    hasSingleMedia
       ? "100%"
       : item.media.length === 2
         ? "48%"
         : "31.5%";
   const mediaHeight =
-    item.media.length === 1 ? 180 : item.media.length === 2 ? 132 : 104;
+    hasSingleMedia ? singleMediaHeight : item.media.length === 2 ? 132 : 104;
   const hasText = item.text.trim().length > 0;
   const hasRating = item.rating > 0;
 
   return (
     <View className="rounded-[30px] bg-white px-4 py-4" style={cardShadowStyle}>
-      <View className="flex-row items-start">
+      <View
+        className="flex-row items-start"
+        style={{ marginHorizontal: reviewAuthorRowHorizontalOffset }}
+      >
         <Image
           source={item.avatarUri}
           contentFit="cover"
@@ -2042,23 +1926,38 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
         </View>
       ) : null}
 
+      {hasText ? (
+        <Text
+          className="mt-4 text-[15px] leading-[17px] text-[#554751]"
+          style={{ marginHorizontal: reviewAuthorRowHorizontalOffset }}
+        >
+          {item.text}
+        </Text>
+      ) : null}
+
       {item.media.length > 0 ? (
-        <View className="mt-4 flex-row flex-wrap gap-3">
+        <View
+          className={hasSingleMedia ? "mt-4" : "mt-4 flex-row flex-wrap gap-3"}
+          style={
+            hasSingleMedia
+              ? {
+                  alignSelf: "center",
+                  marginHorizontal: -reviewCardHorizontalPadding,
+                  width: screenWidth - detailSheetHorizontalPadding * 2,
+                }
+              : undefined
+          }
+        >
           {item.media.map((media, index) => (
             <PersonalExperienceMediaThumb
               height={mediaHeight}
+              isFullBleed={hasSingleMedia}
               key={`${item.id}-media-${index}`}
               item={media}
               width={mediaWidth}
             />
           ))}
         </View>
-      ) : null}
-
-      {hasText ? (
-        <Text className="mt-4 text-[15px] leading-6 text-[#554751]">
-          {item.text}
-        </Text>
       ) : null}
     </View>
   );
@@ -2503,6 +2402,43 @@ export default function HotspotDetailScreen() {
       },
     ],
   }));
+  const heroOverlayDismissDistance = Math.min(collapseDistance, 144);
+  const heroHeaderOverlayStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      scrollY.value,
+      [0, heroOverlayDismissDistance * 0.45, heroOverlayDismissDistance],
+      [1, 0.55, 0],
+      Extrapolation.CLAMP,
+    ),
+    transform: [
+      {
+        translateY: interpolate(
+          scrollY.value,
+          [0, heroOverlayDismissDistance],
+          [0, -24],
+          Extrapolation.CLAMP,
+        ),
+      },
+    ],
+  }));
+  const heroFloatingActionStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      scrollY.value,
+      [0, heroOverlayDismissDistance * 0.4, heroOverlayDismissDistance],
+      [1, 0.6, 0],
+      Extrapolation.CLAMP,
+    ),
+    transform: [
+      {
+        translateY: interpolate(
+          scrollY.value,
+          [0, heroOverlayDismissDistance],
+          [0, -36],
+          Extrapolation.CLAMP,
+        ),
+      },
+    ],
+  }));
 
   useAnimatedReaction(
     () => scrollY.value >= stickyCheckinRevealOffset,
@@ -2694,24 +2630,17 @@ export default function HotspotDetailScreen() {
     };
   }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId]);
 
-  const localHotspot = useMemo(
-    () => getHotspotBySlug(resolvedSlug),
-    [resolvedSlug],
-  );
   const remoteHotspotResult = useMemo(
     () =>
       remoteHotspot
         ? buildHotspotFromApi({
             apiHotspot: remoteHotspot,
-            fallbackHotspot: localHotspot,
             routeSlug: resolvedSlug,
           })
         : null,
-    [localHotspot, remoteHotspot, resolvedSlug],
+    [remoteHotspot, resolvedSlug],
   );
-  const hotspot = remoteHotspotResult?.hotspot ?? localHotspot ?? null;
-  const matchedLocalHotspot =
-    remoteHotspotResult?.matchedLocalHotspot ?? localHotspot ?? null;
+  const hotspot = remoteHotspotResult?.hotspot ?? null;
   const savedPersonalPosts = useHotspotPersonalPosts(hotspot?.slug ?? resolvedSlug);
 
   useEffect(() => {
@@ -2732,7 +2661,6 @@ export default function HotspotDetailScreen() {
     }
 
     let isActive = true;
-    const fallbackRoutes = getRelatedRoutesForHotspot(hotspot);
 
     const loadRelatedRoutes = async () => {
       if (resolvedHotspotId === null) {
@@ -2776,15 +2704,13 @@ export default function HotspotDetailScreen() {
           return;
         }
 
-        setApiRelatedRoutes(fallbackRoutes);
+        setApiRelatedRoutes([]);
         setRelatedRoutesError(
-          `${
-            error instanceof Error
-              ? error.message
-              : "Không tải được tuyến theo hotspotId."
-          } Đang hiển thị dữ liệu cục bộ.`,
+          error instanceof Error
+            ? error.message
+            : "Không tải được tuyến theo hotspotId.",
         );
-        setRelatedRoutesStatus("fallback");
+        setRelatedRoutesStatus("empty");
       }
     };
 
@@ -2895,8 +2821,7 @@ export default function HotspotDetailScreen() {
   const heroScrollHintBottom =
     galleryPreviewImages.length > 1 ? heroGalleryBottomOffset + 152 : 108;
   const rewardXp = getRewardValue(hotspot.reward);
-  const canOpenStories =
-    resolvedHotspotId !== null ? hasApiStories : Boolean(matchedLocalHotspot);
+  const canOpenStories = hasApiStories;
   const hotspotCheckinId = hotspot.slug;
   const isCheckedInFromRemoteHotspot = remoteHotspot?.isCheckedIn === true;
   const isCheckedInFromApiStore =
@@ -2911,8 +2836,8 @@ export default function HotspotDetailScreen() {
     !isCheckedIn &&
     (isRemoteHotspotLoading || isRemoteCheckinStatusLoading);
   const detailSheetBottomPadding = isCheckedIn
-    ? Math.max(insets.bottom + 28, 44)
-    : Math.max(insets.bottom + 128, 148);
+    ? Math.max(insets.bottom + 10, 16)
+    : Math.max(insets.bottom + 100, 120);
   const audioStoryDurationLabel = getAudioStoryDurationLabel(hotspot.story);
   const hotspotStoriesHref =
     resolvedHotspotId !== null
@@ -2926,7 +2851,6 @@ export default function HotspotDetailScreen() {
     },
     pathname: "/hotspot/[slug]/review-compose",
   } as Href;
-  const localRelatedRoutes = getRelatedRoutesForHotspot(hotspot);
   const hasPersistedRelatedRoutes =
     Array.isArray(apiRelatedRoutes) && apiRelatedRoutes.length > 0;
   const isRelatedRoutesLoading =
@@ -2934,13 +2858,10 @@ export default function HotspotDetailScreen() {
     relatedRoutesStatus === "loading" &&
     !hasPersistedRelatedRoutes;
   const relatedRoutes =
-    resolvedHotspotId === null
-      ? localRelatedRoutes
-      : relatedRoutesStatus === "ready" ||
-          relatedRoutesStatus === "fallback" ||
-          (relatedRoutesStatus === "loading" && hasPersistedRelatedRoutes)
-        ? (apiRelatedRoutes ?? [])
-        : [];
+    relatedRoutesStatus === "ready" ||
+    (relatedRoutesStatus === "loading" && hasPersistedRelatedRoutes)
+      ? (apiRelatedRoutes ?? [])
+      : [];
   const relatedRouteCardWidth = Math.min(
     Math.max((screenWidth - relatedRouteScrollInset * 2) * 0.72, 236),
     272,
@@ -2976,7 +2897,6 @@ export default function HotspotDetailScreen() {
   const summaryStats = buildSummaryStats({
     apiHotspot: remoteHotspot,
     hotspot,
-    matchedLocalHotspot,
     rewardXp,
   });
 
@@ -3024,25 +2944,29 @@ export default function HotspotDetailScreen() {
 
         <LinearGradient
           colors={[
-            "rgba(0, 0, 0, 0.06)",
-            "rgba(0, 0, 0, 0.16)",
-            "rgba(5, 16, 28, 0.72)",
+            "rgba(0, 0, 0, 0)",
+            "rgba(0, 0, 0, 0.04)",
+            "rgba(5, 16, 28, 0.32)",
           ]}
-          locations={[0, 0.45, 1]}
+          locations={[0, 0.58, 1]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
         />
       </Animated.View>
 
-      <View
-        style={{
-          left: 0,
-          position: "absolute",
-          right: 0,
-          top: 0,
-          zIndex: 3,
-        }}
+      <Animated.View
+        pointerEvents="box-none"
+        style={[
+          heroHeaderOverlayStyle,
+          {
+            left: 0,
+            position: "absolute",
+            right: 0,
+            top: 0,
+            zIndex: 3,
+          },
+        ]}
       >
         <View className="px-4" style={{ paddingTop: insets.top + 8 }}>
           <View style={{ alignSelf: "center", maxWidth: 520, width: "100%" }}>
@@ -3090,7 +3014,44 @@ export default function HotspotDetailScreen() {
             </View>
           </View>
         </View>
-      </View>
+      </Animated.View>
+
+      <Animated.View
+        pointerEvents="box-none"
+        style={[
+          heroFloatingActionStyle,
+          {
+            position: "absolute",
+            right: 20,
+            top: heroHeightExpanded - contentOverlap - 22,
+            zIndex: 3,
+          },
+        ]}
+      >
+        <Pressable
+          className="h-12 w-12 items-center justify-center rounded-full"
+          onPress={() => router.replace("/hotspots")}
+          style={buttonShadowStyle}
+        >
+          <LinearGradient
+            colors={loginGradientColors}
+            end={{ x: 1, y: 0.5 }}
+            locations={[0, 0.58, 1]}
+            start={{ x: 0, y: 0.5 }}
+            className="h-12 w-12 items-center justify-center rounded-full"
+          >
+            <SymbolView
+              name={{
+                ios: "paperplane.fill",
+                android: "near_me",
+                web: "near_me",
+              }}
+              size={17}
+              tintColor="#FFFFFF"
+            />
+          </LinearGradient>
+        </Pressable>
+      </Animated.View>
 
       <HeroScrollHint bottomOffset={heroScrollHintBottom} scrollY={scrollY} />
 
@@ -3172,30 +3133,6 @@ export default function HotspotDetailScreen() {
               },
             ]}
           >
-            <Pressable
-              className="absolute right-5 z-10 h-12 w-12 items-center justify-center rounded-full"
-              onPress={() => router.replace("/hotspots")}
-              style={[buttonShadowStyle, { top: -22 }]}
-            >
-              <LinearGradient
-                colors={loginGradientColors}
-                end={{ x: 1, y: 0.5 }}
-                locations={[0, 0.58, 1]}
-                start={{ x: 0, y: 0.5 }}
-                className="h-12 w-12 items-center justify-center rounded-full"
-              >
-                <SymbolView
-                  name={{
-                    ios: "paperplane.fill",
-                    android: "near_me",
-                    web: "near_me",
-                  }}
-                  size={17}
-                  tintColor="#FFFFFF"
-                />
-              </LinearGradient>
-            </Pressable>
-
             <View className="mt-5">
               <View className="gap-3">
                 <Text className="text-[13px] font-extrabold uppercase tracking-[1.2px] text-[#EB489B]">
@@ -3207,14 +3144,6 @@ export default function HotspotDetailScreen() {
               </View>
 
               <HotspotOverviewSection text={hotspot.overview} />
-
-              {remoteHotspotError && localHotspot ? (
-                <View className="mt-4 rounded-[22px] bg-[#FFF4E8] px-4 py-3">
-                  <Text className="text-[15px] font-bold text-[#B45309]">
-                    {`${remoteHotspotError} Đang hiển thị dữ liệu cục bộ.`}
-                  </Text>
-                </View>
-              ) : null}
 
               <SummaryStatsRow items={summaryStats} />
 
@@ -3308,16 +3237,10 @@ export default function HotspotDetailScreen() {
                   style={cardShadowStyle}
                 >
                   <Text className="text-[16px] font-black text-[#1E3142]">
-                    {resolvedHotspotId !== null &&
-                    relatedRoutesStatus === "empty"
-                      ? "Chưa có route published"
-                      : "Chua co route truc tiep"}
+                    Chưa có route published
                   </Text>
                   <Text className="mt-2 text-[15px] leading-6 text-[#5E7486]">
-                    {resolvedHotspotId !== null &&
-                    relatedRoutesStatus === "empty"
-                      ? `API route theo hotspot/${resolvedHotspotId} hiện chưa trả về tuyến published nào cho điểm đến này.`
-                      : "Hotspot nay hien chua duoc gan vao mot tuyen route cu the trong du lieu mau."}
+                    {`API route theo hotspot/${resolvedHotspotId} hiện chưa trả về tuyến published nào cho điểm đến này.`}
                   </Text>
                 </View>
               ) : null}
@@ -3337,18 +3260,6 @@ export default function HotspotDetailScreen() {
               items={personalExperienceItems}
               reviewsErrorMessage={hotspotPostsError}
             />
-
-            <View className="mt-5 gap-3">
-              <Pressable
-                className="items-center rounded-[22px] bg-white px-5 py-4"
-                onPress={() => router.back()}
-                style={cardShadowStyle}
-              >
-                <Text className="text-[15px] font-bold text-[#254055]">
-                  Quay lai hero list
-                </Text>
-              </Pressable>
-            </View>
           </Animated.View>
         </Animated.ScrollView>
 

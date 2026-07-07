@@ -96,7 +96,7 @@ export default function ForgotPasswordScreen() {
     insets.bottom + (isCompactScreen ? 18 : 24),
     isCompactScreen ? 22 : 30,
   );
-  const titleSize = isCompactScreen ? 29 : 34;
+  const titleSize = isCompactScreen ? 25 : 29;
   const sectionTopMargin = isCompactScreen ? 22 : 30;
   const fieldHeightClassName = isCompactScreen
     ? "h-12 rounded-2xl"

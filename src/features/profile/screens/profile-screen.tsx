@@ -90,6 +90,7 @@ const fallbackPostAuthorName = "Minh Anh";
 const fallbackPostTimestamp = "09:30, 02/07/2026";
 const fallbackPostLikeCount = 128;
 const fallbackPostCommentCount = 14;
+const fallbackPostShareCount = 2;
 
 const GUEST_MENU_ITEMS: {
   label: string;
@@ -218,14 +219,49 @@ function getPostVisibilityLabel(visibility: string) {
   }
 }
 
-function buildPostHashtags(post: ProfilePost) {
-  const hashtags = [
-    post.isTaggedHotspot ? "#Hotspot" : null,
-    post.isTaggedRoute ? "#Tuyến" : null,
-    ...post.tags.map((tag) => `#${tag.name}`),
-  ].filter(Boolean) as string[];
+function getPostVisibilityIcon(visibility: string): SymbolName {
+  switch (visibility.toUpperCase()) {
+    case "PRIVATE":
+      return { ios: "lock.fill", android: "lock", web: "lock" };
+    case "FOLLOWER":
+      return {
+        ios: "person.2.fill",
+        android: "groups",
+        web: "groups",
+      };
+    case "PUBLIC":
+    default:
+      return {
+        ios: "globe.asia.australia.fill",
+        android: "public",
+        web: "public",
+      };
+  }
+}
 
-  return hashtags.length > 0 ? hashtags : ["#Thiên nhiên"];
+function resolvePostMediaUris(post: ProfilePost) {
+  const mediaUris = post.medias
+    .filter((media) => {
+      const trimmedUrl = media.url.trim();
+      const normalizedType = media.type.trim().toUpperCase();
+      const normalizedMime = media.mimeType.trim().toLowerCase();
+
+      return (
+        trimmedUrl &&
+        (normalizedType === "IMAGE" || normalizedMime.startsWith("image/"))
+      );
+    })
+    .map((media) => media.url.trim());
+
+  if (mediaUris.length > 0) {
+    return Array.from(new Set(mediaUris));
+  }
+
+  if (post.image?.trim()) {
+    return [post.image.trim()];
+  }
+
+  return [fallbackPostImageUri];
 }
 
 export default function ProfileScreen() {
@@ -504,10 +540,12 @@ export default function ProfileScreen() {
               posts.length === 0 ? (
                 <EmptyPosts />
               ) : (
-                <View className="gap-3">
-                  {posts.map((post) => (
+                <View>
+                  {posts.map((post, index) => (
                     <PostCard
                       key={post.id}
+                      isLast={index === posts.length - 1}
+                      pageGutter={gutter}
                       post={post}
                       profileAvatar={profile.avatar}
                       profileName={profile.name}
@@ -996,10 +1034,7 @@ function PostAuthorAvatar({
   const initials = getProfileInitials(name, username);
 
   return (
-    <View
-      className="h-12 w-12 overflow-hidden rounded-full border-2 border-white bg-white"
-      style={cardShadow}
-    >
+    <View className="h-11 w-11 overflow-hidden rounded-full bg-[#F3F4F6]">
       {hasError || !avatar ? (
         <LinearGradient
           colors={avatarFallbackColors}
@@ -1025,7 +1060,7 @@ function PostAuthorAvatar({
 
 function PostAction({
   icon,
-  tintColor = "#2B2233",
+  tintColor = "#6B7280",
   value,
 }: {
   icon: SymbolName;
@@ -1033,10 +1068,10 @@ function PostAction({
   value?: number;
 }) {
   return (
-    <View className="flex-row items-center gap-2">
-      <SymbolView name={icon} size={18} tintColor={tintColor} />
+    <View className="flex-row items-center gap-1.5">
+      <SymbolView name={icon} size={17} tintColor={tintColor} />
       {typeof value === "number" ? (
-        <Text className="text-[15px] font-semibold text-[#2B2233]">
+        <Text className="text-[14px] font-medium text-[#4B5563]">
           {value}
         </Text>
       ) : null}
@@ -1044,35 +1079,88 @@ function PostAction({
   );
 }
 
+function PostMediaGallery({ sources }: { sources: string[] }) {
+  const visibleSources = sources.slice(0, 4);
+  const hiddenCount = Math.max(sources.length - visibleSources.length, 0);
+
+  if (visibleSources.length === 1) {
+    return (
+      <View className="overflow-hidden rounded-[20px] bg-[#F3F4F6]">
+        <Image
+          source={visibleSources[0]}
+          contentFit="cover"
+          transition={180}
+          cachePolicy="memory-disk"
+          style={{
+            aspectRatio: 1.08,
+            width: "100%",
+          }}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View className="flex-row gap-2">
+      {visibleSources.map((source, index) => {
+        const isLastVisibleItem = index === visibleSources.length - 1;
+
+        return (
+          <View
+            key={`${source}-${index}`}
+            className="min-w-0 flex-1 overflow-hidden rounded-[20px] bg-[#F3F4F6]"
+            style={{ height: 238 }}
+          >
+            <Image
+              source={source}
+              contentFit="cover"
+              transition={180}
+              cachePolicy="memory-disk"
+              style={{ height: "100%", width: "100%" }}
+            />
+
+            {hiddenCount > 0 && isLastVisibleItem ? (
+              <View className="absolute inset-0 items-center justify-center bg-black/35">
+                <Text className="text-[28px] font-black text-white">
+                  +{hiddenCount}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function PostCard({
   post,
+  isLast,
+  pageGutter,
   profileAvatar,
   profileName,
   profileUsername,
 }: {
   post: ProfilePost;
+  isLast: boolean;
+  pageGutter: number;
   profileAvatar: string | null;
   profileName: string;
   profileUsername: string;
 }) {
-  const hashtagChips = buildPostHashtags(post);
-  const imageBadgeLabel =
-    post.tags[0]?.name ||
-    (post.isTaggedHotspot ? "Hotspot" : "") ||
-    (post.isTaggedRoute ? "Tuyến" : "") ||
-    "Thiên nhiên";
   const authorName =
     post.displayName.trim() ||
     profileName.trim() ||
     fallbackPostAuthorName;
   const authorUsername = post.username.trim() || profileUsername.trim();
   const postContent = post.text.trim() || "Chuyến đi hôm nay rất đáng nhớ.";
-  const postImage = post.image || fallbackPostImageUri;
+  const postMediaSources = resolvePostMediaUris(post);
+  const visibilityIcon = getPostVisibilityIcon(post.visibility);
+  const visibilityLabel = getPostVisibilityLabel(post.visibility);
 
   return (
     <View
-      className="rounded-[28px] border border-[#F1E7EB] bg-white p-4"
-      style={cardShadow}
+      className={`px-4 py-4 ${isLast ? "" : "border-b border-[#DEE3EA]"}`}
     >
       <View className="flex-row items-start justify-between gap-3">
         <View className="min-w-0 flex-1 flex-row items-center gap-3">
@@ -1084,97 +1172,71 @@ function PostCard({
 
           <View className="min-w-0 flex-1">
             <Text
-              className="text-[16px] font-extrabold leading-5 text-[#1D2A44]"
+              className="text-[17px] font-extrabold leading-5 text-[#202124]"
               numberOfLines={1}
             >
               {authorName}
             </Text>
 
-            <Text className="mt-1 text-[13px] leading-4 text-[#6D7486]">
-              {formatPostTimestamp(post.createdAt)}
-            </Text>
+            <View className="mt-0.5 flex-row items-center gap-1.5">
+              <Text className="text-[13px] leading-4 text-[#6B7280]">
+                {formatPostTimestamp(post.createdAt)}
+              </Text>
+              <Text className="text-[13px] text-[#6B7280]">·</Text>
+              <SymbolView
+                name={visibilityIcon}
+                size={12}
+                tintColor="#6B7280"
+              />
+              <Text className="text-[12px] text-[#6B7280]">
+                {visibilityLabel}
+              </Text>
+            </View>
           </View>
         </View>
 
-        <View className="flex-row items-center gap-2 self-start">
-          <View className="rounded-full bg-[#EAFBF2] px-3 py-1.5">
-            <Text className="text-[13px] font-medium text-[#34B76F]">
-              {getPostVisibilityLabel(post.visibility)}
-            </Text>
-          </View>
-          <Pressable className="h-7 w-7 items-center justify-center rounded-full">
-            <SymbolView
-              name={{ ios: "ellipsis", android: "more_horiz", web: "more_horiz" }}
-              size={18}
-              tintColor="#7D7382"
-            />
-          </Pressable>
-        </View>
+        <Pressable className="h-8 w-8 items-center justify-center rounded-full">
+          <SymbolView
+            name={{ ios: "ellipsis", android: "more_horiz", web: "more_horiz" }}
+            size={18}
+            tintColor="#7D7382"
+          />
+        </Pressable>
       </View>
 
-      <Text className="mt-4 text-[15px] leading-6 text-[#1D2A44]">
+      <Text className="mt-3 text-[15px] leading-6 text-[#202124]">
         {postContent}
       </Text>
 
-      <View className="mt-4 overflow-hidden rounded-[30px]">
-        <Image
-          source={postImage}
-          contentFit="cover"
-          transition={180}
-          cachePolicy="memory-disk"
-          style={{
-            width: "100%",
-            aspectRatio: 1.12,
-            borderRadius: 30,
-          }}
-        />
-
-        <View
-          className="absolute left-4 top-4 rounded-full px-3 py-2"
-          style={{ backgroundColor: "rgba(57, 71, 96, 0.85)" }}
-        >
-          <View className="flex-row items-center gap-1.5">
-            <SymbolView
-              name={{
-                ios: "mappin.and.ellipse",
-                android: "place",
-                web: "place",
-              }}
-              size={14}
-              tintColor="#FFFFFF"
-            />
-            <Text className="text-[14px] font-bold text-white">
-              {imageBadgeLabel}
-            </Text>
-          </View>
-        </View>
+      <View
+        className="mt-3"
+        style={{ marginHorizontal: -(pageGutter + 16) }}
+      >
+        <PostMediaGallery sources={postMediaSources} />
       </View>
 
-      <View className="mt-4 flex-row items-center justify-between">
-        <View className="flex-row items-center gap-5">
-          <PostAction
-            icon={{ ios: "heart", android: "favorite_border", web: "favorite_border" }}
-            value={fallbackPostLikeCount}
-          />
-          <PostAction
-            icon={{ ios: "bubble.left", android: "chat_bubble_outline", web: "chat_bubble_outline" }}
-            value={fallbackPostCommentCount}
-          />
-          <PostAction
-            icon={{ ios: "paperplane", android: "send", web: "send" }}
-          />
-        </View>
+      <View className="mt-3 flex-row items-center gap-5">
         <PostAction
-          icon={{ ios: "bookmark", android: "bookmark_border", web: "bookmark_border" }}
+          icon={{ ios: "heart.fill", android: "favorite", web: "favorite" }}
+          tintColor="#F43F5E"
+          value={fallbackPostLikeCount}
         />
-      </View>
-
-      <View className="mt-4 flex-row flex-wrap gap-2">
-        {hashtagChips.map((label) => (
-          <View key={`${post.id}-${label}`} className="rounded-full bg-[#FDEAF4] px-3 py-1.5">
-            <Text className="text-[14px] font-medium text-[#B14F84]">{label}</Text>
-          </View>
-        ))}
+        <PostAction
+          icon={{
+            ios: "bubble.left",
+            android: "chat_bubble_outline",
+            web: "chat_bubble_outline",
+          }}
+          value={fallbackPostCommentCount}
+        />
+        <PostAction
+          icon={{
+            ios: "arrowshape.turn.up.right",
+            android: "reply",
+            web: "reply",
+          }}
+          value={fallbackPostShareCount}
+        />
       </View>
 
       {post.reason ? (

@@ -61,11 +61,11 @@ export function HiddenStoryUnlockedContent({
         />
       </LinearGradient>
 
-      <Text className="mt-5 text-center text-[21px] font-black text-[#3B2A32]">
+      <Text className="mt-5 text-center text-[19px] font-black text-[#3B2A32]">
         Câu chuyện đã mở khóa
       </Text>
 
-      <Text className="mt-3 max-w-[320px] text-center text-[15px] leading-6 text-[#6A5964]">
+      <Text className="mt-3 max-w-[320px] text-center text-[14px] leading-5 text-[#6A5964]">
         {`Bạn đã check-in tại hotspot này. Story hotspot ${audioStoryDurationLabel} và nội dung độc quyền đã sẵn sàng.`}
       </Text>
 
@@ -90,7 +90,7 @@ export function HiddenStoryUnlockedContent({
               size={15}
               tintColor="#FFFFFF"
             />
-            <Text className="ml-2 text-[16px] font-black text-white">
+            <Text className="ml-2 text-[14px] font-black text-white">
               Đã check-in
             </Text>
           </LinearGradient>
@@ -119,7 +119,7 @@ export function HiddenStoryUnlockedContent({
               size={15}
               tintColor="#FFFFFF"
             />
-            <Text className="ml-2 text-[16px] font-black text-white">
+            <Text className="ml-2 text-[14px] font-black text-white">
               Xem story
             </Text>
           </LinearGradient>
