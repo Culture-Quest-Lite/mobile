@@ -29,10 +29,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
   getValidAccessToken,
@@ -49,16 +46,16 @@ import {
 } from "@/features/route/api/route-api";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import {
+  mergeApiCheckins,
+  useCheckedInApiHotspots,
+  useCheckins,
+} from "@/lib/checkin-store";
+import {
   type AppCoordinate,
   formatCoordinateLabel,
   getDevelopmentLocationOverride,
   getDeviceCoordinate,
 } from "@/lib/location";
-import {
-  mergeApiCheckins,
-  useCheckedInApiHotspots,
-  useCheckins,
-} from "@/lib/checkin-store";
 
 import {
   type NearbyHotspotDto,
@@ -68,24 +65,16 @@ import { getActiveTagNames } from "../api/get-tags";
 import {
   type CommunityBoardTab,
   type NearbyCategoryCard,
-  type NearbyPlaceCard,
   type NearbyRouteCard,
   type RouteDifficulty,
   activeJourney,
   communityBoards,
   communityTabs,
-  nearbyRoutes as fallbackNearbyRoutes,
   featuredRoutes,
   nearbyCategories,
-  nearbyPlaces,
   voucherMerchants,
 } from "../data/home-screen.mock";
-import {
-  findMatchingHotspotByNameOrCoordinate,
-  getApiHotspotRouteSlug,
-  getHotspotHref,
-  getNearbyHotspotsFromCoordinate,
-} from "../data/hotspots";
+import { getApiHotspotRouteSlug, getHotspotHref } from "../data/hotspots";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const guestPreviewLogo = require("../../../../assets/images/logo3.png");
@@ -388,8 +377,8 @@ type NearbyPlaceListItem = {
   title: string;
 };
 
-type NearbyPlacesSectionStatus = "empty" | "fallback" | "loading" | "ready";
-type SuggestedRoutesSectionStatus = "empty" | "fallback" | "loading" | "ready";
+type NearbyPlacesSectionStatus = "empty" | "loading" | "ready";
+type SuggestedRoutesSectionStatus = "empty" | "loading" | "ready";
 type SuggestedRouteCard = NearbyRouteCard & {
   id: string | null;
 };
@@ -406,10 +395,8 @@ const nearbyPlaceCategoryHeight = 20;
 const nearbyPlaceDetailRowHeight = 22;
 const nearbyPlaceContentHeight = 124;
 const nearbyPlaceFallbackImageUri =
-  nearbyPlaces[0]?.imageUri ??
   "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
 const suggestedRouteFallbackImageUri =
-  fallbackNearbyRoutes[0]?.imageUri ??
   "https://i.pinimg.com/1200x/b9/05/dd/b905ddb3d6e87ba4f85692125c1eec2a.jpg";
 const defaultLocationPreviewRegion: Region = {
   latitude: 10.8414,
@@ -478,18 +465,6 @@ function formatRewardLabel(value: number | null | undefined, fallback = "+0") {
   return `+${Math.max(0, Math.round(value))}`;
 }
 
-function formatCompactCount(value: number | null | undefined) {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    return null;
-  }
-
-  if (value >= 1000) {
-    return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`;
-  }
-
-  return `${Math.round(value)}`;
-}
-
 function trimTrailingZeroDecimal(value: number) {
   if (!Number.isFinite(value)) {
     return "0";
@@ -532,13 +507,6 @@ function mapApiRouteDifficultyToCardDifficulty(
   }
 }
 
-function buildFallbackSuggestedRoutes(): SuggestedRouteCard[] {
-  return fallbackNearbyRoutes.map((route) => ({
-    ...route,
-    id: null,
-  }));
-}
-
 function sortNearbyHotspotsByDistance(
   hotspots: NearbyHotspotDto[],
   currentCoordinate: Pick<AppCoordinate, "latitude" | "longitude">,
@@ -578,7 +546,7 @@ function mapRouteToSuggestedRouteCard(route: RouteDto): SuggestedRouteCard {
     stops: `${getRouteStopCount(route).toString().padStart(2, "0")} điểm`,
     subtitle:
       route.description ||
-      `${getRouteStopCount(route)} điểm dừng phù hợp để bắt đầu từ hotspot gần bạn.`,
+      `${getRouteStopCount(route)} điểm dừng phù hợp để bắt đầu từ địa điểm gần bạn.`,
     title: route.routeName,
     xp: `${formatRewardLabel(route.xp || route.point, "+0")} XP`,
   };
@@ -602,21 +570,15 @@ function getProfileInitials(name: string, username: string) {
   return `${firstInitial}${lastInitial}`.toUpperCase();
 }
 
-function getPrimaryNearbyCategory(
-  hotspot: NearbyHotspotDto,
-  fallbackCategory?: string,
-) {
+function getPrimaryNearbyCategory(hotspot: NearbyHotspotDto) {
   const tagName = hotspot.tags
     .find((tag) => tag.tagName.trim())
     ?.tagName.trim();
 
-  return tagName || fallbackCategory || "Hotspot";
+  return tagName || "Không có dữ liệu";
 }
 
-function getPrimaryNearbyImageUri(
-  hotspot: NearbyHotspotDto,
-  fallbackImageUri?: string,
-) {
+function getPrimaryNearbyImageUri(hotspot: NearbyHotspotDto) {
   const medias = [...hotspot.medias]
     .filter((media) => media.fileUrl.trim())
     .sort((left, right) => {
@@ -626,36 +588,7 @@ function getPrimaryNearbyImageUri(
       return leftOrder - rightOrder;
     });
 
-  return (
-    medias[0]?.fileUrl.trim() || fallbackImageUri || nearbyPlaceFallbackImageUri
-  );
-}
-
-function mapLocalNearbyPlaceItem(place: NearbyPlaceCard): NearbyPlaceListItem {
-  return {
-    category: place.category,
-    detailIcon: "star",
-    detailPrimaryText: place.rating.toFixed(1),
-    detailSecondaryText: `(${place.reviews})`,
-    distance: place.distance,
-    hotspotId: null,
-    imageUri: place.imageUri,
-    isCheckedIn: false,
-    key: place.slug,
-    reward: place.reward,
-    slug: place.slug,
-    title: place.title,
-  };
-}
-
-function buildLocalNearbyPlaceItems(
-  coordinate?: Pick<AppCoordinate, "latitude" | "longitude"> | null,
-) {
-  const localPlaces = coordinate
-    ? getNearbyHotspotsFromCoordinate(coordinate, nearbyPlaces.length)
-    : nearbyPlaces;
-
-  return localPlaces.map(mapLocalNearbyPlaceItem);
+  return medias[0]?.fileUrl.trim() || nearbyPlaceFallbackImageUri;
 }
 
 function buildApiNearbyPlaceItems(
@@ -664,51 +597,25 @@ function buildApiNearbyPlaceItems(
 ): NearbyPlaceListItem[] {
   return hotspots
     .map((hotspot, index) => {
-      const matchedLocalHotspot = findMatchingHotspotByNameOrCoordinate({
-        hotspotName: hotspot.hotspotName,
-        latitude: hotspot.latitude,
-        longitude: hotspot.longitude,
-      });
       const distanceMeters = getDistanceMeters(currentCoordinate, {
         latitude: hotspot.latitude,
         longitude: hotspot.longitude,
       });
-      const remoteAddress = hotspot.address.trim();
-      const matchedLocalRating =
-        matchedLocalHotspot?.rating !== undefined
-          ? matchedLocalHotspot.rating.toFixed(1)
-          : null;
-      const matchedLocalReviews =
-        matchedLocalHotspot?.reviews?.trim() ||
-        formatCompactCount(hotspot.point);
-      const detailIcon: NearbyPlaceListItem["detailIcon"] = matchedLocalRating
-        ? "star"
-        : "location";
+      const detailIcon: NearbyPlaceListItem["detailIcon"] = "location";
 
       return {
-        category: getPrimaryNearbyCategory(
-          hotspot,
-          matchedLocalHotspot?.category,
-        ),
+        category: getPrimaryNearbyCategory(hotspot),
         detailIcon,
-        detailPrimaryText:
-          matchedLocalRating || remoteAddress || "Hotspot từ API",
-        detailSecondaryText: matchedLocalRating
-          ? `(${matchedLocalReviews ?? "0"})`
-          : undefined,
+        detailPrimaryText: hotspot.address.trim() || "Không có dữ liệu",
         distance: formatDistanceMeters(distanceMeters),
         hotspotId: hotspot.hotspotId,
-        imageUri: getPrimaryNearbyImageUri(
-          hotspot,
-          matchedLocalHotspot?.imageUri,
-        ),
+        imageUri: getPrimaryNearbyImageUri(hotspot),
         isCheckedIn: hotspot.isCheckedIn === true,
         key: `${hotspot.hotspotId}-${index}`,
-        reward: formatRewardLabel(hotspot.xp, matchedLocalHotspot?.reward),
-        slug: matchedLocalHotspot?.slug ?? null,
+        reward: formatRewardLabel(hotspot.xp),
+        slug: null,
         sortDistanceMeters: distanceMeters,
-        title:
-          hotspot.hotspotName.trim() || matchedLocalHotspot?.title || "Hotspot",
+        title: hotspot.hotspotName.trim() || "Không có dữ liệu",
       };
     })
     .sort((left, right) => left.sortDistanceMeters - right.sortDistanceMeters)
@@ -724,7 +631,10 @@ function isNearbyPlaceCheckedIn(
     return true;
   }
 
-  if (place.hotspotId !== null && checkedInApiHotspotIds.includes(place.hotspotId)) {
+  if (
+    place.hotspotId !== null &&
+    checkedInApiHotspotIds.includes(place.hotspotId)
+  ) {
     return true;
   }
 
@@ -768,8 +678,7 @@ async function resolveNearbyRequestCoordinate(): Promise<{
   if (!servicesEnabled) {
     return {
       coordinate: null,
-      fallbackMessage:
-        "Bật GPS để tải địa điểm gần bạn. Đang hiển thị dữ liệu.",
+      fallbackMessage: "Bật GPS để tải địa điểm gần bạn.",
     };
   }
 
@@ -782,8 +691,7 @@ async function resolveNearbyRequestCoordinate(): Promise<{
   if (permissionResponse.status !== "granted") {
     return {
       coordinate: null,
-      fallbackMessage:
-        "Cho phép truy cập vị trí để tải địa điểm gần bạn. Đang hiển thị dữ liệu.",
+      fallbackMessage: "Cho phép truy cập vị trí để tải địa điểm gần bạn.",
     };
   }
 
@@ -805,8 +713,7 @@ async function resolveNearbyRequestCoordinate(): Promise<{
   if (!currentLocation) {
     return {
       coordinate: null,
-      fallbackMessage:
-        "Không xác định được vị trí hiện tại. Đang hiển thị dữ liệu.",
+      fallbackMessage: "Không xác định được vị trí hiện tại.",
     };
   }
 
@@ -913,7 +820,7 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
             </View>
             <View className="rounded-full bg-white/90 px-3 py-2">
               <Text className="text-[12px] font-bold text-[#D9587F]">
-                Mở khóa story
+                Mở khóa câu chuyện
               </Text>
             </View>
             <View className="rounded-full bg-white/90 px-3 py-2">
@@ -956,6 +863,23 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
           </Pressable>
         </View>
       </View>
+    </View>
+  );
+}
+
+function SectionEmptyState({
+  description = "Không có dữ liệu phù hợp.",
+  title = "Không có dữ liệu phù hợp",
+}: {
+  description?: string;
+  title?: string;
+}) {
+  return (
+    <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
+      <Text className="text-[15px] font-bold text-[#3B4454]">{title}</Text>
+      <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+        {description}
+      </Text>
     </View>
   );
 }
@@ -1065,7 +989,7 @@ function NearbyDistanceDropdown({
 }) {
   return (
     <View
-      className="overflow-hidden rounded-[28px] border border-[#F6DDD0] bg-white px-4 py-3"
+      className="overflow-hidden rounded-[24px] border border-[#F6DDD0] bg-white px-3.5 py-2.5"
       style={cardShadowStyle}
     >
       <LinearGradient
@@ -1075,12 +999,12 @@ function NearbyDistanceDropdown({
         className="absolute inset-0"
       />
 
-      <View className="flex-row items-start gap-2.5">
+      <View className="flex-row items-start gap-2">
         <LinearGradient
           colors={["#FF8A50", "#FF5F87"]}
           end={{ x: 1, y: 1 }}
           start={{ x: 0, y: 0 }}
-          className="h-10 w-10 items-center justify-center rounded-full"
+          className="h-9 w-9 items-center justify-center rounded-full"
         >
           <SymbolView
             name={{
@@ -1088,16 +1012,16 @@ function NearbyDistanceDropdown({
               android: "local_fire_department",
               web: "local_fire_department",
             }}
-            size={16}
+            size={15}
             tintColor="#FFFFFF"
           />
         </LinearGradient>
 
         <View className="flex-1">
-          <Text className="text-[18px] font-extrabold tracking-[-0.2px] text-[#2B2233]">
+          <Text className="text-[16px] font-extrabold tracking-[-0.2px] text-[#2B2233]">
             Địa điểm gần bạn
           </Text>
-          <Text className="mt-0.5 text-[12px] font-medium text-[#9C94A5]">
+          <Text className="mt-0.5 text-[11px] font-medium text-[#9C94A5]">
             Bán kính tìm kiếm
           </Text>
         </View>
@@ -1107,15 +1031,15 @@ function NearbyDistanceDropdown({
           end={{ x: 1, y: 0.5 }}
           locations={[0, 0.58, 1]}
           start={{ x: 0, y: 0.5 }}
-          className="rounded-full px-3 py-1.5"
+          className="rounded-full px-2.5 py-1"
         >
-          <Text className="text-[13px] font-extrabold text-white">
+          <Text className="text-[12px] font-extrabold text-white">
             {formatDistanceMeters(draftDistanceMeters)}
           </Text>
         </LinearGradient>
       </View>
 
-      <View className="mt-4">
+      <View className="mt-3">
         <NearbyDistanceSlider
           max={nearbyDistanceSliderMaximumMeters}
           min={nearbyDistanceSliderMinimumMeters}
@@ -1124,23 +1048,23 @@ function NearbyDistanceDropdown({
         />
       </View>
 
-      <View className="mt-4 flex-row gap-2.5">
+      <View className="mt-3 flex-row gap-2">
         <Pressable
-          className="flex-1 flex-row items-center justify-center rounded-[16px] border border-[#E3E7EF] bg-white px-3.5 py-3"
+          className="flex-1 flex-row items-center justify-center rounded-[14px] border border-[#E3E7EF] bg-white px-3 py-2.5"
           onPress={onOpenMap}
         >
           <SymbolView
             name={{ ios: "map.fill", android: "map", web: "map" }}
-            size={14}
+            size={13}
             tintColor="#374151"
           />
-          <Text className="ml-1.5 text-[14px] font-bold text-[#2F3947]">
+          <Text className="ml-1.5 text-[13px] font-bold text-[#2F3947]">
             Xem bản đồ
           </Text>
         </Pressable>
 
         <Pressable
-          className={`flex-1 overflow-hidden rounded-[16px] ${
+          className={`flex-1 overflow-hidden rounded-[14px] ${
             isLoading ? "opacity-70" : ""
           }`}
           disabled={isLoading}
@@ -1151,7 +1075,7 @@ function NearbyDistanceDropdown({
             end={{ x: 1, y: 0.5 }}
             start={{ x: 0, y: 0.5 }}
             locations={[0, 0.58, 1]}
-            className="flex-row items-center justify-center rounded-[16px] px-3.5 py-3"
+            className="flex-row items-center justify-center rounded-[14px] px-3 py-2.5"
           >
             {isLoading ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
@@ -1163,10 +1087,10 @@ function NearbyDistanceDropdown({
                     android: "check",
                     web: "check",
                   }}
-                  size={14}
+                  size={13}
                   tintColor="#FFFFFF"
                 />
-                <Text className="ml-1.5 text-[14px] font-extrabold text-white">
+                <Text className="ml-1.5 text-[13px] font-extrabold text-white">
                   Áp dụng
                 </Text>
               </>
@@ -1175,11 +1099,11 @@ function NearbyDistanceDropdown({
         </Pressable>
       </View>
 
-      <View className="mt-2.5 flex-row items-center justify-end">
-        <Text className="text-[11px] font-medium text-[#B3A6AF]">
+      <View className="mt-2 flex-row items-center justify-end">
+        <Text className="text-[10px] font-medium text-[#B3A6AF]">
           Đang áp dụng:{" "}
         </Text>
-        <Text className="text-[11px] font-bold text-[#8E869A]">
+        <Text className="text-[10px] font-bold text-[#8E869A]">
           {formatDistanceMeters(currentDistanceMeters)}
         </Text>
       </View>
@@ -1653,7 +1577,6 @@ function LocationMapModal({
 }
 
 export default function HomeScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const authSession = useAuthSession();
   const checkedInHotspotSlugs = useCheckins();
@@ -1688,7 +1611,7 @@ export default function HomeScreen() {
     NearbyPlaceListItem[]
   >([]);
   const [suggestedRoutes, setSuggestedRoutes] = useState<SuggestedRouteCard[]>(
-    () => buildFallbackSuggestedRoutes(),
+    [],
   );
   const [suggestedRoutesNote, setSuggestedRoutesNote] = useState<string | null>(
     null,
@@ -1701,18 +1624,14 @@ export default function HomeScreen() {
   const [activeCommunityTab, setActiveCommunityTab] =
     useState<CommunityBoardTab>("community");
   const isGuest = authSession.role === "guest";
-  const homeHeaderTopPadding =
-    Platform.OS === "android"
-      ? isGuest
-        ? 18
-        : insets.top + 12
-      : insets.top + 4;
+  const homeHeaderTopPadding = 12;
   const routeCardLeftInset = gutter;
   const routeCardWidth = Math.max(contentWidth, 264);
-  const nearbyRouteCardWidth = Math.min(Math.max(safeWidth * 0.72, 236), 272);
+  const nearbyRouteCardWidth = Math.min(Math.max(safeWidth * 0.68, 228), 260);
   const nearbyPlaceCardWidth = Math.min(Math.max(safeWidth * 0.42, 160), 186);
   const nearbyPlaceImageHeight = Math.round(nearbyPlaceCardWidth * 0.8);
-  const nearbyPlaceCardHeight = nearbyPlaceImageHeight + nearbyPlaceContentHeight;
+  const nearbyPlaceCardHeight =
+    nearbyPlaceImageHeight + nearbyPlaceContentHeight;
   const voucherMerchantCircleSize = Math.min(
     Math.max(contentWidth * 0.22, 76),
     86,
@@ -1808,6 +1727,11 @@ export default function HomeScreen() {
   }, [handleOpenLocationMap, pendingNearbySearchDistanceMeters]);
 
   useEffect(() => {
+    if (featuredRoutes.length <= 1) {
+      activeRouteIndexRef.current = 0;
+      return;
+    }
+
     const intervalId = setInterval(() => {
       const nextIndex =
         (activeRouteIndexRef.current + 1) % featuredRoutes.length;
@@ -1833,21 +1757,20 @@ export default function HomeScreen() {
       try {
         const { coordinate, fallbackMessage } =
           await resolveNearbyRequestCoordinate();
-        const fallbackNearbyPlaces = buildLocalNearbyPlaceItems(coordinate);
 
         if (!isActive) {
           return;
         }
 
         if (!coordinate) {
-          setResolvedNearbyPlaces(fallbackNearbyPlaces);
+          setResolvedNearbyPlaces([]);
           setNearbyPlacesNote(fallbackMessage);
-          setNearbyPlacesStatus("fallback");
-          setSuggestedRoutes(buildFallbackSuggestedRoutes());
+          setNearbyPlacesStatus("empty");
+          setSuggestedRoutes([]);
           setSuggestedRoutesNote(
-            "Không xác định được địa điểm gần bạn để gợi ý tuyến. Đang hiển thị dữ liệu.",
+            "Không xác định được vị trí hiện tại nên chưa thể gợi ý tuyến đường phù hợp.",
           );
-          setSuggestedRoutesStatus("fallback");
+          setSuggestedRoutesStatus("empty");
           return;
         }
 
@@ -1870,13 +1793,13 @@ export default function HomeScreen() {
           setResolvedNearbyPlaces([]);
           setNearbyPlacesNote(
             coordinate.source === "dev-override"
-              ? `API nearby trả rỗng trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
-              : `Không có hotspot trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh vị trí hiện tại.`,
+              ? `Không có dữ liệu phù hợp trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
+              : `Không có dữ liệu phù hợp trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh vị trí hiện tại.`,
           );
           setNearbyPlacesStatus("empty");
           setSuggestedRoutes([]);
           setSuggestedRoutesNote(
-            "Chưa có địa điểm gần bạn nên chưa thể gợi ý tuyến đường.",
+            "Không có dữ liệu tuyến đường phù hợp gần bạn.",
           );
           setSuggestedRoutesStatus("empty");
           return;
@@ -1936,7 +1859,7 @@ export default function HomeScreen() {
 
             setSuggestedRoutes([]);
             setSuggestedRoutesNote(
-              "Các địa điểm gần bạn hiện chưa có tuyến published để gợi ý.",
+              "Không có dữ liệu tuyến đường phù hợp gần bạn.",
             );
             setSuggestedRoutesStatus("empty");
             return;
@@ -1964,15 +1887,13 @@ export default function HomeScreen() {
             return;
           }
 
-          setSuggestedRoutes(buildFallbackSuggestedRoutes());
+          setSuggestedRoutes([]);
           setSuggestedRoutesNote(
-            `${
-              routeError instanceof Error
-                ? routeError.message
-                : "Không tải được tuyến gợi ý theo hotspot."
-            } Đang hiển thị dữ liệu demo.`,
+            routeError instanceof Error
+              ? routeError.message
+              : "Không có dữ liệu tuyến đường phù hợp.",
           );
-          setSuggestedRoutesStatus("fallback");
+          setSuggestedRoutesStatus("empty");
         }
       } catch (error) {
         console.warn("[home] load nearby places failed", {
@@ -1983,20 +1904,16 @@ export default function HomeScreen() {
           return;
         }
 
-        setResolvedNearbyPlaces(buildLocalNearbyPlaceItems());
+        setResolvedNearbyPlaces([]);
         setNearbyPlacesNote(
-          `${
-            error instanceof Error
-              ? error.message
-              : "Không tải được nearby API."
-          } Đang hiển thị dữ liệu demo.`,
+          error instanceof Error
+            ? error.message
+            : "Không có dữ liệu địa điểm phù hợp.",
         );
-        setNearbyPlacesStatus("fallback");
-        setSuggestedRoutes(buildFallbackSuggestedRoutes());
-        setSuggestedRoutesNote(
-          "Không lấy được hotspot gần bạn để gợi ý tuyến. Đang hiển thị dữ liệu demo.",
-        );
-        setSuggestedRoutesStatus("fallback");
+        setNearbyPlacesStatus("empty");
+        setSuggestedRoutes([]);
+        setSuggestedRoutesNote("Không có dữ liệu tuyến đường phù hợp.");
+        setSuggestedRoutesStatus("empty");
       }
     }
 
@@ -2145,7 +2062,7 @@ export default function HomeScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={["left", "right"]}>
+    <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
       <RNStatusBar
         animated
         backgroundColor="transparent"
@@ -2299,7 +2216,7 @@ export default function HomeScreen() {
                           <View className="flex-row items-end">
                             <Pressable className="rounded-full bg-white/92 px-4 py-2.5">
                               <Text className="text-[14px] font-extrabold text-[#D9587F]">
-                                Xem route
+                                Xem tuyến đường
                               </Text>
                             </Pressable>
                           </View>
@@ -2518,7 +2435,7 @@ export default function HomeScreen() {
           <View className="gap-4">
             <View className="flex-row items-center justify-between">
               <Pressable hitSlop={8} onPress={handleOpenHotspots}>
-                <Text className="text-[18px] font-extrabold text-[#2B2233]">
+                <Text className="text-[16px] font-extrabold text-[#2B2233]">
                   Địa điểm gần bạn
                 </Text>
               </Pressable>
@@ -2539,24 +2456,15 @@ export default function HomeScreen() {
             ) : null}
 
             {nearbyPlacesStatus === "loading" ? (
-              <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-                <Text className="text-[15px] font-bold text-[#3B4454]">
-                  Đang tải hotspot gần bạn...
-                </Text>
-                <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
-                  {`App đang lấy vị trí hiện tại và gọi nearby API trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)}.`}
-                </Text>
-              </View>
+              <SectionEmptyState
+                description={`Đang lấy vị trí hiện tại trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)}.`}
+                title="Đang tải địa điểm gần bạn..."
+              />
             ) : nearbyPlacesStatus === "empty" ? (
-              <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-                <Text className="text-[15px] font-bold text-[#3B4454]">
-                  Chưa có hotspot gần vị trí này
-                </Text>
-                <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
-                  {nearbyPlacesNote ??
-                    "Nearby API đang trả mảng rỗng cho tọa độ hiện tại."}
-                </Text>
-              </View>
+              <SectionEmptyState
+                description={nearbyPlacesNote ?? "Không có dữ liệu phù hợp."}
+                title="Chưa có địa điểm phù hợp"
+              />
             ) : (
               <ScrollView
                 horizontal
@@ -2569,208 +2477,225 @@ export default function HomeScreen() {
                   marginHorizontal: -gutter,
                   width: safeWidth,
                 }}
-                >
-                  {resolvedNearbyPlaces.map((place, index) => {
-                    const isPlaceCheckedIn = isNearbyPlaceCheckedIn(
-                      place,
-                      checkedInApiHotspotIds,
-                      checkedInHotspotSlugs,
-                    );
+              >
+                {resolvedNearbyPlaces.map((place, index) => {
+                  const isPlaceCheckedIn = isNearbyPlaceCheckedIn(
+                    place,
+                    checkedInApiHotspotIds,
+                    checkedInHotspotSlugs,
+                  );
 
-                    return (
-                      <Pressable
-                        key={place.key}
-                        className={
-                          index === resolvedNearbyPlaces.length - 1 ? "" : "mr-3.5"
+                  return (
+                    <Pressable
+                      key={place.key}
+                      className={
+                        index === resolvedNearbyPlaces.length - 1
+                          ? ""
+                          : "mr-3.5"
+                      }
+                      disabled={!place.slug && place.hotspotId === null}
+                      onPress={() => {
+                        const hotspotId = place.hotspotId;
+                        const routeSlug =
+                          place.slug ??
+                          (hotspotId !== null
+                            ? getApiHotspotRouteSlug(hotspotId)
+                            : null);
+
+                        if (routeSlug) {
+                          router.push(getHotspotHref(routeSlug, hotspotId));
                         }
-                        disabled={!place.slug && place.hotspotId === null}
-                        onPress={() => {
-                          const hotspotId = place.hotspotId;
-                          const routeSlug =
-                            place.slug ??
-                            (hotspotId !== null
-                              ? getApiHotspotRouteSlug(hotspotId)
-                              : null);
-
-                          if (routeSlug) {
-                            router.push(getHotspotHref(routeSlug, hotspotId));
-                          }
-                        }}
-                        style={{ width: nearbyPlaceCardWidth }}
+                      }}
+                      style={{ width: nearbyPlaceCardWidth }}
+                    >
+                      <View
+                        className="overflow-hidden rounded-[22px] border border-[#EEF1F4] bg-white"
+                        style={[
+                          nearbyPlaceShadowStyle,
+                          { height: nearbyPlaceCardHeight },
+                        ]}
                       >
-                        <View
-                          className="overflow-hidden rounded-[22px] border border-[#EEF1F4] bg-white"
-                          style={[
-                            nearbyPlaceShadowStyle,
-                            { height: nearbyPlaceCardHeight },
-                          ]}
-                        >
-                          <View className="relative">
-                            <Image
-                              source={place.imageUri}
-                              contentFit="cover"
-                              transition={220}
-                              cachePolicy="memory-disk"
-                              style={{
-                                height: nearbyPlaceImageHeight,
-                                width: "100%",
-                              }}
-                            />
+                        <View className="relative">
+                          <Image
+                            source={place.imageUri}
+                            contentFit="cover"
+                            transition={220}
+                            cachePolicy="memory-disk"
+                            style={{
+                              height: nearbyPlaceImageHeight,
+                              width: "100%",
+                            }}
+                          />
 
-                            <View className="absolute inset-x-2.5 top-2.5 flex-row items-center justify-between">
-                              <View className="rounded-full bg-[#45414D]/92 px-2.5 py-1">
-                                <Text className="text-[11px] font-extrabold text-white">
-                                  {place.distance}
-                                </Text>
-                              </View>
+                          <View className="absolute inset-x-2.5 top-2.5 flex-row items-center justify-between">
+                            <View className="rounded-full bg-[#45414D]/92 px-2.5 py-1">
+                              <Text className="text-[11px] font-extrabold text-white">
+                                {place.distance}
+                              </Text>
+                            </View>
 
-                              <View
-                                className={`rounded-full px-2.5 py-1 ${
-                                  isPlaceCheckedIn ? "bg-[#DCFCE7]" : "bg-[#f0af16]"
+                            <View
+                              className={`rounded-full px-2.5 py-1 ${
+                                isPlaceCheckedIn
+                                  ? "bg-[#DCFCE7]"
+                                  : "bg-[#f0af16]"
+                              }`}
+                            >
+                              <Text
+                                className={`text-[11px] font-extrabold ${
+                                  isPlaceCheckedIn
+                                    ? "text-[#15803D]"
+                                    : "text-[#2B2233]"
                                 }`}
                               >
-                                <Text
-                                  className={`text-[11px] font-extrabold ${
-                                    isPlaceCheckedIn
-                                      ? "text-[#15803D]"
-                                      : "text-[#2B2233]"
-                                  }`}
-                                >
-                                  {isPlaceCheckedIn ? "Đã check-in" : `${place.reward} XP`}
-                                </Text>
-                              </View>
+                                {isPlaceCheckedIn
+                                  ? "Đã check-in"
+                                  : `${place.reward} XP`}
+                              </Text>
                             </View>
                           </View>
-
-                          <View
-                            className="flex-1 gap-2 px-3.5 pb-3.5 pt-3"
-                            style={{ minHeight: nearbyPlaceContentHeight }}
-                          >
-                            <Text
-                              className="text-[13px] font-extrabold leading-[16px] text-[#3B4454]"
-                              numberOfLines={2}
-                              style={{ minHeight: nearbyPlaceTitleHeight }}
-                            >
-                              {place.title}
-                            </Text>
-
-                            <Text
-                              className="text-[13px] text-[#A39AAB]"
-                              numberOfLines={1}
-                              style={{ minHeight: nearbyPlaceCategoryHeight }}
-                            >
-                              {place.category}
-                            </Text>
-
-                            {isPlaceCheckedIn ? (
-                              <View
-                                className="flex-row items-center gap-1.5"
-                                style={{ minHeight: nearbyPlaceDetailRowHeight }}
-                              >
-                                <View className="h-5 w-5 items-center justify-center rounded-full bg-[#DCFCE7]">
-                                  <SymbolView
-                                    name={{
-                                      ios: "checkmark",
-                                      android: "check",
-                                      web: "check",
-                                    }}
-                                    size={11}
-                                    tintColor="#15803D"
-                                  />
-                                </View>
-                                <Text
-                                  className="flex-1 text-[12px] font-bold text-[#15803D]"
-                                  numberOfLines={1}
-                                >
-                                  Story đã mở khóa
-                                </Text>
-                              </View>
-                            ) : (
-                              <View
-                                className="flex-row items-center gap-1"
-                                style={{ minHeight: nearbyPlaceDetailRowHeight }}
-                              >
-                                {place.detailIcon === "star" ? (
-                                  <Text className="text-[12px] text-[#F58752]">
-                                    ★
-                                  </Text>
-                                ) : (
-                                  <SymbolView
-                                    name={{
-                                      ios: "location.fill",
-                                      android: "place",
-                                      web: "place",
-                                    }}
-                                    size={11}
-                                    tintColor="#8E869A"
-                                  />
-                                )}
-                                <Text
-                                  className={
-                                    place.detailIcon === "star"
-                                      ? "text-[12px] font-bold text-[#F58752]"
-                                      : "flex-1 text-[12px] text-[#8E869A]"
-                                  }
-                                  numberOfLines={1}
-                                >
-                                  {place.detailPrimaryText}
-                                </Text>
-                                {place.detailSecondaryText ? (
-                                  <Text
-                                    className="text-[12px] text-[#8E869A]"
-                                    numberOfLines={1}
-                                  >
-                                    {place.detailSecondaryText}
-                                  </Text>
-                                ) : null}
-                              </View>
-                            )}
-                          </View>
                         </View>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              )}
+
+                        <View
+                          className="flex-1 gap-2 px-3.5 pb-3.5 pt-3"
+                          style={{ minHeight: nearbyPlaceContentHeight }}
+                        >
+                          <Text
+                            className="text-[13px] font-extrabold leading-[16px] text-[#3B4454]"
+                            numberOfLines={2}
+                            style={{ minHeight: nearbyPlaceTitleHeight }}
+                          >
+                            {place.title}
+                          </Text>
+
+                          <Text
+                            className="text-[13px] text-[#A39AAB]"
+                            numberOfLines={1}
+                            style={{ minHeight: nearbyPlaceCategoryHeight }}
+                          >
+                            {place.category}
+                          </Text>
+
+                          {isPlaceCheckedIn ? (
+                            <View
+                              className="flex-row items-center gap-1.5"
+                              style={{ minHeight: nearbyPlaceDetailRowHeight }}
+                            >
+                              <View className="h-5 w-5 items-center justify-center rounded-full bg-[#DCFCE7]">
+                                <SymbolView
+                                  name={{
+                                    ios: "checkmark",
+                                    android: "check",
+                                    web: "check",
+                                  }}
+                                  size={11}
+                                  tintColor="#15803D"
+                                />
+                              </View>
+                              <Text
+                                className="flex-1 text-[12px] font-bold text-[#15803D]"
+                                numberOfLines={1}
+                              >
+                                Câu chuyện đã mở khóa
+                              </Text>
+                            </View>
+                          ) : (
+                            <View
+                              className="flex-row items-center gap-1"
+                              style={{ minHeight: nearbyPlaceDetailRowHeight }}
+                            >
+                              {place.detailIcon === "star" ? (
+                                <Text className="text-[12px] text-[#F58752]">
+                                  ★
+                                </Text>
+                              ) : (
+                                <SymbolView
+                                  name={{
+                                    ios: "location.fill",
+                                    android: "place",
+                                    web: "place",
+                                  }}
+                                  size={11}
+                                  tintColor="#8E869A"
+                                />
+                              )}
+                              <Text
+                                className={
+                                  place.detailIcon === "star"
+                                    ? "text-[12px] font-bold text-[#F58752]"
+                                    : "flex-1 text-[12px] text-[#8E869A]"
+                                }
+                                numberOfLines={1}
+                              >
+                                {place.detailPrimaryText}
+                              </Text>
+                              {place.detailSecondaryText ? (
+                                <Text
+                                  className="text-[12px] text-[#8E869A]"
+                                  numberOfLines={1}
+                                >
+                                  {place.detailSecondaryText}
+                                </Text>
+                              ) : null}
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
 
             <Text className="text-[18px] font-extrabold text-[#2B2233]">
               Chủ đề
             </Text>
 
-            <ScrollView
-              horizontal
-              contentContainerStyle={{ paddingRight: 12 }}
-              showsHorizontalScrollIndicator={false}
-            >
-              {themeCategories.map((item, index) => (
-                <Pressable
-                  key={`${item.label}-${index}`}
-                  className={
-                    index === themeCategories.length - 1 ? "" : "mr-3.5"
-                  }
-                >
-                  <View
-                    className="h-[104px] w-[104px] items-center justify-center rounded-[22px] p-4"
-                    style={{ backgroundColor: item.background }}
+            {themeCategories.length === 0 ? (
+              <SectionEmptyState description="Chưa có dữ liệu chủ đề phù hợp từ API." />
+            ) : (
+              <ScrollView
+                horizontal
+                contentContainerStyle={{
+                  paddingLeft: gutter,
+                  paddingRight: gutter,
+                }}
+                showsHorizontalScrollIndicator={false}
+                style={{
+                  marginHorizontal: -gutter,
+                  width: safeWidth,
+                }}
+              >
+                {themeCategories.map((item, index) => (
+                  <Pressable
+                    key={`${item.label}-${index}`}
+                    className={
+                      index === themeCategories.length - 1 ? "" : "mr-3.5"
+                    }
                   >
-                    <View className="items-center justify-center">
-                      <SymbolView
-                        name={item.icon}
-                        size={16}
-                        tintColor={item.accent}
-                      />
-                    </View>
-
-                    <Text
-                      className="mt-3 text-center text-[13px] font-extrabold leading-4 text-[#2F2A35]"
-                      numberOfLines={2}
+                    <View
+                      className="h-[104px] w-[104px] items-center justify-center rounded-[22px] p-4"
+                      style={{ backgroundColor: item.background }}
                     >
-                      {item.label}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))}
-            </ScrollView>
+                      <View className="items-center justify-center">
+                        <SymbolView
+                          name={item.icon}
+                          size={16}
+                          tintColor={item.accent}
+                        />
+                      </View>
+
+                      <Text
+                        className="mt-3 text-center text-[13px] font-extrabold leading-4 text-[#2F2A35]"
+                        numberOfLines={2}
+                      >
+                        {item.label}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
 
             <View className="flex-row items-center justify-between">
               <Text className="text-[18px] font-extrabold text-[#2B2233]">
@@ -2795,25 +2720,15 @@ export default function HomeScreen() {
             ) : null}
 
             {suggestedRoutesStatus === "loading" ? (
-              <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-                <Text className="text-[15px] font-bold text-[#3B4454]">
-                  Đang tải tuyến gợi ý...
-                </Text>
-                <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
-                  App đang lấy hotspotId từ nearby API rồi gọi route API cho mục
-                  đề xuất tuyến đường.
-                </Text>
-              </View>
+              <SectionEmptyState
+                description="Đang tải dữ liệu tuyến đường theo địa điểm phù hợp."
+                title="Đang tải tuyến gợi ý..."
+              />
             ) : suggestedRoutesStatus === "empty" ? (
-              <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-                <Text className="text-[15px] font-bold text-[#3B4454]">
-                  Chưa có tuyến phù hợp
-                </Text>
-                <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
-                  {suggestedRoutesNote ??
-                    "Hotspot gần bạn hiện chưa có route published để gợi ý."}
-                </Text>
-              </View>
+              <SectionEmptyState
+                description={suggestedRoutesNote ?? "Không có dữ liệu phù hợp."}
+                title="Chưa có tuyến phù hợp"
+              />
             ) : (
               <ScrollView
                 horizontal
@@ -2940,7 +2855,7 @@ export default function HomeScreen() {
               </View>
 
               <View
-                className="gap-5 rounded-[28px]  bg-white p-4"
+                className="gap-5 rounded-[28px] bg-white p-4"
                 style={cardShadowStyle}
               >
                 <View className="gap-3">
