@@ -1,7 +1,6 @@
-import { Platform } from "react-native";
 
 import { PublicEnv, buildApiUrl } from "@/constants/env";
-
+import axios from "axios";
 export type BillingCycle = "MONTHLY" | "YEARLY";
 export type PaymentGateway = "MOMO" | "PAYOS";
 export type PartnerSubscriptionStatus =
@@ -144,10 +143,10 @@ function getAuthHeaders(accessToken: string) {
 
 function appendFile(formData: FormData, fieldName: string, file: UploadFile) {
   formData.append(fieldName, {
+    uri: file.uri,
     name: file.name,
     type: file.type,
-    uri: Platform.OS === "ios" ? file.uri.replace("file://", "") : file.uri,
-  } as unknown as Blob);
+  } as any);
 }
 
 export async function getSubscriptionPlans(accessToken: string) {
@@ -166,7 +165,9 @@ export async function getSubscriptionPlanDetail(planId: number, accessToken: str
   return ensureOk<SubscriptionPlan>(response, "Không lấy được chi tiết gói đăng ký");
 }
 
-export async function registerPartnerSubscription(request: RegisterPartnerSubscriptionRequest) {
+export async function registerPartnerSubscription(
+  request: RegisterPartnerSubscriptionRequest,
+) {
   const formData = new FormData();
 
   formData.append("subscriptionPlanId", String(request.subscriptionPlanId));
@@ -176,16 +177,66 @@ export async function registerPartnerSubscription(request: RegisterPartnerSubscr
   formData.append("longitude", String(request.longitude));
   formData.append("latitude", String(request.latitude));
   formData.append("billingCycle", request.billingCycle);
+
   appendFile(formData, "documentFile", request.documentFile);
-  request.files?.forEach((file) => appendFile(formData, "files", file));
+  // request.files?.forEach((file) => appendFile(formData, "files", file));
 
-  const response = await fetch(resolveApiUrl("/api/partner/subscriptions/register"), {
-    body: formData,
-    headers: getAuthHeaders(request.accessToken),
-    method: "POST",
-  });
+  try {
+    console.log("========== REGISTER PARTNER ==========");
+    console.log("URL:", resolveApiUrl("/api/partner/subscriptions/register"));
+    console.log("subscriptionPlanId:", request.subscriptionPlanId);
+    console.log("shopName:", request.shopName);
+    console.log("shopEmail:", request.shopEmail);
+    console.log("address:", request.address);
+    console.log("billingCycle:", request.billingCycle);
+    console.log("longitude:", request.longitude);
+    console.log("latitude:", request.latitude);
 
-  return ensureOk<PartnerSubscription>(response, "Đăng ký gói Partner thất bại");
+    console.log("documentFile:", request.documentFile);
+
+    console.log("shopFiles:", request.files);
+
+    const response = await axios.post<PartnerSubscription>(
+      resolveApiUrl("/api/partner/subscriptions/register"),
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${request.accessToken}`,
+          // bỏ Content-Type
+        },
+        transformRequest: (data) => data,
+      },
+    );
+
+    console.log("REGISTER SUCCESS");
+    console.log(response.status);
+    console.log(response.data);
+
+    return response.data;
+  } catch (error: any) {
+    console.log("========== REGISTER FAILED ==========");
+
+    console.log("status:", error?.response?.status);
+
+    console.log("headers:");
+    console.log(error?.response?.headers);
+
+    console.log("response data:");
+    console.log(error?.response?.data);
+
+    console.log("request:");
+    console.log(error?.config);
+
+    console.log("message:");
+    console.log(error?.message);
+
+    throw new Error(
+      error?.response?.data?.message ||
+      error?.response?.data?.error ||
+      error?.message ||
+      "Đăng ký gói Partner thất bại",
+    );
+  }
 }
 
 export async function initiateMomoPayment({

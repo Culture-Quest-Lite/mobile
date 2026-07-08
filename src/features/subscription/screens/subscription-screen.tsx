@@ -1,4 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -6,6 +7,7 @@ import {
   Alert,
   Image,
   Linking,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -14,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import MapView, { Marker, PROVIDER_GOOGLE, type Region } from "react-native-maps";
 
 import { SymbolView } from "@/components/ui/symbol-view";
 import { getValidAccessToken } from "@/features/auth/hooks/use-auth-session";
@@ -30,6 +33,101 @@ import {
 } from "../api/partner-subscription-api";
 
 const MOMO_REDIRECT_URL = "culturequest://partner-subscription/payment-result";
+
+const DEFAULT_SHOP_REGION: Region = {
+  latitude: 10.762622,
+  longitude: 106.682212,
+  latitudeDelta: 0.015,
+  longitudeDelta: 0.015,
+};
+
+const formatCoordinateInput = (value: number) => value.toFixed(6);
+
+function CoordinateMapPickerModal({
+  latitude,
+  longitude,
+  onApply,
+  onClose,
+  visible,
+}: {
+  latitude: string;
+  longitude: string;
+  onApply: (coordinate: { latitude: number; longitude: number }) => void;
+  onClose: () => void;
+  visible: boolean;
+}) {
+  const initialLatitude = Number(latitude);
+  const initialLongitude = Number(longitude);
+  const [pickedCoordinate, setPickedCoordinate] = useState({
+    latitude: Number.isFinite(initialLatitude) ? initialLatitude : DEFAULT_SHOP_REGION.latitude,
+    longitude: Number.isFinite(initialLongitude) ? initialLongitude : DEFAULT_SHOP_REGION.longitude,
+  });
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
+    const nextLatitude = Number(latitude);
+    const nextLongitude = Number(longitude);
+
+    setPickedCoordinate({
+      latitude: Number.isFinite(nextLatitude) ? nextLatitude : DEFAULT_SHOP_REGION.latitude,
+      longitude: Number.isFinite(nextLongitude) ? nextLongitude : DEFAULT_SHOP_REGION.longitude,
+    });
+  }, [latitude, longitude, visible]);
+
+  const region: Region = {
+    latitude: pickedCoordinate.latitude,
+    longitude: pickedCoordinate.longitude,
+    latitudeDelta: 0.015,
+    longitudeDelta: 0.015,
+  };
+
+  return (
+    <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
+      <SafeAreaView className="flex-1 bg-white" edges={["top", "bottom"]}>
+        <View className="flex-row items-center justify-between border-b border-[#F4EFF8] px-4 py-3">
+          <View className="flex-1 pr-3">
+            <Text className="text-[17px] font-extrabold text-[#2B2233]">Chọn vị trí shop</Text>
+            <Text className="mt-1 text-[12px] text-[#8E869A]">Chạm vào bản đồ để lấy kinh độ/vĩ độ.</Text>
+          </View>
+          <Pressable onPress={onClose} className="h-10 w-10 items-center justify-center rounded-full bg-[#F4EFF8]">
+            <SymbolView name={{ ios: "xmark", android: "close", web: "close" }} size={16} tintColor="#8E869A" />
+          </Pressable>
+        </View>
+
+        <MapView
+          provider={PROVIDER_GOOGLE}
+          initialRegion={region}
+          onPress={(event) => setPickedCoordinate(event.nativeEvent.coordinate)}
+          style={{ flex: 1 }}
+        >
+          <Marker coordinate={pickedCoordinate} />
+        </MapView>
+
+        <View className="gap-3 border-t border-[#F4EFF8] bg-white px-4 py-4">
+          <View className="rounded-2xl bg-[#FFF8FC] p-3">
+            <Text className="text-[12px] font-bold text-[#8E869A]">Tọa độ đã chọn</Text>
+            <Text className="mt-1 text-[14px] font-extrabold text-[#2B2233]">
+              Kinh độ: {formatCoordinateInput(pickedCoordinate.longitude)}
+            </Text>
+            <Text className="mt-1 text-[14px] font-extrabold text-[#2B2233]">
+              Vĩ độ: {formatCoordinateInput(pickedCoordinate.latitude)}
+            </Text>
+          </View>
+
+          <Pressable
+            onPress={() => onApply(pickedCoordinate)}
+            className="rounded-xl bg-[#EB489B] px-4 py-4"
+          >
+            <Text className="text-center text-[15px] font-extrabold text-white">Dùng tọa độ này</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+}
 
 type SubscriptionAudience = "EXPLORER" | "PARTNER";
 
@@ -157,6 +255,8 @@ export default function SubscriptionScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeAudience, setActiveAudience] = useState<SubscriptionAudience>("PARTNER");
+  const [isCoordinateMapVisible, setIsCoordinateMapVisible] = useState(false);
+  const [isGettingCurrentLocation, setIsGettingCurrentLocation] = useState(false);
 
   const selectedAmount = useMemo(() => {
     return selectedPlan ? getPlanPrice(selectedPlan, billingCycle) : null;
@@ -275,6 +375,39 @@ export default function SubscriptionScreen() {
     if (!result.canceled && result.assets[0]) {
       setDocumentFile(normalizePickedAsset(result.assets[0], "partner-document"));
     }
+  }
+
+  async function handleUseCurrentLocation() {
+    setIsGettingCurrentLocation(true);
+
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+
+      if (permission.status !== "granted") {
+        Alert.alert("Thiếu quyền vị trí", "Vui lòng cấp quyền vị trí để tự điền tọa độ shop.");
+        return;
+      }
+
+      const currentLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      setLongitude(formatCoordinateInput(currentLocation.coords.longitude));
+      setLatitude(formatCoordinateInput(currentLocation.coords.latitude));
+    } catch (error) {
+      Alert.alert(
+        "Không lấy được vị trí",
+        error instanceof Error ? error.message : "Vui lòng thử lại hoặc chọn trên bản đồ.",
+      );
+    } finally {
+      setIsGettingCurrentLocation(false);
+    }
+  }
+
+  function handleApplyMapCoordinate(coordinate: { latitude: number; longitude: number }) {
+    setLongitude(formatCoordinateInput(coordinate.longitude));
+    setLatitude(formatCoordinateInput(coordinate.latitude));
+    setIsCoordinateMapVisible(false);
   }
 
   async function pickShopImages() {
@@ -578,13 +711,96 @@ export default function SubscriptionScreen() {
         {activeAudience === "PARTNER" ? (
           <>
         <Text className="mb-3 mt-6 text-[16px] font-extrabold text-[#2B2233]">2. Thông tin shop</Text>
-        <View className="gap-3 rounded-2xl bg-[#FFF8FC] p-4">
-          <TextInput value={shopName} onChangeText={setShopName} placeholder="Tên shop" className="rounded-xl bg-white px-4 py-3 text-[#2B2233]" />
-          <TextInput value={shopEmail} onChangeText={setShopEmail} placeholder="Email quản lý shop" keyboardType="email-address" autoCapitalize="none" className="rounded-xl bg-white px-4 py-3 text-[#2B2233]" />
-          <TextInput value={address} onChangeText={setAddress} placeholder="Địa chỉ shop" className="rounded-xl bg-white px-4 py-3 text-[#2B2233]" />
-          <View className="flex-row gap-3">
-            <TextInput value={longitude} onChangeText={setLongitude} placeholder="Kinh độ" keyboardType="decimal-pad" className="flex-1 rounded-xl bg-white px-4 py-3 text-[#2B2233]" />
-            <TextInput value={latitude} onChangeText={setLatitude} placeholder="Vĩ độ" keyboardType="decimal-pad" className="flex-1 rounded-xl bg-white px-4 py-3 text-[#2B2233]" />
+        <View className="gap-4 rounded-2xl bg-[#FFF8FC] p-4">
+          <View>
+            <Text className="mb-1.5 text-[12px] font-extrabold text-[#6F657A]">Tên shop / địa điểm *</Text>
+            <TextInput
+              value={shopName}
+              onChangeText={setShopName}
+              placeholder="Ví dụ: Cửa hàng Cà phê Heritage Quận 1"
+              placeholderTextColor="#B8AFBE"
+              className="rounded-xl bg-white px-4 py-3 text-[#2B2233]"
+            />
+          </View>
+
+          <View>
+            <Text className="mb-1.5 text-[12px] font-extrabold text-[#6F657A]">Email quản lý shop *</Text>
+            <TextInput
+              value={shopEmail}
+              onChangeText={setShopEmail}
+              placeholder="Ví dụ: shop.partner@gmail.com"
+              placeholderTextColor="#B8AFBE"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              className="rounded-xl bg-white px-4 py-3 text-[#2B2233]"
+            />
+            <Text className="mt-1 text-[11px] leading-4 text-[#A49BAA]"></Text>
+          </View>
+
+          <View>
+            <Text className="mb-1.5 text-[12px] font-extrabold text-[#6F657A]">Địa chỉ shop *</Text>
+            <TextInput
+              value={address}
+              onChangeText={setAddress}
+              placeholder="Ví dụ: 123 Nguyễn Huệ, P. Bến Nghé, Quận 1, TP.HCM"
+              placeholderTextColor="#B8AFBE"
+              className="rounded-xl bg-white px-4 py-3 text-[#2B2233]"
+            />
+          </View>
+
+          <View className="rounded-2xl border border-[#F4DDEB] bg-white p-3">
+            <View className="mb-3 flex-row items-start justify-between gap-3">
+              <View className="flex-1">
+                <Text className="text-[12px] font-extrabold text-[#6F657A]">Tọa độ shop *</Text>
+                <Text className="mt-1 text-[11px] leading-4 text-[#A49BAA]">Có thể nhập tay hoặc dùng GPS/bản đồ để tự điền.</Text>
+              </View>
+            </View>
+
+            <View className="flex-row gap-3">
+              <View className="flex-1">
+                <Text className="mb-1 text-[11px] font-bold text-[#8E869A]">Kinh độ</Text>
+                <TextInput
+                  value={longitude}
+                  onChangeText={setLongitude}
+                  placeholder="VD: 106.682212"
+                  placeholderTextColor="#B8AFBE"
+                  keyboardType="decimal-pad"
+                  className="rounded-xl bg-[#FFF8FC] px-4 py-3 text-[#2B2233]"
+                />
+              </View>
+              <View className="flex-1">
+                <Text className="mb-1 text-[11px] font-bold text-[#8E869A]">Vĩ độ</Text>
+                <TextInput
+                  value={latitude}
+                  onChangeText={setLatitude}
+                  placeholder="VD: 10.762622"
+                  placeholderTextColor="#B8AFBE"
+                  keyboardType="decimal-pad"
+                  className="rounded-xl bg-[#FFF8FC] px-4 py-3 text-[#2B2233]"
+                />
+              </View>
+            </View>
+
+            <View className="mt-3 flex-row gap-3">
+              <Pressable
+                onPress={handleUseCurrentLocation}
+                disabled={isGettingCurrentLocation}
+                className={`flex-1 rounded-xl px-3 py-3 ${isGettingCurrentLocation ? "bg-[#D8CADF]" : "bg-[#EB489B]"}`}
+              >
+                {isGettingCurrentLocation ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <Text className="text-center text-[12px] font-extrabold text-white">Lấy GPS hiện tại</Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                onPress={() => setIsCoordinateMapVisible(true)}
+                className="flex-1 rounded-xl border border-[#EB489B] bg-white px-3 py-3"
+              >
+                <Text className="text-center text-[12px] font-extrabold text-[#EB489B]">Chọn trên bản đồ</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
 
@@ -623,10 +839,10 @@ export default function SubscriptionScreen() {
         ) : (
           <View className="mt-6 rounded-2xl border border-[#E7DDF0] bg-[#FAF7FC] p-4">
             <Text className="text-[15px] font-extrabold text-[#2B2233]">
-              Luồng Explorer đang tạm để sau
+              {/* Luồng Explorer đang tạm để sau */}
             </Text>
             <Text className="mt-2 text-[13px] leading-5 text-[#8E869A]">
-              Màn hình hiện chỉ mở form đăng ký cho Partner để test upload hồ sơ và thanh toán MoMo. Khi cần làm gói Explorer, có thể dùng tab này để gắn luồng riêng.
+              {/* Màn hình hiện chỉ mở form đăng ký cho Partner để test upload hồ sơ và thanh toán MoMo. Khi cần làm gói Explorer, có thể dùng tab này để gắn luồng riêng. */}
             </Text>
             <Pressable
               onPress={() => setActiveAudience("PARTNER")}
@@ -638,6 +854,14 @@ export default function SubscriptionScreen() {
             </Pressable>
           </View>
         )}
+
+        <CoordinateMapPickerModal
+          latitude={latitude}
+          longitude={longitude}
+          onApply={handleApplyMapCoordinate}
+          onClose={() => setIsCoordinateMapVisible(false)}
+          visible={isCoordinateMapVisible}
+        />
 
         {payment ? (
           <View className="mt-5 rounded-2xl border border-[#F4EFF8] bg-white p-4">
