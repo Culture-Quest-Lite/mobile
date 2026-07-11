@@ -2,8 +2,8 @@ import { SymbolView } from '@/components/ui/symbol-view';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { type Href, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, PanResponder, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getValidAccessToken, useAuthSession } from '@/features/auth/hooks/use-auth-session';
@@ -390,7 +390,18 @@ export default function RouteDetailScreen() {
   const [isStartingRoute, setIsStartingRoute] = useState(false);
   const [isSavedRoute, setIsSavedRoute] = useState(false);
   const [activeRouteProgress, setActiveRouteProgress] = useState<UserRouteProgressDto | null>(null);
-  const [mapHeight, setMapHeight] = useState(240);
+  const { height: screenHeight } = useWindowDimensions();
+  const sheetTranslateY = useRef(new Animated.Value(0)).current;
+  const sheetOffsetRef = useRef(0);
+
+  const collapsedMapHeight = 240;
+  const dragAreaHeight = 120;
+  const sheetPeekHeight = 116;
+  const expandedSheetOffset = Math.max(
+    screenHeight - collapsedMapHeight - sheetPeekHeight,
+    0,
+  );
+  const mapHeight = screenHeight;
 
   useFocusEffect(
     useCallback(() => {
@@ -496,11 +507,70 @@ export default function RouteDetailScreen() {
     return orderedStops.find((stop) => !checkedInIds.includes(String(stop.hotspotId))) ?? orderedStops[0];
   }, [checkedInIds, orderedStops]);
 
-  const handleMapScroll = useCallback((event: any) => {
-    const offsetY = event.nativeEvent.contentOffset.y;
-    const nextHeight = Math.min(420, Math.max(240, 240 + offsetY * 0.6));
-    setMapHeight(nextHeight);
-  }, []);
+  const animateSheetTo = useCallback(
+    (toValue: number) => {
+      sheetOffsetRef.current = toValue;
+
+      Animated.spring(sheetTranslateY, {
+        toValue,
+        useNativeDriver: true,
+        damping: 24,
+        stiffness: 230,
+        mass: 0.9,
+      }).start();
+    },
+    [sheetTranslateY],
+  );
+
+  const dragPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dy) > 2,
+        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+          Math.abs(gestureState.dy) > 2,
+        onPanResponderGrant: () => {
+          sheetTranslateY.stopAnimation((value) => {
+            sheetOffsetRef.current = value;
+          });
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const nextValue = Math.min(
+            expandedSheetOffset,
+            Math.max(0, sheetOffsetRef.current + gestureState.dy),
+          );
+
+          sheetTranslateY.setValue(nextValue);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const currentValue = Math.min(
+            expandedSheetOffset,
+            Math.max(0, sheetOffsetRef.current + gestureState.dy),
+          );
+
+          const shouldOpen =
+            gestureState.vy > 0.25 ||
+            currentValue > expandedSheetOffset * 0.35;
+
+          animateSheetTo(shouldOpen ? expandedSheetOffset : 0);
+        },
+        onPanResponderTerminate: (_, gestureState) => {
+          const currentValue = Math.min(
+            expandedSheetOffset,
+            Math.max(0, sheetOffsetRef.current + gestureState.dy),
+          );
+
+          animateSheetTo(
+            currentValue > expandedSheetOffset * 0.35
+              ? expandedSheetOffset
+              : 0,
+          );
+        },
+      }),
+    [animateSheetTo, expandedSheetOffset, sheetTranslateY],
+  );
 
   if (isLoading) {
     return (
@@ -583,36 +653,60 @@ export default function RouteDetailScreen() {
 
   return (
     <View className="flex-1 bg-white">
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onScroll={handleMapScroll}
-      >
-        <View className="relative">
-          <RouteMapHero route={route} checkedInIds={checkedInIds} height={mapHeight} />
+      <View className="absolute inset-0">
+        <RouteMapHero route={route} checkedInIds={checkedInIds} height={mapHeight} />
 
-          <SafeAreaView edges={['top']} className="absolute inset-x-0 top-0">
-            <View className="flex-row items-center justify-between px-3 pt-2">
-              <Pressable
-                onPress={() => router.back()}
-                className="h-10 w-10 items-center justify-center rounded-full bg-black/30"
-              >
-                <SymbolView
-                  name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                  size={18}
-                  tintColor="#fff"
-                />
-              </Pressable>
-              <View className="rounded-full bg-black/30 px-3 py-2">
-                <Text className="text-[11px] font-bold text-white">{route.status}</Text>
-              </View>
+        <SafeAreaView edges={['top']} className="absolute inset-x-0 top-0">
+          <View className="flex-row items-center justify-between px-3 pt-2">
+            <Pressable
+              onPress={() => router.back()}
+              className="h-10 w-10 items-center justify-center rounded-full bg-black/30"
+            >
+              <SymbolView
+                name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
+                size={18}
+                tintColor="#fff"
+              />
+            </Pressable>
+            <View className="rounded-full bg-black/30 px-3 py-2">
+              <Text className="text-[11px] font-bold text-white">{route.status}</Text>
             </View>
-          </SafeAreaView>
+          </View>
+        </SafeAreaView>
+      </View>
+
+      <Animated.View
+        className="absolute inset-x-0 bottom-0 overflow-hidden rounded-t-[30px] bg-white"
+        style={{
+          top: collapsedMapHeight,
+          transform: [{ translateY: sheetTranslateY }],
+        }}
+      >
+        <View
+          {...dragPanResponder.panHandlers}
+          style={{
+            height: dragAreaHeight,
+            zIndex: 50,
+            elevation: 50,
+          }}
+          className="absolute inset-x-0 top-0 items-center bg-white pb-2 pt-3"
+        >
+          <View className="h-1.5 w-12 rounded-full bg-[#D8D0DE]" />
+          <Text className="mt-2 text-[11px] font-semibold text-[#8E869A]">
+            Giữ và vuốt vùng này xuống để mở rộng bản đồ
+          </Text>
         </View>
 
-        <View className="relative -mt-8 px-4">
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{
+            paddingTop: dragAreaHeight,
+            paddingBottom: 120,
+          }}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+        >
+          <View className="relative px-4">
           <View className="rounded-3xl bg-white p-5" style={cardShadow}>
             <View className="flex-row items-center gap-2">
               <SymbolView
@@ -877,8 +971,9 @@ export default function RouteDetailScreen() {
               ))}
             </View>
           </View>
-        </View>
-      </ScrollView>
+          </View>
+        </ScrollView>
+      </Animated.View>
 
       <View className="absolute inset-x-0 bottom-0 px-4 pb-6 pt-2">
         <View className="flex-row gap-2 rounded-2xl bg-white/95 p-2.5" style={cardShadow}>
