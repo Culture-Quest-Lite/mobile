@@ -2,9 +2,27 @@ import { SymbolView } from '@/components/ui/symbol-view';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { type Href, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  type GestureResponderEvent,
+  Pressable,
+  ScrollView,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { getValidAccessToken, useAuthSession } from '@/features/auth/hooks/use-auth-session';
 import {
@@ -16,12 +34,14 @@ import { getGoongRouteCoordinates } from '@/features/map/api/goong-directions';
 import { AppMap } from '@/features/map/components/app-map';
 import {
   getRouteById,
+  getSavedRoutes,
   getUserRouteProgressById,
   getUserRouteProgressList,
   type RouteDto,
   type RouteHotspotDto,
   saveRoute,
   startRouteProgress,
+  unSaveRoute,
   type UserRouteProgressDto,
 } from '@/features/route/api/route-api';
 import { useCheckins } from '@/lib/checkin-store';
@@ -389,8 +409,81 @@ export default function RouteDetailScreen() {
   const [isSavingRoute, setIsSavingRoute] = useState(false);
   const [isStartingRoute, setIsStartingRoute] = useState(false);
   const [isSavedRoute, setIsSavedRoute] = useState(false);
+  const [savedRouteId, setSavedRouteId] = useState<number | null>(null);
   const [activeRouteProgress, setActiveRouteProgress] = useState<UserRouteProgressDto | null>(null);
-  const [mapHeight, setMapHeight] = useState(240);
+
+  const { height: screenHeight } = useWindowDimensions();
+  const collapsedMapHeight = 240;
+  const expandedMapHeight = Math.max(
+    360,
+    Math.min(Math.round(screenHeight * 0.62), screenHeight - 220),
+  );
+
+  const [mapHeight, setMapHeight] = useState(collapsedMapHeight);
+  const mapHeightRef = useRef(collapsedMapHeight);
+  const scrollOffsetRef = useRef(0);
+  const touchStartYRef = useRef<number | null>(null);
+  const touchStartMapHeightRef = useRef(collapsedMapHeight);
+  const isPullingMapRef = useRef(false);
+
+  const clampMapHeight = useCallback(
+    (height: number) =>
+      Math.min(Math.max(height, collapsedMapHeight), expandedMapHeight),
+    [expandedMapHeight],
+  );
+
+  const updateMapHeight = useCallback(
+    (height: number) => {
+      const nextHeight = clampMapHeight(height);
+      mapHeightRef.current = nextHeight;
+      setMapHeight(nextHeight);
+    },
+    [clampMapHeight],
+  );
+
+  const handleContentTouchStart = useCallback(
+    (event: GestureResponderEvent) => {
+      touchStartYRef.current = event.nativeEvent.pageY;
+      touchStartMapHeightRef.current = mapHeightRef.current;
+      isPullingMapRef.current = scrollOffsetRef.current <= 1;
+    },
+    [],
+  );
+
+  const handleContentTouchMove = useCallback(
+    (event: GestureResponderEvent) => {
+      if (!isPullingMapRef.current || touchStartYRef.current === null) return;
+
+      const dragDistance =
+        event.nativeEvent.pageY - touchStartYRef.current;
+
+      // Chỉ kéo xuống mới làm bản đồ lớn hơn.
+      // Vuốt lên vẫn được ScrollView xử lý để cuộn nội dung.
+      if (dragDistance <= 0) return;
+
+      updateMapHeight(
+        touchStartMapHeightRef.current + dragDistance,
+      );
+    },
+    [updateMapHeight],
+  );
+
+  const handleContentTouchEnd = useCallback(() => {
+    if (isPullingMapRef.current) {
+      const middlePoint =
+        collapsedMapHeight +
+        (expandedMapHeight - collapsedMapHeight) * 0.35;
+
+      updateMapHeight(
+        mapHeightRef.current >= middlePoint
+          ? expandedMapHeight
+          : collapsedMapHeight,
+      );
+    }
+
+    touchStartYRef.current = null;
+    isPullingMapRef.current = false;
+  }, [expandedMapHeight, updateMapHeight]);
 
   useFocusEffect(
     useCallback(() => {
@@ -409,7 +502,7 @@ export default function RouteDetailScreen() {
 
         try {
           const accessToken = await getValidAccessToken();
-          const [routeDetail, progressPage] = await Promise.all([
+          const [routeDetail, progressPage, savedRoutes] = await Promise.all([
             getRouteById({
               accessToken,
               routeId,
@@ -431,6 +524,9 @@ export default function RouteDetailScreen() {
                   totalElements: 0,
                   totalPages: 0,
                 }),
+            accessToken
+              ? getSavedRoutes({ accessToken, tokenType: session.tokenType })
+              : Promise.resolve([]),
           ]);
 
           if (cancelled) return;
@@ -456,8 +552,14 @@ export default function RouteDetailScreen() {
             }
           }
 
+          const savedRoute = savedRoutes.find(
+            (item) => Number(item.routeId) === Number(routeId),
+          );
+
           setRoute(routeDetail);
           setActiveRouteProgress(startedProgress ?? null);
+          setIsSavedRoute(Boolean(savedRoute));
+          setSavedRouteId(savedRoute?.savedRouteId ?? null);
         } catch (loadError) {
           if (cancelled) return;
           setError(loadError instanceof Error ? loadError.message : 'Không thể tải chi tiết tuyến.');
@@ -496,11 +598,6 @@ export default function RouteDetailScreen() {
     return orderedStops.find((stop) => !checkedInIds.includes(String(stop.hotspotId))) ?? orderedStops[0];
   }, [checkedInIds, orderedStops]);
 
-  const handleMapScroll = useCallback((event: any) => {
-    const offsetY = event.nativeEvent.contentOffset.y;
-    const nextHeight = Math.min(420, Math.max(240, 240 + offsetY * 0.6));
-    setMapHeight(nextHeight);
-  }, []);
 
   if (isLoading) {
     return (
@@ -548,12 +645,44 @@ export default function RouteDetailScreen() {
     setIsSavingRoute(true);
     try {
       const accessToken = await getValidAccessToken();
-      await saveRoute({ accessToken, routeId: route.routeId, tokenType: session.tokenType });
+
+      if (isSavedRoute) {
+        if (!savedRouteId) {
+          throw new Error('Không tìm thấy mã tuyến đã lưu để bỏ lưu.');
+        }
+
+        await unSaveRoute({
+          accessToken,
+          savedRouteId,
+          tokenType: session.tokenType,
+        });
+        setIsSavedRoute(false);
+        setSavedRouteId(null);
+        Alert.alert('Đã bỏ lưu', 'Tuyến đã được xóa khỏi danh sách đã lưu.');
+        return;
+      }
+
+      const saved = await saveRoute({
+        accessToken,
+        routeId: route.routeId,
+        tokenType: session.tokenType,
+      });
+
+      const nextSavedRouteId =
+        typeof saved === 'object' && saved !== null && 'savedRouteId' in saved
+          ? Number(saved.savedRouteId)
+          : null;
+
       setIsSavedRoute(true);
+      setSavedRouteId(
+        nextSavedRouteId && Number.isFinite(nextSavedRouteId)
+          ? nextSavedRouteId
+          : null,
+      );
       Alert.alert('Đã lưu tuyến', 'Tuyến này đã được thêm vào danh sách đã lưu.');
     } catch (saveError) {
       Alert.alert(
-        'Không thể lưu tuyến',
+        isSavedRoute ? 'Không thể bỏ lưu tuyến' : 'Không thể lưu tuyến',
         saveError instanceof Error ? saveError.message : 'Vui lòng thử lại sau.',
       );
     } finally {
@@ -583,36 +712,62 @@ export default function RouteDetailScreen() {
 
   return (
     <View className="flex-1 bg-white">
+      <View
+        className="relative overflow-hidden bg-[#E8F0FE]"
+        style={{ height: mapHeight }}
+      >
+        <RouteMapHero
+          route={route}
+          checkedInIds={checkedInIds}
+          height={mapHeight}
+        />
+
+        <SafeAreaView
+          edges={['top']}
+          className="absolute inset-x-0 top-0"
+          pointerEvents="box-none"
+        >
+          <View className="flex-row items-center justify-between px-3 pt-2">
+            <Pressable
+              onPress={() => router.back()}
+              className="h-10 w-10 items-center justify-center rounded-full bg-black/30"
+            >
+              <SymbolView
+                name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
+                size={18}
+                tintColor="#fff"
+              />
+            </Pressable>
+            <View className="rounded-full bg-black/30 px-3 py-2">
+              <Text className="text-[11px] font-bold text-white">{route.status}</Text>
+            </View>
+          </View>
+        </SafeAreaView>
+      </View>
+
       <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingBottom: 120 }}
+        className="flex-1 bg-white"
+        contentContainerStyle={{ paddingBottom: 104 }}
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
-        onScroll={handleMapScroll}
+        bounces={false}
+        overScrollMode="never"
+        onScroll={(event) => {
+          scrollOffsetRef.current = Math.max(event.nativeEvent.contentOffset.y, 0);
+        }}
+        onTouchStart={handleContentTouchStart}
+        onTouchMove={handleContentTouchMove}
+        onTouchEnd={handleContentTouchEnd}
+        onTouchCancel={handleContentTouchEnd}
       >
-        <View className="relative">
-          <RouteMapHero route={route} checkedInIds={checkedInIds} height={mapHeight} />
+          <View className="relative px-4">
+          <View className="items-center pb-2 pt-1">
+            <View className="h-1.5 w-12 rounded-full bg-[#D9DCE5]" />
+            <Text className="mt-1 text-[10px] text-[#8E869A]">
+              {mapHeight > collapsedMapHeight ? 'Bản đồ đang được mở rộng' : 'Kéo xuống để mở rộng bản đồ'}
+            </Text>
+          </View>
 
-          <SafeAreaView edges={['top']} className="absolute inset-x-0 top-0">
-            <View className="flex-row items-center justify-between px-3 pt-2">
-              <Pressable
-                onPress={() => router.back()}
-                className="h-10 w-10 items-center justify-center rounded-full bg-black/30"
-              >
-                <SymbolView
-                  name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-                  size={18}
-                  tintColor="#fff"
-                />
-              </Pressable>
-              <View className="rounded-full bg-black/30 px-3 py-2">
-                <Text className="text-[11px] font-bold text-white">{route.status}</Text>
-              </View>
-            </View>
-          </SafeAreaView>
-        </View>
-
-        <View className="relative -mt-8 px-4">
           <View className="rounded-3xl bg-white p-5" style={cardShadow}>
             <View className="flex-row items-center gap-2">
               <SymbolView
@@ -877,7 +1032,7 @@ export default function RouteDetailScreen() {
               ))}
             </View>
           </View>
-        </View>
+          </View>
       </ScrollView>
 
       <View className="absolute inset-x-0 bottom-0 px-4 pb-6 pt-2">
