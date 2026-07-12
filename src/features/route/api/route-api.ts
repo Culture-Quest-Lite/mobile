@@ -334,7 +334,10 @@ export function parseRoute(value: unknown): RouteDto | null {
     status: readString(value.status, "DRAFT"),
     tags: Array.isArray(value.tags)
       ? value.tags.map(parseTag).filter(isNonNull)
-      : [],
+      : (() => {
+          const singleTag = parseTag(value.tag);
+          return singleTag ? [singleTag] : [];
+        })(),
     totalDistance: readNumber(value.totalDistance),
     xp: readNumber(value.xp),
   };
@@ -628,18 +631,18 @@ export async function searchRoutes({
   const url = `${resolveRouteUrl("/api/v1/routes/search")}?${params.toString()}`;
   const body = await fetchRouteJson(url, accessToken, tokenType);
 
-  const rawContent =
-    isObject(body) && Array.isArray(body.content) ? body.content : [];
+  const unwrappedBody = unwrapApiBody(body);
+  const rawContent = readPageContent(body);
   const content = rawContent.map(parseRoute).filter(isNonNull);
 
   return {
     content,
-    number: isObject(body) ? readNumber(body.number, page) : page,
-    size: isObject(body) ? readNumber(body.size, size) : size,
-    totalElements: isObject(body)
-      ? readNumber(body.totalElements, content.length)
+    number: isObject(unwrappedBody) ? readNumber(unwrappedBody.number, page) : page,
+    size: isObject(unwrappedBody) ? readNumber(unwrappedBody.size, size) : size,
+    totalElements: isObject(unwrappedBody)
+      ? readNumber(unwrappedBody.totalElements, content.length)
       : content.length,
-    totalPages: isObject(body) ? readNumber(body.totalPages, 1) : 1,
+    totalPages: isObject(unwrappedBody) ? readNumber(unwrappedBody.totalPages, 1) : 1,
   };
 }
 
@@ -677,11 +680,12 @@ export async function getRoutesByHotspot({
   }`;
   const body = await fetchRouteJson(url, accessToken, tokenType);
 
-  if (!Array.isArray(body)) {
+  const rawRoutes = readPageContent(body);
+  if (rawRoutes.length === 0 && !Array.isArray(unwrapApiBody(body))) {
     throw new Error("API route theo hotspot trả về dữ liệu không đúng định dạng.");
   }
 
-  return body.map(parseRoute).filter(isNonNull);
+  return rawRoutes.map(parseRoute).filter(isNonNull);
 }
 
 function getDifficultyLabel(difficulty?: string) {
@@ -832,7 +836,7 @@ export async function saveRoute({
   const body = await fetchRouteJson(url, accessToken, tokenType, {
     method: "POST",
   });
-  return parseSavedRoute(body) ?? body;
+  return parseSavedRoute(unwrapApiBody(body)) ?? unwrapApiBody(body);
 }
 
 export async function unSaveRoute({

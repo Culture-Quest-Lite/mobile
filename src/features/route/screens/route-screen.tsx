@@ -29,11 +29,13 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 import {
   abandonRouteProgress,
+  getRouteById,
   getRoutes,
   getSavedRoutes,
   getUserRouteProgressList,
   mapRouteToRouteItem,
   type RouteDto,
+  unSaveRoute,
   type UserRouteProgressDto,
 } from "@/features/route/api/route-api";
 
@@ -42,6 +44,61 @@ type RouteVariant =
   "official" | "active" | "completed" | "bookmarked" | "community";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
+
+type SavedRouteItem = RouteItem & { savedRouteId: number };
+
+type SavedRouteApiRecord = {
+  savedRouteId?: number | string | null;
+  id?: number | string | null;
+  routeId?: number | string | null;
+  route?: RouteDto | null;
+  routeResponse?: RouteDto | null;
+  savedRoute?: RouteDto | null;
+  savedAt?: string | null;
+};
+
+function getSavedRouteId(record: SavedRouteApiRecord) {
+  const value = record.savedRouteId ?? record.id;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getSavedRouteDto(
+  record: SavedRouteApiRecord,
+  routeLookup: Record<string, RouteDto>,
+) {
+  const nestedRoute = record.route ?? record.routeResponse ?? record.savedRoute;
+  if (nestedRoute?.routeId) return nestedRoute;
+
+  const routeId = Number(record.routeId);
+  if (!Number.isFinite(routeId)) return null;
+
+  return routeLookup[String(routeId)] ?? null;
+}
+
+function mapSavedRoutesToItems(
+  records: unknown,
+  routeLookup: Record<string, RouteDto>,
+): SavedRouteItem[] {
+  if (!Array.isArray(records)) return [];
+
+  return records.flatMap((rawRecord) => {
+    if (!rawRecord || typeof rawRecord !== "object") return [];
+
+    const record = rawRecord as SavedRouteApiRecord;
+    const savedRouteId = getSavedRouteId(record);
+    const route = getSavedRouteDto(record, routeLookup);
+
+    if (savedRouteId === null || !route) return [];
+
+    return [
+      {
+        ...mapRouteToRouteItem(route),
+        savedRouteId,
+      },
+    ];
+  });
+}
 
 const sunsetColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 
@@ -160,7 +217,8 @@ export default function RouteScreen() {
   const [completedRoutesFromApi, setCompletedRoutesFromApi] = useState<
     RouteItem[]
   >([]);
-  const [savedRoutesFromApi, setSavedRoutesFromApi] = useState<RouteItem[]>([]);
+  const [savedRoutesFromApi, setSavedRoutesFromApi] = useState<SavedRouteItem[]>([]);
+  const [removingSavedRouteId, setRemovingSavedRouteId] = useState<number | null>(null);
   const [abandoningProgressId, setAbandoningProgressId] = useState<
     number | null
   >(null);
@@ -239,14 +297,65 @@ export default function RouteScreen() {
               mapProgressToRouteItem(progress, routeLookup),
             ),
           );
-          setSavedRoutesFromApi(
-            savedResult.status === "fulfilled"
-              ? savedResult.value
-                  .map((savedRoute) => savedRoute.route)
-                  .filter(Boolean)
-                  .map((route) => mapRouteToRouteItem(route as RouteDto))
-              : [],
-          );
+          if (savedResult.status === "fulfilled") {
+            const savedRecords = Array.isArray(savedResult.value)
+              ? (savedResult.value as SavedRouteApiRecord[])
+              : [];
+
+            // GET saved routes chỉ trả savedRouteId + routeId, nên lấy chi tiết
+            // route theo routeId nếu route đó không có trong danh sách chính thức.
+            const missingRouteIds = Array.from(
+              new Set(
+                savedRecords
+                  .map((record) => Number(record.routeId))
+                  .filter(
+                    (routeId) =>
+                      Number.isFinite(routeId) &&
+                      !routeLookup[String(routeId)],
+                  ),
+              ),
+            );
+
+            const missingRouteResults = await Promise.allSettled(
+              missingRouteIds.map((savedRouteId) =>
+                getRouteById({
+                  accessToken,
+                  routeId: savedRouteId,
+                  tokenType: session.tokenType,
+                }),
+              ),
+            );
+
+            missingRouteResults.forEach((result) => {
+              if (result.status === "fulfilled") {
+                routeLookup[String(result.value.routeId)] = result.value;
+              } else {
+                console.warn(
+                  "[route-screen] load saved route detail failed",
+                  result.reason,
+                );
+              }
+            });
+
+            const savedItems = mapSavedRoutesToItems(
+              savedRecords,
+              routeLookup,
+            );
+
+            console.log("[route-screen] saved routes loaded", {
+              rawCount: savedRecords.length,
+              mappedCount: savedItems.length,
+              raw: savedRecords,
+            });
+
+            setSavedRoutesFromApi(savedItems);
+          } else {
+            console.warn(
+              "[route-screen] get saved routes failed",
+              savedResult.reason,
+            );
+            setSavedRoutesFromApi([]);
+          }
 
           if (officialResult.status === "rejected") {
             setRouteError(
@@ -263,6 +372,7 @@ export default function RouteScreen() {
             setOfficialRoutes(routes);
             setActiveRouteProgresses([]);
             setActiveRoutesFromApi([]);
+            setSavedRoutesFromApi([]);
             setRouteError(
               error instanceof Error
                 ? error.message
@@ -360,6 +470,49 @@ export default function RouteScreen() {
       ],
     );
   }
+  async function handleUnsaveRoute(savedRouteId: number, routeName: string) {
+    if (removingSavedRouteId !== null) return;
+
+    Alert.alert(
+      "Bỏ lưu tuyến",
+      `Bạn có chắc chắn muốn bỏ lưu ${routeName}?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Bỏ lưu",
+          style: "destructive",
+          onPress: async () => {
+            setRemovingSavedRouteId(savedRouteId);
+
+            try {
+              const accessToken = await getValidAccessToken();
+              await unSaveRoute({
+                accessToken,
+                savedRouteId,
+                tokenType: session.tokenType,
+              });
+
+              setSavedRoutesFromApi((current) =>
+                current.filter(
+                  (savedRoute) => savedRoute.savedRouteId !== savedRouteId,
+                ),
+              );
+            } catch (error) {
+              Alert.alert(
+                "Không thể bỏ lưu tuyến",
+                error instanceof Error
+                  ? error.message
+                  : "Vui lòng thử lại sau.",
+              );
+            } finally {
+              setRemovingSavedRouteId(null);
+            }
+          },
+        },
+      ],
+    );
+  }
+
   const completedList = useMemo(
     () => completedRoutesFromApi,
     [completedRoutesFromApi],
@@ -512,7 +665,12 @@ export default function RouteScreen() {
             ))}
           {tab === "bookmarked" &&
             (savedList.length ? (
-              <RouteList list={savedList} variant="bookmarked" />
+              <RouteList
+                list={savedList}
+                variant="bookmarked"
+                onUnsaveRoute={handleUnsaveRoute}
+                removingSavedRouteId={removingSavedRouteId}
+              />
             ) : (
               <EmptyState text="Bạn chưa lưu tuyến nào" />
             ))}
@@ -860,14 +1018,18 @@ function RouteList({
   progressByRouteId,
   onAbandonRoute,
   abandoningProgressId,
+  onUnsaveRoute,
+  removingSavedRouteId,
 }: {
-  list: RouteItem[];
+  list: RouteItem[] | SavedRouteItem[];
   variant: RouteVariant;
   progress?: number;
   progressMap?: Record<string, number>;
   progressByRouteId?: Record<string, UserRouteProgressDto>;
   onAbandonRoute?: (progressId: number) => void;
   abandoningProgressId?: number | null;
+  onUnsaveRoute?: (savedRouteId: number, routeName: string) => void;
+  removingSavedRouteId?: number | null;
 }) {
   return (
     <View className="gap-3">
@@ -881,6 +1043,11 @@ function RouteList({
           progressId={progressByRouteId?.[route.id]?.userRouteProgressId}
           onAbandonRoute={onAbandonRoute}
           abandoningProgressId={abandoningProgressId}
+          savedRouteId={
+            "savedRouteId" in route ? route.savedRouteId : undefined
+          }
+          onUnsaveRoute={onUnsaveRoute}
+          removingSavedRouteId={removingSavedRouteId}
         />
       ))}
     </View>
@@ -895,6 +1062,9 @@ function RouteCard({
   progressInfo,
   onAbandonRoute,
   abandoningProgressId,
+  savedRouteId,
+  onUnsaveRoute,
+  removingSavedRouteId,
 }: {
   route: RouteItem;
   variant: RouteVariant;
@@ -903,8 +1073,13 @@ function RouteCard({
   progressInfo?: UserRouteProgressDto;
   onAbandonRoute?: (progressId: number) => void;
   abandoningProgressId?: number | null;
+  savedRouteId?: number;
+  onUnsaveRoute?: (savedRouteId: number, routeName: string) => void;
+  removingSavedRouteId?: number | null;
 }) {
   const router = useRouter();
+  const isRemovingSavedRoute =
+    savedRouteId !== undefined && removingSavedRouteId === savedRouteId;
 
   return (
     <View
@@ -1011,6 +1186,33 @@ function RouteCard({
           </View>
         </View>
       )}
+
+      {variant === "bookmarked" &&
+      savedRouteId !== undefined &&
+      onUnsaveRoute ? (
+        <View className="border-t border-[#ECEEF4] px-3 pb-3 pt-3">
+          <Pressable
+            disabled={isRemovingSavedRoute}
+            onPress={() => onUnsaveRoute(savedRouteId, route.title)}
+            className={`flex-row items-center justify-center gap-2 rounded-xl border border-[#F7C7D1] bg-[#FFF5F8] py-2.5 ${
+              isRemovingSavedRoute ? "opacity-60" : ""
+            }`}
+          >
+            <SymbolView
+              name={{
+                ios: "bookmark.slash",
+                android: "bookmark_remove",
+                web: "bookmark_remove",
+              }}
+              size={14}
+              tintColor="#B42345"
+            />
+            <Text className="text-[12px] font-extrabold text-[#B42345]">
+              {isRemovingSavedRoute ? "Đang bỏ lưu..." : "Bỏ lưu"}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
