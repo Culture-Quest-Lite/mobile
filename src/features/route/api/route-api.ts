@@ -76,10 +76,17 @@ export type ProgressStatus =
   "IN_PROGRESS" | "COMPLETED" | "ABANDONED" | "ON_HOLD" | string;
 
 export type HotspotProgressDto = {
+  userProgressId?: number | null;
+  userId?: number | null;
   hotspotId: number;
   hotspotName?: string;
   isCheckedIn: boolean;
   index?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  totalPointEarned?: number | null;
+  totalXpEarned?: number | null;
+  firstVisitedAt?: string | null;
 };
 
 export type UserRouteProgressDto = {
@@ -117,6 +124,10 @@ export type CheckInResponseDto = {
   pointEarned: number;
   userRouteProgressId: number | null;
   xpEarned: number;
+  latitude?: number | null;
+  longitude?: number | null;
+  isCheckedIn?: boolean;
+  userId?: number | null;
 };
 
 type SearchRoutesRequest = {
@@ -323,7 +334,10 @@ export function parseRoute(value: unknown): RouteDto | null {
     status: readString(value.status, "DRAFT"),
     tags: Array.isArray(value.tags)
       ? value.tags.map(parseTag).filter(isNonNull)
-      : [],
+      : (() => {
+          const singleTag = parseTag(value.tag);
+          return singleTag ? [singleTag] : [];
+        })(),
     totalDistance: readNumber(value.totalDistance),
     xp: readNumber(value.xp),
   };
@@ -334,11 +348,23 @@ function parseHotspotProgress(value: unknown): HotspotProgressDto | null {
   const hotspotId = readNumber(value.hotspotId, -1);
   if (hotspotId < 0) return null;
 
+  const { latitude, longitude } = normalizeLatitudeLongitude(
+    value.latitude,
+    value.longitude,
+  );
+
   return {
+    userProgressId: readNullableNumber(value.userProgressId ?? value.id),
+    userId: readNullableNumber(value.userId),
     hotspotId,
     hotspotName: readString(value.hotspotName) || readString(value.name),
     index: readNullableNumber(value.index),
     isCheckedIn: Boolean(value.isCheckedIn ?? value.checkedIn),
+    latitude,
+    longitude,
+    totalPointEarned: readNullableNumber(value.totalPointEarned),
+    totalXpEarned: readNullableNumber(value.totalXpEarned),
+    firstVisitedAt: readString(value.firstVisitedAt) || null,
   };
 }
 
@@ -348,7 +374,7 @@ export function parseUserRouteProgress(
   if (!isObject(value)) return null;
 
   const userRouteProgressId = readNumber(
-    value.userRouteProgressId ?? value.id,
+    value.userRouteProgressId ?? value.routeParticipantId ?? value.id,
     -1,
   );
   const routeFromBody = parseRoute(
@@ -396,22 +422,33 @@ function parseSavedRoute(value: unknown): SavedRouteDto | null {
 function parseCheckInResponse(value: unknown): CheckInResponseDto | null {
   if (!isObject(value)) return null;
 
-  const checkInId = readNumber(value.checkInId, -1);
+  // UserHotspotProgressController trả userProgressId/firstVisitedAt/
+  // totalPointEarned/totalXpEarned. Vẫn hỗ trợ response check-in cũ để
+  // các màn hình hiện tại không phải đổi interface.
+  const checkInId = readNumber(value.checkInId ?? value.userProgressId ?? value.id, -1);
   const hotspotId = readNumber(value.hotspotId, -1);
   const userRouteProgressId =
     value.userRouteProgressId == null
       ? null
       : readNumber(value.userRouteProgressId, -1);
+  const { latitude, longitude } = normalizeLatitudeLongitude(
+    value.latitude,
+    value.longitude,
+  );
 
   if (checkInId < 0 || hotspotId < 0 || userRouteProgressId === -1) return null;
 
   return {
-    checkInAt: readString(value.checkInAt),
+    checkInAt: readString(value.checkInAt ?? value.firstVisitedAt),
     checkInId,
     hotspotId,
-    pointEarned: readNumber(value.pointEarned),
+    pointEarned: readNumber(value.pointEarned ?? value.totalPointEarned),
     userRouteProgressId,
-    xpEarned: readNumber(value.xpEarned),
+    xpEarned: readNumber(value.xpEarned ?? value.totalXpEarned),
+    latitude,
+    longitude,
+    isCheckedIn: Boolean(value.isCheckedIn ?? true),
+    userId: readNullableNumber(value.userId),
   };
 }
 
@@ -594,18 +631,18 @@ export async function searchRoutes({
   const url = `${resolveRouteUrl("/api/v1/routes/search")}?${params.toString()}`;
   const body = await fetchRouteJson(url, accessToken, tokenType);
 
-  const rawContent =
-    isObject(body) && Array.isArray(body.content) ? body.content : [];
+  const unwrappedBody = unwrapApiBody(body);
+  const rawContent = readPageContent(body);
   const content = rawContent.map(parseRoute).filter(isNonNull);
 
   return {
     content,
-    number: isObject(body) ? readNumber(body.number, page) : page,
-    size: isObject(body) ? readNumber(body.size, size) : size,
-    totalElements: isObject(body)
-      ? readNumber(body.totalElements, content.length)
+    number: isObject(unwrappedBody) ? readNumber(unwrappedBody.number, page) : page,
+    size: isObject(unwrappedBody) ? readNumber(unwrappedBody.size, size) : size,
+    totalElements: isObject(unwrappedBody)
+      ? readNumber(unwrappedBody.totalElements, content.length)
       : content.length,
-    totalPages: isObject(body) ? readNumber(body.totalPages, 1) : 1,
+    totalPages: isObject(unwrappedBody) ? readNumber(unwrappedBody.totalPages, 1) : 1,
   };
 }
 
@@ -643,11 +680,12 @@ export async function getRoutesByHotspot({
   }`;
   const body = await fetchRouteJson(url, accessToken, tokenType);
 
-  if (!Array.isArray(body)) {
+  const rawRoutes = readPageContent(body);
+  if (rawRoutes.length === 0 && !Array.isArray(unwrapApiBody(body))) {
     throw new Error("API route theo hotspot trả về dữ liệu không đúng định dạng.");
   }
 
-  return body.map(parseRoute).filter(isNonNull);
+  return rawRoutes.map(parseRoute).filter(isNonNull);
 }
 
 function getDifficultyLabel(difficulty?: string) {
@@ -703,7 +741,7 @@ export async function startRouteProgress({
   tokenType,
 }: RouteIdRequest) {
   requireAccessToken(accessToken);
-  const url = resolveRouteUrl(`/api/v1/user-route-progress/start/${routeId}`);
+  const url = resolveRouteUrl(`/api/v1/route-participants/start/${routeId}`);
   const body = await fetchRouteJson(url, accessToken, tokenType, {
     method: "POST",
   });
@@ -722,7 +760,7 @@ export async function abandonRouteProgress({
   tokenType,
 }: RouteIdRequest) {
   requireAccessToken(accessToken);
-  const url = resolveRouteUrl(`/api/v1/user-route-progress/abandon/${routeId}`);
+  const url = resolveRouteUrl(`/api/v1/route-participants/abandon/${routeId}`);
   const body = await fetchRouteJson(url, accessToken, tokenType, {
     method: "PUT",
   });
@@ -748,7 +786,7 @@ export async function getUserRouteProgressList({
 
   if (status) params.set("status", status);
 
-  const url = `${resolveRouteUrl("/api/v1/user-route-progress")}?${params.toString()}`;
+  const url = `${resolveRouteUrl("/api/v1/route-participants")}?${params.toString()}`;
   const body = await fetchRouteJson(url, accessToken, tokenType);
   const unwrappedBody = unwrapApiBody(body);
   const rawContent = readPageContent(body);
@@ -775,7 +813,7 @@ export async function getUserRouteProgressById({
   tokenType,
 }: AuthenticatedRouteRequest & { progressId: number | string }) {
   requireAccessToken(accessToken);
-  const url = resolveRouteUrl(`/api/v1/user-route-progress/${progressId}`);
+  const url = resolveRouteUrl(`/api/v1/route-participants/${progressId}`);
   const body = await fetchRouteJson(url, accessToken, tokenType);
   const progress = parseUserRouteProgress(unwrapApiBody(body));
 
@@ -798,7 +836,7 @@ export async function saveRoute({
   const body = await fetchRouteJson(url, accessToken, tokenType, {
     method: "POST",
   });
-  return parseSavedRoute(body) ?? body;
+  return parseSavedRoute(unwrapApiBody(body)) ?? unwrapApiBody(body);
 }
 
 export async function unSaveRoute({
@@ -830,7 +868,7 @@ export async function createRouteCheckIn({
   tokenType,
 }: CheckInRequest) {
   requireAccessToken(accessToken);
-  const url = resolveRouteUrl("/api/v1/check-ins");
+  const url = resolveRouteUrl("/api/v1/user-hotspot-progress");
   const body = await fetchRouteJson(url, accessToken, tokenType, {
     body: { hotspotId, latitude, longitude },
     method: "POST",
@@ -843,6 +881,14 @@ export async function createRouteCheckIn({
 
   return checkIn;
 }
+
+// Tên alias bám theo RouteParticipantController của backend.
+// Các tên cũ vẫn được giữ để không làm hỏng màn hình hiện tại.
+export const startRouteParticipant = startRouteProgress;
+export const abandonRouteParticipant = abandonRouteProgress;
+export const getRouteParticipants = getUserRouteProgressList;
+export const getRouteParticipantById = getUserRouteProgressById;
+export const checkInHotspotProgress = createRouteCheckIn;
 
 export async function getRoutes(request: SearchRoutesRequest = {}) {
   return searchRoutes(request);
