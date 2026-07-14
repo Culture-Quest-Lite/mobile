@@ -37,6 +37,7 @@ export type CommunityExplorerProfile = {
   role: string;
   headline: string;
   bio: string;
+  birthDate: string;
   city: string;
   level: number;
   checkIns: number;
@@ -65,6 +66,7 @@ export const communityExplorerProfiles: readonly CommunityExplorerProfile[] = [
     role: "Story hunter",
     headline: "Săn góc kể chuyện đẹp ở các bảo tàng và sân khấu truyền thống.",
     bio: "Thích ghép những điểm dừng văn hóa thành hành trình ngắn, dễ đi và nhiều góc ảnh kể được câu chuyện của địa điểm.",
+    birthDate: "21 tháng 11, 2004",
     city: "TP. Hồ Chí Minh",
     level: 14,
     checkIns: 152,
@@ -94,6 +96,7 @@ export const communityExplorerProfiles: readonly CommunityExplorerProfile[] = [
     headline:
       "Gom note nhanh cho các route học thuật, triển lãm và nhóm sinh viên.",
     bio: "Ưu tiên những route dễ phối hợp theo nhóm 3-5 người, có checklist rõ ràng và nội dung súc tích để ai mới tham gia cũng theo được.",
+    birthDate: "03 tháng 08, 2003",
     city: "Thủ Đức",
     level: 11,
     checkIns: 108,
@@ -120,6 +123,7 @@ export const communityExplorerProfiles: readonly CommunityExplorerProfile[] = [
     role: "Meetup host",
     headline: "Tổ chức meetup nhỏ cho người mới, ưu tiên route dễ nhập cuộc.",
     bio: "Mình hay lên lịch route buổi tối với quãng đi bộ nhẹ, có nhiều điểm dừng kể chuyện và chỗ để cả nhóm ngồi trao đổi nhanh.",
+    birthDate: "16 tháng 02, 2001",
     city: "Quận 1",
     level: 10,
     checkIns: 91,
@@ -146,6 +150,7 @@ export const communityExplorerProfiles: readonly CommunityExplorerProfile[] = [
     role: "Explorer level 9",
     headline: "Ưu tiên các cung kiến trúc cổ và điểm ngắm hoàng hôn dễ đi bộ.",
     bio: "Hay ghép route lịch sử với các điểm chụp silhouette lúc chiều muộn, phù hợp cho nhóm 2-3 người thích đi chậm và chụp nhiều.",
+    birthDate: "09 tháng 06, 2000",
     city: "Quận 5",
     level: 9,
     checkIns: 73,

@@ -1,10 +1,11 @@
+import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { type Href, useRouter } from "expo-router";
-import { SymbolView } from "@/components/ui/symbol-view";
 import { type ComponentProps, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -87,10 +88,100 @@ const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
 const fallbackPostImageUri =
   "https://i.pinimg.com/1200x/6d/cd/14/6dcd140b80b210ac445a0eddfc40784a.jpg";
 const fallbackPostAuthorName = "Minh Anh";
-const fallbackPostTimestamp = "09:30, 02/07/2026";
+const fallbackPostTimestamp = "02/07/2026";
 const fallbackPostLikeCount = 128;
 const fallbackPostCommentCount = 14;
 const fallbackPostShareCount = 2;
+const postMenuSections: {
+  items: {
+    description?: string;
+    icon: SymbolName;
+    isDestructive?: boolean;
+    label: string;
+  }[];
+  key: string;
+}[] = [
+  {
+    key: "primary",
+    items: [
+      {
+        label: "Ghim bài viết",
+        icon: { ios: "pin", android: "push_pin", web: "push_pin" },
+      },
+      {
+        label: "Lưu bài viết",
+        icon: {
+          ios: "bookmark",
+          android: "bookmark_border",
+          web: "bookmark_border",
+        },
+      },
+      {
+        label: "Chia sẻ lên cộng đồng",
+        icon: { ios: "camera", android: "photo_camera", web: "photo_camera" },
+      },
+      {
+        label: "Chỉnh sửa bài viết",
+        icon: { ios: "pencil", android: "edit", web: "edit" },
+      },
+      {
+        label: "Chỉnh sửa quyền riêng tư",
+        icon: { ios: "lock", android: "lock", web: "lock" },
+      },
+      {
+        label: "Ai có thể bình luận về bài viết này?",
+        icon: {
+          ios: "bubble.left.and.bubble.right",
+          android: "forum",
+          web: "forum",
+        },
+      },
+      {
+        label: "Chuyển vào kho lưu trữ",
+        icon: { ios: "archivebox", android: "inventory_2", web: "inventory_2" },
+      },
+      {
+        label: "Chuyển vào thùng rác",
+        description: "Các mục trong thùng rác sẽ bị xóa sau 30 ngày.",
+        icon: {
+          ios: "trash",
+          android: "delete_outline",
+          web: "delete_outline",
+        },
+        isDestructive: true,
+      },
+      {
+        label: "Nhận thông báo về bài viết này",
+        icon: {
+          ios: "bell",
+          android: "notifications_none",
+          web: "notifications_none",
+        },
+      },
+    ],
+  },
+  {
+    key: "secondary",
+    items: [
+      {
+        label: "Thêm vào album",
+        icon: {
+          ios: "square.stack",
+          android: "photo_album",
+          web: "photo_album",
+        },
+      },
+      {
+        label: "Thêm ảnh/video khác vào bài viết này",
+        icon: {
+          ios: "plus.square.on.square",
+          android: "add_photo_alternate",
+          web: "add_photo_alternate",
+        },
+      },
+    ],
+  },
+];
 
 const GUEST_MENU_ITEMS: {
   label: string;
@@ -197,13 +288,8 @@ function formatPostTimestamp(value: string | null) {
     month: "2-digit",
     year: "numeric",
   }).format(parsedDate);
-  const timeText = new Intl.DateTimeFormat("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(parsedDate);
 
-  return `${timeText},${dateText}`;
+  return dateText;
 }
 
 function getPostVisibilityLabel(visibility: string) {
@@ -284,15 +370,15 @@ export default function ProfileScreen() {
 
   if (!authSession.isAuthenticated) {
     return (
-        <GuestProfileScreen
-          bottomInset={insets.bottom}
-          onBackHome={handleBackToHome}
-          onOpenAuth={handleOpenAuth}
-          pageGutter={gutter}
-          screenWidth={safeWidth}
-        />
-      );
-    }
+      <GuestProfileScreen
+        bottomInset={insets.bottom}
+        onBackHome={handleBackToHome}
+        onOpenAuth={handleOpenAuth}
+        pageGutter={gutter}
+        screenWidth={safeWidth}
+      />
+    );
+  }
 
   if (isLoading && !profile) {
     return (
@@ -366,10 +452,7 @@ export default function ProfileScreen() {
         : null;
 
   return (
-    <SafeAreaView
-      className="flex-1 bg-[#F7F8FC]"
-      edges={["left", "right"]}
-    >
+    <SafeAreaView className="flex-1 bg-[#F7F8FC]" edges={["left", "right"]}>
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -483,8 +566,8 @@ export default function ProfileScreen() {
                     </View>
                   </View>
                   <XPBar
-                    value={isMaxLevel ? 1 : currentLevelXp ?? 0}
-                    max={isMaxLevel ? 1 : xpToNext ?? 1}
+                    value={isMaxLevel ? 1 : (currentLevelXp ?? 0)}
+                    max={isMaxLevel ? 1 : (xpToNext ?? 1)}
                     height={8}
                     trackColor="#F4EAF0"
                   />
@@ -580,7 +663,8 @@ export default function ProfileScreen() {
                       router.push(
                         getHotspotHref(
                           hotspot.slug,
-                          getCachedHotspotDetail({ slug: hotspot.slug })?.hotspotId,
+                          getCachedHotspotDetail({ slug: hotspot.slug })
+                            ?.hotspotId,
                         ),
                       )
                     }
@@ -1040,7 +1124,12 @@ function PostAuthorAvatar({
           colors={avatarFallbackColors}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
-          style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}
+          style={{
+            width: "100%",
+            height: "100%",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
         >
           <Text className="text-[16px] font-black text-white">{initials}</Text>
         </LinearGradient>
@@ -1071,9 +1160,7 @@ function PostAction({
     <View className="flex-row items-center gap-1.5">
       <SymbolView name={icon} size={17} tintColor={tintColor} />
       {typeof value === "number" ? (
-        <Text className="text-[14px] font-medium text-[#4B5563]">
-          {value}
-        </Text>
+        <Text className="text-[14px] font-medium text-[#4B5563]">{value}</Text>
       ) : null}
     </View>
   );
@@ -1085,7 +1172,7 @@ function PostMediaGallery({ sources }: { sources: string[] }) {
 
   if (visibleSources.length === 1) {
     return (
-      <View className="overflow-hidden rounded-[20px] bg-[#F3F4F6]">
+      <View className="overflow-hidden bg-[#F3F4F6]">
         <Image
           source={visibleSources[0]}
           contentFit="cover"
@@ -1101,14 +1188,14 @@ function PostMediaGallery({ sources }: { sources: string[] }) {
   }
 
   return (
-    <View className="flex-row gap-2">
+    <View className="flex-row gap-0">
       {visibleSources.map((source, index) => {
         const isLastVisibleItem = index === visibleSources.length - 1;
 
         return (
           <View
             key={`${source}-${index}`}
-            className="min-w-0 flex-1 overflow-hidden rounded-[20px] bg-[#F3F4F6]"
+            className="min-w-0 flex-1 overflow-hidden bg-[#F3F4F6]"
             style={{ height: 238 }}
           >
             <Image
@@ -1133,6 +1220,100 @@ function PostMediaGallery({ sources }: { sources: string[] }) {
   );
 }
 
+function PostMenuRow({
+  item,
+  isLast,
+  onPress,
+}: {
+  item: (typeof postMenuSections)[number]["items"][number];
+  isLast: boolean;
+  onPress: () => void;
+}) {
+  const labelColor = item.isDestructive ? "#C24F3B" : "#202124";
+  const descriptionColor = item.isDestructive ? "#B46A5F" : "#8E869A";
+
+  return (
+    <Pressable
+      className={`flex-row items-start gap-3 py-3 ${isLast ? "" : "border-b border-[#E7E5EF]"}`}
+      onPress={onPress}
+    >
+      <View className="w-6 items-center pt-0.5">
+        <SymbolView name={item.icon} size={19} tintColor={labelColor} />
+      </View>
+      <View className="min-w-0 flex-1">
+        <Text
+          className="text-[16px] font-semibold leading-5"
+          style={{ color: labelColor }}
+        >
+          {item.label}
+        </Text>
+        {item.description ? (
+          <Text
+            className="mt-0.5 text-[13px] leading-[17px]"
+            style={{ color: descriptionColor }}
+          >
+            {item.description}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+function PostOptionsSheet({
+  bottomInset,
+  onClose,
+  visible,
+}: {
+  bottomInset: number;
+  onClose: () => void;
+  visible: boolean;
+}) {
+  return (
+    <Modal
+      transparent
+      animationType="slide"
+      visible={visible}
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View className="flex-1 bg-black/35">
+        <Pressable className="flex-1" onPress={onClose} />
+        <View
+          className="rounded-t-[28px] bg-white px-3 pt-3"
+          style={{ paddingBottom: Math.max(bottomInset, 14) }}
+        >
+          <View className="items-center pb-3">
+            <View className="h-1.5 w-14 rounded-full bg-[#D3D2DC]" />
+          </View>
+
+          <ScrollView
+            bounces={false}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 4 }}
+          >
+            {postMenuSections.map((section) => (
+              <View
+                key={section.key}
+                className="mb-3 rounded-[22px] bg-[#F7F6FB] px-4 py-1"
+              >
+                {section.items.map((item, index) => (
+                  <PostMenuRow
+                    key={`${section.key}-${item.label}`}
+                    item={item}
+                    isLast={index === section.items.length - 1}
+                    onPress={onClose}
+                  />
+                ))}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function PostCard({
   post,
   isLast,
@@ -1148,10 +1329,10 @@ function PostCard({
   profileName: string;
   profileUsername: string;
 }) {
+  const insets = useSafeAreaInsets();
+  const [isPostMenuVisible, setIsPostMenuVisible] = useState(false);
   const authorName =
-    post.displayName.trim() ||
-    profileName.trim() ||
-    fallbackPostAuthorName;
+    post.displayName.trim() || profileName.trim() || fallbackPostAuthorName;
   const authorUsername = post.username.trim() || profileUsername.trim();
   const postContent = post.text.trim() || "Chuyến đi hôm nay rất đáng nhớ.";
   const postMediaSources = resolvePostMediaUris(post);
@@ -1159,18 +1340,16 @@ function PostCard({
   const visibilityLabel = getPostVisibilityLabel(post.visibility);
 
   return (
-    <View
-      className={`px-4 py-4 ${isLast ? "" : "border-b border-[#DEE3EA]"}`}
-    >
-      <View className="flex-row items-start justify-between gap-3">
-        <View className="min-w-0 flex-1 flex-row items-center gap-3">
+    <View className={`px-3 py-3 ${isLast ? "" : "border-b border-[#DEE3EA]"}`}>
+      <View className="flex-row items-start justify-between gap-2">
+        <View className="min-w-0 flex-1 flex-row items-center gap-2.5">
           <PostAuthorAvatar
             avatar={profileAvatar}
             name={authorName}
             username={authorUsername}
           />
 
-          <View className="min-w-0 flex-1">
+          <View className="min-w-0 flex-1 gap-0">
             <Text
               className="text-[17px] font-extrabold leading-5 text-[#202124]"
               numberOfLines={1}
@@ -1178,24 +1357,23 @@ function PostCard({
               {authorName}
             </Text>
 
-            <View className="mt-0.5 flex-row items-center gap-1.5">
-              <Text className="text-[13px] leading-4 text-[#6B7280]">
+            <View className="flex-row items-center gap-1">
+              <Text className="text-[12px] leading-[14px] text-[#6B7280]">
                 {formatPostTimestamp(post.createdAt)}
               </Text>
-              <Text className="text-[13px] text-[#6B7280]">·</Text>
-              <SymbolView
-                name={visibilityIcon}
-                size={12}
-                tintColor="#6B7280"
-              />
-              <Text className="text-[12px] text-[#6B7280]">
+              <Text className="text-[12px] text-[#6B7280]">·</Text>
+              <SymbolView name={visibilityIcon} size={11} tintColor="#6B7280" />
+              <Text className="text-[12px] leading-[14px] text-[#6B7280]">
                 {visibilityLabel}
               </Text>
             </View>
           </View>
         </View>
 
-        <Pressable className="h-8 w-8 items-center justify-center rounded-full">
+        <Pressable
+          className="h-8 w-8 items-center justify-center rounded-full"
+          onPress={() => setIsPostMenuVisible(true)}
+        >
           <SymbolView
             name={{ ios: "ellipsis", android: "more_horiz", web: "more_horiz" }}
             size={18}
@@ -1204,18 +1382,18 @@ function PostCard({
         </Pressable>
       </View>
 
-      <Text className="mt-3 text-[15px] leading-6 text-[#202124]">
+      <Text
+        className="text-[15px] leading-[17px] text-[#202124]"
+        style={{ textAlign: "justify" }}
+      >
         {postContent}
       </Text>
 
-      <View
-        className="mt-3"
-        style={{ marginHorizontal: -(pageGutter + 16) }}
-      >
+      <View className="mt-1" style={{ marginHorizontal: -(pageGutter + 12) }}>
         <PostMediaGallery sources={postMediaSources} />
       </View>
 
-      <View className="mt-3 flex-row items-center gap-5">
+      <View className="mt-2 flex-row items-center gap-5">
         <PostAction
           icon={{ ios: "heart.fill", android: "favorite", web: "favorite" }}
           tintColor="#F43F5E"
@@ -1244,6 +1422,12 @@ function PostCard({
           Lý do: {post.reason}
         </Text>
       ) : null}
+
+      <PostOptionsSheet
+        bottomInset={insets.bottom}
+        visible={isPostMenuVisible}
+        onClose={() => setIsPostMenuVisible(false)}
+      />
     </View>
   );
 }

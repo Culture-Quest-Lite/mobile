@@ -372,6 +372,7 @@ type NearbyPlaceListItem = {
   imageUri: string;
   isCheckedIn: boolean;
   key: string;
+  rating: string;
   reward: string;
   slug: string | null;
   title: string;
@@ -387,15 +388,18 @@ const defaultNearbySearchDistanceMeters = 20;
 const nearbyDistanceSliderMinimumMeters = 20;
 const nearbyDistanceSliderMaximumMeters = 1000;
 const nearbyDistanceSliderStepMeters = 20;
-const suggestedRouteCardImageHeight = 128;
-const suggestedRouteSubtitleHeight = 36;
+const suggestedRouteCardImageHeight = 142;
+const suggestedRouteSubtitleHeight = 30;
 const suggestedRouteCardHeight = 254;
-const nearbyPlaceTitleHeight = 34;
-const nearbyPlaceCategoryHeight = 20;
-const nearbyPlaceDetailRowHeight = 22;
-const nearbyPlaceContentHeight = 124;
+const suggestedRouteSubtitleLineCount = 2;
+const suggestedRouteSubtitleReservedCharacters = 14;
+const nearbyPlaceTitleHeight = 22;
+const nearbyPlaceCategoryHeight = 12;
+const nearbyPlaceDetailRowHeight = 18;
+const nearbyPlaceContentHeight = 132;
 const nearbyPlaceFallbackImageUri =
   "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
+const nearbyPlaceFallbackRating = "4.9";
 const suggestedRouteFallbackImageUri =
   "https://i.pinimg.com/1200x/b9/05/dd/b905ddb3d6e87ba4f85692125c1eec2a.jpg";
 const defaultLocationPreviewRegion: Region = {
@@ -612,6 +616,7 @@ function buildApiNearbyPlaceItems(
         imageUri: getPrimaryNearbyImageUri(hotspot),
         isCheckedIn: hotspot.isCheckedIn === true,
         key: `${hotspot.hotspotId}-${index}`,
+        rating: nearbyPlaceFallbackRating,
         reward: formatRewardLabel(hotspot.xp),
         slug: null,
         sortDistanceMeters: distanceMeters,
@@ -879,6 +884,97 @@ function SectionEmptyState({
       <Text className="text-[15px] font-bold text-[#3B4454]">{title}</Text>
       <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
         {description}
+      </Text>
+    </View>
+  );
+}
+
+function trimInlineReadMoreBaseText(text: string) {
+  return text.replace(/[\s.,;:!?-]+$/u, "").trimEnd();
+}
+
+function SuggestedRouteSubtitle({ text }: { text: string }) {
+  const normalizedText = text.trim();
+  const [containerWidth, setContainerWidth] = useState(0);
+  const measurementSignature = `${containerWidth}:${normalizedText}`;
+  const [measuredSubtitle, setMeasuredSubtitle] = useState<{
+    collapsedText: string | null;
+    shouldShowInlineReadMore: boolean;
+    signature: string;
+  }>({
+    collapsedText: null,
+    shouldShowInlineReadMore: false,
+    signature: "",
+  });
+  const hasMeasuredCurrentSubtitle =
+    measuredSubtitle.signature === measurementSignature;
+
+  return (
+    <View
+      className="w-full"
+      style={{ height: suggestedRouteSubtitleHeight }}
+      onLayout={(event) => {
+        const nextWidth = Math.round(event.nativeEvent.layout.width);
+        setContainerWidth((currentWidth) =>
+          currentWidth === nextWidth ? currentWidth : nextWidth,
+        );
+      }}
+    >
+      {containerWidth > 0 && !hasMeasuredCurrentSubtitle ? (
+        <Text
+          pointerEvents="none"
+          className="absolute opacity-0 text-[13px] leading-[17px] text-[#8E869A]"
+          style={{ width: containerWidth }}
+          onTextLayout={(event) => {
+            const lines = event.nativeEvent.lines;
+
+            if (lines.length <= suggestedRouteSubtitleLineCount) {
+              setMeasuredSubtitle({
+                collapsedText: normalizedText,
+                shouldShowInlineReadMore: false,
+                signature: measurementSignature,
+              });
+              return;
+            }
+
+            const visibleText = lines
+              .slice(0, suggestedRouteSubtitleLineCount)
+              .map((line) => line.text)
+              .join("")
+              .replace(/\s+/g, " ")
+              .trim();
+            const nextCollapsedText = trimInlineReadMoreBaseText(
+              visibleText.slice(
+                0,
+                Math.max(
+                  visibleText.length - suggestedRouteSubtitleReservedCharacters,
+                  suggestedRouteSubtitleLineCount * 8,
+                ),
+              ),
+            );
+
+            setMeasuredSubtitle({
+              collapsedText:
+                nextCollapsedText || trimInlineReadMoreBaseText(visibleText),
+              shouldShowInlineReadMore: true,
+              signature: measurementSignature,
+            });
+          }}
+        >
+          {normalizedText}
+        </Text>
+      ) : null}
+
+      <Text
+        className="text-[13px] leading-[17px] text-[#8E869A]"
+        numberOfLines={suggestedRouteSubtitleLineCount}
+      >
+        {hasMeasuredCurrentSubtitle
+          ? (measuredSubtitle.collapsedText ?? normalizedText)
+          : normalizedText}
+        {hasMeasuredCurrentSubtitle && measuredSubtitle.shouldShowInlineReadMore ? (
+          <Text className="font-bold text-[#7E6F82]">... Xem thêm</Text>
+        ) : null}
       </Text>
     </View>
   );
@@ -2495,7 +2591,7 @@ export default function HomeScreen() {
                       style={{ width: nearbyPlaceCardWidth }}
                     >
                       <View
-                        className="overflow-hidden rounded-[22px] border border-[#EEF1F4] bg-white"
+                        className="overflow-hidden rounded-[10px] border border-[#EEF1F4] bg-white"
                         style={[
                           nearbyPlaceShadowStyle,
                           { height: nearbyPlaceCardHeight },
@@ -2543,7 +2639,7 @@ export default function HomeScreen() {
                         </View>
 
                         <View
-                          className="flex-1 gap-2 px-3.5 pb-3.5 pt-3"
+                          className="flex-1 gap-0.5 px-3.5 pb-3.5 pt-3"
                           style={{ minHeight: nearbyPlaceContentHeight }}
                         >
                           <Text
@@ -2561,6 +2657,24 @@ export default function HomeScreen() {
                           >
                             {place.category}
                           </Text>
+
+                          <View
+                            className="flex-row items-center gap-1"
+                            style={{ minHeight: nearbyPlaceDetailRowHeight }}
+                          >
+                            <SymbolView
+                              name={{
+                                ios: "star.fill",
+                                android: "star",
+                                web: "star",
+                              }}
+                              size={11}
+                              tintColor="#F58752"
+                            />
+                            <Text className="text-[12px] font-bold text-[#F58752]">
+                              {place.rating}
+                            </Text>
+                          </View>
 
                           {isPlaceCheckedIn ? (
                             <View
@@ -2582,7 +2696,7 @@ export default function HomeScreen() {
                                 className="flex-1 text-[12px] font-bold text-[#15803D]"
                                 numberOfLines={1}
                               >
-                                Câu chuyện đã mở khóa
+                                Xem câu chuyện
                               </Text>
                             </View>
                           ) : (
@@ -2743,7 +2857,7 @@ export default function HomeScreen() {
                     style={{ width: nearbyRouteCardWidth }}
                   >
                     <View
-                      className="overflow-hidden rounded-[24px] border border-[#EEF1F4] bg-white"
+                      className="overflow-hidden rounded-[10px] border border-[#EEF1F4] bg-white"
                       style={[
                         cardShadowStyle,
                         { height: suggestedRouteCardHeight },
@@ -2768,10 +2882,10 @@ export default function HomeScreen() {
                         </View>
                       </View>
 
-                      <View className="flex-1 gap-2.5 px-4 pb-4 pt-3.5">
+                      <View className="flex-1 gap-1 px-4 pb-3 pt-3">
                         <View
-                          className="flex-row flex-wrap items-center gap-2"
-                          style={{ minHeight: 26 }}
+                          className="flex-row flex-wrap items-center gap-1"
+                          style={{ minHeight: 20 }}
                         >
                           <View className="rounded-full bg-[#FFF1F6] px-2.5 py-1">
                             <Text className="text-[11px] font-extrabold text-[#EB489B]">
@@ -2811,13 +2925,7 @@ export default function HomeScreen() {
                           {route.title}
                         </Text>
 
-                        <Text
-                          className="text-[13px] leading-[18px] text-[#8E869A]"
-                          numberOfLines={2}
-                          style={{ height: suggestedRouteSubtitleHeight }}
-                        >
-                          {route.subtitle}
-                        </Text>
+                        <SuggestedRouteSubtitle text={route.subtitle} />
                       </View>
                     </View>
                   </Pressable>
