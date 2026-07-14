@@ -53,6 +53,7 @@ import {
 import {
   type AppCoordinate,
   formatCoordinateLabel,
+  ensureForegroundLocationPermission,
   getDevelopmentLocationOverride,
   getDeviceCoordinate,
 } from "@/lib/location";
@@ -691,7 +692,7 @@ async function resolveNearbyRequestCoordinate(): Promise<{
   const permissionResponse =
     permission.granted || !permission.canAskAgain
       ? permission
-      : await Location.requestForegroundPermissionsAsync();
+      : await ensureForegroundLocationPermission();
 
   if (permissionResponse.status !== "granted") {
     return {

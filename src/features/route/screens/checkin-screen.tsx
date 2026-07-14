@@ -19,6 +19,7 @@ import { createRouteCheckIn, getRouteById, type RouteHotspotDto } from '@/featur
 import { addCheckin, useCheckins } from '@/lib/checkin-store';
 import { getHotspot, getRouteHotspots } from '@/lib/demo-data';
 import { getHotspotDetailHref, getHotspotStoriesHref } from '@/lib/hotspot-navigation';
+import { ensureForegroundLocationPermission } from "@/lib/location";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Stage = 'idle' | 'scanning' | 'success';
@@ -302,7 +303,7 @@ export default function CheckinScreen() {
 
       setCheckInError(null);
       try {
-        const permission = await Location.requestForegroundPermissionsAsync();
+        const permission = await ensureForegroundLocationPermission();
         if (permission.status !== 'granted') {
           throw new Error('Bạn cần cho phép quyền vị trí để check-in.');
         }
