@@ -769,6 +769,9 @@ function ActiveProgressSummary({
 }
 
 function CommunityTab() {
+  const router = useRouter();
+  const [showCustomRouteMenu, setShowCustomRouteMenu] = useState(false);
+  const [showCustomRouteHelp, setShowCustomRouteHelp] = useState(false);
   const popular = useMemo(
     () =>
       [...communityJourneys].sort((a, b) => b.participants - a.participants),
@@ -779,7 +782,10 @@ function CommunityTab() {
 
   return (
     <View className="gap-5">
-      <Pressable className="overflow-hidden rounded-3xl">
+      <Pressable
+        className="overflow-hidden rounded-3xl"
+        onPress={() => setShowCustomRouteMenu(true)}
+      >
         <LinearGradient
           colors={["#E84D6A", "#EB489B", "#F58752"]}
           start={{ x: 0, y: 0 }}
@@ -790,34 +796,37 @@ function CommunityTab() {
             <View className="h-14 w-14 items-center justify-center rounded-2xl bg-black/20">
               <SymbolView
                 name={{
-                  ios: "record.circle",
-                  android: "fiber_manual_record",
-                  web: "fiber_manual_record",
+                  ios: "map.fill",
+                  android: "route",
+                  web: "route",
                 }}
-                size={18}
-                tintColor="#FECACA"
+                size={20}
+                tintColor="#FFFFFF"
               />
             </View>
             <View className="flex-1">
               <Text className="text-[11px] font-bold uppercase tracking-wider text-white/90">
-                Mới · Journey Recording
+                Custom Route
               </Text>
               <Text className="text-[17px] font-extrabold leading-tight text-white">
-                Ghi hành trình của bạn
+                Tạo hành trình của riêng bạn
               </Text>
               <Text className="mt-0.5 text-[12px] text-white/90">
-                Đi tự do, app tự tạo tuyến chia sẻ
+                Tự lên kế hoạch hoặc ghi lại chuyến đi thực tế
               </Text>
             </View>
-            <SymbolView
-              name={{
-                ios: "sparkles",
-                android: "auto_awesome",
-                web: "auto_awesome",
-              }}
-              size={16}
-              tintColor="#FFFFFF"
-            />
+            <View className="items-center gap-1">
+              <Pressable
+                className="h-8 w-8 items-center justify-center rounded-full bg-white/20"
+                onPress={(event) => {
+                  event.stopPropagation();
+                  setShowCustomRouteHelp(true);
+                }}
+              >
+                <Text className="text-[15px] font-extrabold text-white">?</Text>
+              </Pressable>
+              <Text className="text-[9px] font-bold text-white/80">Hướng dẫn</Text>
+            </View>
           </View>
         </LinearGradient>
       </Pressable>
@@ -867,6 +876,219 @@ function CommunityTab() {
           {rest.map((journey) => (
             <CommunityJourneyCard key={journey.id} journey={journey} />
           ))}
+        </View>
+      </View>
+
+      <Modal
+        visible={showCustomRouteMenu}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCustomRouteMenu(false)}
+      >
+        <Pressable
+          className="flex-1 justify-end bg-black/40"
+          onPress={() => setShowCustomRouteMenu(false)}
+        >
+          <Pressable
+            className="rounded-t-[32px] bg-[#F7F8FC] px-4 pb-8 pt-4"
+            onPress={(event) => event.stopPropagation()}
+          >
+            <View className="mb-4 items-center">
+              <View className="h-1.5 w-12 rounded-full bg-[#D9DDE7]" />
+            </View>
+
+            <View className="mb-4 flex-row items-start justify-between gap-3">
+              <View className="flex-1">
+                <Text className="text-[21px] font-extrabold text-[#2B2233]">
+                  Bạn muốn tạo route theo cách nào?
+                </Text>
+                <Text className="mt-1 text-[12px] leading-5 text-[#777181]">
+                  Hai loại đều tạo Custom Route nhưng có mục đích và cách sử dụng khác nhau.
+                </Text>
+              </View>
+              <Pressable
+                className="h-9 w-9 items-center justify-center rounded-full bg-white"
+                style={cardShadowStyle}
+                onPress={() => {
+                  setShowCustomRouteMenu(false);
+                  setShowCustomRouteHelp(true);
+                }}
+              >
+                <Text className="text-[16px] font-extrabold text-[#EB489B]">?</Text>
+              </Pressable>
+            </View>
+
+            <Pressable
+              className="mb-3 rounded-3xl border border-[#E8EDF4] bg-white p-4"
+              style={cardShadowStyle}
+              onPress={() => {
+                setShowCustomRouteMenu(false);
+                router.push("/route/custom/plan" as Href);
+              }}
+            >
+              <View className="flex-row items-start gap-3">
+                <View className="h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF1F6]">
+                  <SymbolView
+                    name={{ ios: "slider.horizontal.3", android: "tune", web: "tune" }}
+                    size={20}
+                    tintColor="#EB489B"
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[16px] font-extrabold text-[#2B2233]">
+                    Tạo tuyến đường cá nhân
+                  </Text>
+                  <Text className="mt-1 text-[12px] leading-5 text-[#777181]">
+                    Chủ động tìm, chọn và sắp xếp các hotspot theo kế hoạch của bạn trước khi bắt đầu đi.
+                  </Text>
+                  <View className="mt-3 self-start rounded-full bg-[#FFF1F6] px-3 py-1.5">
+                    <Text className="text-[10px] font-extrabold text-[#D93679]">
+                      PHÙ HỢP KHI MUỐN LÊN KẾ HOẠCH
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </Pressable>
+
+            <Pressable
+              className="rounded-3xl border border-[#FFD9C7] bg-white p-4"
+              style={cardShadowStyle}
+              onPress={() => {
+                setShowCustomRouteMenu(false);
+                router.push("/route/custom/record" as Href);
+              }}
+            >
+              <View className="flex-row items-start gap-3">
+                <View className="h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF4EF]">
+                  <SymbolView
+                    name={{
+                      ios: "record.circle",
+                      android: "fiber_manual_record",
+                      web: "fiber_manual_record",
+                    }}
+                    size={21}
+                    tintColor="#F15B45"
+                  />
+                </View>
+                <View className="flex-1">
+                  <View className="flex-row items-center gap-2">
+                    <Text className="text-[16px] font-extrabold text-[#2B2233]">
+                      Ghi hành trình mới
+                    </Text>
+                    <View className="rounded-full bg-[#F15B45] px-2 py-1">
+                      <Text className="text-[9px] font-extrabold text-white">RECORD</Text>
+                    </View>
+                  </View>
+                  <Text className="mt-1 text-[12px] leading-5 text-[#777181]">
+                    Bắt đầu đi thực tế. Mỗi lần check-in, hệ thống lưu hotspot và tạo story nháp cho hành trình của bạn.
+                  </Text>
+                  <View className="mt-3 rounded-2xl bg-[#FFF8F4] px-3 py-2.5">
+                    <Text className="text-[11px] font-semibold leading-4 text-[#A44A35]">
+                      Chỉ được ghi 1 hành trình tại một thời điểm. Hoàn tất bản nháp rồi mới submit để thử nghiệm và chia sẻ.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showCustomRouteHelp}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCustomRouteHelp(false)}
+      >
+        <View className="flex-1 items-center justify-center bg-black/45 px-4">
+          <View className="max-h-[86%] w-full rounded-[30px] bg-white p-5" style={cardShadowStyle}>
+            <View className="flex-row items-start justify-between gap-3">
+              <View className="flex-1">
+                <Text className="text-[20px] font-extrabold text-[#2B2233]">Hướng dẫn Custom Route</Text>
+                <Text className="mt-1 text-[12px] leading-5 text-[#777181]">
+                  Chọn đúng loại route để hệ thống hỗ trợ bạn theo đúng mục đích.
+                </Text>
+              </View>
+              <Pressable
+                className="h-9 w-9 items-center justify-center rounded-full bg-[#F1F3F7]"
+                onPress={() => setShowCustomRouteHelp(false)}
+              >
+                <Text className="text-[17px] font-bold text-[#676270]">×</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView className="mt-4" showsVerticalScrollIndicator={false}>
+              <GuideSection
+                step="A"
+                title="Tạo tuyến đường cá nhân"
+                description="Bạn tự chọn và sắp xếp các hotspot theo ý thích. Dùng khi muốn chuẩn bị lịch trình trước chuyến đi."
+                bullets={[
+                  "Tìm và thêm hotspot mong muốn.",
+                  "Sắp xếp thứ tự điểm dừng.",
+                  "Chỉnh tên, mô tả và thông tin route.",
+                ]}
+              />
+              <GuideSection
+                step="B"
+                title="Ghi hành trình mới"
+                description="Dùng khi đang đi thực tế và muốn lưu lại những hotspot đã check-in thành một route mới."
+                bullets={[
+                  "Bắt đầu ghi: route có trạng thái RECORDING.",
+                  "Mỗi check-in tạo một story nháp gắn với route và hotspot.",
+                  "Kết thúc ghi: route chuyển sang DRAFT để chỉnh sửa.",
+                  "Finalize: route chuyển sang TRIAL để submit lên hệ thống.",
+                ]}
+              />
+
+              <View className="rounded-2xl bg-[#FFF8E8] p-3.5">
+                <Text className="text-[12px] font-extrabold text-[#8A5C00]">Quyền lợi khi chia sẻ</Text>
+                <Text className="mt-1 text-[11px] leading-5 text-[#775F31]">
+                  Sau khi route được publish, bạn có thể nhận thêm Point và XP khi người dùng khác hoàn thành route của bạn.
+                </Text>
+              </View>
+            </ScrollView>
+
+            <Pressable
+              className="mt-4 rounded-2xl bg-[#EB489B] py-3.5"
+              onPress={() => setShowCustomRouteHelp(false)}
+            >
+              <Text className="text-center text-[13px] font-extrabold text-white">Đã hiểu</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+function GuideSection({
+  step,
+  title,
+  description,
+  bullets,
+}: {
+  step: string;
+  title: string;
+  description: string;
+  bullets: string[];
+}) {
+  return (
+    <View className="mb-3 rounded-3xl border border-[#E8EDF4] bg-[#FAFBFD] p-4">
+      <View className="flex-row items-start gap-3">
+        <View className="h-8 w-8 items-center justify-center rounded-xl bg-[#2B2233]">
+          <Text className="text-[12px] font-extrabold text-white">{step}</Text>
+        </View>
+        <View className="flex-1">
+          <Text className="text-[15px] font-extrabold text-[#2B2233]">{title}</Text>
+          <Text className="mt-1 text-[11px] leading-5 text-[#777181]">{description}</Text>
+          <View className="mt-2 gap-1.5">
+            {bullets.map((bullet) => (
+              <View key={bullet} className="flex-row items-start gap-2">
+                <View className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[#EB489B]" />
+                <Text className="flex-1 text-[11px] leading-4 text-[#5F5965]">{bullet}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </View>
     </View>

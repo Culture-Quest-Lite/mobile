@@ -48,13 +48,12 @@ function toGoongPoint(point: LatLng) {
   return `${point.latitude},${point.longitude}`;
 }
 
-export async function getGoongRouteCoordinates({
-  origin,
-  destination,
-  waypoints = [],
-}: DirectionOptions): Promise<LatLng[]> {
+async function getSingleLegRouteCoordinates(
+  origin: LatLng,
+  destination: LatLng,
+): Promise<LatLng[]> {
   if (!PublicEnv.goongApiKey) {
-    return [origin, ...waypoints, destination];
+    return [origin, destination];
   }
 
   const params = new URLSearchParams({
@@ -63,10 +62,6 @@ export async function getGoongRouteCoordinates({
     vehicle: 'bike',
     api_key: PublicEnv.goongApiKey,
   });
-
-  if (waypoints.length > 0) {
-    params.set('waypoints', waypoints.map(toGoongPoint).join('|'));
-  }
 
   const response = await fetch(`https://rsapi.goong.io/Direction?${params.toString()}`);
 
@@ -78,8 +73,44 @@ export async function getGoongRouteCoordinates({
   const encodedPolyline = data?.routes?.[0]?.overview_polyline?.points;
 
   if (typeof encodedPolyline !== 'string' || !encodedPolyline) {
-    return [origin, ...waypoints, destination];
+    return [origin, destination];
   }
 
   return decodePolyline(encodedPolyline);
+}
+
+/**
+ * Lấy đường đi thực tế qua toàn bộ điểm theo đúng thứ tự.
+ * Mỗi cặp điểm liên tiếp được gọi Directions riêng rồi ghép lại, nhờ đó
+ * tuyến luôn đi qua A -> B -> C -> D ngay cả khi endpoint Directions không
+ * xử lý tham số waypoint như mong đợi.
+ */
+export async function getMultiStopRouteCoordinates(
+  orderedPoints: LatLng[],
+): Promise<LatLng[]> {
+  if (orderedPoints.length < 2) return orderedPoints;
+
+  const fullRoute: LatLng[] = [];
+
+  for (let index = 0; index < orderedPoints.length - 1; index += 1) {
+    const leg = await getSingleLegRouteCoordinates(
+      orderedPoints[index],
+      orderedPoints[index + 1],
+    );
+
+    if (leg.length === 0) continue;
+
+    // Bỏ điểm đầu của chặng sau để không tạo điểm trùng tại hotspot nối tiếp.
+    fullRoute.push(...(index === 0 ? leg : leg.slice(1)));
+  }
+
+  return fullRoute.length > 1 ? fullRoute : orderedPoints;
+}
+
+export async function getGoongRouteCoordinates({
+  origin,
+  destination,
+  waypoints = [],
+}: DirectionOptions): Promise<LatLng[]> {
+  return getMultiStopRouteCoordinates([origin, ...waypoints, destination]);
 }

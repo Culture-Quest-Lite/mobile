@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 
 import { loginWithPassword } from "@/features/auth/api/login";
 import { refreshAccessToken } from "@/features/auth/api/refresh-token";
+import { readStoredJson, writeStoredJson } from "@/lib/persistent-json-storage";
 
 export type AuthRole = "guest" | "explorer";
 
@@ -32,8 +33,35 @@ const guestSession: AuthSession = {
 };
 
 const ACCESS_TOKEN_REFRESH_BUFFER_MS = 30 * 1000;
+const AUTH_SESSION_STORAGE_KEY = "auth-session";
 
-let authSession = guestSession;
+function readInitialAuthSession(): AuthSession {
+  const storedSession = readStoredJson<AuthSession | null>(
+    AUTH_SESSION_STORAGE_KEY,
+    null,
+  );
+
+  if (!storedSession?.isAuthenticated) {
+    return guestSession;
+  }
+
+  if (
+    storedSession.refreshExpiresAt !== null &&
+    Date.now() >= storedSession.refreshExpiresAt
+  ) {
+    writeStoredJson(AUTH_SESSION_STORAGE_KEY, guestSession);
+    return guestSession;
+  }
+
+  return {
+    ...guestSession,
+    ...storedSession,
+    isAuthenticated: true,
+    role: "explorer",
+  };
+}
+
+let authSession = readInitialAuthSession();
 const listeners = new Set<() => void>();
 let refreshSessionPromise: Promise<AuthSession> | null = null;
 
@@ -45,6 +73,7 @@ function emitChange() {
 
 function setAuthSession(nextSession: AuthSession) {
   authSession = nextSession;
+  writeStoredJson(AUTH_SESSION_STORAGE_KEY, nextSession);
   emitChange();
 }
 

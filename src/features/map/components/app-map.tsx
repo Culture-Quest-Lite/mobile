@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Text, View } from 'react-native';
 import MapView, {
   Marker,
@@ -62,6 +62,8 @@ export function AppMap({
   onPointPress,
 }: AppMapProps) {
   const mapRef = useRef<MapView | null>(null);
+  const [hasLoadedMapTiles, setHasLoadedMapTiles] = useState(false);
+  const [showMapConfigurationWarning, setShowMapConfigurationWarning] = useState(false);
   const validPoints = useMemo(() => points.filter(isValidCoordinate), [points]);
   const initialRegion = useMemo(() => getRegion(validPoints), [validPoints]);
 
@@ -72,6 +74,49 @@ export function AppMap({
           latitude: point.latitude,
           longitude: point.longitude,
         }));
+
+  useEffect(() => {
+    setHasLoadedMapTiles(false);
+    setShowMapConfigurationWarning(false);
+
+    const warningTimer = setTimeout(() => {
+      setShowMapConfigurationWarning(true);
+    }, 8000);
+
+    return () => clearTimeout(warningTimer);
+  }, []);
+
+  useEffect(() => {
+    if (!mapRef.current || validPoints.length === 0) return;
+
+    const timer = setTimeout(() => {
+      if (validPoints.length === 1) {
+        mapRef.current?.animateToRegion(
+          {
+            latitude: validPoints[0].latitude,
+            longitude: validPoints[0].longitude,
+            latitudeDelta: 0.025,
+            longitudeDelta: 0.025,
+          },
+          350,
+        );
+        return;
+      }
+
+      mapRef.current?.fitToCoordinates(
+        validPoints.map((point) => ({
+          latitude: point.latitude,
+          longitude: point.longitude,
+        })),
+        {
+          animated: true,
+          edgePadding: { top: 55, right: 55, bottom: 55, left: 55 },
+        },
+      );
+    }, 80);
+
+    return () => clearTimeout(timer);
+  }, [validPoints]);
 
   if (Platform.OS === 'web') {
     return (
@@ -113,6 +158,10 @@ export function AppMap({
         loadingEnabled
         loadingIndicatorColor="#EB489B"
         loadingBackgroundColor="#E8F0FE"
+        onMapLoaded={() => {
+          setHasLoadedMapTiles(true);
+          setShowMapConfigurationWarning(false);
+        }}
         onMapReady={() => {
           if (validPoints.length > 1) {
             mapRef.current?.fitToCoordinates(
@@ -136,7 +185,7 @@ export function AppMap({
           />
         ) : null}
 
-        {validPoints.map((point, index) => (
+        {validPoints.map((point) => (
           <Marker
             key={String(point.id)}
             coordinate={{
@@ -145,26 +194,9 @@ export function AppMap({
             }}
             title={point.title}
             description={point.description}
+            pinColor="#EB489B"
             onPress={() => onPointPress?.(point)}
-          >
-            <View
-              style={{
-                height: 30,
-                minWidth: 30,
-                paddingHorizontal: 8,
-                borderRadius: 999,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: '#EB489B',
-                borderColor: '#FFFFFF',
-                borderWidth: 2,
-              }}
-            >
-              <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
-                {index + 1}
-              </Text>
-            </View>
-          </Marker>
+          />
         ))}
       </MapView>
     </View>

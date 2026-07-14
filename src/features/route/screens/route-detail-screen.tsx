@@ -30,7 +30,7 @@ import {
   getApiHotspotRouteSlug,
   getHotspotHref,
 } from '@/features/home/data/hotspots';
-import { getGoongRouteCoordinates } from '@/features/map/api/goong-directions';
+import { getMultiStopRouteCoordinates } from '@/features/map/api/goong-directions';
 import { AppMap } from '@/features/map/components/app-map';
 import {
   getRouteById,
@@ -46,6 +46,7 @@ import {
 } from '@/features/route/api/route-api';
 import { useCheckins } from '@/lib/checkin-store';
 import { getHotspotDetailHref } from '@/lib/hotspot-navigation';
+import { openGoogleMapsMultiStopRoute } from '@/lib/google-maps-navigation';
 
 const fallbackRouteImage =
   'https://i.pinimg.com/1200x/80/69/f9/8069f9581583a196f9f39bda000b9312.jpg';
@@ -223,11 +224,9 @@ function RouteMapHero({
       }
 
       try {
-        const coordinates = await getGoongRouteCoordinates({
-          origin: points[0],
-          destination: points[points.length - 1],
-          waypoints: points.slice(1, -1),
-        });
+        const coordinates = await getMultiStopRouteCoordinates(
+          points.map(({ latitude, longitude }) => ({ latitude, longitude })),
+        );
 
         if (!cancelled) setRouteCoordinates(coordinates);
       } catch (error) {
@@ -856,7 +855,41 @@ export default function RouteDetailScreen() {
           </View>
 
           <View className="mt-6">
-            <Text className="mb-3 text-[19px] font-bold text-[#2B2233]">Hành trình của bạn</Text>
+            <View className="mb-3 flex-row items-center justify-between gap-3">
+              <View className="flex-1">
+                <Text className="text-[19px] font-bold text-[#2B2233]">Hành trình của bạn</Text>
+                <Text className="mt-0.5 text-[11px] text-[#8E869A]">Các hotspot được mở trong Google Maps theo đúng thứ tự bên dưới.</Text>
+              </View>
+              <Pressable
+                onPress={() => {
+                  const points = orderedStops.flatMap((stop) => {
+                    const coordinate = getCoordinate(stop);
+                    return coordinate
+                      ? [{ ...coordinate, title: stop.hotspotName ?? undefined }]
+                      : [];
+                  });
+
+                  void openGoogleMapsMultiStopRoute({
+                    points,
+                    travelMode: 'driving',
+                    useCurrentLocationAsOrigin: true,
+                  }).catch((error) => {
+                    Alert.alert(
+                      'Không thể mở Google Maps',
+                      error instanceof Error ? error.message : 'Vui lòng thử lại.',
+                    );
+                  });
+                }}
+                className="flex-row items-center gap-1.5 rounded-xl bg-[#EEF7FF] px-3 py-2.5"
+              >
+                <SymbolView
+                  name={{ ios: 'map.fill', android: 'map', web: 'map' }}
+                  size={14}
+                  tintColor="#1677C8"
+                />
+                <Text className="text-[11px] font-bold text-[#1677C8]">Mở Google Maps</Text>
+              </Pressable>
+            </View>
             <View className="pl-7">
               <View className="absolute bottom-2 left-3 top-2 w-px bg-[#EB489B]/40" />
               {orderedStops.map((stop, index) => {
