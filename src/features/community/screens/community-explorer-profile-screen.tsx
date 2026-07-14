@@ -1,16 +1,17 @@
+import { SymbolView } from "@/components/ui/symbol-view";
+import { useScreenLayout } from "@/hooks/use-screen-layout";
+import { routes, type RouteItem } from "@/lib/demo-data";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { SymbolView } from "@/components/ui/symbol-view";
-import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
+import { useMemo, useState, type ComponentProps } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
-import { routes, type RouteItem } from "@/lib/demo-data";
 import {
   getCommunityExplorerProfileById,
   getCommunityPostsByAuthorId,
@@ -21,59 +22,41 @@ import {
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type ProfileTabKey = "posts" | "routes" | "badges";
 
-const PROFILE_TABS: readonly { key: ProfileTabKey; label: string }[] = [
-  { key: "posts", label: "Bài viết" },
-  { key: "routes", label: "Tuyến đường" },
-  { key: "badges", label: "Thành tựu" },
+const PROFILE_TABS: readonly {
+  key: ProfileTabKey;
+  label: string;
+  icon: SymbolName;
+}[] = [
+  {
+    key: "posts",
+    label: "Bài viết",
+    icon: {
+      ios: "rectangle.grid.1x2",
+      android: "view_agenda",
+      web: "view_agenda",
+    },
+  },
+  {
+    key: "routes",
+    label: "Tuyến đường",
+    icon: { ios: "map", android: "route", web: "route" },
+  },
+  {
+    key: "badges",
+    label: "Thành tựu",
+    icon: { ios: "rosette", android: "military_tech", web: "military_tech" },
+  },
 ] as const;
 
-const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
-const shellGradientColors = ["#FFF5FB", "#FFF7F0", "#FFFFFF"] as const;
-
-const cardShadowStyle = {
-  shadowColor: "rgba(235, 72, 155, 0.14)",
+const cardShadow = {
+  shadowColor: "rgba(28, 45, 80, 0.10)",
   shadowOpacity: 1,
-  shadowRadius: 24,
-  shadowOffset: {
-    width: 0,
-    height: 12,
-  },
+  shadowRadius: 20,
+  shadowOffset: { width: 0, height: 10 },
   elevation: 10,
 } as const;
 
-const avatarGlowStyle = {
-  shadowColor: "rgba(235, 72, 155, 0.24)",
-  shadowOpacity: 1,
-  shadowRadius: 22,
-  shadowOffset: {
-    width: 0,
-    height: 10,
-  },
-  elevation: 12,
-} as const;
-
-const pillShadowStyle = {
-  shadowColor: "rgba(235, 72, 155, 0.12)",
-  shadowOpacity: 1,
-  shadowRadius: 14,
-  shadowOffset: {
-    width: 0,
-    height: 8,
-  },
-  elevation: 6,
-} as const;
-
-const statsPanelShadowStyle = {
-  shadowColor: "rgba(245, 135, 82, 0.10)",
-  shadowOpacity: 1,
-  shadowRadius: 22,
-  shadowOffset: {
-    width: 0,
-    height: 10,
-  },
-  elevation: 8,
-} as const;
-
+const heroGradientColors = ["#20476B", "#4F87B2", "#F7F8FC"] as const;
 const badgeGradients = [
   ["#EB489B", "#F58752"],
   ["#4F7AF0", "#6D96FF"],
@@ -83,8 +66,8 @@ const badgeGradients = [
 export default function CommunityExplorerProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { gutter, safeWidth } = useScreenLayout({ maxContentWidth: 640 });
   const { id } = useLocalSearchParams<{ id?: string | string[] }>();
-  const [activeTab, setActiveTab] = useState<ProfileTabKey>("posts");
 
   const explorerId = Array.isArray(id) ? id[0] : id;
   const profile = useMemo(
@@ -114,75 +97,61 @@ export default function CommunityExplorerProfileScreen() {
         : [],
     [profile],
   );
+  const initialIsFollowing = useMemo(
+    () => posts.some((post) => post.isFollowing),
+    [posts],
+  );
+  const [activeTab, setActiveTab] = useState<ProfileTabKey>("posts");
+  const [followOverrides, setFollowOverrides] = useState<
+    Record<string, boolean>
+  >({});
 
   if (!profile) {
     return (
-      <SafeAreaView className="flex-1 bg-[#FFF8F5]" edges={["top"]}>
+      <SafeAreaView className="flex-1 items-center justify-center bg-[#F7F8FC] px-6">
         <StatusBar style="dark" />
-        <View className="flex-1 items-center justify-center px-5">
-          <View
-            className="w-full max-w-[360px] rounded-[30px] border border-[#F3DDD5] bg-white px-6 py-7"
-            style={cardShadowStyle}
-          >
-            <Text className="text-center text-[21px] font-black text-[#2F2337]">
-              Không tìm thấy explorer
-            </Text>
-            <Text className="mt-2 text-center text-[14px] leading-6 text-[#8E869A]">
-              Hồ sơ cộng đồng này không còn khả dụng hoặc dữ liệu demo chưa được
-              tạo.
-            </Text>
-            <Pressable
-              onPress={() => router.replace("/bookings")}
-              className="mt-5 overflow-hidden rounded-[18px]"
-              style={pillShadowStyle}
-            >
-              <LinearGradient
-                colors={gradientColors}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                className="items-center py-3.5"
-              >
-                <Text className="text-[15px] font-black text-white">
-                  Quay lại cộng đồng
-                </Text>
-              </LinearGradient>
-            </Pressable>
-          </View>
-        </View>
+        <Text className="text-center text-[18px] font-extrabold text-[#2B2233]">
+          Không tìm thấy explorer
+        </Text>
+        <Text className="mt-2 text-center text-[14px] leading-5 text-[#8E869A]">
+          Hồ sơ cộng đồng này không còn khả dụng hoặc dữ liệu demo chưa được tạo.
+        </Text>
+        <Pressable
+          onPress={() => router.replace("/bookings")}
+          className="mt-5 rounded-full bg-[#F58752] px-5 py-3"
+          style={cardShadow}
+        >
+          <Text className="text-[14px] font-extrabold text-white">
+            Quay lại cộng đồng
+          </Text>
+        </Pressable>
       </SafeAreaView>
     );
   }
 
-  const shortBio = truncateText(profile.bio, 140);
-  const profileMetaItems = getProfileMetaItems(profile);
+  const heroHeight = Math.max(Math.min(safeWidth * 0.82, 296), 252);
+  const avatarSize = 124;
+  const profileOverlap = avatarSize * 0.5;
+  const isFollowingProfile = explorerId
+    ? (followOverrides[explorerId] ?? initialIsFollowing)
+    : initialIsFollowing;
+  const socialStats = [
+    { label: "Đang theo dõi", value: profile.following },
+    { label: "Follower", value: profile.followers },
+    { label: "Check-ins", value: profile.checkIns },
+  ];
 
   return (
-    <SafeAreaView className="flex-1 bg-[#FFF8F5]" edges={["left", "right"]}>
+    <SafeAreaView className="flex-1 bg-[#F7F8FC]" edges={["left", "right"]}>
       <StatusBar style="light" />
-
-      <View className="absolute inset-0 bg-[#FFF8F5]" />
-      <LinearGradient
-        colors={shellGradientColors}
-        start={{ x: 0.08, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ position: "absolute", inset: 0 }}
-      />
-      <View
-        className="absolute -left-12 top-14 h-44 w-44 rounded-full"
-        style={{ backgroundColor: "rgba(235, 72, 155, 0.09)" }}
-      />
-      <View
-        className="absolute right-[-26px] top-28 h-36 w-36 rounded-full"
-        style={{ backgroundColor: "rgba(245, 135, 82, 0.08)" }}
-      />
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 36 }}
+        contentContainerStyle={{ paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="relative">
-          <View className="h-[336px] overflow-hidden rounded-t-[28px]">
+        <View className="relative" style={{ height: heroHeight }}>
+          {profile.cover ? (
             <Image
               source={profile.cover}
               contentFit="cover"
@@ -190,245 +159,197 @@ export default function CommunityExplorerProfileScreen() {
               cachePolicy="memory-disk"
               style={{ width: "100%", height: "100%" }}
             />
-
+          ) : (
             <LinearGradient
-              colors={[
-                "rgba(47, 35, 55, 0.28)",
-                "rgba(47, 35, 55, 0.12)",
-                "rgba(47, 35, 55, 0.56)",
-              ]}
-              locations={[0, 0.46, 1]}
-              style={{ position: "absolute", inset: 0 }}
+              colors={heroGradientColors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ width: "100%", height: "100%" }}
             />
+          )}
+          <LinearGradient
+            colors={[
+              "rgba(0,0,0,0.10)",
+              "rgba(0,0,0,0.05)",
+              "rgba(247,248,252,0.28)",
+            ]}
+            locations={[0, 0.72, 1]}
+            style={{ position: "absolute", inset: 0 }}
+          />
 
-            <View
-              className="absolute left-4 right-4 flex-row items-center justify-between"
-              style={{ top: insets.top + 8 }}
+          <View
+            className="absolute flex-row items-center justify-between"
+            style={{ left: gutter, paddingTop: insets.top + 10, right: gutter }}
+          >
+            <Pressable
+              accessibilityLabel="Quay lại cộng đồng"
+              className="h-10 w-10 items-center justify-center rounded-full bg-black/30"
+              onPress={() => router.replace("/bookings")}
             >
-              <OverlayIconButton
-                icon={{
+              <SymbolView
+                name={{
                   ios: "chevron.left",
                   android: "arrow_back",
                   web: "arrow_back",
                 }}
-                onPress={() => router.replace("/bookings")}
+                size={16}
+                tintColor="#FFFFFF"
               />
-              <OverlayIconButton
+            </Pressable>
+
+            <View className="flex-row items-center gap-2">
+              <HeroActionButton
                 icon={{
-                  ios: "ellipsis",
-                  android: "more_horiz",
-                  web: "more_horiz",
+                  ios: "bell",
+                  android: "notifications_none",
+                  web: "notifications_none",
+                }}
+              />
+              <HeroActionButton
+                icon={{
+                  ios: "square.and.arrow.up",
+                  android: "ios_share",
+                  web: "ios_share",
                 }}
               />
             </View>
-          </View>
-
-          <View
-            className="absolute bottom-[-60px] left-0 right-0 items-center"
-            style={{ zIndex: 2 }}
-          >
-            <ProfileAvatar profile={profile} />
           </View>
         </View>
 
-        <View
-          className="-mt-8 w-full rounded-t-[34px] bg-white px-5 pb-8 pt-24"
-          style={cardShadowStyle}
-        >
+          <View style={{ marginTop: -profileOverlap, paddingHorizontal: gutter }}>
           <View className="items-center">
-            <Text className="text-center text-[31px] font-black tracking-[-1px] text-[#2F2337]">
+            <ExplorerAvatar
+              avatar={profile.avatar}
+              avatarColors={profile.avatarColors}
+              initials={getProfileInitials(profile.name, profile.username)}
+              size={avatarSize}
+            />
+
+            <Text
+              className="mt-2 text-center text-[20px] font-extrabold leading-tight text-[#2B2233]"
+              numberOfLines={2}
+            >
               {profile.name}
             </Text>
-            {profile.isPremium ? (
-              <View className="mt-3">
-                <PremiumBadge
-                  label="Premium"
-                  icon={{
-                    ios: "crown.fill",
-                    android: "workspace_premium",
-                    web: "workspace_premium",
-                  }}
-                />
-              </View>
-            ) : null}
-            <Text className="mt-3 text-[17px] font-black text-[#F06297]">
+            <Text
+              className="mt-0.5 text-center text-[13px] font-semibold text-[#8E869A]"
+              numberOfLines={1}
+            >
               {profile.username}
             </Text>
-            <View className="mt-3 flex-row flex-wrap items-center justify-center gap-2">
-              {profileMetaItems.map((item) => (
-                <ProfileMetaChip key={`${profile.id}-${item}`} label={item} />
+
+            <View className="mt-2.5 w-full max-w-[320px] flex-row items-start justify-center">
+              {socialStats.map((item, index) => (
+                <ProfileCountMetric
+                  key={item.label}
+                  hasDivider={index < socialStats.length - 1}
+                  label={item.label}
+                  value={item.value}
+                />
               ))}
             </View>
-            <Text className="mt-3 max-w-[320px] text-center text-[15px] leading-6 text-[#5A4C63]">
-              {shortBio}
-            </Text>
+
+            <View className="mt-2.5 flex-row items-center justify-center gap-2">
+              <Pressable
+                accessibilityLabel={
+                  isFollowingProfile ? "Bỏ theo dõi explorer" : "Theo dõi explorer"
+                }
+                className={`min-w-[128px] rounded-full px-5 py-2.5 ${
+                  isFollowingProfile
+                    ? "bg-[#EDEFF4]"
+                    : "bg-[#FF4D73]"
+                }`}
+                onPress={() => {
+                  if (!explorerId) {
+                    return;
+                  }
+
+                  setFollowOverrides((current) => ({
+                    ...current,
+                    [explorerId]:
+                      !(current[explorerId] ?? initialIsFollowing),
+                  }));
+                }}
+                style={cardShadow}
+              >
+                <Text
+                  className={`text-center text-[14px] font-extrabold ${
+                    isFollowingProfile ? "text-[#2B2233]" : "text-white"
+                  }`}
+                >
+                  {isFollowingProfile ? "Đang theo dõi" : "Follow"}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityLabel="Nhắn tin explorer"
+                className="rounded-full border border-[#E6E8EE] bg-white px-4 py-2.5"
+              >
+                <Text className="text-[14px] font-bold text-[#2B2233]">
+                  Nhắn tin
+                </Text>
+              </Pressable>
+            </View>
+
           </View>
 
-          <View className="mt-7 gap-6">
-            <View>
-              <StatsSectionHeader
-                title="Thống kê xã hội"
-                icon={{
-                  ios: "person.2.fill",
-                  android: "group",
-                  web: "group",
-                }}
+          <View className="mt-2.5 gap-2.5">
+            <PersonalInfoCard profile={profile} />
+            <AchievementCard profile={profile} />
+          </View>
+
+          <View className="mt-3 flex-row border-y border-[#E9EAF0] bg-white">
+            {PROFILE_TABS.map((tab) => {
+              const selected = activeTab === tab.key;
+
+              return (
+                <Pressable
+                  key={tab.key}
+                  onPress={() => setActiveTab(tab.key)}
+                  accessibilityLabel={tab.label}
+                  className="flex-1 items-center justify-center gap-1 py-2.5"
+                  style={{
+                    borderBottomColor: selected ? "#EB489B" : "transparent",
+                    borderBottomWidth: 2,
+                  }}
+                >
+                  <SymbolView
+                    name={tab.icon}
+                    size={16}
+                    tintColor={selected ? "#F58752" : "#AA9FB0"}
+                  />
+                  <Text
+                    className={`text-[11px] font-bold ${
+                      selected ? "text-[#F58752]" : "text-[#AA9FB0]"
+                    }`}
+                  >
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View className="mt-4">
+            {activeTab === "posts" ? (
+              <PostsTabContent
+                pageGutter={gutter}
+                posts={posts}
+                profile={profile}
               />
-              <StatsPanel>
-                <View className="flex-row items-start justify-between">
-                  <StatIconMetric
-                    label="Bài viết"
-                    value={posts.length.toString()}
-                    icon={{
-                      ios: "doc.text.image.fill",
-                      android: "feed",
-                      web: "feed",
-                    }}
-                  />
-                  <StatIconMetric
-                    label="Đang theo dõi"
-                    value={formatCompactValue(profile.following)}
-                    icon={{
-                      ios: "person.2.fill",
-                      android: "group",
-                      web: "group",
-                    }}
-                    withDivider
-                  />
-                  <StatIconMetric
-                    label="Người theo dõi"
-                    value={formatCompactValue(profile.followers)}
-                    icon={{
-                      ios: "person.crop.circle.badge.plus",
-                      android: "person_add",
-                      web: "person_add",
-                    }}
-                    withDivider
-                  />
-                </View>
-              </StatsPanel>
-            </View>
-
-            <View>
-              <StatsSectionHeader
-                title="Thống kê khám phá"
-                icon={{
-                  ios: "mappin.and.ellipse",
-                  android: "location_on",
-                  web: "location_on",
-                }}
+            ) : activeTab === "routes" ? (
+              <RoutesTabContent
+                completedRoutes={completedRoutes}
+                favoriteRoutes={favoriteRoutes}
+                onOpenRoute={(routeId) => router.push(`/route/${routeId}` as Href)}
               />
-              <StatsPanel>
-                <View className="flex-row items-start justify-between">
-                  <StatIconMetric
-                    compact
-                    label="Check-ins"
-                    value={formatCompactValue(profile.checkIns)}
-                    icon={{
-                      ios: "mappin.and.ellipse",
-                      android: "location_on",
-                      web: "location_on",
-                    }}
-                  />
-                  <StatIconMetric
-                    compact
-                    label="Tuyến"
-                    value={profile.routesCompleted.toString()}
-                    icon={{
-                      ios: "map.fill",
-                      android: "route",
-                      web: "route",
-                    }}
-                    backgroundColor="#FFF5E7"
-                    iconTintColor="#D69228"
-                    withDivider
-                  />
-                  <StatIconMetric
-                    compact
-                    label="Huy hiệu"
-                    value={profile.badgeCount.toString()}
-                    icon={{
-                      ios: "rosette",
-                      android: "military_tech",
-                      web: "military_tech",
-                    }}
-                    backgroundColor="#F3EAF4"
-                    iconTintColor="#9A4A78"
-                    withDivider
-                  />
-                  <StatIconMetric
-                    compact
-                    label="Streak"
-                    value={profile.streakDays.toString()}
-                    icon={{
-                      ios: "flame.fill",
-                      android: "local_fire_department",
-                      web: "local_fire_department",
-                    }}
-                    withDivider
-                  />
-                </View>
-              </StatsPanel>
-            </View>
-
-            <SectionCard>
-              <SectionHeader
-                title="Nội dung công khai"
-                actionLabel="Chia sẻ công khai"
+            ) : (
+              <BadgesTabContent
+                badgeCount={profile.badgeCount}
+                badges={profile.badges}
+                isPremium={profile.isPremium}
               />
-              <View className="mt-4 flex-row rounded-[20px] bg-[#FFF3F8] p-1">
-                {PROFILE_TABS.map((tab) => {
-                  const selected = activeTab === tab.key;
-
-                  return (
-                    <Pressable
-                      key={tab.key}
-                      onPress={() => setActiveTab(tab.key)}
-                      className="flex-1 overflow-hidden rounded-[16px]"
-                    >
-                      {selected ? (
-                        <LinearGradient
-                          colors={gradientColors}
-                          start={{ x: 0, y: 0.5 }}
-                          end={{ x: 1, y: 0.5 }}
-                          className="items-center py-3"
-                        >
-                          <Text className="text-[13px] font-black text-white">
-                            {tab.label}
-                          </Text>
-                        </LinearGradient>
-                      ) : (
-                        <View className="items-center py-3">
-                          <Text className="text-[13px] font-black text-[#8E869A]">
-                            {tab.label}
-                          </Text>
-                        </View>
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <View className="mt-5">
-                {activeTab === "posts" ? (
-                  <PostsTabContent posts={posts} />
-                ) : activeTab === "routes" ? (
-                  <RoutesTabContent
-                    completedRoutes={completedRoutes}
-                    favoriteRoutes={favoriteRoutes}
-                    onOpenRoute={(routeId) =>
-                      router.push(`/route/${routeId}` as Href)
-                    }
-                  />
-                ) : (
-                  <BadgesTabContent
-                    badgeCount={profile.badgeCount}
-                    badges={profile.badges}
-                    isPremium={profile.isPremium}
-                  />
-                )}
-              </View>
-            </SectionCard>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -436,291 +357,563 @@ export default function CommunityExplorerProfileScreen() {
   );
 }
 
-function OverlayIconButton({
-  icon,
-  onPress,
+function ExplorerAvatar({
+  avatar,
+  avatarColors,
+  initials,
+  size,
 }: {
-  icon: SymbolName;
-  onPress?: () => void;
+  avatar?: string;
+  avatarColors: readonly [string, string];
+  initials: string;
+  size: number;
 }) {
+  const [hasError, setHasError] = useState(!avatar);
+
   return (
-    <Pressable
-      onPress={onPress}
-      className="h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-[#2F2337]/35"
-    >
-      <SymbolView name={icon} size={17} tintColor="#FFFFFF" />
+    <View className="relative">
+      <View
+        className="overflow-hidden rounded-full"
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          shadowColor: "rgba(32, 71, 107, 0.16)",
+          shadowOpacity: 1,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 8,
+        }}
+      >
+        {hasError || !avatar ? (
+          <LinearGradient
+            colors={avatarColors}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={{
+              width: "100%",
+              height: "100%",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text
+              className="font-black text-white"
+              style={{ fontSize: Math.max(22, size * 0.28) }}
+            >
+              {initials}
+            </Text>
+          </LinearGradient>
+        ) : (
+          <Image
+            source={avatar}
+            contentFit="cover"
+            transition={180}
+            cachePolicy="memory-disk"
+            onError={() => setHasError(true)}
+            style={{ width: "100%", height: "100%" }}
+          />
+        )}
+      </View>
+    </View>
+  );
+}
+
+function HeroActionButton({ icon }: { icon: SymbolName }) {
+  return (
+    <Pressable className="h-10 w-10 items-center justify-center rounded-full bg-black/30">
+      <SymbolView name={icon} size={16} tintColor="#FFFFFF" />
     </Pressable>
   );
 }
 
-function ProfileAvatar({ profile }: { profile: CommunityExplorerProfile }) {
-  return (
-    <LinearGradient
-      colors={gradientColors}
-      start={{ x: 0, y: 0.5 }}
-      end={{ x: 1, y: 0.5 }}
-      style={[
-        {
-          alignItems: "center",
-          justifyContent: "center",
-          width: 120,
-          height: 120,
-          borderRadius: 60,
-          padding: 4,
-        },
-        avatarGlowStyle,
-      ]}
-    >
-      <View
-        className="items-center justify-center rounded-full bg-white"
-        style={{ width: 112, height: 112 }}
-      >
-        {profile.avatar ? (
-          <Image
-            source={profile.avatar}
-            contentFit="cover"
-            transition={180}
-            cachePolicy="memory-disk"
-            style={{ width: 100, height: 100, borderRadius: 50 }}
-          />
-        ) : (
-          <LinearGradient
-            colors={profile.avatarColors}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={{
-              alignItems: "center",
-              justifyContent: "center",
-              width: 100,
-              height: 100,
-              borderRadius: 50,
-            }}
-          >
-            <Text className="text-[28px] font-black text-white">
-              {profile.initials}
-            </Text>
-          </LinearGradient>
-        )}
-      </View>
-    </LinearGradient>
-  );
-}
-
-function SectionCard({ children }: { children: ReactNode }) {
-  return (
-    <View
-      className="rounded-[28px] border border-[#F2E0D7] bg-white p-4"
-      style={cardShadowStyle}
-    >
-      {children}
-    </View>
-  );
-}
-
-function StatsPanel({ children }: { children: ReactNode }) {
-  return (
-    <View
-      className="mt-3 overflow-hidden rounded-[30px] bg-white px-2 py-5"
-      style={statsPanelShadowStyle}
-    >
-      {children}
-    </View>
-  );
-}
-
-function StatsSectionHeader({
-  icon,
-  title,
+function ProfileCountMetric({
+  hasDivider,
+  label,
+  value,
 }: {
+  hasDivider: boolean;
+  label: string;
+  value: number;
+}) {
+  return (
+    <View className="relative flex-1 items-center px-1">
+      <Text className="text-center text-[16px] font-extrabold text-[#2B2233]">
+        {formatCompactValue(value)}
+      </Text>
+      <Text className="mt-0.5 text-center text-[10px] leading-3 text-[#8E869A]">
+        {label}
+      </Text>
+      {hasDivider ? (
+        <View
+          className="absolute right-0 top-1/2 w-px bg-[#D9DDE6]"
+          style={{ height: 28, transform: [{ translateY: -14 }] }}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+function PersonalInfoCard({
+  profile,
+}: {
+  profile: CommunityExplorerProfile;
+}) {
+  const introText = profile.bio.trim() || profile.headline.trim();
+
+  return (
+    <View className="rounded-[24px] bg-white px-4 py-4" style={cardShadow}>
+      <View className="flex-row items-center justify-between">
+        <Text className="text-[17px] font-extrabold text-[#202124]">
+          Thông tin cá nhân
+        </Text>
+        <Pressable
+          accessibilityLabel="Chỉnh sửa thông tin cá nhân"
+          className="h-7 w-7 items-center justify-center rounded-full bg-[#F8F8FA]"
+        >
+          <SymbolView
+            name={{ ios: "pencil", android: "edit", web: "edit" }}
+            size={13}
+            tintColor="#7D7382"
+          />
+        </Pressable>
+      </View>
+
+      <View className="mt-3 gap-3">
+        <ExpandablePersonalInfoRow
+          icon={{
+            ios: "text.alignleft",
+            android: "subject",
+            web: "subject",
+          }}
+          accentColor="#F58752"
+          text={introText}
+        />
+        <PersonalInfoRow
+          icon={{
+            ios: "mappin.and.ellipse",
+            android: "location_on",
+            web: "location_on",
+          }}
+          accentColor="#EB489B"
+          text={profile.city}
+        />
+        <PersonalInfoRow
+          icon={{
+            ios: "calendar",
+            android: "calendar_month",
+            web: "calendar_month",
+          }}
+          accentColor="#4F87B2"
+          text={profile.birthDate}
+        />
+      </View>
+    </View>
+  );
+}
+
+function AchievementCard({
+  profile,
+}: {
+  profile: CommunityExplorerProfile;
+}) {
+  const achievementItems = [
+    {
+      label: "Level",
+      value: profile.level.toString(),
+      iconTintColor: "#F58752",
+      icon: {
+        ios: "sparkles",
+        android: "auto_awesome",
+        web: "auto_awesome",
+      } satisfies SymbolName,
+    },
+    {
+      label: "Huy hiệu",
+      value: profile.badgeCount.toString(),
+      iconTintColor: "#EB489B",
+      icon: {
+        ios: "rosette",
+        android: "military_tech",
+        web: "military_tech",
+      } satisfies SymbolName,
+    },
+    {
+      label: "Tuyến",
+      value: profile.routesCompleted.toString(),
+      iconTintColor: "#4F87B2",
+      icon: { ios: "map", android: "route", web: "route" } satisfies SymbolName,
+    },
+    {
+      label: "Streak",
+      value: profile.streakDays.toString(),
+      iconTintColor: "#D69228",
+      icon: {
+        ios: "flame.fill",
+        android: "local_fire_department",
+        web: "local_fire_department",
+      } satisfies SymbolName,
+    },
+  ];
+
+  return (
+    <View>
+      <View className="flex-row items-center justify-between gap-2">
+        <Text className="text-[11px] font-semibold uppercase tracking-[3px] text-[#8E869A]">
+          Thành tựu
+        </Text>
+        {profile.isPremium ? (
+          <View className="flex-row items-center gap-1">
+            <SymbolView
+              name={{
+                ios: "trophy",
+                android: "workspace_premium",
+                web: "workspace_premium",
+              }}
+              size={11}
+              tintColor="#B57B4B"
+            />
+            <Text className="text-[11px] font-semibold text-[#B57B4B]">
+              Premium
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View className="mt-2.5 flex-row gap-1.5">
+        {achievementItems.map((item) => (
+          <AchievementMetric key={item.label} item={item} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function PersonalInfoRow({
+  accentColor,
+  icon,
+  text,
+}: {
+  accentColor: string;
   icon: SymbolName;
-  title: string;
+  text: string;
 }) {
   return (
     <View className="flex-row items-center gap-2.5">
-      <View className="h-7 w-7 items-center justify-center rounded-full bg-[#FFF1F6]">
-        <SymbolView name={icon} size={12} tintColor="#EB489B" />
+      <View
+        className="h-8 w-8 items-center justify-center rounded-full"
+        style={{ backgroundColor: `${accentColor}14` }}
+      >
+        <SymbolView name={icon} size={15} tintColor={accentColor} />
       </View>
-      <Text className="text-[12px] font-black uppercase tracking-[1px] text-[#E06294]">
-        {title}
+      <Text
+        className="min-w-0 flex-1 text-[13px] font-normal leading-[18px] text-[#202124]"
+      >
+        {text}
       </Text>
     </View>
   );
 }
 
-function PremiumBadge({ icon, label }: { icon: SymbolName; label: string }) {
-  return (
-    <LinearGradient
-      colors={["#FF6EA9", "#FFC24A"]}
-      start={{ x: 0, y: 0.5 }}
-      end={{ x: 1, y: 0.5 }}
-      className="flex-row items-center gap-1.5 rounded-full px-3.5 py-2"
-      style={pillShadowStyle}
-    >
-      <SymbolView name={icon} size={11} tintColor="#FFFFFF" />
-      <Text className="text-[12px] font-black text-white">{label}</Text>
-    </LinearGradient>
-  );
-}
-
-function ProfileMetaChip({ label }: { label: string }) {
-  return (
-    <View className="rounded-full border border-[#F7DCE7] bg-[#FFF6FB] px-3 py-1.5">
-      <Text className="text-[13px] font-bold text-[#6C5A75]">{label}</Text>
-    </View>
-  );
-}
-
-function TagChip({ label }: { label: string }) {
-  return (
-    <View className="rounded-full border border-[#F3DCE7] bg-[#FFF7FA] px-3 py-2">
-      <Text className="text-[12px] font-semibold text-[#7B7182]">{label}</Text>
-    </View>
-  );
-}
-
-function StatIconMetric({
-  backgroundColor = "#FFF1F6",
-  compact = false,
+function ExpandablePersonalInfoRow({
+  accentColor,
   icon,
-  iconTintColor = "#EB489B",
-  label,
-  value,
-  withDivider = false,
+  text,
 }: {
-  backgroundColor?: string;
-  compact?: boolean;
+  accentColor: string;
   icon: SymbolName;
-  iconTintColor?: string;
-  label: string;
-  value: string;
-  withDivider?: boolean;
+  text: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const maxLength = 78;
+  const shouldTruncate = text.length > maxLength;
+  const collapsedText = shouldTruncate
+    ? `${text.slice(0, maxLength).trimEnd()}...`
+    : text;
+
+  return (
+    <View className="flex-row items-start gap-2.5">
+      <View
+        className="h-8 w-8 items-center justify-center rounded-full"
+        style={{ backgroundColor: `${accentColor}14` }}
+      >
+        <SymbolView name={icon} size={15} tintColor={accentColor} />
+      </View>
+      <Text className="min-w-0 flex-1 text-[13px] font-normal leading-[18px] text-[#202124]">
+        {expanded || !shouldTruncate ? text : collapsedText}
+        {shouldTruncate ? (
+          <Text
+            className="font-semibold text-[#F58752]"
+            onPress={() => setExpanded((current) => !current)}
+          >
+            {expanded ? " Thu gọn" : " Xem thêm"}
+          </Text>
+        ) : null}
+      </Text>
+    </View>
+  );
+}
+
+function AchievementMetric({
+  item,
+}: {
+  item: {
+    icon: SymbolName;
+    iconTintColor: string;
+    label: string;
+    value: string;
+  };
 }) {
   return (
-    <View
-      className={`flex-1 items-center px-1.5 ${
-        withDivider ? "border-l border-[#F3E6DF]" : ""
-      }`}
-    >
+    <View className="min-w-0 flex-1 items-center rounded-[15px] border border-[#F5EFEA] bg-white px-1.5 py-2">
       <View
-        className={`items-center justify-center rounded-full bg-[#FFF1F6] ${
-          compact ? "h-10 w-10" : "h-11 w-11"
-        }`}
-        style={{ backgroundColor }}
+        className="h-5 w-5 items-center justify-center rounded-full"
+        style={{ backgroundColor: `${item.iconTintColor}12` }}
       >
-        <SymbolView
-          name={icon}
-          size={compact ? 14 : 15}
-          tintColor={iconTintColor}
-        />
+        <SymbolView name={item.icon} size={10} tintColor={item.iconTintColor} />
       </View>
-      <Text
-        className={`mt-3 font-black text-[#2F2337] ${
-          compact ? "text-[17px]" : "text-[19px]"
-        }`}
-      >
-        {value}
+      <Text className="mt-1 text-[16px] font-medium text-[#2B2233]">
+        {item.value}
       </Text>
-      <Text
-        className={`mt-1 text-center font-medium text-[#73657B] ${
-          compact ? "text-[11px]" : "text-[12px]"
-        }`}
-      >
-        {label}
+      <Text className="mt-0.5 text-[8px] font-semibold uppercase tracking-[0.8px] text-[#8E869A]">
+        {item.label}
       </Text>
     </View>
   );
 }
 
-function PostsTabContent({ posts }: { posts: CommunityPost[] }) {
+function PostsTabContent({
+  pageGutter,
+  posts,
+  profile,
+}: {
+  pageGutter: number;
+  posts: CommunityPost[];
+  profile: CommunityExplorerProfile;
+}) {
   if (!posts.length) {
     return (
-      <EmptyContent message="Explorer này chưa có bài viết công khai nào." />
+      <EmptyState
+        icon={{ ios: "photo", android: "image", web: "image" }}
+        message="Explorer này chưa có bài viết công khai nào."
+      />
     );
   }
 
   return (
-    <View className="gap-4">
+    <View>
       {posts.map((post, index) => (
-        <PublicPostCard key={post.id} post={post} index={index} />
+        <CommunityPostCard
+          key={post.id}
+          isLast={index === posts.length - 1}
+          pageGutter={pageGutter}
+          post={post}
+          profile={profile}
+        />
       ))}
     </View>
   );
 }
 
-function PublicPostCard({
-  index,
+function CommunityPostCard({
+  isLast,
+  pageGutter,
   post,
+  profile,
 }: {
-  index: number;
+  isLast: boolean;
+  pageGutter: number;
   post: CommunityPost;
+  profile: CommunityExplorerProfile;
 }) {
-  const postType = getPostTypeLabel(post, index);
-
   return (
-    <View
-      className="overflow-hidden rounded-[28px] border border-[#F2E0D7] bg-white"
-      style={cardShadowStyle}
-    >
-      <Image
-        source={post.image}
-        contentFit="cover"
-        transition={180}
-        cachePolicy="memory-disk"
-        style={{ width: "100%", height: 188 }}
-      />
+    <View className={`px-3 py-3 ${isLast ? "" : "border-b border-[#DEE3EA]"}`}>
+      <View className="flex-row items-start justify-between gap-2">
+        <View className="min-w-0 flex-1 flex-row items-center gap-2.5">
+          <CommunityPostAuthorAvatar
+            avatar={profile.avatar}
+            avatarColors={profile.avatarColors}
+            initials={getProfileInitials(profile.name, profile.username)}
+          />
 
-      <View className="p-4">
-        <View className="flex-row items-center justify-between gap-3">
-          <View className="rounded-full bg-[#FFF2F8] px-3 py-2">
-            <Text className="text-[12px] font-black text-[#D55E8E]">
-              {postType}
+          <View className="min-w-0 flex-1 gap-0.5">
+            <Text
+              className="text-[17px] font-extrabold leading-5 text-[#202124]"
+              numberOfLines={1}
+            >
+              {profile.name}
             </Text>
+
+            <View className="flex-row items-center gap-1">
+              <Text className="text-[12px] leading-[14px] text-[#6B7280]">
+                {post.time}
+              </Text>
+              <Text className="text-[12px] text-[#6B7280]">·</Text>
+              <Text
+                className="min-w-0 flex-1 text-[12px] leading-[14px] text-[#6B7280]"
+                numberOfLines={1}
+              >
+                {post.location}
+              </Text>
+            </View>
           </View>
-          <Text className="text-[12px] font-medium text-[#A095A6]">
-            {post.time}
+        </View>
+
+        <View className="rounded-full bg-[#FFF3F8] px-2.5 py-1">
+          <Text className="text-[11px] font-extrabold text-[#D55E8E]">
+            {post.badge}
           </Text>
         </View>
-
-        <Text className="mt-3 text-[17px] font-black text-[#2F2337]">
-          {post.location}
-        </Text>
-        <Text className="mt-1 text-[14px] leading-6 text-[#5E5168]">
-          {post.caption}
-        </Text>
-
-        <View className="mt-3 flex-row flex-wrap gap-2">
-          {post.tags.map((tag) => (
-            <TagChip key={`${post.id}-${tag}`} label={tag} />
-          ))}
-        </View>
-
-        <View className="mt-4 flex-row items-center justify-between">
-          <InlineMetric
-            icon={{
-              ios: "heart.fill",
-              android: "favorite",
-              web: "favorite",
-            }}
-            value={post.likes}
-          />
-          <InlineMetric
-            icon={{
-              ios: "bubble.left.fill",
-              android: "chat",
-              web: "chat",
-            }}
-            value={post.comments}
-          />
-          <InlineMetric
-            icon={{
-              ios: "arrowshape.turn.up.right.fill",
-              android: "ios_share",
-              web: "ios_share",
-            }}
-            value={post.shares}
-          />
-        </View>
       </View>
+
+      <Text className="mt-3 text-[15px] leading-[22px] text-[#202124]">
+        {post.caption}
+      </Text>
+
+      <Text className="mt-2 text-[12px] font-semibold text-[#F58752]">
+        Gợi ý: {post.mood}
+      </Text>
+
+      <View className="mt-2 flex-row flex-wrap gap-2">
+        {post.tags.map((tag) => (
+          <PostTag key={`${post.id}-${tag}`} label={tag} />
+        ))}
+      </View>
+
+      <View className="mt-3" style={{ marginHorizontal: -(pageGutter + 12) }}>
+        <Image
+          source={post.image}
+          contentFit="cover"
+          transition={180}
+          cachePolicy="memory-disk"
+          style={{
+            aspectRatio: 1.08,
+            width: "100%",
+          }}
+        />
+      </View>
+
+      <View className="mt-3 flex-row items-center gap-5">
+        <PostAction
+          icon={{ ios: "heart.fill", android: "favorite", web: "favorite" }}
+          tintColor="#F43F5E"
+          value={post.likes}
+        />
+        <PostAction
+          icon={{
+            ios: "bubble.left",
+            android: "chat_bubble_outline",
+            web: "chat_bubble_outline",
+          }}
+          value={post.comments}
+        />
+        <PostAction
+          icon={{
+            ios: "arrowshape.turn.up.right",
+            android: "reply",
+            web: "reply",
+          }}
+          value={post.shares}
+        />
+      </View>
+
+      <View className="mt-3 flex-row flex-wrap items-center gap-3">
+        <PostSupplementalMeta
+          icon={{
+            ios: "flame.fill",
+            android: "local_fire_department",
+            web: "local_fire_department",
+          }}
+          value={post.hotScore}
+        />
+        <PostSupplementalMeta
+          icon={{ ios: "eye.fill", android: "visibility", web: "visibility" }}
+          value={post.views}
+        />
+      </View>
+    </View>
+  );
+}
+
+function CommunityPostAuthorAvatar({
+  avatar,
+  avatarColors,
+  initials,
+}: {
+  avatar?: string;
+  avatarColors: readonly [string, string];
+  initials: string;
+}) {
+  const [hasError, setHasError] = useState(!avatar);
+
+  return (
+    <View className="h-11 w-11 overflow-hidden rounded-full bg-[#F3F4F6]">
+      {hasError || !avatar ? (
+        <LinearGradient
+          colors={avatarColors}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={{
+            width: "100%",
+            height: "100%",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text className="text-[16px] font-black text-white">{initials}</Text>
+        </LinearGradient>
+      ) : (
+        <Image
+          source={avatar}
+          contentFit="cover"
+          transition={180}
+          cachePolicy="memory-disk"
+          onError={() => setHasError(true)}
+          style={{ width: "100%", height: "100%" }}
+        />
+      )}
+    </View>
+  );
+}
+
+function PostTag({ label }: { label: string }) {
+  return (
+    <View className="rounded-full border border-[#F4E7DF] bg-[#FFF9F6] px-3 py-1.5">
+      <Text className="text-[11px] font-semibold text-[#7B7182]">{label}</Text>
+    </View>
+  );
+}
+
+function PostAction({
+  icon,
+  tintColor = "#6B7280",
+  value,
+}: {
+  icon: SymbolName;
+  tintColor?: string;
+  value?: string;
+}) {
+  return (
+    <View className="flex-row items-center gap-1.5">
+      <SymbolView name={icon} size={17} tintColor={tintColor} />
+      {value ? (
+        <Text className="text-[14px] font-medium text-[#4B5563]">{value}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+function PostSupplementalMeta({
+  icon,
+  value,
+}: {
+  icon: SymbolName;
+  value: string;
+}) {
+  return (
+    <View className="flex-row items-center gap-1.5">
+      <SymbolView name={icon} size={13} tintColor="#F58752" />
+      <Text className="text-[12px] font-semibold text-[#6B6173]">{value}</Text>
     </View>
   );
 }
@@ -736,43 +929,46 @@ function RoutesTabContent({
 }) {
   if (!completedRoutes.length && !favoriteRoutes.length) {
     return (
-      <EmptyContent message="Explorer này chưa chia sẻ route công khai nào." />
+      <EmptyState
+        icon={{ ios: "map", android: "map", web: "map" }}
+        message="Explorer này chưa chia sẻ route công khai nào."
+      />
     );
   }
 
   return (
-    <View className="gap-5">
-      <RouteCollectionSection
+    <View className="gap-4">
+      <RouteSection
         title="Route đã hoàn thành"
         actionLabel={`${completedRoutes.length} route`}
-        routes={completedRoutes}
         emptyMessage="Chưa có route hoàn thành được chia sẻ công khai."
-        statusLabel="Hoàn thành"
+        routes={completedRoutes}
         statusIcon={{
           ios: "checkmark.circle.fill",
           android: "task_alt",
           web: "task_alt",
         }}
+        statusLabel="Hoàn thành"
         onOpenRoute={onOpenRoute}
       />
-      <RouteCollectionSection
+      <RouteSection
         title="Route yêu thích"
         actionLabel={`${favoriteRoutes.length} route`}
-        routes={favoriteRoutes}
         emptyMessage="Chưa có route yêu thích được đánh dấu công khai."
-        statusLabel="Yêu thích"
+        routes={favoriteRoutes}
         statusIcon={{
           ios: "star.fill",
           android: "star",
           web: "star",
         }}
+        statusLabel="Yêu thích"
         onOpenRoute={onOpenRoute}
       />
     </View>
   );
 }
 
-function RouteCollectionSection({
+function RouteSection({
   actionLabel,
   emptyMessage,
   onOpenRoute,
@@ -791,11 +987,17 @@ function RouteCollectionSection({
 }) {
   return (
     <View>
-      <SectionHeader title={title} actionLabel={actionLabel} />
+      <View className="mb-3 flex-row items-center justify-between">
+        <Text className="text-[15px] font-extrabold text-[#2B2233]">{title}</Text>
+        <Text className="text-[12px] font-semibold text-[#8E869A]">
+          {actionLabel}
+        </Text>
+      </View>
+
       {routes.length ? (
-        <View className="mt-4 gap-3">
+        <View className="gap-2">
           {routes.map((route) => (
-            <PublicRouteCard
+            <ExplorerRouteCard
               key={`${title}-${route.id}`}
               onPress={() => onOpenRoute(route.id)}
               route={route}
@@ -805,15 +1007,13 @@ function RouteCollectionSection({
           ))}
         </View>
       ) : (
-        <View className="mt-4">
-          <EmptyContent message={emptyMessage} />
-        </View>
+        <EmptyState icon={statusIcon} message={emptyMessage} />
       )}
     </View>
   );
 }
 
-function PublicRouteCard({
+function ExplorerRouteCard({
   onPress,
   route,
   statusIcon,
@@ -827,41 +1027,38 @@ function PublicRouteCard({
   return (
     <Pressable
       onPress={onPress}
-      className="flex-row overflow-hidden rounded-[28px] border border-[#F2E0D7] bg-white"
-      style={cardShadowStyle}
+      className="flex-row gap-3 rounded-2xl bg-white p-2.5"
+      style={cardShadow}
     >
       <Image
         source={route.cover}
         contentFit="cover"
         transition={180}
         cachePolicy="memory-disk"
-        style={{ width: 104, height: 124 }}
+        style={{ width: 74, height: 74, borderRadius: 14 }}
       />
 
-      <View className="min-w-0 flex-1 px-4 py-3.5">
+      <View className="min-w-0 flex-1 justify-center">
         <View className="flex-row items-start justify-between gap-2">
           <Text
-            className="min-w-0 flex-1 text-[15px] font-black text-[#2F2337]"
+            className="flex-1 text-[14px] font-semibold text-[#2B2233]"
             numberOfLines={1}
           >
             {route.title}
           </Text>
-          <View className="flex-row items-center gap-1 rounded-full bg-[#FFF2F8] px-2.5 py-1.5">
-            <SymbolView name={statusIcon} size={11} tintColor="#D55E8E" />
-            <Text className="text-[11px] font-black text-[#D55E8E]">
+          <View className="flex-row items-center gap-1 rounded-full bg-[#FFF4EF] px-2 py-1">
+            <SymbolView name={statusIcon} size={11} tintColor="#F58752" />
+            <Text className="text-[10px] font-extrabold text-[#F58752]">
               {statusLabel}
             </Text>
           </View>
         </View>
 
-        <Text
-          className="mt-1 text-[12px] leading-5 text-[#7B7182]"
-          numberOfLines={2}
-        >
+        <Text className="mt-0.5 text-[11px] text-[#8E869A]" numberOfLines={2}>
           {route.subtitle}
         </Text>
 
-        <View className="mt-3 flex-row flex-wrap items-center gap-3">
+        <View className="mt-1.5 flex-row flex-wrap items-center gap-3">
           <RouteMeta
             icon={{
               ios: "figure.walk",
@@ -892,6 +1089,15 @@ function PublicRouteCard({
   );
 }
 
+function RouteMeta({ icon, value }: { icon: SymbolName; value: string }) {
+  return (
+    <View className="flex-row items-center gap-1.5">
+      <SymbolView name={icon} size={12} tintColor="#EB489B" />
+      <Text className="text-[12px] font-semibold text-[#5E5168]">{value}</Text>
+    </View>
+  );
+}
+
 function BadgesTabContent({
   badgeCount,
   badges,
@@ -902,17 +1108,22 @@ function BadgesTabContent({
   isPremium?: boolean;
 }) {
   if (!badges.length) {
-    return <EmptyContent message="Explorer này chưa công khai badge nào." />;
+    return (
+      <EmptyState
+        icon={{ ios: "rosette", android: "military_tech", web: "military_tech" }}
+        message="Explorer này chưa công khai badge nào."
+      />
+    );
   }
 
   return (
     <View>
       <LinearGradient
-        colors={gradientColors}
+        colors={["#F58752", "#EB489B"]}
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
         className="rounded-[28px] px-4 py-4"
-        style={pillShadowStyle}
+        style={cardShadow}
       >
         <Text className="text-[24px] font-black text-white">
           {badgeCount} huy hiệu
@@ -937,25 +1148,6 @@ function BadgesTabContent({
   );
 }
 
-function SectionHeader({
-  actionLabel,
-  title,
-}: {
-  actionLabel: string;
-  title: string;
-}) {
-  return (
-    <View className="flex-row items-center justify-between">
-      <Text className="text-[22px] font-black tracking-[-0.4px] text-[#2F2337]">
-        {title}
-      </Text>
-      <Text className="text-[13px] font-semibold text-[#8E869A]">
-        {actionLabel}
-      </Text>
-    </View>
-  );
-}
-
 function BadgeCard({
   badge,
   colors,
@@ -972,7 +1164,7 @@ function BadgeCard({
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
         className="rounded-[24px] p-4"
-        style={cardShadowStyle}
+        style={cardShadow}
       >
         <View className="h-10 w-10 items-center justify-center rounded-full bg-white/20">
           <SymbolView
@@ -996,48 +1188,20 @@ function BadgeCard({
   );
 }
 
-function RouteMeta({ icon, value }: { icon: SymbolName; value: string }) {
+function EmptyState({
+  icon,
+  message,
+}: {
+  icon: SymbolName;
+  message: string;
+}) {
   return (
-    <View className="flex-row items-center gap-1.5">
-      <SymbolView name={icon} size={12} tintColor="#EB489B" />
-      <Text className="text-[12px] font-semibold text-[#5E5168]">{value}</Text>
-    </View>
-  );
-}
-
-function InlineMetric({ icon, value }: { icon: SymbolName; value: string }) {
-  return (
-    <View className="flex-row items-center gap-1.5">
-      <SymbolView name={icon} size={12} tintColor="#EB489B" />
-      <Text className="text-[12px] font-semibold text-[#5E5168]">{value}</Text>
-    </View>
-  );
-}
-
-function EmptyContent({ message }: { message: string }) {
-  return (
-    <View
-      className="rounded-[28px] border border-[#F2E0D7] bg-white px-4 py-6"
-      style={cardShadowStyle}
-    >
-      <Text className="text-center text-[14px] leading-6 text-[#6D6276]">
+    <View className="items-center rounded-2xl bg-white py-12" style={cardShadow}>
+      <SymbolView name={icon} size={30} tintColor="#AA9FB0" />
+      <Text className="mt-2 px-6 text-center text-[13px] text-[#8E869A]">
         {message}
       </Text>
     </View>
-  );
-}
-
-function getPostTypeLabel(post: CommunityPost, index: number): string {
-  const typeByTopic: Record<CommunityPost["topic"], string> = {
-    culture: "Ảnh hành trình",
-    art: "Review địa điểm",
-    cuisine: "Chia sẻ trải nghiệm",
-    history: "Chia sẻ trải nghiệm",
-  };
-
-  return (
-    typeByTopic[post.topic] ??
-    ["Ảnh hành trình", "Review địa điểm", "Chia sẻ trải nghiệm"][index % 3]
   );
 }
 
@@ -1049,16 +1213,20 @@ function formatCompactValue(value: number): string {
   return value.toString();
 }
 
-function truncateText(value: string, maxLength: number): string {
-  if (value.length <= maxLength) {
-    return value;
+function getProfileInitials(name: string, username: string) {
+  const source = name.trim() || username.replace(/^@+/, "").trim();
+
+  if (!source) {
+    return "CQ";
   }
 
-  return `${value.slice(0, maxLength - 1).trimEnd()}…`;
-}
+  const parts = source.split(/\s+/).filter(Boolean);
 
-function getProfileMetaItems(profile: CommunityExplorerProfile): string[] {
-  const normalizedRole = profile.role.replace(/\s*level\s*\d+/i, "").trim();
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
 
-  return [normalizedRole, `Level ${profile.level}`, profile.city].filter(Boolean);
+  const firstInitial = parts[0][0] ?? "";
+  const lastInitial = parts[parts.length - 1][0] ?? "";
+  return `${firstInitial}${lastInitial}`.toUpperCase();
 }
