@@ -1,5 +1,3 @@
-const appJson = require("./app.json");
-
 function readConfigString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -16,44 +14,59 @@ function readFirstDefinedEnv(...keys) {
   return "";
 }
 
-const expoConfig = appJson.expo ?? {};
+module.exports = ({ config }) => {
+  const expoConfig = config ?? {};
 
-// Expo SDK only inlines EXPO_PUBLIC_* into app code.
-// Native config can still read regular .env keys here.
-const googleMapsApiKey = readFirstDefinedEnv(
-  "GOOGLE_MAPS_API_KEY",
-  "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
-);
+  const googleMapsApiKey = readFirstDefinedEnv(
+    "GOOGLE_MAPS_API_KEY",
+    "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
+  );
 
-const existingPlugins = Array.isArray(expoConfig.plugins)
+  const existingPlugins = Array.isArray(expoConfig.plugins)
   ? expoConfig.plugins
   : [];
 
 const filteredPlugins = existingPlugins.filter((plugin) => {
-  if (typeof plugin === "string") {
-    return plugin !== "react-native-maps";
-  }
+  const pluginName =
+    typeof plugin === "string"
+      ? plugin
+      : Array.isArray(plugin)
+        ? plugin[0]
+        : "";
 
-  return !Array.isArray(plugin) || plugin[0] !== "react-native-maps";
+  return pluginName !== "react-native-maps" && pluginName !== "expo-image";
 });
 
-const plugins = googleMapsApiKey
-  ? [
-      ...filteredPlugins,
-      [
-        "react-native-maps",
-        {
-          androidGoogleMapsApiKey: googleMapsApiKey,
-          iosGoogleMapsApiKey: googleMapsApiKey,
-        },
-      ],
-    ]
-  : filteredPlugins;
+const plugins = [
+  ...filteredPlugins,
 
-module.exports = {
-  ...appJson,
-  expo: {
+  "expo-image",
+
+  ...(googleMapsApiKey
+    ? [
+        [
+          "react-native-maps",
+          {
+            androidGoogleMapsApiKey: googleMapsApiKey,
+            iosGoogleMapsApiKey: googleMapsApiKey,
+          },
+        ],
+      ]
+    : []),
+];
+  return {
     ...expoConfig,
+
+    owner: "culture-quest-lite",
+    slug: "anhphan",
+
+    extra: {
+      ...(expoConfig.extra ?? {}),
+      eas: {
+        ...(expoConfig.extra?.eas ?? {}),
+        projectId: "2d579612-86f3-4c94-9171-67e4dbeca3e3",
+      },
+    },
 
     android: {
       ...expoConfig.android,
@@ -78,5 +91,5 @@ module.exports = {
     },
 
     plugins,
-  },
+  };
 };
