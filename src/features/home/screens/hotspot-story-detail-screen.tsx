@@ -25,7 +25,7 @@ import {
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 
-import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
+import { getHotspotById } from "../api/get-hotspot-by-id";
 import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
 import {
   cacheHotspotStories,
@@ -463,14 +463,14 @@ export default function HotspotStoryDetailScreen() {
         const accessToken = authSession.isAuthenticated
           ? await getValidAccessToken()
           : null;
-        const stories = await getUnlockedHotspotStories({
+        const remoteHotspot = await getHotspotById({
           accessToken,
           hotspotId: resolvedHotspotId,
           tokenType: authSession.tokenType,
         });
         const mappedStories = buildHotspotThemeStoriesFromApi(
           resolvedHotspot,
-          stories,
+          remoteHotspot.stories,
         );
 
         cacheHotspotStories({

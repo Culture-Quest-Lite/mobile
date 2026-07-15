@@ -7,7 +7,18 @@ type GetCheckedInHotspotsRequest = {
   tokenType?: string | null;
 };
 
+type UserHotspotProgressQueryStyle = "flat" | "nested" | "none";
 type RouteProgressQueryStyle = "flat" | "nested" | "none";
+
+type UserHotspotProgressSummary = {
+  hotspotId: number;
+  isCheckedIn: boolean;
+};
+
+type UserHotspotProgressPage = {
+  items: UserHotspotProgressSummary[];
+  totalPages: number | null;
+};
 
 type UserRouteProgressSummary = {
   userRouteProgressId: number;
@@ -19,6 +30,15 @@ type UserRouteProgressPage = {
 };
 
 const routeProgressPageSize = 100;
+const userHotspotProgressPageSize = 100;
+
+function resolveUserHotspotProgressUrl() {
+  if (PublicEnv.apiBaseUrl.trim()) {
+    return buildApiUrl("/api/v1/user-hotspot-progress");
+  }
+
+  return "http://3.113.215.65:8080/api/v1/user-hotspot-progress";
+}
 
 function resolveUserRouteProgressUrl() {
   if (PublicEnv.apiBaseUrl.trim()) {
@@ -38,11 +58,77 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 function readNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsedValue = Number(value);
+
+    if (Number.isFinite(parsedValue)) {
+      return parsedValue;
+    }
+  }
+
+  return null;
 }
 
 function readBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : null;
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalizedValue = value.trim().toLowerCase();
+
+    if (normalizedValue === "true") {
+      return true;
+    }
+
+    if (normalizedValue === "false") {
+      return false;
+    }
+  }
+
+  return null;
+}
+
+function unwrapApiBody(body: unknown): unknown {
+  if (!isObject(body)) {
+    return body;
+  }
+
+  for (const key of ["data", "result", "payload", "response"]) {
+    const candidate = body[key];
+
+    if (candidate !== undefined && candidate !== null) {
+      return candidate;
+    }
+  }
+
+  return body;
+}
+
+function readPageItems(body: unknown): unknown[] {
+  const unwrappedBody = unwrapApiBody(body);
+
+  if (Array.isArray(unwrappedBody)) {
+    return unwrappedBody;
+  }
+
+  if (!isObject(unwrappedBody)) {
+    return [];
+  }
+
+  for (const key of ["content", "items", "data", "result", "records"]) {
+    const candidate = unwrappedBody[key];
+
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return [];
 }
 
 function readRouteProgressSummary(
@@ -52,7 +138,9 @@ function readRouteProgressSummary(
     return null;
   }
 
-  const userRouteProgressId = readNumber(value.userRouteProgressId);
+  const userRouteProgressId = readNumber(
+    value.userRouteProgressId ?? value.routeParticipantId ?? value.id,
+  );
 
   if (userRouteProgressId === null) {
     return null;
@@ -63,19 +151,91 @@ function readRouteProgressSummary(
   };
 }
 
-function parseRouteProgressPage(value: unknown): UserRouteProgressPage | null {
-  if (!isObject(value) || !Array.isArray(value.content)) {
+function readUserHotspotProgressSummary(
+  value: unknown,
+): UserHotspotProgressSummary | null {
+  if (!isObject(value)) {
     return null;
   }
 
-  const items = value.content.map(readRouteProgressSummary);
+  const hotspotId = readNumber(value.hotspotId);
+  const isCheckedIn = readBoolean(
+    value.isCheckedIn ?? value.isCheckIn ?? value.checkedIn,
+  );
+
+  if (hotspotId === null || isCheckedIn === null) {
+    return null;
+  }
+
+  return {
+    hotspotId,
+    isCheckedIn,
+  };
+}
+
+function parseUserHotspotProgressPage(
+  value: unknown,
+): UserHotspotProgressPage | null {
+  const unwrappedValue = unwrapApiBody(value);
+  const standaloneItem = readUserHotspotProgressSummary(unwrappedValue);
+
+  if (standaloneItem) {
+    return {
+      items: [standaloneItem],
+      totalPages: 1,
+    };
+  }
+
+  const pageItems = readPageItems(unwrappedValue);
+
+  if (pageItems.length > 0) {
+    const items = pageItems
+      .map(readUserHotspotProgressSummary)
+      .filter((item): item is UserHotspotProgressSummary => item !== null);
+    const totalPages = isObject(unwrappedValue)
+      ? (isObject(unwrappedValue.page)
+          ? readNumber(unwrappedValue.page.totalPages)
+          : readNumber(unwrappedValue.totalPages)) ?? 1
+      : 1;
+
+    return {
+      items,
+      totalPages,
+    };
+  }
+
+  if (!isObject(unwrappedValue) || !Array.isArray(unwrappedValue.content)) {
+    return null;
+  }
+
+  const items = unwrappedValue.content
+    .map(readUserHotspotProgressSummary)
+    .filter((item): item is UserHotspotProgressSummary => item !== null);
+  const totalPages = isObject(unwrappedValue.page)
+    ? readNumber(unwrappedValue.page.totalPages)
+    : null;
+
+  return {
+    items,
+    totalPages,
+  };
+}
+
+function parseRouteProgressPage(value: unknown): UserRouteProgressPage | null {
+  const unwrappedValue = unwrapApiBody(value);
+
+  if (!isObject(unwrappedValue) || !Array.isArray(unwrappedValue.content)) {
+    return null;
+  }
+
+  const items = unwrappedValue.content.map(readRouteProgressSummary);
 
   if (items.some((item) => item === null)) {
     return null;
   }
 
-  const totalPages = isObject(value.page)
-    ? readNumber(value.page.totalPages)
+  const totalPages = isObject(unwrappedValue.page)
+    ? readNumber(unwrappedValue.page.totalPages)
     : null;
 
   return {
@@ -85,19 +245,23 @@ function parseRouteProgressPage(value: unknown): UserRouteProgressPage | null {
 }
 
 function parseCheckedInHotspotIds(value: unknown) {
-  if (!isObject(value) || !Array.isArray(value.hotspotProgressList)) {
+  const unwrappedValue = unwrapApiBody(value);
+
+  if (!isObject(unwrappedValue) || !Array.isArray(unwrappedValue.hotspotProgressList)) {
     return null;
   }
 
   const checkedInHotspotIds: number[] = [];
 
-  for (const item of value.hotspotProgressList) {
+  for (const item of unwrappedValue.hotspotProgressList) {
     if (!isObject(item)) {
       return null;
     }
 
     const hotspotId = readNumber(item.hotspotId);
-    const isCheckedIn = readBoolean(item.isCheckedIn);
+    const isCheckedIn = readBoolean(
+      item.isCheckedIn ?? item.isCheckIn ?? item.checkedIn,
+    );
 
     if (hotspotId === null || isCheckedIn === null) {
       return null;
@@ -155,6 +319,26 @@ function getConnectionErrorMessage(url: string) {
   return "Không thể kết nối đến máy chủ đồng bộ check-in.";
 }
 
+function buildUserHotspotProgressPageUrl({
+  baseUrl,
+  page,
+  style,
+}: {
+  baseUrl: string;
+  page: number;
+  style: UserHotspotProgressQueryStyle;
+}) {
+  if (style === "none") {
+    return baseUrl;
+  }
+
+  if (style === "nested") {
+    return `${baseUrl}?filter.page=${page}&filter.size=${userHotspotProgressPageSize}`;
+  }
+
+  return `${baseUrl}?page=${page}&size=${userHotspotProgressPageSize}`;
+}
+
 function buildRouteProgressPageUrl({
   baseUrl,
   page,
@@ -209,6 +393,49 @@ async function fetchJson({
   };
 }
 
+async function fetchUserHotspotProgressPage({
+  accessToken,
+  page,
+  queryStyle,
+  tokenType,
+}: {
+  accessToken: string;
+  page: number;
+  queryStyle: UserHotspotProgressQueryStyle;
+  tokenType?: string | null;
+}) {
+  const url = buildUserHotspotProgressPageUrl({
+    baseUrl: resolveUserHotspotProgressUrl(),
+    page,
+    style: queryStyle,
+  });
+  const response = await fetchJson({
+    accessToken,
+    tokenType,
+    url,
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      getErrorMessage(
+        response.body,
+        "Không thể tải tiến độ check-in hotspot",
+        response.status,
+      ),
+    );
+  }
+
+  const parsedPage = parseUserHotspotProgressPage(response.body);
+
+  if (!parsedPage) {
+    throw new Error(
+      "API user-hotspot-progress trả về dữ liệu không đúng định dạng.",
+    );
+  }
+
+  return parsedPage;
+}
+
 async function fetchRouteProgressPage({
   accessToken,
   page,
@@ -244,6 +471,71 @@ async function fetchRouteProgressPage({
   }
 
   return parsedPage;
+}
+
+async function resolveWorkingUserHotspotProgressQueryStyle({
+  accessToken,
+  tokenType,
+}: GetCheckedInHotspotsRequest) {
+  const queryStyles: UserHotspotProgressQueryStyle[] = [
+    "flat",
+    "nested",
+    "none",
+  ];
+  let lastQueryError: Error | null = null;
+
+  for (const queryStyle of queryStyles) {
+    const url = buildUserHotspotProgressPageUrl({
+      baseUrl: resolveUserHotspotProgressUrl(),
+      page: 0,
+      style: queryStyle,
+    });
+    const response = await fetchJson({
+      accessToken,
+      tokenType,
+      url,
+    });
+
+    if (!response.ok) {
+      if (response.status === 400 || response.status === 404 || response.status === 405) {
+        lastQueryError = new Error(
+          getErrorMessage(
+            response.body,
+            "Yêu cầu tiến độ check-in hotspot không hợp lệ",
+            response.status,
+          ),
+        );
+        continue;
+      }
+
+      throw new Error(
+        getErrorMessage(
+          response.body,
+          "Không thể tải tiến độ check-in hotspot",
+          response.status,
+        ),
+      );
+    }
+
+    const parsedPage = parseUserHotspotProgressPage(response.body);
+
+    if (!parsedPage) {
+      lastQueryError = new Error(
+        "API user-hotspot-progress trả về dữ liệu không đúng định dạng.",
+      );
+      continue;
+    }
+
+    return {
+      firstPage: parsedPage,
+      queryStyle,
+    };
+  }
+
+  throw (
+    lastQueryError ??
+    new Error("Không xác định được cách gọi API user-hotspot-progress.")
+  );
 }
 
 async function resolveWorkingRouteProgressQueryStyle({
@@ -330,7 +622,43 @@ async function fetchCheckedInHotspotIdsByRouteProgressId({
   return checkedInHotspotIds;
 }
 
-export async function getCheckedInHotspotIds({
+async function getCheckedInHotspotIdsFromUserHotspotProgress({
+  accessToken,
+  tokenType,
+}: GetCheckedInHotspotsRequest) {
+  const { firstPage, queryStyle } = await resolveWorkingUserHotspotProgressQueryStyle({
+    accessToken,
+    tokenType,
+  });
+  const hotspotProgressSummaries = [...firstPage.items];
+
+  if (queryStyle !== "none") {
+    let currentPage = 1;
+    const totalPages = firstPage.totalPages ?? 1;
+
+    while (currentPage < totalPages) {
+      const nextPage = await fetchUserHotspotProgressPage({
+        accessToken,
+        page: currentPage,
+        queryStyle,
+        tokenType,
+      });
+
+      hotspotProgressSummaries.push(...nextPage.items);
+      currentPage += 1;
+    }
+  }
+
+  return Array.from(
+    new Set(
+      hotspotProgressSummaries
+        .filter((item) => item.isCheckedIn)
+        .map((item) => item.hotspotId),
+    ),
+  );
+}
+
+async function getCheckedInHotspotIdsFromRouteProgress({
   accessToken,
   tokenType,
 }: GetCheckedInHotspotsRequest): Promise<number[]> {
@@ -373,4 +701,25 @@ export async function getCheckedInHotspotIds({
   }
 
   return Array.from(checkedInHotspotIds);
+}
+
+export async function getCheckedInHotspotIds({
+  accessToken,
+  tokenType,
+}: GetCheckedInHotspotsRequest): Promise<number[]> {
+  try {
+    return await getCheckedInHotspotIdsFromUserHotspotProgress({
+      accessToken,
+      tokenType,
+    });
+  } catch (error) {
+    console.info("[checkin-sync] user-hotspot-progress sync failed, fallback route-progress", {
+      error: error instanceof Error ? error.message : error,
+    });
+  }
+
+  return getCheckedInHotspotIdsFromRouteProgress({
+    accessToken,
+    tokenType,
+  });
 }

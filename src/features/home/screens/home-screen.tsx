@@ -61,6 +61,7 @@ import {
   type NearbyHotspotDto,
   getNearbyHotspots,
 } from "../api/get-nearby-hotspots";
+import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import { getActiveTagNames } from "../api/get-tags";
 import {
   type CommunityBoardTab,
@@ -363,7 +364,6 @@ type ExplorerSummary = {
 };
 
 type NearbyPlaceListItem = {
-  category: string;
   detailIcon: "location" | "star";
   detailPrimaryText: string;
   detailSecondaryText?: string;
@@ -372,6 +372,7 @@ type NearbyPlaceListItem = {
   imageUri: string;
   isCheckedIn: boolean;
   key: string;
+  openingHours: string;
   rating: string;
   reward: string;
   slug: string | null;
@@ -394,7 +395,7 @@ const suggestedRouteCardHeight = 254;
 const suggestedRouteSubtitleLineCount = 2;
 const suggestedRouteSubtitleReservedCharacters = 14;
 const nearbyPlaceTitleHeight = 22;
-const nearbyPlaceCategoryHeight = 12;
+const nearbyPlaceCategoryHeight = 16;
 const nearbyPlaceDetailRowHeight = 18;
 const nearbyPlaceContentHeight = 132;
 const nearbyPlaceFallbackImageUri =
@@ -467,6 +468,37 @@ function formatRewardLabel(value: number | null | undefined, fallback = "+0") {
   }
 
   return `+${Math.max(0, Math.round(value))}`;
+}
+
+function readMeaningfulNearbyText(value?: string | null) {
+  const trimmedValue = value?.trim();
+
+  return trimmedValue ? trimmedValue : null;
+}
+
+function formatNearbyTimeValue(value?: string | null) {
+  const meaningfulValue = readMeaningfulNearbyText(value);
+
+  if (!meaningfulValue) {
+    return null;
+  }
+
+  const matchedValue = meaningfulValue.match(/^\d{2}:\d{2}/);
+
+  return matchedValue?.[0] ?? meaningfulValue;
+}
+
+function formatNearbyTimeWindow(start?: string | null, end?: string | null) {
+  const formattedStart = formatNearbyTimeValue(start);
+  const formattedEnd = formatNearbyTimeValue(end);
+
+  if (formattedStart && formattedEnd) {
+    return formattedStart === formattedEnd
+      ? formattedStart
+      : `${formattedStart} - ${formattedEnd}`;
+  }
+
+  return formattedStart ?? formattedEnd;
 }
 
 function trimTrailingZeroDecimal(value: number) {
@@ -574,12 +606,12 @@ function getProfileInitials(name: string, username: string) {
   return `${firstInitial}${lastInitial}`.toUpperCase();
 }
 
-function getPrimaryNearbyCategory(hotspot: NearbyHotspotDto) {
-  const tagName = hotspot.tags
-    .find((tag) => tag.tagName.trim())
-    ?.tagName.trim();
-
-  return tagName || "Không có dữ liệu";
+function getNearbyOpeningHoursLabel(hotspot: NearbyHotspotDto) {
+  return (
+    formatNearbyTimeWindow(hotspot.openingTime, hotspot.closingTime) ??
+    formatNearbyTimeWindow(hotspot.startTime, hotspot.endTime) ??
+    "Giờ cập nhật sau"
+  );
 }
 
 function getPrimaryNearbyImageUri(hotspot: NearbyHotspotDto) {
@@ -608,7 +640,6 @@ function buildApiNearbyPlaceItems(
       const detailIcon: NearbyPlaceListItem["detailIcon"] = "location";
 
       return {
-        category: getPrimaryNearbyCategory(hotspot),
         detailIcon,
         detailPrimaryText: hotspot.address.trim() || "Không có dữ liệu",
         distance: formatDistanceMeters(distanceMeters),
@@ -616,6 +647,7 @@ function buildApiNearbyPlaceItems(
         imageUri: getPrimaryNearbyImageUri(hotspot),
         isCheckedIn: hotspot.isCheckedIn === true,
         key: `${hotspot.hotspotId}-${index}`,
+        openingHours: getNearbyOpeningHoursLabel(hotspot),
         rating: nearbyPlaceFallbackRating,
         reward: formatRewardLabel(hotspot.xp),
         slug: null,
@@ -972,7 +1004,8 @@ function SuggestedRouteSubtitle({ text }: { text: string }) {
         {hasMeasuredCurrentSubtitle
           ? (measuredSubtitle.collapsedText ?? normalizedText)
           : normalizedText}
-        {hasMeasuredCurrentSubtitle && measuredSubtitle.shouldShowInlineReadMore ? (
+        {hasMeasuredCurrentSubtitle &&
+        measuredSubtitle.shouldShowInlineReadMore ? (
           <Text className="font-bold text-[#7E6F82]">... Xem thêm</Text>
         ) : null}
       </Text>
@@ -1717,6 +1750,47 @@ export default function HomeScreen() {
   const [themeCategories, setThemeCategories] = useState<NearbyCategoryCard[]>(
     [],
   );
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      async function syncRemoteCheckinState() {
+        if (!authSession.isAuthenticated) {
+          return;
+        }
+
+        try {
+          const accessToken = await getValidAccessToken();
+
+          if (!accessToken || !isActive) {
+            return;
+          }
+
+          const checkedInHotspotIds = await getCheckedInHotspotIds({
+            accessToken,
+            tokenType: authSession.tokenType,
+          });
+
+          if (!isActive) {
+            return;
+          }
+
+          mergeApiCheckins(checkedInHotspotIds);
+        } catch (error) {
+          console.info("[home] check-in sync skipped", {
+            error: error instanceof Error ? error.message : error,
+          });
+        }
+      }
+
+      void syncRemoteCheckinState();
+
+      return () => {
+        isActive = false;
+      };
+    }, [authSession.isAuthenticated, authSession.tokenType]),
+  );
   const [activeCommunityTab, setActiveCommunityTab] =
     useState<CommunityBoardTab>("community");
   const isGuest = authSession.role === "guest";
@@ -1724,7 +1798,7 @@ export default function HomeScreen() {
   const routeCardLeftInset = gutter;
   const routeCardWidth = Math.max(contentWidth, 264);
   const nearbyRouteCardWidth = Math.min(Math.max(safeWidth * 0.68, 228), 260);
-  const nearbyPlaceCardWidth = Math.min(Math.max(safeWidth * 0.42, 160), 186);
+  const nearbyPlaceCardWidth = Math.min(Math.max(safeWidth * 0.45, 168), 196);
   const nearbyPlaceImageHeight = Math.round(nearbyPlaceCardWidth * 0.8);
   const nearbyPlaceCardHeight =
     nearbyPlaceImageHeight + nearbyPlaceContentHeight;
@@ -2664,13 +2738,26 @@ export default function HomeScreen() {
                             {place.title}
                           </Text>
 
-                          <Text
-                            className="text-[13px] text-[#A39AAB]"
-                            numberOfLines={1}
+                          <View
+                            className="flex-row items-center gap-1"
                             style={{ minHeight: nearbyPlaceCategoryHeight }}
                           >
-                            {place.category}
-                          </Text>
+                            <SymbolView
+                              name={{
+                                ios: "clock.fill",
+                                android: "schedule",
+                                web: "schedule",
+                              }}
+                              size={11}
+                              tintColor="#A39AAB"
+                            />
+                            <Text
+                              className="flex-1 text-[12px] text-[#A39AAB]"
+                              numberOfLines={1}
+                            >
+                              {place.openingHours}
+                            </Text>
+                          </View>
 
                           <View
                             className="flex-row items-center gap-1"

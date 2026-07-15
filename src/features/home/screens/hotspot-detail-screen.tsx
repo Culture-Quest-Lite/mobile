@@ -2,9 +2,9 @@ import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -59,7 +59,6 @@ import type { ProfilePost } from "@/features/profile/types";
 import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
 import { getHotspotPosts } from "../api/get-hotspot-posts";
-import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
 import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
 import { HiddenStoryUnlockedContent } from "../components/hidden-story-unlocked-content";
 import { HotspotGpsCheckinOverlay } from "../components/hotspot-gps-checkin-overlay";
@@ -70,10 +69,8 @@ import {
   type HotspotPersonalPost,
 } from "../data/hotspot-post-store";
 import {
-  cacheHotspotStories,
   getCachedHotspotStories,
 } from "../data/hotspot-story-cache";
-import { buildHotspotThemeStoriesFromApi } from "../data/hotspot-theme-stories";
 import {
   getHotspotBySlug,
   type HotspotDetail,
@@ -229,26 +226,6 @@ function formatApiTimeWindow(start?: string | null, end?: string | null) {
   return formattedStart ?? formattedEnd;
 }
 
-function resolveRemoteDistrictLabel(
-  address: string,
-  fallbackDistrict?: string,
-) {
-  const segments = address
-    .split(",")
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-
-  if (segments.length >= 2) {
-    return segments[segments.length - 2] ?? segments[segments.length - 1]!;
-  }
-
-  if (segments.length === 1) {
-    return segments[0]!;
-  }
-
-  return fallbackDistrict?.trim() || "Đang cập nhật";
-}
-
 function resolveRemoteMediaUris(
   apiHotspot: NearbyHotspotDto,
 ) {
@@ -269,12 +246,79 @@ function resolveRemoteMediaUris(
   return [defaultRemoteHotspotImageUri];
 }
 
-function buildFallbackTips(overview: string) {
-  return [
-    "Kiểm tra giờ mở cửa trước khi ghé thăm.",
-    "Bật định vị để có thể check-in tại hotspot.",
-    overview,
-  ];
+function formatEstimatedDurationLabel(
+  minimumDuration?: number | null,
+  maximumDuration?: number | null,
+) {
+  const resolvedMinimumDuration =
+    typeof minimumDuration === "number" && Number.isFinite(minimumDuration)
+      ? Math.max(0, Math.round(minimumDuration))
+      : null;
+  const resolvedMaximumDuration =
+    typeof maximumDuration === "number" && Number.isFinite(maximumDuration)
+      ? Math.max(0, Math.round(maximumDuration))
+      : null;
+
+  if (
+    resolvedMinimumDuration !== null &&
+    resolvedMaximumDuration !== null
+  ) {
+    return resolvedMinimumDuration === resolvedMaximumDuration
+      ? `${resolvedMinimumDuration} phút`
+      : `${resolvedMinimumDuration} - ${resolvedMaximumDuration} phút`;
+  }
+
+  if (resolvedMinimumDuration !== null) {
+    return `${resolvedMinimumDuration} phút`;
+  }
+
+  if (resolvedMaximumDuration !== null) {
+    return `${resolvedMaximumDuration} phút`;
+  }
+
+  return null;
+}
+
+function getRemoteHotspotTagNames(apiHotspot: NearbyHotspotDto | null) {
+  if (!apiHotspot) {
+    return [];
+  }
+
+  return apiHotspot.tags
+    .map((tag) => readMeaningfulApiText(tag.tagName))
+    .filter((tagName): tagName is string => Boolean(tagName));
+}
+
+function hasRemoteHotspotStories(apiHotspot: NearbyHotspotDto | null) {
+  if (!apiHotspot) {
+    return false;
+  }
+
+  return apiHotspot.stories.some((story) => {
+    const storyTitle = readMeaningfulApiText(story.title);
+    const storyContent = readMeaningfulApiText(story.content);
+
+    return Boolean(storyTitle || storyContent);
+  });
+}
+
+function getStoryNarrationSourceText({
+  apiHotspot,
+  fallbackText,
+}: {
+  apiHotspot: NearbyHotspotDto | null;
+  fallbackText: string;
+}) {
+  const storyContent = apiHotspot?.stories
+    .map((story) => readMeaningfulApiText(story.content))
+    .filter((value): value is string => Boolean(value))
+    .join(" ");
+
+  return (
+    storyContent ||
+    readMeaningfulApiText(apiHotspot?.historyInformation) ||
+    fallbackText
+  );
 }
 
 function buildHotspotFromApi({
@@ -284,10 +328,7 @@ function buildHotspotFromApi({
   apiHotspot: NearbyHotspotDto;
   routeSlug: string;
 }) {
-  const tagNames = apiHotspot.tags
-    .map((tag) => readMeaningfulApiText(tag.tagName))
-    .filter((tagName): tagName is string => Boolean(tagName));
-  const category = tagNames[0] ?? "Hotspot";
+  const tagNames = getRemoteHotspotTagNames(apiHotspot);
   const address =
     readMeaningfulApiText(apiHotspot.address) ?? "Địa chỉ đang cập nhật";
   const imageUris = resolveRemoteMediaUris(apiHotspot);
@@ -295,50 +336,42 @@ function buildHotspotFromApi({
   const gallery = imageUris.slice(1);
   const overview =
     readMeaningfulApiText(apiHotspot.description) ??
-    "Không có dữ liệu";
-  const story =
     readMeaningfulApiText(apiHotspot.historyInformation) ??
-    readMeaningfulApiText(apiHotspot.description) ??
-    overview;
+    "";
+  const story = readMeaningfulApiText(apiHotspot.historyInformation) ?? "";
   const scheduleLabel =
     formatApiTimeWindow(apiHotspot.openingTime, apiHotspot.closingTime) ??
     formatApiTimeWindow(apiHotspot.startTime, apiHotspot.endTime) ??
-    "Giờ mở cửa đang cập nhật";
-  const bestTimeLabel =
-    formatApiTimeWindow(apiHotspot.startTime, apiHotspot.endTime) ?? scheduleLabel;
+    "";
 
   return {
     hotspot: {
       address,
-      bestTimeLabel,
-      category,
+      bestTimeLabel: "",
+      category: tagNames[0] ?? "",
       coordinate: {
         latitude: apiHotspot.latitude,
         longitude: apiHotspot.longitude,
       },
-      distance: "Từ API",
-      district: resolveRemoteDistrictLabel(address),
+      distance: "",
+      district: "",
       gallery,
-      highlights: [
-        overview,
-        story,
-        `XP thưởng: +${apiHotspot.xp ?? 0}`,
-      ],
+      highlights: [],
       imageUri,
       overview,
       rating: 0,
       reviews: `${Math.max(0, Math.round(apiHotspot.point ?? 0))}`,
       reward: `+${Math.max(0, Math.round(apiHotspot.xp ?? 0))}`,
-      routePairing: "Không có dữ liệu",
+      routePairing: "",
       scheduleLabel,
       slug: routeSlug,
       story,
-      ticketLabel: "Không có dữ liệu",
-      tips: buildFallbackTips(overview),
+      ticketLabel: "",
+      tips: [],
       title:
         readMeaningfulApiText(apiHotspot.hotspotName) ??
         `Hotspot #${apiHotspot.hotspotId}`,
-      vibeTags: tagNames.length > 0 ? tagNames : [category],
+      vibeTags: tagNames,
     } satisfies HotspotDetail,
   };
 }
@@ -457,9 +490,11 @@ function getSummaryOpenTimeValue({
     return remoteScheduleValue;
   }
 
-  const scheduleValue =
-    readMeaningfulApiText(hotspot.scheduleLabel) ??
-    hotspot.scheduleLabel.trim();
+  const scheduleValue = readMeaningfulApiText(hotspot.scheduleLabel);
+
+  if (!scheduleValue) {
+    return null;
+  }
   const timeRangeMatch = scheduleValue.match(
     /\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}/,
   );
@@ -488,18 +523,24 @@ function buildSummaryStats({
     apiHotspot?.point !== null && apiHotspot?.point !== undefined
       ? `${Math.max(0, Math.round(apiHotspot.point))}`
       : "0";
-
-  return [
+  const openTimeValue = getSummaryOpenTimeValue({
+    apiHotspot,
+    hotspot,
+  });
+  const items: SummaryStatItem[] = [
     {
       icon: {
         ios: "star.fill",
         android: "star",
         web: "star",
       } as SymbolName,
-      label: "Điểm thưởng",
+      label: "Điểm",
       value: scoreValue,
     },
-    {
+  ];
+
+  if (openTimeValue) {
+    items.push({
       icon: {
         ios: "clock.fill",
         android: "schedule",
@@ -507,21 +548,21 @@ function buildSummaryStats({
       } as SymbolName,
       isCompactValue: true,
       label: "Giờ mở cửa",
-      value: getSummaryOpenTimeValue({
-        apiHotspot,
-        hotspot,
-      }),
-    },
-    {
-      icon: {
-        ios: "gift.fill",
-        android: "redeem",
-        web: "redeem",
-      } as SymbolName,
-      label: "Điểm XP",
-      value: `+${rewardXp}`,
-    },
-  ];
+      value: openTimeValue,
+    });
+  }
+
+  items.push({
+    icon: {
+      ios: "gift.fill",
+      android: "redeem",
+      web: "redeem",
+    } as SymbolName,
+    label: "Điểm XP",
+    value: `+${rewardXp}`,
+  });
+
+  return items;
 }
 
 function getGalleryPreviewImages(hotspot: HotspotDetail) {
@@ -1007,13 +1048,13 @@ function HeroScrollHint({
 function DirectionMapCard({
   address,
   coordinate,
-  districtLabel,
+  headline,
   onInteractionChange,
   title,
 }: {
   address: string;
   coordinate?: HotspotDetail["coordinate"] | null;
-  districtLabel: string;
+  headline: string;
   onInteractionChange?: (isInteracting: boolean) => void;
   title: string;
 }) {
@@ -1222,8 +1263,11 @@ function DirectionMapCard({
           <Text className="text-[11px] font-semibold uppercase tracking-[0.8px] text-white/72">
             {mapGestureHint}
           </Text>
-          <Text className="mt-1 text-[18px] font-black uppercase tracking-[0.6px] text-white">
-            {districtLabel}
+          <Text
+            className="mt-1 text-[18px] font-black text-white"
+            numberOfLines={1}
+          >
+            {headline}
           </Text>
         </View>
 
@@ -1262,15 +1306,15 @@ function DirectionMapCard({
 }
 
 function LocationInformationSection({
-  access,
   address,
-  atmosphereTags,
-  bestTime,
+  openingHours,
+  tagLabels,
+  visitDuration,
 }: {
-  access: string;
   address: string;
-  atmosphereTags: string[];
-  bestTime: string;
+  openingHours?: string | null;
+  tagLabels: string[];
+  visitDuration?: string | null;
 }) {
   const items = [
     {
@@ -1282,34 +1326,51 @@ function LocationInformationSection({
       label: "Địa điểm",
       value: address,
     },
-    {
-      icon: {
-        ios: "sun.max.fill",
-        android: "wb_sunny",
-        web: "wb_sunny",
-      } as SymbolName,
-      label: "Giờ đẹp",
-      value: bestTime,
-    },
-    {
-      icon: {
-        ios: "hourglass",
-        android: "hourglass_empty",
-        web: "hourglass_empty",
-      } as SymbolName,
-      label: "Mở cửa",
-      value: access,
-    },
-    {
-      icon: {
-        ios: "sparkles",
-        android: "auto_awesome",
-        web: "auto_awesome",
-      } as SymbolName,
-      label: "Không gian",
-      tags: sortAtmosphereTags(atmosphereTags.filter((tag) => tag.trim())),
-    },
-  ];
+    visitDuration
+      ? {
+          icon: {
+            ios: "hourglass",
+            android: "hourglass_empty",
+            web: "hourglass_empty",
+          } as SymbolName,
+          label: "Thời gian tham quan",
+          value: visitDuration,
+        }
+      : null,
+    openingHours
+      ? {
+          icon: {
+            ios: "clock.fill",
+            android: "schedule",
+            web: "schedule",
+          } as SymbolName,
+          label: "Giờ hoạt động",
+          value: openingHours,
+        }
+      : null,
+    tagLabels.length > 0
+      ? {
+          icon: {
+            ios: "sparkles",
+            android: "auto_awesome",
+            web: "auto_awesome",
+          } as SymbolName,
+          label: "Chủ đề",
+          tags: sortAtmosphereTags(tagLabels.filter((tag) => tag.trim())),
+        }
+      : null,
+  ].filter(Boolean) as (
+    | {
+        icon: SymbolName;
+        label: string;
+        value: string;
+      }
+    | {
+        icon: SymbolName;
+        label: string;
+        tags: string[];
+      }
+  )[];
 
   return (
     <View className="mt-7 gap-5">
@@ -2321,13 +2382,7 @@ export default function HotspotDetailScreen() {
     hotspotId: resolvedHotspotId,
     slug: resolvedSlug,
   });
-  const [hasApiStories, setHasApiStories] = useState(() =>
-    Boolean(cachedStoriesEntry?.stories.length),
-  );
   const [isMapInteracting, setIsMapInteracting] = useState(false);
-  const [isStoryAvailabilityLoading, setIsStoryAvailabilityLoading] = useState(
-    () => cachedStoriesEntry === null && resolvedHotspotId !== null,
-  );
   const [gallerySelection, setGallerySelection] = useState(() => ({
     index: 0,
     slugKey: resolvedSlug,
@@ -2583,52 +2638,59 @@ export default function HotspotDetailScreen() {
     mergeApiCheckins([resolvedHotspotId]);
   }, [remoteHotspot?.isCheckedIn, resolvedHotspotId]);
 
-  useEffect(() => {
-    let isActive = true;
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
 
-    async function syncRemoteCheckinStatus() {
-      if (!authSession.isAuthenticated || resolvedHotspotId === null) {
-        setIsRemoteCheckinStatusLoading(false);
-        return;
-      }
-
-      setIsRemoteCheckinStatusLoading(true);
-
-      try {
-        const accessToken = await getValidAccessToken();
-
-        if (!accessToken || !isActive) {
-          return;
-        }
-
-        const checkedInHotspotIds = await getCheckedInHotspotIds({
-          accessToken,
-          tokenType: authSession.tokenType,
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        mergeApiCheckins(checkedInHotspotIds);
-      } catch (error) {
-        console.info("[hotspot-detail] check-in status sync skipped", {
-          error: error instanceof Error ? error.message : error,
-          hotspotId: resolvedHotspotId,
-        });
-      } finally {
-        if (isActive) {
+      async function syncRemoteCheckinStatus() {
+        if (!authSession.isAuthenticated || resolvedHotspotId === null) {
           setIsRemoteCheckinStatusLoading(false);
+          return;
+        }
+
+        setIsRemoteCheckinStatusLoading(true);
+
+        try {
+          const accessToken = await getValidAccessToken();
+
+          if (!accessToken || !isActive) {
+            return;
+          }
+
+          const checkedInHotspotIds = await getCheckedInHotspotIds({
+            accessToken,
+            tokenType: authSession.tokenType,
+          });
+
+          if (!isActive) {
+            return;
+          }
+
+          mergeApiCheckins(checkedInHotspotIds);
+        } catch (error) {
+          console.info("[hotspot-detail] check-in status sync skipped", {
+            error: error instanceof Error ? error.message : error,
+            hotspotId: resolvedHotspotId,
+          });
+        } finally {
+          if (isActive) {
+            setIsRemoteCheckinStatusLoading(false);
+          }
         }
       }
-    }
 
-    void syncRemoteCheckinStatus();
+      void syncRemoteCheckinStatus();
 
-    return () => {
-      isActive = false;
-    };
-  }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId]);
+      return () => {
+        isActive = false;
+      };
+    }, [
+      authSession.isAuthenticated,
+      authSession.tokenType,
+      resolvedHotspotId,
+      setIsRemoteCheckinStatusLoading,
+    ]),
+  );
 
   const remoteHotspotResult = useMemo(
     () =>
@@ -2726,77 +2788,6 @@ export default function HotspotDetailScreen() {
     resolvedHotspotId,
   ]);
 
-  useEffect(() => {
-    if (!hotspot || resolvedHotspotId === null) {
-      return;
-    }
-
-    let isActive = true;
-    const nextCachedStoriesEntry = getCachedHotspotStories({
-      hotspotId: resolvedHotspotId,
-      slug: hotspot.slug,
-    });
-
-    const loadHotspotStoriesAvailability = async () => {
-      setHasApiStories(Boolean(nextCachedStoriesEntry?.stories.length));
-
-      if (nextCachedStoriesEntry === null) {
-        setIsStoryAvailabilityLoading(true);
-      }
-
-      try {
-        const accessToken = authSession.isAuthenticated
-          ? await getValidAccessToken()
-          : null;
-        const stories = await getUnlockedHotspotStories({
-          accessToken,
-          hotspotId: resolvedHotspotId,
-          tokenType: authSession.tokenType,
-        });
-        const mappedStories = buildHotspotThemeStoriesFromApi(hotspot, stories);
-
-        cacheHotspotStories({
-          hotspotId: resolvedHotspotId,
-          slug: hotspot.slug,
-          stories: mappedStories,
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        setHasApiStories(mappedStories.length > 0);
-      } catch (error) {
-        console.warn("[hotspot-detail] load hotspot stories failed", {
-          error: error instanceof Error ? error.message : error,
-          hotspotId: resolvedHotspotId,
-          slug: hotspot.slug,
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        setHasApiStories(Boolean(nextCachedStoriesEntry?.stories.length));
-      } finally {
-        if (isActive) {
-          setIsStoryAvailabilityLoading(false);
-        }
-      }
-    };
-
-    void loadHotspotStoriesAvailability();
-
-    return () => {
-      isActive = false;
-    };
-  }, [
-    authSession.isAuthenticated,
-    authSession.tokenType,
-    hotspot,
-    resolvedHotspotId,
-  ]);
-
   if (!hotspot) {
     if (isRemoteHotspotLoading) {
       return <LoadingState />;
@@ -2820,8 +2811,34 @@ export default function HotspotDetailScreen() {
   );
   const heroScrollHintBottom =
     galleryPreviewImages.length > 1 ? heroGalleryBottomOffset + 152 : 108;
+  const overviewText =
+    readMeaningfulApiText(hotspot.overview) ??
+    readMeaningfulApiText(remoteHotspot?.description) ??
+    readMeaningfulApiText(remoteHotspot?.historyInformation) ??
+    "";
+  const historicalInfoText =
+    readMeaningfulApiText(remoteHotspot?.historyInformation) ??
+    readMeaningfulApiText(hotspot.story) ??
+    null;
+  const openingHoursLabel = getSummaryOpenTimeValue({
+    apiHotspot: remoteHotspot,
+    hotspot,
+  });
+  const visitDurationLabel =
+    formatEstimatedDurationLabel(
+      remoteHotspot?.estimatedDurationMin,
+      remoteHotspot?.estimatedDurationMax,
+    ) ?? readMeaningfulApiText(hotspot.bestTimeLabel);
+  const hotspotTagLabels =
+    remoteHotspot !== null
+      ? getRemoteHotspotTagNames(remoteHotspot)
+      : hotspot.vibeTags.filter((tag) => tag.trim());
   const rewardXp = getRewardValue(hotspot.reward);
-  const canOpenStories = hasApiStories;
+  const canOpenStories =
+    resolvedHotspotId === null
+      ? true
+      : Boolean(cachedStoriesEntry?.stories.length) ||
+        hasRemoteHotspotStories(remoteHotspot);
   const hotspotCheckinId = hotspot.slug;
   const isCheckedInFromRemoteHotspot = remoteHotspot?.isCheckedIn === true;
   const isCheckedInFromApiStore =
@@ -2838,7 +2855,16 @@ export default function HotspotDetailScreen() {
   const detailSheetBottomPadding = isCheckedIn
     ? Math.max(insets.bottom + 10, 16)
     : Math.max(insets.bottom + 100, 120);
-  const audioStoryDurationLabel = getAudioStoryDurationLabel(hotspot.story);
+  const isStoryAvailabilityLoading =
+    resolvedHotspotId !== null &&
+    isRemoteHotspotLoading &&
+    !cachedStoriesEntry?.stories.length;
+  const audioStoryDurationLabel = getAudioStoryDurationLabel(
+    getStoryNarrationSourceText({
+      apiHotspot: remoteHotspot,
+      fallbackText: historicalInfoText ?? overviewText,
+    }),
+  );
   const hotspotStoriesHref =
     resolvedHotspotId !== null
       ? (`/hotspot/${hotspot.slug}/stories?hotspotId=${resolvedHotspotId}` as Href)
@@ -2866,24 +2892,6 @@ export default function HotspotDetailScreen() {
     Math.max((screenWidth - relatedRouteScrollInset * 2) * 0.72, 236),
     272,
   );
-  const currentHotspotRouteIds = getRouteLookupIds(hotspot);
-  const routeProgressRoute = relatedRoutes.find((route) =>
-    route.hotspotIds.some((routeHotspotId) =>
-      currentHotspotRouteIds.includes(routeHotspotId),
-    ),
-  );
-  const visitedRouteProgressIds = new Set(
-    [...checkins, hotspotCheckinId].flatMap((checkedInHotspotId) => {
-      const checkedInHotspot = getHotspotBySlug(checkedInHotspotId);
-
-      return checkedInHotspot ? getRouteLookupIds(checkedInHotspot) : [];
-    }),
-  );
-  const visitedRouteStopsCount = routeProgressRoute
-    ? routeProgressRoute.hotspotIds.filter((routeHotspotId) =>
-        visitedRouteProgressIds.has(routeHotspotId),
-      ).length
-    : undefined;
   const savedPersonalExperienceItems = buildSavedPersonalExperienceItems(
     savedPersonalPosts,
   );
@@ -3143,7 +3151,7 @@ export default function HotspotDetailScreen() {
                 </Text>
               </View>
 
-              <HotspotOverviewSection text={hotspot.overview} />
+              {overviewText ? <HotspotOverviewSection text={overviewText} /> : null}
 
               <SummaryStatsRow items={summaryStats} />
 
@@ -3151,22 +3159,24 @@ export default function HotspotDetailScreen() {
                 <DirectionMapCard
                   address={hotspot.address}
                   coordinate={hotspot.coordinate}
-                  districtLabel={hotspot.district}
+                  headline={hotspot.title}
                   onInteractionChange={setIsMapInteracting}
                   title={hotspot.title}
                 />
               </View>
 
               <LocationInformationSection
-                access={`${hotspot.scheduleLabel} · ${hotspot.ticketLabel}`}
                 address={hotspot.address}
-                atmosphereTags={hotspot.vibeTags}
-                bestTime={hotspot.bestTimeLabel}
+                openingHours={openingHoursLabel}
+                tagLabels={hotspotTagLabels}
+                visitDuration={visitDurationLabel}
               />
             </View>
 
             <View className="mt-7 gap-5">
-              <HistoricalInfoSection text={hotspot.story} />
+              {historicalInfoText ? (
+                <HistoricalInfoSection text={historicalInfoText} />
+              ) : null}
 
               <HiddenStoryCheckinSection
                 audioStoryDurationLabel={audioStoryDurationLabel}
@@ -3282,7 +3292,6 @@ export default function HotspotDetailScreen() {
 
         {isCheckinOverlayVisible ? (
           <HotspotGpsCheckinOverlay
-            audioStoryDurationLabel={audioStoryDurationLabel}
             hotspot={hotspot}
             hotspotId={resolvedHotspotId}
             isStoryAvailable={canOpenStories}
@@ -3294,9 +3303,6 @@ export default function HotspotDetailScreen() {
                 addApiCheckin(resolvedHotspotId);
               }
             }}
-            rewardXp={rewardXp}
-            totalRouteStopsCount={routeProgressRoute?.hotspotIds.length}
-            visitedRouteStopsCount={visitedRouteStopsCount}
           />
         ) : null}
       </SafeAreaView>

@@ -14,8 +14,12 @@ import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
+import {
+  useCheckedInApiHotspots,
+  useCheckins,
+} from "@/lib/checkin-store";
 
-import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
+import { getHotspotById } from "../api/get-hotspot-by-id";
 import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
 import {
   cacheHotspotStories,
@@ -173,11 +177,7 @@ function StoryCard({
   onPress: () => void;
 }) {
   return (
-    <Pressable
-      className="pb-5 pt-6"
-      onPress={onPress}
-      style={{ overflow: "visible" }}
-    >
+    <View className="pb-5 pt-6" style={{ overflow: "visible" }}>
       <View
         style={{
           minHeight: Math.max(item.cardHeight + 24, item.imageHeight - 32),
@@ -220,8 +220,13 @@ function StoryCard({
           />
 
           <View style={{ maxWidth: `${item.textWidth}%` }}>
+            <View className="self-start rounded-full bg-white/30 px-3 py-1.5">
+              <Text className="text-[11px] font-medium uppercase tracking-[0.8px] text-white">
+                {item.tagLabel}
+              </Text>
+            </View>
             <Text
-              className="text-[20px] font-black leading-6 text-white"
+              className="mt-3 text-[20px] font-semibold leading-6 text-white"
               style={{
                 textShadowColor: "rgba(76, 53, 76, 0.12)",
                 textShadowOffset: { width: 0, height: 1 },
@@ -230,6 +235,15 @@ function StoryCard({
             >
               {item.title}
             </Text>
+
+            <Pressable
+              className="mt-5 self-start rounded-full bg-white px-4 py-2.5"
+              onPress={onPress}
+            >
+              <Text className="text-[13px] font-medium text-[#C73A86]">
+                Xem chi tiết
+              </Text>
+            </Pressable>
           </View>
         </LinearGradient>
 
@@ -256,7 +270,7 @@ function StoryCard({
           />
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -312,10 +326,37 @@ function EmptyStoriesState({ message }: { message: string }) {
   );
 }
 
+function LockedStoriesState({ onBack }: { onBack: () => void }) {
+  return (
+    <View
+      className="rounded-[28px] border border-[#F4DCE6] bg-[#FFF9FD] px-5 py-6"
+      style={cardShadowStyle}
+    >
+      <Text className="text-[19px] font-black text-[#2B2233]">
+        Story đang khóa
+      </Text>
+      <Text className="mt-2 text-[15px] leading-6 text-[#6F657A]">
+        Check-in tại hotspot trước, sau đó story từ API mới được hiển thị trên
+        màn này.
+      </Text>
+      <Pressable
+        className="mt-5 self-start rounded-full bg-[#FFF0F6] px-4 py-3"
+        onPress={onBack}
+      >
+        <Text className="text-[14px] font-black text-[#EB489B]">
+          Quay lại hotspot
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function HotspotStoriesScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
+  const checkedInHotspotSlugs = useCheckins();
+  const checkedInApiHotspots = useCheckedInApiHotspots();
   const { hotspotId, slug } = useLocalSearchParams<{
     hotspotId?: string;
     slug: string;
@@ -334,12 +375,20 @@ export default function HotspotStoriesScreen() {
     hotspotId: resolvedHotspotId,
     slug: resolvedSlug,
   });
+  const isCheckedIn =
+    resolvedHotspotId === null
+      ? true
+      : checkedInApiHotspots.includes(resolvedHotspotId) ||
+        checkedInHotspotSlugs.includes(resolvedSlug);
   const [activeTabId, setActiveTabId] = useState("");
   const [apiStoryCards, setApiStoryCards] = useState<
     HotspotThemeStory[] | null
-  >(() => cachedStoriesEntry?.stories ?? null);
+  >(() => (isCheckedIn ? (cachedStoriesEntry?.stories ?? null) : null));
   const [isStoriesLoading, setIsStoriesLoading] = useState(
-    () => cachedStoriesEntry === null && resolvedHotspotId !== null,
+    () =>
+      isCheckedIn &&
+      cachedStoriesEntry === null &&
+      resolvedHotspotId !== null,
   );
   const [storiesError, setStoriesError] = useState<string | null>(null);
   const fallbackStoryCards =
@@ -364,6 +413,17 @@ export default function HotspotStoriesScreen() {
         hotspotId: resolvedHotspotId,
         slug: resolvedSlug,
       });
+
+      if (!isCheckedIn && resolvedHotspotId !== null) {
+        if (!isActive) {
+          return;
+        }
+
+        setApiStoryCards(null);
+        setIsStoriesLoading(false);
+        setStoriesError(null);
+        return;
+      }
 
       if (nextCachedStoriesEntry) {
         if (!isActive) {
@@ -396,14 +456,14 @@ export default function HotspotStoriesScreen() {
         const accessToken = authSession.isAuthenticated
           ? await getValidAccessToken()
           : null;
-        const stories = await getUnlockedHotspotStories({
+        const remoteHotspot = await getHotspotById({
           accessToken,
           hotspotId: resolvedHotspotId,
           tokenType: authSession.tokenType,
         });
         const mappedStories = buildHotspotThemeStoriesFromApi(
           resolvedHotspot,
-          stories,
+          remoteHotspot.stories,
         );
 
         cacheHotspotStories({
@@ -434,7 +494,7 @@ export default function HotspotStoriesScreen() {
         setStoriesError(
           error instanceof Error
             ? error.message
-            : "Không tải được story từ API cho hotspot này.",
+            : "Không tải được story từ dữ liệu hotspot này.",
         );
       } finally {
         if (isActive) {
@@ -452,6 +512,7 @@ export default function HotspotStoriesScreen() {
     authSession.isAuthenticated,
     authSession.tokenType,
     hotspot,
+    isCheckedIn,
     resolvedHotspotId,
     resolvedSlug,
   ]);
@@ -507,37 +568,45 @@ export default function HotspotStoriesScreen() {
             <View className="h-11 w-11" />
           </View>
 
-          <ScrollView
-            horizontal
-            contentContainerStyle={{
-              columnGap: 18,
-              paddingBottom: 4,
-              paddingTop: 4,
-            }}
-            showsHorizontalScrollIndicator={false}
-          >
-            {resolvedThemeTabs.map((tab) => (
-              <ThemeTagChip
-                key={tab.id}
-                imageSource={tab.imageSource}
-                isActive={tab.id === resolvedActiveTab?.id}
-                label={tab.label}
-                onPress={() => setActiveTabId(tab.id)}
-              />
-            ))}
-          </ScrollView>
+          {isCheckedIn || resolvedHotspotId === null ? (
+            <>
+              <ScrollView
+                horizontal
+                contentContainerStyle={{
+                  columnGap: 18,
+                  paddingBottom: 4,
+                  paddingTop: 4,
+                }}
+                showsHorizontalScrollIndicator={false}
+              >
+                {resolvedThemeTabs.map((tab) => (
+                  <ThemeTagChip
+                    key={tab.id}
+                    imageSource={tab.imageSource}
+                    isActive={tab.id === resolvedActiveTab?.id}
+                    label={tab.label}
+                    onPress={() => setActiveTabId(tab.id)}
+                  />
+                ))}
+              </ScrollView>
 
-          {isStoriesLoading ? (
+              {isStoriesLoading ? (
+                <Text className="pb-3 pt-2 text-[13px] font-medium text-[#A897B2]">
+                  Đang tải story của hotspot...
+                </Text>
+              ) : null}
+
+              {storiesError ? (
+                <Text className="pb-3 pt-2 text-[13px] font-medium text-[#D97706]">
+                  {storiesError}
+                </Text>
+              ) : null}
+            </>
+          ) : (
             <Text className="pb-3 pt-2 text-[13px] font-medium text-[#A897B2]">
-              Đang tải story của hotspot...
+              Story sẽ mở sau khi bạn check-in hotspot này.
             </Text>
-          ) : null}
-
-          {storiesError ? (
-            <Text className="pb-3 pt-2 text-[13px] font-medium text-[#D97706]">
-              {storiesError}
-            </Text>
-          ) : null}
+          )}
         </View>
 
         <ScrollView
@@ -550,7 +619,9 @@ export default function HotspotStoriesScreen() {
           }}
           showsVerticalScrollIndicator={false}
         >
-          {visibleStories.length > 0 ? (
+          {!isCheckedIn && resolvedHotspotId !== null ? (
+            <LockedStoriesState onBack={() => router.back()} />
+          ) : visibleStories.length > 0 ? (
             visibleStories.map((story) => (
               <StoryCard
                 key={story.id}
