@@ -39,6 +39,7 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 import { useProfile } from "@/features/profile/hooks/use-profile";
 import {
+  ensureForegroundLocationPermission,
   getDevelopmentLocationOverride,
   getDeviceCoordinate,
 } from "@/lib/location";
@@ -1024,7 +1025,7 @@ export function HotspotGpsCheckinOverlay({
       }
 
       const permissionResponse =
-        await Location.requestForegroundPermissionsAsync();
+        await ensureForegroundLocationPermission();
 
       if (permissionResponse.status !== "granted") {
         setVerificationStatus("permission-denied");

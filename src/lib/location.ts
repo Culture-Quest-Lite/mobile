@@ -8,6 +8,43 @@ export type AppCoordinate = {
   source: "device" | "dev-override";
 };
 
+
+export type ForegroundLocationPermissionResult = {
+  canAskAgain: boolean;
+  granted: boolean;
+  status: Location.PermissionStatus;
+};
+
+export async function ensureForegroundLocationPermission(): Promise<ForegroundLocationPermissionResult> {
+  const currentPermission = await Location.getForegroundPermissionsAsync();
+
+  if (currentPermission.granted) {
+    return {
+      canAskAgain: currentPermission.canAskAgain,
+      granted: true,
+      status: currentPermission.status,
+    };
+  }
+
+  // Do not repeatedly show the native dialog after the user has denied it
+  // permanently. The UI can direct the user to Android/iOS Settings instead.
+  if (!currentPermission.canAskAgain) {
+    return {
+      canAskAgain: false,
+      granted: false,
+      status: currentPermission.status,
+    };
+  }
+
+  const requestedPermission = await Location.requestForegroundPermissionsAsync();
+
+  return {
+    canAskAgain: requestedPermission.canAskAgain,
+    granted: requestedPermission.granted,
+    status: requestedPermission.status,
+  };
+}
+
 type DeviceCoordinateOptions = {
   accuracy: Location.Accuracy;
   maxAge: number;

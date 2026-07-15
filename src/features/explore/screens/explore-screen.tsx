@@ -30,6 +30,7 @@ import {
 } from '@/features/route/api/route-api';
 import {
   type AppCoordinate,
+  ensureForegroundLocationPermission,
   getDevelopmentLocationOverride,
   getDeviceCoordinate,
 } from '@/lib/location';
@@ -293,7 +294,7 @@ export default function ExploreScreen() {
       try {
         const permission = getDevelopmentLocationOverride()
           ? { status: Location.PermissionStatus.GRANTED }
-          : await Location.requestForegroundPermissionsAsync();
+          : await ensureForegroundLocationPermission();
 
         const coordinate =
           getDevelopmentLocationOverride() ??
