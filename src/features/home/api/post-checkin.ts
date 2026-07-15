@@ -11,12 +11,15 @@ export type CreateCheckInRequest = {
 };
 
 export type CheckInResponse = {
-  checkInAt: string;
-  checkInId: number;
+  firstVisitedAt: string;
   hotspotId: number;
-  pointEarned: number;
-  userRouteProgressId: number | null;
-  xpEarned: number;
+  isCheckedIn: boolean;
+  latitude: number;
+  longitude: number;
+  totalPointEarned: number;
+  totalXpEarned: number;
+  userId: number;
+  userProgressId: number;
 };
 
 type CreateCheckInErrorCode =
@@ -52,10 +55,10 @@ export class CreateCheckInError extends Error {
 
 function resolveCreateCheckInUrl() {
   if (PublicEnv.apiBaseUrl.trim()) {
-    return buildApiUrl("/api/v1/check-ins");
+    return buildApiUrl("/api/v1/user-hotspot-progress");
   }
 
-  return "http://13.158.40.56:8080/api/v1/check-ins";
+  return "http://3.113.215.65:8080/api/v1/user-hotspot-progress";
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -66,10 +69,6 @@ function readNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function readString(value: unknown) {
-  return typeof value === "string" ? value : "";
-}
-
 function normalizeLookupText(value: string) {
   return value
     .normalize("NFD")
@@ -77,12 +76,12 @@ function normalizeLookupText(value: string) {
     .toLowerCase();
 }
 
-function readNullableNumber(value: unknown) {
-  if (value === null) {
-    return null;
-  }
+function readString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
 
-  return readNumber(value);
+function readBoolean(value: unknown) {
+  return typeof value === "boolean" ? value : null;
 }
 
 function parseCheckInResponse(value: unknown): CheckInResponse | null {
@@ -90,31 +89,40 @@ function parseCheckInResponse(value: unknown): CheckInResponse | null {
     return null;
   }
 
-  const checkInId = readNumber(value.checkInId);
+  const userProgressId = readNumber(value.userProgressId);
+  const userId = readNumber(value.userId);
   const hotspotId = readNumber(value.hotspotId);
-  const userRouteProgressId = readNullableNumber(value.userRouteProgressId);
-  const pointEarned = readNumber(value.pointEarned);
-  const xpEarned = readNumber(value.xpEarned);
-  const checkInAt = readString(value.checkInAt);
+  const isCheckedIn = readBoolean(value.isCheckedIn ?? value.isCheckIn);
+  const latitude = readNumber(value.latitude);
+  const longitude = readNumber(value.longitude);
+  const totalPointEarned = readNumber(value.totalPointEarned);
+  const totalXpEarned = readNumber(value.totalXpEarned);
+  const firstVisitedAt = readString(value.firstVisitedAt);
 
   if (
-    checkInId === null ||
+    userProgressId === null ||
+    userId === null ||
     hotspotId === null ||
-    pointEarned === null ||
-    xpEarned === null ||
-    (value.userRouteProgressId !== null && userRouteProgressId === null) ||
-    !checkInAt.trim()
+    isCheckedIn === null ||
+    latitude === null ||
+    longitude === null ||
+    totalPointEarned === null ||
+    totalXpEarned === null ||
+    !firstVisitedAt.trim()
   ) {
     return null;
   }
 
   return {
-    checkInAt,
-    checkInId,
+    firstVisitedAt,
     hotspotId,
-    pointEarned,
-    userRouteProgressId,
-    xpEarned,
+    isCheckedIn,
+    latitude,
+    longitude,
+    totalPointEarned,
+    totalXpEarned,
+    userId,
+    userProgressId,
   };
 }
 
@@ -181,7 +189,7 @@ function getErrorMessage(body: unknown, status: number) {
 }
 
 function isDuplicateCheckInResponse(body: unknown, status: number) {
-  if (status !== 400) {
+  if (status !== 400 && status !== 409) {
     return false;
   }
 

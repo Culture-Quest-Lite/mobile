@@ -2,6 +2,10 @@ import type {
   HotspotStoryDto,
   HotspotStoryMediaDto,
 } from "../api/get-hotspot-stories";
+import type {
+  NearbyHotspotMediaDto,
+  NearbyHotspotStoryDto,
+} from "../api/get-nearby-hotspots";
 import type { HotspotDetail } from "./hotspots";
 
 const storyHistoryImage = require("../../../../assets/images/tachnenl.png");
@@ -251,13 +255,16 @@ function splitApiStoryParagraphs(content: string) {
 
 type StoryMediaKind = "image" | "audio" | "video";
 
+type ApiStoryMedia = HotspotStoryMediaDto | NearbyHotspotMediaDto;
+type ApiStory = HotspotStoryDto | NearbyHotspotStoryDto;
+
 const mediaExtensionPatterns: Record<StoryMediaKind, RegExp> = {
   audio: /\.(aac|flac|m4a|mp3|oga|ogg|wav)(?:$|[?#])/i,
   image: /\.(avif|bmp|gif|heic|jpeg|jpg|png|svg|webp)(?:$|[?#])/i,
   video: /\.(m3u8|mov|mp4|m4v|webm)(?:$|[?#])/i,
 };
 
-function resolveStoryMediaKind(media: HotspotStoryMediaDto): StoryMediaKind | null {
+function resolveStoryMediaKind(media: ApiStoryMedia): StoryMediaKind | null {
   const normalizedMediaType = media.mediaType.trim().toLowerCase();
   const normalizedMimeType = media.mimeType.trim().toLowerCase();
   const normalizedFileName = media.fileName.trim().toLowerCase();
@@ -296,7 +303,7 @@ function resolveStoryMediaKind(media: HotspotStoryMediaDto): StoryMediaKind | nu
   return null;
 }
 
-function getSortedMediaUrlsByKind(story: HotspotStoryDto, mediaKind: StoryMediaKind) {
+function getSortedMediaUrlsByKind(story: ApiStory, mediaKind: StoryMediaKind) {
   return [...story.medias]
     .filter(
       (media) =>
@@ -428,7 +435,7 @@ export function buildHotspotThemeStories(
 
 export function buildHotspotThemeStoriesFromApi(
   hotspot: HotspotDetail,
-  stories: HotspotStoryDto[],
+  stories: ApiStory[],
 ): HotspotThemeStory[] {
   const fallbackStoriesByTag = new Map(
     buildHotspotThemeStories(hotspot).map((story) => [story.tag, story] as const),

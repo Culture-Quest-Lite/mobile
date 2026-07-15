@@ -84,6 +84,51 @@ function parseMedia(value: unknown) {
   };
 }
 
+function parseStoryTag(value: unknown) {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  const tagId = readNumber(value.tagId);
+
+  if (tagId === null) {
+    return null;
+  }
+
+  return {
+    createdAt: readString(value.createdAt),
+    tagId,
+    tagName: readString(value.tagName),
+    tagStatus: readString(value.tagStatus),
+    updatedAt: readString(value.updatedAt),
+  };
+}
+
+function parseStory(value: unknown) {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  const storyId = readNumber(value.storyId);
+
+  if (storyId === null) {
+    return null;
+  }
+
+  return {
+    content: readString(value.content),
+    distanceToNext: readNumber(value.distanceToNext),
+    medias: Array.isArray(value.medias)
+      ? value.medias.map(parseMedia).filter(isNonNull)
+      : [],
+    orderIndex: readNumber(value.orderIndex),
+    status: readString(value.status),
+    storyId,
+    tag: parseStoryTag(value.tag),
+    title: readString(value.title),
+  };
+}
+
 function isNonNull<T>(value: T | null): value is T {
   return value !== null;
 }
@@ -119,7 +164,7 @@ function parseHotspot(value: unknown): NearbyHotspotDto | null {
     historyInformation: readString(value.historyInformation),
     hotspotId,
     hotspotName,
-    isCheckedIn: readNullableBoolean(value.isCheckedIn),
+    isCheckedIn: readNullableBoolean(value.isCheckedIn ?? value.isCheckIn),
     latitude,
     longitude,
     medias: Array.isArray(value.medias)
@@ -129,6 +174,9 @@ function parseHotspot(value: unknown): NearbyHotspotDto | null {
     point: readNumber(value.point),
     startTime: readString(value.startTime),
     status: readString(value.status),
+    stories: Array.isArray(value.stories)
+      ? value.stories.map(parseStory).filter(isNonNull)
+      : [],
     tags: Array.isArray(value.tags)
       ? value.tags.map(parseTag).filter(isNonNull)
       : [],
