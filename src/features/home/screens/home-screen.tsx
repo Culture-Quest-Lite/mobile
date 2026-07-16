@@ -52,17 +52,17 @@ import {
 } from "@/lib/checkin-store";
 import {
   type AppCoordinate,
-  formatCoordinateLabel,
   ensureForegroundLocationPermission,
+  formatCoordinateLabel,
   getDevelopmentLocationOverride,
   getDeviceCoordinate,
 } from "@/lib/location";
 
+import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import {
   type NearbyHotspotDto,
   getNearbyHotspots,
 } from "../api/get-nearby-hotspots";
-import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import { getActiveTagNames } from "../api/get-tags";
 import {
   type CommunityBoardTab,

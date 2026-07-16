@@ -1,9 +1,8 @@
+import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { SymbolView } from "@/components/ui/symbol-view";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import {
   SafeAreaView,
@@ -14,10 +13,7 @@ import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
-import {
-  useCheckedInApiHotspots,
-  useCheckins,
-} from "@/lib/checkin-store";
+import { useCheckedInApiHotspots, useCheckins } from "@/lib/checkin-store";
 
 import { getHotspotById } from "../api/get-hotspot-by-id";
 import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
@@ -46,6 +42,10 @@ const cardShadowStyle = {
   elevation: 8,
 } as const;
 
+const pageBackground = "#FFF9FD";
+
+type StoryImageSource = ComponentProps<typeof Image>["source"];
+
 type StoryThemeTabItem = {
   id: string;
   imageSource: number;
@@ -61,7 +61,9 @@ const fallbackStoryThemeOrder: StoryThemeTag[] = [
 ];
 
 function getFallbackStoryThemeTag(index: number) {
-  return fallbackStoryThemeOrder[index % fallbackStoryThemeOrder.length] ?? "history";
+  return (
+    fallbackStoryThemeOrder[index % fallbackStoryThemeOrder.length] ?? "history"
+  );
 }
 
 function normalizeApiTagId(value?: number | null) {
@@ -169,108 +171,193 @@ function ThemeTagChip({
   );
 }
 
+function getStoryCardAccent(tag: StoryThemeTag) {
+  switch (tag) {
+    case "history":
+      return {
+        badgeBackground: "rgba(255, 255, 255, 0.9)",
+        badgeText: "#C73A86",
+        dot: "#EB489B",
+        dotInactive: "rgba(255, 255, 255, 0.52)",
+        moreText: "#B45384",
+      };
+    case "culture":
+      return {
+        badgeBackground: "rgba(255, 255, 255, 0.9)",
+        badgeText: "#0F8A5F",
+        dot: "#10B981",
+        dotInactive: "rgba(255, 255, 255, 0.52)",
+        moreText: "#0F8A5F",
+      };
+    case "food":
+      return {
+        badgeBackground: "rgba(255, 255, 255, 0.9)",
+        badgeText: "#DD6B20",
+        dot: "#F97316",
+        dotInactive: "rgba(255, 255, 255, 0.52)",
+        moreText: "#D97706",
+      };
+    case "education":
+      return {
+        badgeBackground: "rgba(255, 255, 255, 0.9)",
+        badgeText: "#7C3AED",
+        dot: "#8B5CF6",
+        dotInactive: "rgba(255, 255, 255, 0.52)",
+        moreText: "#7C3AED",
+      };
+  }
+}
+
+function getStoryPreviewImages(item: HotspotThemeStory): StoryImageSource[] {
+  const previewImages = [
+    ...(item.heroGallery.length > 0
+      ? item.heroGallery
+      : item.gallery.length > 0
+        ? item.gallery
+        : [item.imageSource]),
+  ];
+
+  return [...new Set(previewImages)];
+}
+
 function StoryCard({
+  hotspotTitle,
   item,
   onPress,
 }: {
+  hotspotTitle: string;
   item: HotspotThemeStory;
   onPress: () => void;
 }) {
+  const previewImages = getStoryPreviewImages(item);
+  const accent = getStoryCardAccent(item.tag);
+  const previewDescription =
+    item.summary.trim() ||
+    item.scriptParagraphs.find((paragraph) => paragraph.trim())?.trim() ||
+    "Story này đang được cập nhật nội dung.";
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  useEffect(() => {
+    if (previewImages.length <= 1) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setActiveImageIndex((currentIndex) => {
+        return (currentIndex + 1) % previewImages.length;
+      });
+    }, 3200);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [previewImages.length]);
+
+  const activeImage =
+    previewImages[activeImageIndex] ?? previewImages[0] ?? item.imageSource;
+
   return (
-    <View className="pb-5 pt-6" style={{ overflow: "visible" }}>
+    <Pressable
+      className="rounded-[22px]"
+      onPress={onPress}
+    >
+      <View className="overflow-hidden rounded-[8px]">
+        <Image
+          source={activeImage}
+          contentFit="cover"
+          transition={420}
+          cachePolicy="memory-disk"
+          style={{
+            backgroundColor: "#F6EFF8",
+            height: 188,
+            width: "100%",
+          }}
+        />
+
+        {previewImages.length > 1 ? (
+          <View className="absolute right-3 top-3 rounded-full bg-black/30 px-2.5 py-1">
+            <Text className="text-[11px] font-medium text-white">
+              {activeImageIndex + 1}/{previewImages.length}
+            </Text>
+          </View>
+        ) : null}
+
+        {previewImages.length > 1 ? (
+          <View className="absolute bottom-3 left-0 right-0 flex-row items-center justify-center">
+            {previewImages.map((_, index) => (
+              <View
+                key={`${item.id}-preview-dot-${index}`}
+                className={index === previewImages.length - 1 ? "" : "mr-1.5"}
+                style={{
+                  backgroundColor:
+                    index === activeImageIndex ? accent.dot : accent.dotInactive,
+                  borderRadius: 999,
+                  height: 6,
+                  width: index === activeImageIndex ? 18 : 6,
+                }}
+              />
+            ))}
+          </View>
+        ) : null}
+      </View>
+
       <View
         style={{
-          minHeight: Math.max(item.cardHeight + 24, item.imageHeight - 32),
-          overflow: "visible",
-          position: "relative",
+          paddingTop: 12,
         }}
       >
-        <LinearGradient
-          colors={[item.cardColors[0], item.cardColors[1]]}
-          end={{ x: 1, y: 0.5 }}
-          start={{ x: 0, y: 0.5 }}
-          className="overflow-hidden rounded-[30px] px-5 py-4"
-          style={[
-            cardShadowStyle,
-            {
-              minHeight: item.cardHeight,
-              paddingRight: 120,
-            },
-          ]}
-        >
-          <View
-            className="absolute rounded-full"
-            style={{
-              backgroundColor: "rgba(255,255,255,0.18)",
-              height: 136,
-              right: -24,
-              top: -18,
-              width: 136,
-            }}
-          />
-          <View
-            className="absolute rounded-full"
-            style={{
-              backgroundColor: "rgba(255,255,255,0.10)",
-              bottom: -44,
-              height: 110,
-              right: 36,
-              width: 110,
-            }}
-          />
-
-          <View style={{ maxWidth: `${item.textWidth}%` }}>
-            <View className="self-start rounded-full bg-white/30 px-3 py-1.5">
-              <Text className="text-[11px] font-medium uppercase tracking-[0.8px] text-white">
-                {item.tagLabel}
-              </Text>
-            </View>
-            <Text
-              className="mt-3 text-[20px] font-semibold leading-6 text-white"
-              style={{
-                textShadowColor: "rgba(76, 53, 76, 0.12)",
-                textShadowOffset: { width: 0, height: 1 },
-                textShadowRadius: 8,
-              }}
-            >
-              {item.title}
-            </Text>
-
-            <Pressable
-              className="mt-5 self-start rounded-full bg-white px-4 py-2.5"
-              onPress={onPress}
-            >
-              <Text className="text-[13px] font-medium text-[#C73A86]">
-                Xem chi tiết
-              </Text>
-            </Pressable>
-          </View>
-        </LinearGradient>
-
-        <View
-          pointerEvents="none"
+        <Text
+          className="text-[16px] font-semibold text-[#2B2233]"
+          numberOfLines={2}
           style={{
-            bottom: item.imageBottom + 10,
-            elevation: 18,
-            position: "absolute",
-            right: item.imageRight + 6,
-            zIndex: 8,
+            includeFontPadding: false,
+            lineHeight: 16,
           }}
         >
-          <Image
-            source={item.imageSource}
-            contentFit="contain"
-            transition={120}
-            cachePolicy="memory-disk"
-            style={{
-              borderRadius: 26,
-              height: item.imageHeight,
-              width: item.imageWidth,
-            }}
-          />
+          {item.title}
+        </Text>
+
+        <Text
+          className="mt-0 text-[14px] text-[#6F657A]"
+          numberOfLines={2}
+          style={{
+            includeFontPadding: false,
+            lineHeight: 15,
+          }}
+        >
+          {previewDescription}
+        </Text>
+
+        <View className="mt-1 flex-row flex-wrap gap-2">
+          <View className="rounded-full bg-[#FFF7DD] px-3 py-1.5">
+            <Text
+              className="text-[12px] font-medium"
+              style={{
+                color: "#A16207",
+                includeFontPadding: false,
+                lineHeight: 13,
+              }}
+            >
+              {item.tagLabel}
+            </Text>
+          </View>
+
+          <View className="rounded-full bg-[#FFF7DD] px-3 py-1.5">
+            <Text
+              className="text-[12px] font-medium"
+              numberOfLines={1}
+              style={{
+                color: "#A16207",
+                includeFontPadding: false,
+                lineHeight: 13,
+              }}
+            >
+              {hotspotTitle}
+            </Text>
+          </View>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -386,13 +473,13 @@ export default function HotspotStoriesScreen() {
   >(() => (isCheckedIn ? (cachedStoriesEntry?.stories ?? null) : null));
   const [isStoriesLoading, setIsStoriesLoading] = useState(
     () =>
-      isCheckedIn &&
-      cachedStoriesEntry === null &&
-      resolvedHotspotId !== null,
+      isCheckedIn && cachedStoriesEntry === null && resolvedHotspotId !== null,
   );
   const [storiesError, setStoriesError] = useState<string | null>(null);
   const fallbackStoryCards =
-    hotspot && resolvedHotspotId === null ? buildHotspotThemeStories(hotspot) : [];
+    hotspot && resolvedHotspotId === null
+      ? buildHotspotThemeStories(hotspot)
+      : [];
   const storyCards = apiStoryCards ?? fallbackStoryCards;
   const resolvedThemeTabs = buildStoryThemeTabsFromStories(storyCards);
   const resolvedActiveTab =
@@ -533,16 +620,20 @@ export default function HotspotStoriesScreen() {
         );
 
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1" style={{ backgroundColor: pageBackground }}>
       <StatusBar style="dark" />
 
       <SafeAreaView
-        className="flex-1 bg-white"
+        className="flex-1"
+        style={{ backgroundColor: pageBackground }}
         edges={["left", "right", "bottom"]}
       >
         <View
-          className="border-b border-[#F2E8F7] bg-white px-5"
-          style={{ paddingTop: insets.top + 6 }}
+          className="border-b border-[#F2E8F7] px-5"
+          style={{
+            backgroundColor: pageBackground,
+            paddingTop: insets.top + 6,
+          }}
         >
           <View className="flex-row items-center justify-between pb-3">
             <Pressable
@@ -562,7 +653,7 @@ export default function HotspotStoriesScreen() {
             </Pressable>
 
             <Text className="text-[16px] font-black text-[#EB489B]">
-              Story hotspot
+              Câu chuyện
             </Text>
 
             <View className="h-11 w-11" />
@@ -613,7 +704,7 @@ export default function HotspotStoriesScreen() {
           className="flex-1"
           contentContainerStyle={{
             paddingBottom: Math.max(insets.bottom + 30, 34),
-            paddingHorizontal: 20,
+            paddingHorizontal: 23,
             paddingTop: 18,
             rowGap: 18,
           }}
@@ -625,6 +716,7 @@ export default function HotspotStoriesScreen() {
             visibleStories.map((story) => (
               <StoryCard
                 key={story.id}
+                hotspotTitle={hotspot.title}
                 item={story}
                 onPress={() =>
                   router.push(
