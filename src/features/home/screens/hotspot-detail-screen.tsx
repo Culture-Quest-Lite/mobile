@@ -4,7 +4,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentProps,
+} from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -55,10 +61,12 @@ import {
   getRoutesByHotspot,
   mapRouteToRouteItem,
 } from "@/features/route/api/route-api";
-import type { ProfilePost } from "@/features/profile/types";
 import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
-import { getHotspotPosts } from "../api/get-hotspot-posts";
+import {
+  getHotspotPosts,
+  type HotspotPost,
+} from "../api/get-hotspot-posts";
 import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
 import { HiddenStoryUnlockedContent } from "../components/hidden-story-unlocked-content";
 import { HotspotGpsCheckinOverlay } from "../components/hotspot-gps-checkin-overlay";
@@ -124,6 +132,7 @@ const meaninglessApiTextValues = new Set(["", "string", "null", "undefined"]);
 const mapLoadTimeoutMs = 6000;
 const recentReviewPreviewCount = 2;
 const hotspotPostsPageSize = 10;
+const hotspotPostsSort = ["createdAt,DESC"] as const;
 
 const heroShadowStyle = {
   shadowColor: "rgba(15, 23, 42, 0.20)",
@@ -169,20 +178,48 @@ const buttonShadowStyle = {
   elevation: 6,
 } as const;
 
-const relatedRouteCardImageHeight = 128;
-const relatedRouteCardMinHeight = 254;
-const relatedRouteScrollInset = 20;
-const relatedRouteSubtitleHeight = 36;
-const detailSheetHorizontalPadding = 20;
+const relatedRouteCardImageHeight = 136;
+const relatedRouteCardMinHeight = 172;
+const detailSheetHorizontalPadding = 23;
+const relatedRouteScrollInset = detailSheetHorizontalPadding;
 const reviewCardHorizontalPadding = 16;
 const reviewAuthorRowHorizontalOffset = -6;
-const reviewMediaBorderRadius = 24;
+const reviewMediaGridGap = 6;
+const reviewCardBorderRadius = 14;
+const reviewMediaBorderRadius = 16;
+const sectionEyebrowTextStyle = {
+  color: "#7A6F67",
+  lineHeight: 18,
+} as const;
+const sectionTitleTextStyle = {
+  color: "#2B2233",
+  lineHeight: 24,
+} as const;
+const sectionBodyTextStyle = {
+  color: "#6F657A",
+  lineHeight: 19,
+} as const;
+const sectionBodyEmphasisTextStyle = {
+  color: "#554751",
+  lineHeight: 19,
+} as const;
+const sectionCaptionTextStyle = {
+  color: "#7A6F67",
+  lineHeight: 14,
+} as const;
 
 function Text({
   maxFontSizeMultiplier = detailTextMaxFontSizeMultiplier,
+  style,
   ...props
 }: TextProps) {
-  return <RNText maxFontSizeMultiplier={maxFontSizeMultiplier} {...props} />;
+  return (
+    <RNText
+      maxFontSizeMultiplier={maxFontSizeMultiplier}
+      style={[{ includeFontPadding: false }, style]}
+      {...props}
+    />
+  );
 }
 
 function readMeaningfulApiText(value?: string | null) {
@@ -697,7 +734,7 @@ function buildSavedPersonalExperienceItems(
 }
 
 function buildApiPersonalExperienceItems(
-  posts: ProfilePost[],
+  posts: HotspotPost[],
 ): PersonalExperienceItem[] {
   return posts.map((post) => {
     const resolvedMedia = (post.medias.length > 0
@@ -806,17 +843,21 @@ function SummaryStat({
   return (
     <View className="w-full items-center px-1 py-1">
       <View className="flex-row items-center justify-center gap-1.5">
-        <SymbolView name={icon} size={11} tintColor="#EB489B" />
-        <Text className="text-[10px] font-semibold uppercase tracking-[0.6px] text-[#9B91A0]">
+        <SymbolView name={icon} size={12} tintColor="#EB489B" />
+        <Text
+          className="text-[11px] font-black uppercase tracking-[0.8px]"
+          style={sectionEyebrowTextStyle}
+        >
           {label}
         </Text>
       </View>
 
       <Text
         adjustsFontSizeToFit={isCompactValue}
-        className="mt-1.5 text-center text-[12px] font-black leading-4 text-[#1E3142]"
+        className="mt-1 text-center text-[15px] font-semibold"
         minimumFontScale={0.84}
         numberOfLines={1}
+        style={{ color: "#201B18", lineHeight: 18, textAlign: "center" }}
       >
         {value}
       </Text>
@@ -824,28 +865,63 @@ function SummaryStat({
   );
 }
 
-function SummaryStatDivider() {
-  return <View className="h-10 w-px self-center bg-[#F0E4EA]" />;
+function SummaryStatDivider({ leftPercent }: { leftPercent: number }) {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        backgroundColor: "#F4DCE6",
+        bottom: 4,
+        left: `${leftPercent}%`,
+        marginLeft: -0.5,
+        position: "absolute",
+        top: 4,
+        width: 1,
+      }}
+    />
+  );
 }
 
 function SummaryStatsRow({ items }: { items: SummaryStatItem[] }) {
   return (
-    <View className="mt-5 flex-row items-start">
-      {items.map((item, index) => (
-        <View
-          key={`summary-stat-${item.label}-${index}`}
-          className="flex-1 flex-row items-center"
-          style={{ minWidth: 0 }}
-        >
-          <SummaryStat
-            icon={item.icon}
-            isCompactValue={item.isCompactValue}
-            label={item.label}
-            value={item.value}
-          />
-          {index < items.length - 1 ? <SummaryStatDivider /> : null}
+    <View
+      className="mt-4 bg-white py-3"
+      style={[
+        cardShadowStyle,
+        {
+          borderRadius: reviewCardBorderRadius,
+          marginHorizontal: -10,
+          paddingHorizontal: 6,
+        },
+      ]}
+    >
+      <View className="relative">
+        <View className="flex-row items-stretch justify-between">
+          {items.map((item, index) => (
+            <View
+              key={`summary-stat-${item.label}-${index}`}
+              className="flex-1 items-center justify-center"
+              style={{ minWidth: 0 }}
+            >
+              <SummaryStat
+                icon={item.icon}
+                isCompactValue={item.isCompactValue}
+                label={item.label}
+                value={item.value}
+              />
+            </View>
+          ))}
         </View>
-      ))}
+
+        {items.map((item, index) => (
+          index < items.length - 1 ? (
+            <SummaryStatDivider
+              key={`summary-stat-divider-${item.label}-${index}`}
+              leftPercent={((index + 1) / items.length) * 100}
+            />
+          ) : null
+        ))}
+      </View>
     </View>
   );
 }
@@ -901,12 +977,12 @@ function TagChip({
   textColor?: string;
 }) {
   return (
-    <View className="rounded-full px-3 py-2" style={{ backgroundColor }}>
+    <View className="rounded-full px-3 py-1.5" style={{ backgroundColor }}>
       <Text
-        className={`text-[13px] font-semibold ${
+        className={`text-[12px] font-semibold ${
           isUppercase ? "uppercase tracking-[0.8px]" : ""
         }`}
-        style={{ color: textColor }}
+        style={{ color: textColor, lineHeight: 16 }}
       >
         {label}
       </Text>
@@ -1102,8 +1178,8 @@ function DirectionMapCard({
 
   return (
     <View
-      className="overflow-hidden rounded-[30px]"
-      style={[cardShadowStyle, { height: 220 }]}
+      className="overflow-hidden rounded-[18px]"
+      style={[cardShadowStyle, { height: 208 }]}
     >
       {activeMapError ? (
         <View
@@ -1118,10 +1194,12 @@ function DirectionMapCard({
             backgroundColor: "rgba(255, 69, 58, 0.92)",
           }}
         >
-          <Text className="text-[12px] font-bold text-white">
+          <Text className="text-[12px] font-bold text-white" style={{ lineHeight: 16 }}>
             Google Maps error:
           </Text>
-          <Text className="mt-1 text-[12px] text-white">{activeMapError}</Text>
+          <Text className="mt-1 text-[12px] text-white" style={{ lineHeight: 16 }}>
+            {activeMapError}
+          </Text>
         </View>
       ) : null}
 
@@ -1199,7 +1277,7 @@ function DirectionMapCard({
           style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
         >
           <View className="flex-1 items-center justify-center px-6">
-            <View className="rounded-[28px] bg-white/85 px-5 py-5">
+            <View className="rounded-[18px] bg-white/85 px-5 py-5">
               <View className="items-center">
                 <View className="h-16 w-16 items-center justify-center rounded-full bg-white/92">
                   <LinearGradient
@@ -1226,10 +1304,16 @@ function DirectionMapCard({
                     />
                   </LinearGradient>
                 </View>
-                <Text className="mt-4 text-center text-[17px] font-black text-[#1E3142]">
+                <Text
+                  className="mt-4 text-center text-[16px] font-semibold text-[#2B2233]"
+                  style={{ lineHeight: 20 }}
+                >
                   Không tải được preview bản đồ
                 </Text>
-                <Text className="mt-2 text-center text-[13px] leading-5 text-[#5E7486]">
+                <Text
+                  className="mt-2 text-center text-[15px]"
+                  style={sectionBodyTextStyle}
+                >
                   Kiểm tra Google Maps API key, package Android và SHA-1 của
                   build rồi rebuild app.
                 </Text>
@@ -1244,14 +1328,18 @@ function DirectionMapCard({
         className="absolute left-4 right-4 top-4 flex-row items-center justify-between gap-3"
       >
         <View className="rounded-full bg-white/90 px-3 py-2">
-          <Text className="text-[11px] font-bold uppercase tracking-[0.8px] text-[#335A70]">
+          <Text
+            className="text-[12px] font-black uppercase tracking-[0.8px]"
+            style={{ color: "#335A70", lineHeight: 16 }}
+          >
             {mapStatusLabel}
           </Text>
         </View>
         <View className="max-w-[160px] rounded-full bg-white/88 px-3 py-2">
           <Text
-            className="text-[11px] font-medium text-[#4E6473]"
+            className="text-[12px] font-medium text-[#4E6473]"
             numberOfLines={1}
+            style={{ lineHeight: 16 }}
           >
             {address}
           </Text>
@@ -1260,12 +1348,16 @@ function DirectionMapCard({
 
       <View className="absolute bottom-4 left-4 right-4 flex-row items-end justify-between gap-4">
         <View pointerEvents="none" className="flex-1">
-          <Text className="text-[11px] font-semibold uppercase tracking-[0.8px] text-white/72">
+          <Text
+            className="text-[12px] font-black uppercase tracking-[0.8px] text-white/72"
+            style={{ lineHeight: 16 }}
+          >
             {mapGestureHint}
           </Text>
           <Text
-            className="mt-1 text-[18px] font-black text-white"
+            className="mt-1 text-[16px] font-semibold text-white"
             numberOfLines={1}
+            style={{ lineHeight: 20 }}
           >
             {headline}
           </Text>
@@ -1295,7 +1387,7 @@ function DirectionMapCard({
               size={14}
               tintColor="#FFFFFF"
             />
-            <Text className="ml-1.5 text-[14px] font-black text-white">
+            <Text className="ml-1.5 text-[15px] font-semibold text-white">
               Chỉ đường
             </Text>
           </LinearGradient>
@@ -1373,26 +1465,30 @@ function LocationInformationSection({
   )[];
 
   return (
-    <View className="mt-7 gap-5">
-      <View>
-        <Text className="mt-2 text-[18px] font-black text-[#3C2D34]">
-          Thông tin địa điểm
-        </Text>
-      </View>
+    <View className="mt-6 gap-3">
+      <Text
+        className="text-[14px] font-black uppercase tracking-[1.4px]"
+        style={sectionEyebrowTextStyle}
+      >
+        Thông tin về địa điểm
+      </Text>
 
       <View
-        className="rounded-[28px] bg-[#FFFCFA] px-5 py-5"
+        className="rounded-[16px] bg-[#FFFCFA] px-4 py-4"
         style={cardShadowStyle}
       >
-        <View className="gap-6">
+        <View className="gap-5">
           {items.map((item) => (
             <View key={item.label} className="flex-row items-start gap-4">
-              <View className="mt-0.5 h-11 w-11 items-center justify-center rounded-full bg-[#FFF0F6]">
+              <View className="mt-0.5 h-10 w-10 items-center justify-center rounded-full bg-[#FFF0F6]">
                 <SymbolView name={item.icon} size={18} tintColor="#EB489B" />
               </View>
 
               <View className="flex-1">
-                <Text className="text-[12px] font-medium uppercase tracking-[1px] text-[#8FA6BA]">
+                <Text
+                  className="text-[12px] font-black uppercase tracking-[1px] text-[#8FA6BA]"
+                  style={{ lineHeight: 16 }}
+                >
                   {item.label}
                 </Text>
                 {"tags" in item ? (
@@ -1415,7 +1511,10 @@ function LocationInformationSection({
                     })}
                   </View>
                 ) : (
-                  <Text className="mt-1 text-[15px] leading-6 text-[#526879]">
+                  <Text
+                    className="mt-1 text-[15px]"
+                    style={{ color: "#526879", lineHeight: 19 }}
+                  >
                     {item.value}
                   </Text>
                 )}
@@ -1433,20 +1532,21 @@ function HotspotOverviewSection({ text }: { text: string }) {
   const shouldShowToggle = text.trim().length > 150;
 
   return (
-    <View className="mt-4">
+    <View className="mt-3">
       <Text
-        className="text-[15px] leading-6 text-[#677C8E]"
+        className="text-[15px]"
         numberOfLines={isExpanded ? undefined : 4}
+        style={sectionBodyTextStyle}
       >
         {text}
       </Text>
 
       {shouldShowToggle ? (
         <Pressable
-          className="mt-3 self-end"
+          className="mt-2 self-end"
           onPress={() => setIsExpanded((value) => !value)}
         >
-          <Text className="text-[13px] font-bold text-[#7E6F82]">
+          <Text className="text-[12px]" style={sectionCaptionTextStyle}>
             {isExpanded ? "Thu gọn" : "Xem thêm"}
           </Text>
         </Pressable>
@@ -1461,37 +1561,28 @@ function HistoricalInfoSection({ text }: { text: string }) {
 
   return (
     <View className="gap-3">
-      <View className="flex-row items-center gap-2">
-        <View className="h-8 w-8 items-center justify-center rounded-full bg-[#F5EEF6]">
-          <SymbolView
-            name={{
-              ios: "building.columns.fill",
-              android: "account_balance",
-              web: "account_balance",
-            }}
-            size={15}
-            tintColor="#7E6F82"
-          />
-        </View>
-        <Text className="text-[18px] font-black text-[#3C2D34]">
-          Thông tin lịch sử
-        </Text>
-      </View>
+      <Text
+        className="text-[14px] font-black uppercase tracking-[1.4px]"
+        style={sectionEyebrowTextStyle}
+      >
+        Thông tin lịch sử
+      </Text>
 
-      <View className="rounded-[28px] bg-[#FFF9F3] px-5 py-5">
+      <View className="rounded-[16px] bg-[#FFF9F3] px-4 py-4" style={cardShadowStyle}>
         <Text
-          className="text-[15px] leading-6 text-[#554751]"
+          className="text-[15px]"
           numberOfLines={isExpanded ? undefined : 4}
+          style={sectionBodyEmphasisTextStyle}
         >
           {text}
         </Text>
 
         {shouldShowToggle ? (
           <Pressable
-            className="mt-3 self-end"
+            className="mt-2 self-end"
             onPress={() => setIsExpanded((value) => !value)}
           >
-            <Text className="text-[13px] font-bold text-[#7E6F82]">
+            <Text className="text-[12px]" style={sectionCaptionTextStyle}>
               {isExpanded ? "Thu gọn" : "Xem thêm"}
             </Text>
           </Pressable>
@@ -1554,22 +1645,12 @@ function HiddenStoryCheckinSection({
   return (
     <View className="gap-3">
       <View className="flex-row items-center justify-between gap-3">
-        <View className="flex-row items-center gap-2">
-          <View className="h-8 w-8 items-center justify-center rounded-full bg-[#F8EEF6]">
-            <SymbolView
-              name={{
-                ios: "book.closed.fill",
-                android: "menu_book",
-                web: "menu_book",
-              }}
-              size={15}
-              tintColor="#8B6B82"
-            />
-          </View>
-          <Text className="text-[18px] font-black text-[#3C2D34]">
-            Câu chuyện ẩn
-          </Text>
-        </View>
+        <Text
+          className="text-[14px] font-black uppercase tracking-[1.4px]"
+          style={sectionEyebrowTextStyle}
+        >
+          Câu chuyện ẩn
+        </Text>
 
         <View className="flex-row items-center rounded-full bg-[#F6EEE8] px-3 py-2">
           <SymbolView
@@ -1600,7 +1681,7 @@ function HiddenStoryCheckinSection({
             }
           />
           <Text
-            className="ml-1.5 text-[13px] font-black uppercase tracking-[0.8px]"
+            className="ml-1.5 text-[12px] font-black uppercase tracking-[0.8px]"
             style={{
               color: isCheckedIn
                 ? "#1F9D7A"
@@ -1638,7 +1719,7 @@ function HiddenStoryCheckinSection({
           colors={["#F3E3D9", "#E8E0E5"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          className="items-center rounded-[30px] px-5 py-8"
+          className="items-center rounded-[18px] px-5 py-7"
           style={cardShadowStyle}
         >
           <LinearGradient
@@ -1658,11 +1739,17 @@ function HiddenStoryCheckinSection({
             />
           </LinearGradient>
 
-          <Text className="mt-5 text-center text-[22px] font-black text-[#3B2A32]">
+          <Text
+            className="mt-5 text-center text-[18px] font-semibold text-[#2B2233]"
+            style={{ lineHeight: 22 }}
+          >
             Câu chuyện đang chờ bạn
           </Text>
 
-          <Text className="mt-3 max-w-[320px] text-center text-[14px] leading-5 text-[#6A5964]">
+          <Text
+            className="mt-2 max-w-[320px] text-center text-[15px]"
+            style={sectionBodyTextStyle}
+          >
             {isCheckinStatusLoading
               ? "Đang kiểm tra trạng thái check-in từ hệ thống trước khi mở khóa nội dung."
               : isStoryAvailable
@@ -1719,7 +1806,9 @@ function HotspotRouteCarouselCard({
 }) {
   const router = useRouter();
   const difficultyBadgeColors = getRouteBadgeColors(route.difficulty);
-  const ratingLabel = route.rating.toFixed(1);
+  const routeDescription =
+    route.description?.trim() || route.subtitle.trim() || route.theme.trim();
+  const routeTagLabel = route.era.trim() || route.theme.trim();
 
   return (
     <Pressable
@@ -1727,8 +1816,14 @@ function HotspotRouteCarouselCard({
       style={{ width }}
     >
       <View
-        className="overflow-hidden rounded-[24px] border border-[#EEF1F4] bg-white"
-        style={[cardShadowStyle, { minHeight: relatedRouteCardMinHeight }]}
+        className="overflow-hidden border border-[#EEF1F4] bg-white"
+        style={[
+          cardShadowStyle,
+          {
+            borderRadius: 16,
+            minHeight: relatedRouteCardMinHeight,
+          },
+        ]}
       >
         <View className="relative">
           <Image
@@ -1736,68 +1831,71 @@ function HotspotRouteCarouselCard({
             contentFit="cover"
             transition={180}
             cachePolicy="memory-disk"
-            style={{ height: relatedRouteCardImageHeight, width: "100%" }}
+           style={{ height: relatedRouteCardImageHeight, width: "100%" }}
           />
 
-          <View className="absolute right-3 top-3 rounded-full bg-[#FFF1F6] px-2.5 py-1">
-            <Text className="text-[11px] font-extrabold text-[#EB489B]">
+          <View className="absolute right-2 top-2 rounded-full bg-[#FFF1F6] px-2 py-[5px]">
+            <Text className="text-[10px] font-extrabold text-[#EB489B]">
               +{route.xp} XP
             </Text>
           </View>
         </View>
 
-        <View className="flex-1 gap-2.5 px-4 pb-4 pt-3.5">
-          <View className="flex-row flex-wrap items-center gap-2" style={{ minHeight: 26 }}>
-            <View className="rounded-full bg-[#FFF1F6] px-2.5 py-1">
-              <Text className="text-[11px] font-extrabold text-[#EB489B]">
+        <View className="gap-1.5 px-3 pb-3 pt-2">
+          <View className="flex-row flex-wrap items-center gap-1.5">
+            <View className="rounded-full bg-[#FFF1F6] px-2 py-[5px]">
+              <Text className="text-[10px] font-extrabold text-[#EB489B]">
                 {route.distance}
               </Text>
             </View>
-            <View className="rounded-full bg-[#FFF4EF] px-2.5 py-1">
-              <Text className="text-[11px] font-extrabold text-[#F58752]">
+            <View className="rounded-full bg-[#FFF4EF] px-2 py-[5px]">
+              <Text className="text-[10px] font-extrabold text-[#F58752]">
                 {route.duration}
               </Text>
             </View>
             <View
-              className="rounded-full px-2.5 py-1"
+              className="rounded-full px-2 py-[5px]"
               style={{ backgroundColor: difficultyBadgeColors.backgroundColor }}
             >
               <Text
-                className="text-[11px] font-extrabold"
+                className="text-[10px] font-extrabold"
                 style={{ color: difficultyBadgeColors.textColor }}
               >
                 {route.difficulty}
               </Text>
             </View>
-            <View className="rounded-full bg-[#FFF9E6] px-2.5 py-1">
-              <Text className="text-[11px] font-extrabold text-[#B7791F]">
-                ★ {ratingLabel}
-              </Text>
-            </View>
           </View>
 
           <Text
-            className="text-[16px] font-extrabold leading-4 text-[#2B2233]"
-            numberOfLines={1}
+            className="text-[14px] font-semibold text-[#2B2233]"
+            numberOfLines={2}
+            ellipsizeMode="tail"
+            style={{ lineHeight: 18 }}
           >
             {route.title}
           </Text>
 
           <Text
-            className="text-[13px] leading-[18px] text-[#8E869A]"
+            className="text-[12px] text-[#7A6F67]"
             numberOfLines={2}
-            style={{ height: relatedRouteSubtitleHeight }}
+            ellipsizeMode="tail"
+            style={{ lineHeight: 17 }}
           >
-            {route.subtitle}
+            {routeDescription}
           </Text>
 
-          <View className="mt-auto flex-row items-center justify-between gap-3">
-            <Text className="text-[13px] font-semibold text-[#5E7486]">
-              {route.hotspotIds.length} điểm dừng
-            </Text>
-            <View className="rounded-full bg-[#F6F1F8] px-2.5 py-1">
-              <Text className="text-[11px] font-extrabold text-[#7D7281]">
-                {route.era}
+          <View className="flex-row flex-wrap items-center justify-end gap-1.5 pt-1">
+            {routeTagLabel ? (
+              <View className="rounded-full bg-[#F4EFF8] px-2 py-[5px]">
+                <Text className="text-[10px] font-extrabold text-[#6F657A]">
+                  {routeTagLabel}
+                </Text>
+              </View>
+            ) : null}
+
+            <View className="rounded-full bg-[#FFF7E8] px-2 py-[5px]">
+              <Text className="text-[10px] font-extrabold text-[#D97706]">
+                {route.hotspotIds.length} điểm dừng
               </Text>
             </View>
           </View>
@@ -1809,51 +1907,47 @@ function HotspotRouteCarouselCard({
 
 function RouteMatchesSectionHeader() {
   return (
-    <View className="flex-row items-center gap-2">
-      <View className="h-8 w-8 items-center justify-center rounded-full bg-[#F8EEF6]">
-        <SymbolView
-          name={{
-            ios: "map.fill",
-            android: "map",
-            web: "map",
-          }}
-          size={15}
-          tintColor="#8B6B82"
-        />
-      </View>
-      <Text className="text-[18px] font-black text-[#3C2D34]">
-        Các tuyến đường phù hợp
-      </Text>
-    </View>
+    <Text
+      className="text-[14px] font-black uppercase tracking-[1.4px]"
+      style={sectionEyebrowTextStyle}
+    >
+      Các tuyến đường phù hợp
+    </Text>
   );
 }
 
 function PersonalExperienceSectionHeader() {
   return (
-    <View>
-      <Text className="text-[18px] font-black text-[#3C2D34]">
-        Xếp hạng và đánh giá
-      </Text>
-    </View>
+    <Text
+      className="text-[14px] font-black uppercase tracking-[1.4px]"
+      style={sectionEyebrowTextStyle}
+    >
+      Xếp hạng và đánh giá
+    </Text>
   );
 }
 
 function PersonalExperienceMediaThumb({
+  borderRadius = reviewMediaBorderRadius,
   height = 104,
-  isFullBleed = false,
   item,
+  overlayLabel,
   width,
 }: {
+  borderRadius?: number;
   height?: number;
-  isFullBleed?: boolean;
   item: PersonalExperienceMediaItem;
+  overlayLabel?: string;
   width: number | `${number}%`;
 }) {
+  const shouldShowOverlayLabel =
+    typeof overlayLabel === "string" && overlayLabel.trim().length > 0;
+
   return (
-    <View
-      className="overflow-hidden"
-      style={{
-        borderRadius: reviewMediaBorderRadius,
+      <View
+        className="overflow-hidden"
+        style={{
+          borderRadius,
         height,
         width,
       }}
@@ -1866,7 +1960,19 @@ function PersonalExperienceMediaThumb({
         style={{ height: "100%", width: "100%" }}
       />
 
-      {item.type === "video" ? (
+      {shouldShowOverlayLabel ? (
+        <>
+          <View
+            className="absolute inset-0"
+            style={{ backgroundColor: "rgba(18, 24, 38, 0.42)" }}
+          />
+          <View className="absolute inset-0 items-center justify-center">
+            <Text className="text-[28px] font-black text-white">
+              {overlayLabel}
+            </Text>
+          </View>
+        </>
+      ) : item.type === "video" ? (
         <>
           <View
             className="absolute inset-0"
@@ -1901,7 +2007,10 @@ function PersonalExperienceComposer({
   onPressCompose,
 }: PersonalExperienceComposerProps) {
   return (
-    <View className="rounded-[30px] bg-white px-4 py-4" style={cardShadowStyle}>
+    <View
+      className="bg-white px-4 py-4"
+      style={[cardShadowStyle, { borderRadius: reviewCardBorderRadius }]}
+    >
       <View className="flex-row items-center gap-3">
         <Image
           source={avatarUri}
@@ -1928,7 +2037,7 @@ function PersonalExperienceComposer({
               size={16}
               tintColor="#2A6B80"
             />
-            <Text className="ml-2 text-[15px] font-black text-[#2A6B80]">
+            <Text className="ml-2 text-[15px] font-semibold text-[#2A6B80]">
               Thêm ảnh và video
             </Text>
           </View>
@@ -1941,22 +2050,41 @@ function PersonalExperienceComposer({
 function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
   const { width: screenWidth } = useWindowDimensions();
   const hasSingleMedia = item.media.length === 1;
+  const hasTwoMedia = item.media.length === 2;
+  const hasThreeMedia = item.media.length === 3;
+  const reviewCardContentWidth = Math.max(
+    screenWidth - detailSheetHorizontalPadding * 2 - reviewCardHorizontalPadding * 2,
+    0,
+  );
   const singleMediaHeight = Math.min(Math.max(screenWidth * 0.64, 220), 280);
-  const mediaWidth =
-    hasSingleMedia
-      ? "100%"
-      : item.media.length === 2
-        ? "48%"
-        : "31.5%";
-  const mediaHeight =
-    hasSingleMedia ? singleMediaHeight : item.media.length === 2 ? 132 : 104;
+  const multiMediaPreviewItems = hasSingleMedia ? item.media : item.media.slice(0, 4);
+  const hiddenMediaCount = Math.max(item.media.length - multiMediaPreviewItems.length, 0);
+  const twoMediaHeight = Math.min(Math.max(screenWidth * 0.44, 156), 182);
+  const threeMediaHeight = Math.min(Math.max(screenWidth * 0.50, 188), 214);
+  const threeMediaLeadWidth = Math.max(reviewCardContentWidth * 0.56, 0);
+  const threeMediaSideWidth = Math.max(
+    reviewCardContentWidth - threeMediaLeadWidth - reviewMediaGridGap,
+    0,
+  );
+  const threeMediaStackHeight = Math.max(
+    (threeMediaHeight - reviewMediaGridGap) / 2,
+    0,
+  );
+  const multiMediaHeight = 98;
+  const halfWidthMediaItemWidth = Math.max(
+    (reviewCardContentWidth - reviewMediaGridGap) / 2,
+    0,
+  );
   const hasText = item.text.trim().length > 0;
   const hasRating = item.rating > 0;
 
   return (
-    <View className="rounded-[30px] bg-white px-4 py-4" style={cardShadowStyle}>
+    <View
+      className="bg-white px-3.5 py-3"
+      style={[cardShadowStyle, { borderRadius: reviewCardBorderRadius }]}
+    >
       <View
-        className="flex-row items-start"
+        className="flex-row items-center"
         style={{ marginHorizontal: reviewAuthorRowHorizontalOffset }}
       >
         <Image
@@ -1964,23 +2092,42 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
           contentFit="cover"
           transition={120}
           cachePolicy="memory-disk"
-          style={{ height: 44, width: 44, borderRadius: 22 }}
+          style={{ height: 40, width: 40, borderRadius: 20 }}
         />
-        <View className="ml-3 flex-1">
-          <Text className="text-[16px] font-black text-[#2F242C]">
+        <View className="ml-2.5 flex-1 justify-center">
+          <Text
+            className="text-[14px] font-semibold text-[#2B2233]"
+            numberOfLines={1}
+            style={{ lineHeight: 15 }}
+          >
             {item.user}
           </Text>
-          <Text className="mt-0.5 text-[14px] text-[#8A7B83]">
+          <Text
+            className="text-[12px] text-[#8A7B83]"
+            numberOfLines={1}
+            style={{ lineHeight: 12, marginTop: -1 }}
+          >
             {item.date}
           </Text>
+        </View>
+        <View className="ml-1 h-8 w-8 items-center justify-center rounded-full">
+          <SymbolView
+            name={{
+              ios: "ellipsis",
+              android: "more_horiz",
+              web: "more_horiz",
+            }}
+            size={16}
+            tintColor="#8A7B83"
+          />
         </View>
       </View>
 
       {hasRating ? (
-        <View className="mt-3 flex-row items-center justify-between gap-3">
+        <View className="mt-1.5 flex-row items-center justify-between gap-2">
           <RatingStars rating={item.rating} size={13} />
-          <View className="rounded-full bg-[#FFF3DE] px-3 py-1.5">
-            <Text className="text-[12px] font-black text-[#B86D2A]">
+          <View className="rounded-full bg-[#FFF3DE] px-2.5 py-1">
+            <Text className="text-[11px] font-black text-[#B86D2A]">
               {formatReviewRatingValue(item.rating)}/5
             </Text>
           </View>
@@ -1989,8 +2136,14 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
 
       {hasText ? (
         <Text
-          className="mt-4 text-[15px] leading-[17px] text-[#554751]"
-          style={{ marginHorizontal: reviewAuthorRowHorizontalOffset }}
+          className="mt-1.5 text-[14px] text-[#554751]"
+          style={[
+            sectionBodyEmphasisTextStyle,
+            {
+              lineHeight: 15,
+              marginHorizontal: reviewAuthorRowHorizontalOffset,
+            },
+          ]}
         >
           {item.text}
         </Text>
@@ -1998,7 +2151,7 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
 
       {item.media.length > 0 ? (
         <View
-          className={hasSingleMedia ? "mt-4" : "mt-4 flex-row flex-wrap gap-3"}
+          className="mt-2"
           style={
             hasSingleMedia
               ? {
@@ -2006,18 +2159,91 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
                   marginHorizontal: -reviewCardHorizontalPadding,
                   width: screenWidth - detailSheetHorizontalPadding * 2,
                 }
-              : undefined
+              : { width: "100%" }
           }
         >
-          {item.media.map((media, index) => (
+          {hasSingleMedia ? (
             <PersonalExperienceMediaThumb
-              height={mediaHeight}
-              isFullBleed={hasSingleMedia}
-              key={`${item.id}-media-${index}`}
-              item={media}
-              width={mediaWidth}
+              height={singleMediaHeight}
+              item={item.media[0]}
+              width="100%"
             />
-          ))}
+          ) : hasTwoMedia ? (
+            <View
+              className="flex-row"
+              style={{ columnGap: reviewMediaGridGap }}
+            >
+              {item.media.map((media, index) => (
+                <PersonalExperienceMediaThumb
+                  height={twoMediaHeight}
+                  key={`${item.id}-media-${index}`}
+                  item={media}
+                  width={halfWidthMediaItemWidth}
+                />
+              ))}
+            </View>
+          ) : hasThreeMedia ? (
+            <View
+              className="flex-row"
+              style={{ columnGap: reviewMediaGridGap }}
+            >
+              <PersonalExperienceMediaThumb
+                height={threeMediaHeight}
+                item={item.media[0]}
+                width={threeMediaLeadWidth}
+              />
+              <View style={{ rowGap: reviewMediaGridGap, width: threeMediaSideWidth }}>
+                {item.media.slice(1).map((media, index) => (
+                  <PersonalExperienceMediaThumb
+                    height={threeMediaStackHeight}
+                    key={`${item.id}-media-stack-${index}`}
+                    item={media}
+                    width={threeMediaSideWidth}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : (
+            <View
+              className="overflow-hidden"
+              style={{
+                backgroundColor: panelBackground,
+                borderRadius: reviewMediaBorderRadius,
+              }}
+            >
+              <View
+                style={{
+                  columnGap: reviewMediaGridGap,
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  rowGap: reviewMediaGridGap,
+                }}
+              >
+                {multiMediaPreviewItems.map((media, index) => {
+                  const shouldStretchLastItem =
+                    multiMediaPreviewItems.length === 3 && index === 2;
+                  const overlayLabel =
+                    index === multiMediaPreviewItems.length - 1 && hiddenMediaCount > 0
+                      ? `+${hiddenMediaCount}`
+                      : undefined;
+
+                  return (
+                    <PersonalExperienceMediaThumb
+                      height={multiMediaHeight}
+                      key={`${item.id}-media-${index}`}
+                      item={media}
+                      overlayLabel={overlayLabel}
+                      width={
+                        shouldStretchLastItem
+                          ? reviewCardContentWidth
+                          : halfWidthMediaItemWidth
+                      }
+                    />
+                  );
+                })}
+              </View>
+            </View>
+          )}
         </View>
       ) : null}
     </View>
@@ -2030,11 +2256,14 @@ function EmptyPersonalExperienceCard({
   isCheckedIn: boolean;
 }) {
   return (
-    <View className="rounded-[30px] bg-white px-5 py-5" style={cardShadowStyle}>
-      <Text className="text-[16px] font-black text-[#2F242C]">
+    <View
+      className="bg-white px-5 py-5"
+      style={[cardShadowStyle, { borderRadius: reviewCardBorderRadius }]}
+    >
+      <Text className="text-[16px] font-semibold text-[#2B2233]" style={{ lineHeight: 20 }}>
         Chưa có bài đánh giá
       </Text>
-      <Text className="mt-2 text-[15px] leading-6 text-[#6A5964]">
+      <Text className="mt-2 text-[15px]" style={sectionBodyTextStyle}>
         {isCheckedIn
           ? "Bạn là người đầu tiên có thể để lại cảm nhận cho hotspot này."
           : "Check-in tại hotspot để mở quyền chia sẻ bài đánh giá của bạn."}
@@ -2045,10 +2274,13 @@ function EmptyPersonalExperienceCard({
 
 function PersonalExperienceLoadingCard() {
   return (
-    <View className="rounded-[30px] bg-white px-5 py-5" style={cardShadowStyle}>
+    <View
+      className="bg-white px-5 py-5"
+      style={[cardShadowStyle, { borderRadius: reviewCardBorderRadius }]}
+    >
       <View className="flex-row items-center">
         <ActivityIndicator color="#EB489B" />
-        <Text className="ml-3 text-[15px] font-bold text-[#2F242C]">
+        <Text className="ml-3 text-[15px] font-semibold text-[#2B2233]">
           Đang tải bài đánh giá từ hotspot
         </Text>
       </View>
@@ -2059,10 +2291,12 @@ function PersonalExperienceLoadingCard() {
 function PersonalExperienceErrorCard({ message }: { message: string }) {
   return (
     <View
-      className="rounded-[30px] border border-[#F9E2EA] bg-[#FFF8FC] px-5 py-5"
-      style={cardShadowStyle}
+      className="border border-[#F9E2EA] bg-[#FFF8FC] px-5 py-5"
+      style={[cardShadowStyle, { borderRadius: reviewCardBorderRadius }]}
     >
-      <Text className="text-[14px] font-bold text-[#C2416C]">{message}</Text>
+      <Text className="text-[14px] font-bold text-[#C2416C]" style={{ lineHeight: 18 }}>
+        {message}
+      </Text>
     </View>
   );
 }
@@ -2088,14 +2322,14 @@ function PersonalExperienceSection({
       : items;
 
   return (
-    <View className="mt-8 gap-5">
+    <View className="mt-5 gap-3">
       <PersonalExperienceSectionHeader />
 
       {reviewsErrorMessage ? (
         <PersonalExperienceErrorCard message={reviewsErrorMessage} />
       ) : null}
 
-      <View className="gap-4">
+      <View className="gap-3">
         {isLoadingReviews && items.length === 0 ? (
           <PersonalExperienceLoadingCard />
         ) : items.length > 0 ? (
@@ -2113,7 +2347,7 @@ function PersonalExperienceSection({
           onPress={() => setIsShowingAllReviews((current) => !current)}
           style={cardShadowStyle}
         >
-          <Text className="text-[14px] font-black text-[#2A6B80]">
+          <Text className="text-[14px] font-semibold text-[#2A6B80]">
             {isShowingAllReviews
               ? "Ẩn bớt bài đánh giá"
               : "Xem tất cả bài đánh giá"}
@@ -2122,8 +2356,8 @@ function PersonalExperienceSection({
       ) : null}
 
       {isCheckedIn && composer ? (
-        <View className="gap-3">
-          <Text className="text-[16px] font-black text-[#3C2D34]">
+        <View className="gap-2">
+          <Text className="text-[15px] font-semibold text-[#2B2233]" style={{ lineHeight: 16 }}>
             Chia sẻ bài đánh giá của bạn
           </Text>
           <PersonalExperienceComposer
@@ -2371,7 +2605,7 @@ export default function HotspotDetailScreen() {
   const [isRemoteCheckinStatusLoading, setIsRemoteCheckinStatusLoading] =
     useState(false);
   const [isRemoteHotspotLoading, setIsRemoteHotspotLoading] = useState(false);
-  const [apiHotspotPosts, setApiHotspotPosts] = useState<ProfilePost[]>([]);
+  const [apiHotspotPosts, setApiHotspotPosts] = useState<HotspotPost[]>([]);
   const [hotspotPostsError, setHotspotPostsError] = useState<string | null>(
     null,
   );
@@ -2536,6 +2770,7 @@ export default function HotspotDetailScreen() {
           hotspotId: resolvedHotspotId,
           page: 0,
           size: hotspotPostsPageSize,
+          sort: [...hotspotPostsSort],
           tokenType: authSession.tokenType,
         });
 
@@ -2889,8 +3124,8 @@ export default function HotspotDetailScreen() {
       ? (apiRelatedRoutes ?? [])
       : [];
   const relatedRouteCardWidth = Math.min(
-    Math.max((screenWidth - relatedRouteScrollInset * 2) * 0.72, 236),
-    272,
+    Math.max((screenWidth - relatedRouteScrollInset * 2) * 0.62, 208),
+    232,
   );
   const savedPersonalExperienceItems = buildSavedPersonalExperienceItems(
     savedPersonalPosts,
@@ -3128,7 +3363,7 @@ export default function HotspotDetailScreen() {
           ) : null}
 
           <Animated.View
-            className="rounded-t-[34px] rounded-b-[34px] px-5 pt-4"
+            className="rounded-t-[34px] rounded-b-[34px] pt-4"
             style={[
               sheetShadowStyle,
               sheetLiftStyle,
@@ -3136,17 +3371,24 @@ export default function HotspotDetailScreen() {
                 backgroundColor: panelBackground,
                 minHeight: screenHeight,
                 paddingBottom: detailSheetBottomPadding,
+                paddingHorizontal: detailSheetHorizontalPadding,
                 position: "relative",
                 zIndex: 2,
               },
             ]}
           >
-            <View className="mt-5">
-              <View className="gap-3">
-                <Text className="text-[13px] font-extrabold uppercase tracking-[1.2px] text-[#EB489B]">
+            <View className="mt-3">
+              <View className="gap-1">
+                <Text
+                  className="text-[14px] font-black uppercase tracking-[1.4px]"
+                  style={sectionEyebrowTextStyle}
+                >
                   Thông tin địa điểm
                 </Text>
-                <Text className="text-[26px] font-black leading-[30px] text-[#1E3142]">
+                <Text
+                  className="text-[22px] font-semibold text-[#2B2233]"
+                  style={sectionTitleTextStyle}
+                >
                   {hotspot.title}
                 </Text>
               </View>
@@ -3155,7 +3397,7 @@ export default function HotspotDetailScreen() {
 
               <SummaryStatsRow items={summaryStats} />
 
-              <View className="mt-5">
+              <View className="mt-4">
                 <DirectionMapCard
                   address={hotspot.address}
                   coordinate={hotspot.coordinate}
@@ -3173,7 +3415,7 @@ export default function HotspotDetailScreen() {
               />
             </View>
 
-            <View className="mt-7 gap-5">
+            <View className="mt-6 gap-4">
               {historicalInfoText ? (
                 <HistoricalInfoSection text={historicalInfoText} />
               ) : null}
@@ -3189,15 +3431,15 @@ export default function HotspotDetailScreen() {
               />
             </View>
 
-            <View className="mt-8 gap-5">
+            <View className="mt-6 gap-4">
               <RouteMatchesSectionHeader />
 
               {isRelatedRoutesLoading ? (
-                <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-                  <Text className="text-[15px] font-bold text-[#3B4454]">
+                <View className="rounded-[16px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
+                  <Text className="text-[15px] font-semibold text-[#2B2233]" style={{ lineHeight: 19 }}>
                     Đang tải tuyến phù hợp
                   </Text>
-                  <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+                  <Text className="mt-1 text-[15px]" style={sectionBodyTextStyle}>
                     App đang gọi API route theo hotspotId hiện tại để hiển thị
                     danh sách published.
                   </Text>
@@ -3205,8 +3447,8 @@ export default function HotspotDetailScreen() {
               ) : null}
 
               {relatedRoutesError ? (
-                <View className="rounded-[22px] border border-[#F9E2EA] bg-[#FFF8FC] px-4 py-4">
-                  <Text className="text-[14px] font-bold text-[#C2416C]">
+                <View className="rounded-[16px] border border-[#F9E2EA] bg-[#FFF8FC] px-4 py-4">
+                  <Text className="text-[14px] font-bold text-[#C2416C]" style={{ lineHeight: 18 }}>
                     {relatedRoutesError}
                   </Text>
                 </View>
@@ -3243,13 +3485,13 @@ export default function HotspotDetailScreen() {
                 </ScrollView>
               ) : !isRelatedRoutesLoading ? (
                 <View
-                  className="rounded-[28px] bg-white px-5 py-5"
+                  className="rounded-[16px] bg-white px-5 py-5"
                   style={cardShadowStyle}
                 >
-                  <Text className="text-[16px] font-black text-[#1E3142]">
+                  <Text className="text-[16px] font-semibold text-[#2B2233]" style={{ lineHeight: 20 }}>
                     Chưa có route published
                   </Text>
-                  <Text className="mt-2 text-[15px] leading-6 text-[#5E7486]">
+                  <Text className="mt-2 text-[15px]" style={sectionBodyTextStyle}>
                     {`API route theo hotspot/${resolvedHotspotId} hiện chưa trả về tuyến published nào cho điểm đến này.`}
                   </Text>
                 </View>

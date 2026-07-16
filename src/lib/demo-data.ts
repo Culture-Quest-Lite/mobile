@@ -40,6 +40,7 @@ export type NearbyHotspot = Hotspot & {
 export type RouteItem = {
   id: string;
   title: string;
+  description?: string;
   subtitle: string;
   cover: string;
   era: string;
