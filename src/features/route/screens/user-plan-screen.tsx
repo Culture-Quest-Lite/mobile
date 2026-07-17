@@ -1,7 +1,7 @@
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,11 +13,24 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import {
+  getValidAccessToken,
+  useAuthSession,
+} from "@/features/auth/hooks/use-auth-session";
+import {
+  getNearbyHotspots,
+  type NearbyHotspotDto,
+} from "@/features/home/api/get-nearby-hotspots";
+import { searchHotspots } from "@/features/home/api/search-hotspots";
 import { AppMap, type AppMapPoint } from "@/features/map/components/app-map";
 import {
-  getHotspotCoordinateBySlug,
-  hotspotCollection,
-} from "@/features/home/data/hotspots";
+  createUserPlan,
+  optimizeUserPlan,
+  startUserPlan,
+  suggestPlansByDescription,
+  type PlannerHotspot,
+  type UserPlan,
+} from "@/features/route/api/user-plan-api";
 import { openGoogleMapsMultiStopRoute } from "@/lib/google-maps-navigation";
 import {
   ensureForegroundLocationPermission,
@@ -26,12 +39,15 @@ import {
 } from "@/lib/location";
 
 type PlannedStop = AppMapPoint & {
+  hotspotId?: number;
   address: string;
   source: "SYSTEM" | "SEARCH" | "AI";
   scheduleLabel?: string;
+  reason?: string;
 };
 
 type OptimizeMode = "OPENING_HOURS" | "DISTANCE";
+type HotspotBrowseMode = "NEARBY" | "SEARCH";
 
 const defaultUserPoint: AppMapPoint = {
   id: "user",
@@ -49,64 +65,62 @@ function normalizeText(value: string) {
     .trim();
 }
 
-function distanceSquared(a: AppMapPoint, b: AppMapPoint) {
-  const lat = a.latitude - b.latitude;
-  const lng = a.longitude - b.longitude;
-  return lat * lat + lng * lng;
-}
-
-function optimizeNearestNeighbor(start: AppMapPoint, stops: PlannedStop[]) {
-  const remaining = [...stops];
-  const ordered: PlannedStop[] = [];
-  let cursor = start;
-
-  while (remaining.length) {
-    let bestIndex = 0;
-    for (let index = 1; index < remaining.length; index += 1) {
-      if (distanceSquared(cursor, remaining[index]) < distanceSquared(cursor, remaining[bestIndex])) {
-        bestIndex = index;
-      }
-    }
-    const [next] = remaining.splice(bestIndex, 1);
-    ordered.push(next);
-    cursor = next;
-  }
-
-  return ordered;
-}
-
-function openingPriority(stop: PlannedStop) {
-  const schedule = normalizeText(stop.scheduleLabel ?? "");
-  if (!schedule) return 3;
-  if (schedule.includes("sap dong") || schedule.includes("dong cua")) return 0;
-  if (schedule.includes("24/7") || schedule.includes("ca ngay")) return 2;
-  return 1;
-}
-
-const systemHotspots: PlannedStop[] = hotspotCollection
-  .map((hotspot) => ({ hotspot, coordinate: getHotspotCoordinateBySlug(hotspot.slug) }))
-  .filter(
-    (
-      item,
-    ): item is {
-      hotspot: (typeof hotspotCollection)[number];
-      coordinate: { latitude: number; longitude: number };
-    } => item.coordinate !== null,
-  )
-  .map(({ hotspot, coordinate }) => ({
-    id: `system-${hotspot.slug}`,
-    title: hotspot.title,
+function toApiStop(hotspot: PlannerHotspot, reason?: string): PlannedStop {
+  return {
+    id: `api-${hotspot.hotspotId}`,
+    hotspotId: hotspot.hotspotId,
+    title: hotspot.hotspotName,
     description: hotspot.address,
     address: hotspot.address,
-    latitude: coordinate.latitude,
-    longitude: coordinate.longitude,
-    source: "SYSTEM" as const,
-    scheduleLabel: hotspot.scheduleLabel,
-  }));
+    latitude: hotspot.latitude,
+    longitude: hotspot.longitude,
+    source: "AI",
+    scheduleLabel:
+      hotspot.openingTime || hotspot.closingTime
+        ? `${hotspot.openingTime ?? "--:--"} - ${hotspot.closingTime ?? "--:--"}`
+        : undefined,
+    reason,
+  };
+}
+
+function toBrowseStop(
+  hotspot: NearbyHotspotDto,
+  source: "SYSTEM" | "SEARCH",
+): PlannedStop {
+  return {
+    id: `hotspot-${hotspot.hotspotId}`,
+    hotspotId: hotspot.hotspotId,
+    title: hotspot.hotspotName,
+    description: hotspot.address,
+    address: hotspot.address,
+    latitude: hotspot.latitude,
+    longitude: hotspot.longitude,
+    source,
+    scheduleLabel:
+      hotspot.openingTime || hotspot.closingTime
+        ? `${hotspot.openingTime || "--:--"} - ${hotspot.closingTime || "--:--"}`
+        : undefined,
+  };
+}
 
 export default function UserPlanScreen() {
   const router = useRouter();
+  const session = useAuthSession();
   const [systemQuery, setSystemQuery] = useState("");
+  const [browseMode, setBrowseMode] = useState<HotspotBrowseMode>("NEARBY");
+  const [browseHotspots, setBrowseHotspots] = useState<PlannedStop[]>([]);
+  const [isBrowseLoading, setIsBrowseLoading] = useState(false);
+  const [browseError, setBrowseError] = useState<string | null>(null);
+  const [nearFirstSearchHotspots, setNearFirstSearchHotspots] = useState<
+    PlannedStop[]
+  >([]);
+  const [isNearFirstSearchLoading, setIsNearFirstSearchLoading] =
+    useState(false);
+  const [nearFirstSearchError, setNearFirstSearchError] = useState<
+    string | null
+  >(null);
+  const [firstSearchHotspot, setFirstSearchHotspot] =
+    useState<PlannedStop | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiText, setAiText] = useState("");
   const [aiCandidates, setAiCandidates] = useState<PlannedStop[]>([]);
@@ -118,16 +132,44 @@ export default function UserPlanScreen() {
   const [optimizeMode, setOptimizeMode] = useState<OptimizeMode>("DISTANCE");
   const [aiOptimizeExplanation, setAiOptimizeExplanation] = useState("");
   const [isReviewed, setIsReviewed] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState<UserPlan | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const mapPoints = useMemo(() => [userPoint, ...stops], [stops, userPoint]);
-
-  const filteredSystemHotspots = useMemo(() => {
+  const mapPoints = useMemo(() => {
+    const selectedIds = new Set(stops.map((item) => item.hotspotId));
+    const discoverable = [...browseHotspots, ...nearFirstSearchHotspots]
+      .filter((item) => !selectedIds.has(item.hotspotId))
+      .filter(
+        (item, index, items) =>
+          items.findIndex(
+            (candidate) => candidate.hotspotId === item.hotspotId,
+          ) === index,
+      )
+      .slice(0, 30);
+    return [userPoint, ...stops, ...discoverable];
+  }, [browseHotspots, nearFirstSearchHotspots, stops, userPoint]);
+  const routeCoordinates = useMemo(
+    () =>
+      [userPoint, ...stops].map(({ latitude, longitude }) => ({
+        latitude,
+        longitude,
+      })),
+    [stops, userPoint],
+  );
+  const filteredBrowseHotspots = useMemo(() => {
     const keyword = normalizeText(systemQuery);
-    if (!keyword) return systemHotspots;
-    return systemHotspots.filter((hotspot) =>
+    if (!keyword || browseMode === "SEARCH") return browseHotspots;
+    return browseHotspots.filter((hotspot) =>
       normalizeText(`${hotspot.title} ${hotspot.address}`).includes(keyword),
     );
-  }, [systemQuery]);
+  }, [browseHotspots, browseMode, systemQuery]);
+
+  async function getAuth() {
+    const accessToken = await getValidAccessToken();
+    if (!accessToken)
+      throw new Error("Bạn cần đăng nhập để sử dụng kế hoạch cá nhân.");
+    return { accessToken, tokenType: session.tokenType };
+  }
 
   function addStop(stop: PlannedStop) {
     if (stops.some((item) => String(item.id) === String(stop.id))) {
@@ -136,90 +178,253 @@ export default function UserPlanScreen() {
     }
     setStops((current) => [...current, stop]);
     setIsReviewed(false);
+    setCurrentPlan(null);
     setAiOptimizeExplanation("");
   }
 
-  async function locateUser() {
-    setIsLocating(true);
-    try {
-      let coordinate = getDevelopmentLocationOverride();
-      if (!coordinate) {
+  const loadNearbyHotspots = useCallback(
+    async (latitude: number, longitude: number) => {
+      setIsBrowseLoading(true);
+      setBrowseError(null);
+      setFirstSearchHotspot(null);
+      setNearFirstSearchHotspots([]);
+      setNearFirstSearchError(null);
+      try {
+        const accessToken = session.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const hotspots = await getNearbyHotspots({
+          accessToken,
+          tokenType: session.tokenType,
+          latitude,
+          longitude,
+          distance: 10_000,
+        });
+        setBrowseHotspots(hotspots.map((item) => toBrowseStop(item, "SYSTEM")));
+        setBrowseMode("NEARBY");
+      } catch (error) {
+        setBrowseHotspots([]);
+        setBrowseError(
+          error instanceof Error
+            ? error.message
+            : "Không thể tải hotspot gần bạn.",
+        );
+      } finally {
+        setIsBrowseLoading(false);
+      }
+    },
+    [session.isAuthenticated, session.tokenType],
+  );
+
+  const locateUser = useCallback(
+    async (showError = true) => {
+      setIsLocating(true);
+      try {
         const permission = await ensureForegroundLocationPermission();
         if (!permission.granted) {
-          throw new Error("Hãy cấp quyền vị trí để xác định điểm xuất phát.");
+          throw new Error(
+            permission.canAskAgain
+              ? "Hãy cấp quyền vị trí để xác định điểm xuất phát."
+              : "Quyền vị trí đã bị tắt. Hãy mở Cài đặt ứng dụng và cấp quyền Vị trí.",
+          );
         }
-        coordinate = await getDeviceCoordinate({
+
+        let coordinate = await getDeviceCoordinate({
           accuracy: Location.Accuracy.Balanced,
-          maxAge: 60_000,
+          maxAge: 30_000,
           mayShowUserSettingsDialog: true,
         });
+        coordinate ??= getDevelopmentLocationOverride();
+        if (!coordinate) throw new Error("Không lấy được vị trí hiện tại.");
+
+        const nextPoint = {
+          ...defaultUserPoint,
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude,
+        };
+        setUserPoint(nextPoint);
+        await loadNearbyHotspots(coordinate.latitude, coordinate.longitude);
+      } catch (error) {
+        if (showError) {
+          Alert.alert(
+            "Không thể lấy vị trí",
+            error instanceof Error ? error.message : "Vui lòng thử lại.",
+          );
+        }
+      } finally {
+        setIsLocating(false);
       }
-      if (!coordinate) throw new Error("Không lấy được vị trí hiện tại.");
-      setUserPoint({
-        ...defaultUserPoint,
-        latitude: coordinate.latitude,
-        longitude: coordinate.longitude,
-      });
-    } catch (error) {
-      Alert.alert(
-        "Không thể lấy vị trí",
-        error instanceof Error ? error.message : "Vui lòng thử lại.",
-      );
-    } finally {
-      setIsLocating(false);
-    }
-  }
+    },
+    [loadNearbyHotspots],
+  );
 
+  const loadNearbyAroundSearchHotspot = useCallback(
+    async (hotspot: PlannedStop) => {
+      setFirstSearchHotspot(hotspot);
+      setIsNearFirstSearchLoading(true);
+      setNearFirstSearchError(null);
+      try {
+        const accessToken = session.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const nearby = await getNearbyHotspots({
+          accessToken,
+          tokenType: session.tokenType,
+          latitude: hotspot.latitude,
+          longitude: hotspot.longitude,
+          distance: 5_000,
+        });
+        setNearFirstSearchHotspots(
+          nearby
+            .filter((item) => item.hotspotId !== hotspot.hotspotId)
+            .map((item) => toBrowseStop(item, "SYSTEM")),
+        );
+      } catch (error) {
+        setNearFirstSearchHotspots([]);
+        setNearFirstSearchError(
+          error instanceof Error
+            ? error.message
+            : "Không thể tải hotspot gần kết quả tìm kiếm.",
+        );
+      } finally {
+        setIsNearFirstSearchLoading(false);
+      }
+    },
+    [session.isAuthenticated, session.tokenType],
+  );
 
-  function generateAiTextSuggestion() {
+  const runHotspotSearch = useCallback(
+    async (query: string) => {
+      const keyword = query.trim();
+      if (!keyword) {
+        await loadNearbyHotspots(userPoint.latitude, userPoint.longitude);
+        return;
+      }
+
+      setIsBrowseLoading(true);
+      setBrowseError(null);
+      setBrowseMode("SEARCH");
+      try {
+        const accessToken = session.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const result = await searchHotspots({
+          accessToken,
+          tokenType: session.tokenType,
+          payload: {
+            filters: [
+              { field: "hotspotName", operator: "LIKE", value: keyword },
+            ],
+            page: 0,
+            size: 20,
+            sortBy: "hotspotName",
+            sortDirection: "ASC",
+          },
+        });
+        const searchResults = result.content.map((item) =>
+          toBrowseStop(item, "SEARCH"),
+        );
+        setBrowseHotspots(searchResults);
+
+        const firstResult = searchResults[0];
+        if (firstResult) {
+          await loadNearbyAroundSearchHotspot(firstResult);
+        } else {
+          setFirstSearchHotspot(null);
+          setNearFirstSearchHotspots([]);
+          setNearFirstSearchError(null);
+        }
+      } catch (error) {
+        setBrowseHotspots([]);
+        setFirstSearchHotspot(null);
+        setNearFirstSearchHotspots([]);
+        setNearFirstSearchError(null);
+        setBrowseError(
+          error instanceof Error
+            ? error.message
+            : "Không thể tìm kiếm hotspot.",
+        );
+      } finally {
+        setIsBrowseLoading(false);
+      }
+    },
+    [
+      loadNearbyHotspots,
+      loadNearbyAroundSearchHotspot,
+      session.isAuthenticated,
+      session.tokenType,
+      userPoint.latitude,
+      userPoint.longitude,
+    ],
+  );
+
+  useEffect(() => {
+    void locateUser(false);
+  }, [locateUser]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (systemQuery.trim().length >= 2) {
+        void runHotspotSearch(systemQuery);
+      } else if (!systemQuery.trim() && browseMode === "SEARCH") {
+        void loadNearbyHotspots(userPoint.latitude, userPoint.longitude);
+      }
+    }, 400);
+
+    return () => clearTimeout(timeout);
+  }, [
+    browseMode,
+    loadNearbyHotspots,
+    runHotspotSearch,
+    systemQuery,
+    userPoint.latitude,
+    userPoint.longitude,
+  ]);
+
+  async function generateAiTextSuggestion() {
     const prompt = aiPrompt.trim();
     if (!prompt) {
       Alert.alert(
         "Nhập mô tả chuyến đi",
-        "Ví dụ: Tôi muốn tham quan các địa điểm lịch sử, gần nhau và hoàn thành trong một buổi sáng.",
+        "Ví dụ: Tôi muốn tham quan các địa điểm lịch sử trong một buổi sáng.",
       );
       return;
     }
-
     setIsAiLoading(true);
     setIsAiConfirmed(false);
     setAiCandidates([]);
-
-    setTimeout(() => {
-      const words = normalizeText(prompt)
-        .split(/\s+/)
-        .filter((word) => word.length > 2);
-      const ranked = systemHotspots
-        .map((stop) => {
-          const searchable = normalizeText(
-            `${stop.title} ${stop.address} ${stop.scheduleLabel ?? ""}`,
-          );
-          const keywordScore = words.reduce(
-            (score, word) => score + (searchable.includes(word) ? 3 : 0),
-            0,
-          );
-          const nearbyScore = 1 / Math.max(distanceSquared(userPoint, stop), 0.000001);
-          return { stop: { ...stop, source: "AI" as const }, score: keywordScore * 1000 + nearbyScore };
-        })
-        .filter(({ stop }) => !stops.some((selected) => selected.id === stop.id))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
-        .map(({ stop }) => stop);
-
-      const names = ranked.map((item) => item.title).join(", ");
-      setAiText(
-        `AI đề xuất một hành trình gồm ${ranked.length} địa điểm phù hợp với mô tả của bạn: ${names}. ` +
-          "Các địa điểm được ưu tiên theo mức độ phù hợp với nhu cầu và khoảng cách gần vị trí hiện tại. " +
-          "Hãy xác nhận đề xuất để chuyển nội dung này thành các hotspot có thể lựa chọn.",
+    try {
+      const suggestions = await suggestPlansByDescription(await getAuth(), {
+        description: prompt,
+        latitude: userPoint.latitude,
+        longitude: userPoint.longitude,
+        anchorHotspotIds: stops.flatMap((item) =>
+          item.hotspotId ? [item.hotspotId] : [],
+        ),
+        radiusInMeters: 10_000,
+        limit: 8,
+      });
+      const candidates = suggestions.map((item) =>
+        toApiStop(item.hotspot, item.reason),
       );
-      setAiCandidates(ranked);
+      setAiCandidates(candidates);
+      setAiText(
+        candidates.length
+          ? `Hệ thống đã tìm thấy ${candidates.length} hotspot phù hợp. Hãy xác nhận để xem và chọn các địa điểm được đề xuất.`
+          : "Không tìm thấy hotspot phù hợp với mô tả hiện tại. Hãy thử mô tả rộng hơn.",
+      );
+    } catch (error) {
+      Alert.alert(
+        "Không thể nhận gợi ý",
+        error instanceof Error ? error.message : "Vui lòng thử lại.",
+      );
+    } finally {
       setIsAiLoading(false);
-    }, 600);
+    }
   }
 
   function confirmAiSuggestion() {
-    if (!aiText || !aiCandidates.length) return;
-    setIsAiConfirmed(true);
+    if (aiCandidates.length) setIsAiConfirmed(true);
   }
 
   function moveStop(index: number, direction: -1 | 1) {
@@ -231,30 +436,49 @@ export default function UserPlanScreen() {
       return next;
     });
     setIsReviewed(false);
-    setAiOptimizeExplanation("");
+    setCurrentPlan(null);
   }
 
-  function optimizeRoute() {
+  async function optimizeRoute() {
+    const hotspotIds = stops.flatMap((item) =>
+      item.hotspotId ? [item.hotspotId] : [],
+    );
     if (stops.length < 2) return;
-
-    if (optimizeMode === "DISTANCE") {
-      setStops(optimizeNearestNeighbor(userPoint, stops));
-      setAiOptimizeExplanation(
-        "AI đã ưu tiên điểm gần vị trí xuất phát trước, sau đó lần lượt chọn địa điểm gần điểm vừa đi qua nhất. Cách này giúp giảm tổng quãng đường ước tính. Khi có Directions API, hệ thống sẽ dùng quãng đường giao thông thực tế.",
+    if (hotspotIds.length !== stops.length) {
+      Alert.alert(
+        "Chưa thể tối ưu",
+        "Một số hotspot mẫu chưa có ID backend. Hãy chọn hotspot từ phần AI gợi ý để lưu và tối ưu bằng API.",
       );
-    } else {
-      const optimized = [...stops].sort((a, b) => {
-        const priorityDifference = openingPriority(a) - openingPriority(b);
-        if (priorityDifference !== 0) return priorityDifference;
-        return distanceSquared(userPoint, a) - distanceSquared(userPoint, b);
-      });
-      setStops(optimized);
-      setAiOptimizeExplanation(
-        "AI đã ưu tiên các địa điểm có giờ hoạt động hạn chế hoặc có nguy cơ đóng cửa sớm lên trước; các địa điểm mở cả ngày được xếp sau. Nếu thiếu dữ liệu giờ mở cửa, khoảng cách gần vị trí xuất phát được dùng làm tiêu chí phụ.",
-      );
+      return;
     }
-
-    setIsReviewed(false);
+    setIsAiLoading(true);
+    try {
+      const result = await optimizeUserPlan(await getAuth(), {
+        hotspotIds,
+        startLatitude: userPoint.latitude,
+        startLongitude: userPoint.longitude,
+        criterion: optimizeMode === "DISTANCE" ? "DISTANCE" : "TIME",
+        startTime: "08:00:00",
+      });
+      const byId = new Map(stops.map((stop) => [stop.hotspotId, stop]));
+      setStops(
+        result.stops
+          .map((stop) => byId.get(stop.hotspotId))
+          .filter(Boolean) as PlannedStop[],
+      );
+      setAiOptimizeExplanation(
+        `${result.totalEstimatedTimeText || "Đã tối ưu"} • ${Math.round(result.totalDistance || 0)} m${result.usedFallback ? " • backend dùng phương án dự phòng" : ""}`,
+      );
+      setIsReviewed(false);
+      setCurrentPlan(null);
+    } catch (error) {
+      Alert.alert(
+        "Không thể tối ưu",
+        error instanceof Error ? error.message : "Vui lòng thử lại.",
+      );
+    } finally {
+      setIsAiLoading(false);
+    }
   }
 
   async function openInGoogleMaps() {
@@ -272,24 +496,81 @@ export default function UserPlanScreen() {
     }
   }
 
-  function reviewPlan() {
-    if (stops.length < 2) return;
-    setIsReviewed(true);
-    Alert.alert(
-      "Đã duyệt kế hoạch",
-      "Lộ trình đã sẵn sàng. Khi backend hoàn thiện, bước này sẽ tạo Custom Route và cho Explorer bắt đầu hành trình như route thông thường.",
+  async function reviewPlan() {
+    const hotspotIds = stops.flatMap((item) =>
+      item.hotspotId ? [item.hotspotId] : [],
     );
+    if (hotspotIds.length !== stops.length) {
+      Alert.alert(
+        "Không thể lưu kế hoạch",
+        "Hotspot mẫu trong giao diện cũ chưa có ID backend. Hãy dùng các hotspot do API AI gợi ý.",
+      );
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const plan = await createUserPlan(await getAuth(), {
+        name: `Hành trình cá nhân ${new Date().toLocaleDateString("vi-VN")}`,
+        description: aiPrompt.trim() || "Hành trình được tạo từ User Plan",
+        stops: hotspotIds.map((hotspotId) => ({ hotspotId })),
+        startLatitude: userPoint.latitude,
+        startLongitude: userPoint.longitude,
+        isOptimized: Boolean(aiOptimizeExplanation),
+      });
+      setCurrentPlan(plan);
+      setIsReviewed(true);
+      Alert.alert(
+        "Đã tạo kế hoạch",
+        `Kế hoạch #${plan.userPlanId} đã được lưu ở trạng thái ${plan.status}.`,
+      );
+    } catch (error) {
+      Alert.alert(
+        "Không thể tạo kế hoạch",
+        error instanceof Error ? error.message : "Vui lòng thử lại.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
+  async function beginPlan() {
+    if (!currentPlan) return;
+    setIsSaving(true);
+    try {
+      const started = await startUserPlan(
+        await getAuth(),
+        currentPlan.userPlanId,
+      );
+      setCurrentPlan(started);
+      Alert.alert(
+        "Đã bắt đầu hành trình",
+        "Kế hoạch đã chuyển sang trạng thái STARTED.",
+      );
+    } catch (error) {
+      Alert.alert(
+        "Không thể bắt đầu",
+        error instanceof Error ? error.message : "Vui lòng thử lại.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
   return (
-    <SafeAreaView className="flex-1 bg-[#F7F8FC]" edges={["top", "left", "right"]}>
+    <SafeAreaView
+      className="flex-1 bg-[#F7F8FC]"
+      edges={["top", "left", "right"]}
+    >
       <View className="flex-row items-center gap-3 px-4 py-3">
         <Pressable
           onPress={() => router.back()}
           className="h-10 w-10 items-center justify-center rounded-full bg-white"
         >
           <SymbolView
-            name={{ ios: "chevron.left", android: "arrow_back", web: "arrow_back" }}
+            name={{
+              ios: "chevron.left",
+              android: "arrow_back",
+              web: "arrow_back",
+            }}
             size={19}
             tintColor="#2B2233"
           />
@@ -312,38 +593,48 @@ export default function UserPlanScreen() {
         <View className="mt-4 overflow-hidden rounded-[30px] bg-white">
           <AppMap
             points={mapPoints}
-            routeCoordinates={mapPoints.map(({ latitude, longitude }) => ({ latitude, longitude }))}
+            routeCoordinates={routeCoordinates}
             height={320}
           />
           <Pressable
-            onPress={locateUser}
+            onPress={() => locateUser()}
             className="absolute bottom-4 right-4 flex-row items-center gap-2 rounded-full bg-white px-4 py-3"
           >
             {isLocating ? (
               <ActivityIndicator size="small" color="#EB489B" />
             ) : (
               <SymbolView
-                name={{ ios: "location.fill", android: "my_location", web: "my_location" }}
+                name={{
+                  ios: "location.fill",
+                  android: "my_location",
+                  web: "my_location",
+                }}
                 size={16}
                 tintColor="#EB489B"
               />
             )}
-            <Text className="text-[11px] font-extrabold text-[#2B2233]">Vị trí của tôi</Text>
+            <Text className="text-[11px] font-extrabold text-[#2B2233]">
+              Vị trí của tôi
+            </Text>
           </Pressable>
         </View>
 
-
         <View className="rounded-3xl bg-white p-4">
           <Text className="text-[14px] font-extrabold text-[#2B2233]">
-            1. Tìm và chọn hotspot của hệ thống
+            1. Hotspot gần bạn hoặc tìm kiếm
           </Text>
           <Text className="mt-1 text-[10px] leading-4 text-[#8E869A]">
-            Kết quả lọc theo thời gian thực. Hotspot được thêm vào lộ trình đúng theo thứ tự bạn chọn.
+            Ứng dụng ưu tiên quét hotspot trong bán kính 10 km từ vị trí hiện
+            tại. Nhập ít nhất 2 ký tự để tìm bằng API search.
           </Text>
 
           <View className="mt-3 flex-row items-center rounded-2xl bg-[#F1F3F7] px-3">
             <SymbolView
-              name={{ ios: "magnifyingglass", android: "search", web: "search" }}
+              name={{
+                ios: "magnifyingglass",
+                android: "search",
+                web: "search",
+              }}
               size={17}
               tintColor="#8E869A"
             />
@@ -356,41 +647,105 @@ export default function UserPlanScreen() {
             />
           </View>
 
+          <View className="mt-3 flex-row gap-2">
+            <Pressable
+              onPress={() => {
+                setSystemQuery("");
+                setFirstSearchHotspot(null);
+                setNearFirstSearchHotspots([]);
+                setNearFirstSearchError(null);
+                void loadNearbyHotspots(
+                  userPoint.latitude,
+                  userPoint.longitude,
+                );
+              }}
+              className={`flex-1 rounded-xl py-2.5 ${browseMode === "NEARBY" ? "bg-[#2B2233]" : "bg-[#F1F3F7]"}`}
+            >
+              <Text
+                className={`text-center text-[10px] font-extrabold ${browseMode === "NEARBY" ? "text-white" : "text-[#777181]"}`}
+              >
+                Gần tôi
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() =>
+                systemQuery.trim() && void runHotspotSearch(systemQuery)
+              }
+              className={`flex-1 rounded-xl py-2.5 ${browseMode === "SEARCH" ? "bg-[#2B2233]" : "bg-[#F1F3F7]"}`}
+            >
+              <Text
+                className={`text-center text-[10px] font-extrabold ${browseMode === "SEARCH" ? "text-white" : "text-[#777181]"}`}
+              >
+                Kết quả tìm kiếm
+              </Text>
+            </Pressable>
+          </View>
+
+          {isBrowseLoading ? (
+            <View className="items-center py-5">
+              <ActivityIndicator color="#EB489B" />
+              <Text className="mt-2 text-[10px] font-bold text-[#8E869A]">
+                Đang tải hotspot...
+              </Text>
+            </View>
+          ) : null}
+
+          {browseError ? (
+            <View className="mt-3 rounded-2xl bg-[#FFF0F2] p-3">
+              <Text className="text-[10px] font-bold text-[#C43D52]">
+                {browseError}
+              </Text>
+            </View>
+          ) : null}
+
           <View className="mt-3 gap-2">
-            {filteredSystemHotspots.slice(0, 8).map((hotspot) => {
-              const selectedIndex = stops.findIndex((item) => item.id === hotspot.id);
-              const isSelected = selectedIndex >= 0;
-              return (
-                <Pressable
-                  key={String(hotspot.id)}
-                  onPress={() => addStop(hotspot)}
-                  className={`flex-row items-center gap-3 rounded-2xl border p-3 ${
-                    isSelected ? "border-[#EB489B] bg-[#FFF6FA]" : "border-[#E8EDF4]"
-                  }`}
-                >
-                  <View className="h-10 w-10 items-center justify-center rounded-xl bg-[#FFF1F6]">
-                    <Text>{isSelected ? selectedIndex + 1 : "📍"}</Text>
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-[12px] font-extrabold text-[#2B2233]" numberOfLines={1}>
-                      {hotspot.title}
-                    </Text>
-                    <Text className="mt-1 text-[10px] text-[#8E869A]" numberOfLines={1}>
-                      {hotspot.address}
-                    </Text>
-                    {hotspot.scheduleLabel ? (
-                      <Text className="mt-1 text-[9px] font-bold text-[#F58752]">
-                        🕒 {hotspot.scheduleLabel}
+            {!isBrowseLoading &&
+              filteredBrowseHotspots.slice(0, 12).map((hotspot) => {
+                const selectedIndex = stops.findIndex(
+                  (item) => item.id === hotspot.id,
+                );
+                const isSelected = selectedIndex >= 0;
+                return (
+                  <Pressable
+                    key={String(hotspot.id)}
+                    onPress={() => addStop(hotspot)}
+                    className={`flex-row items-center gap-3 rounded-2xl border p-3 ${
+                      isSelected
+                        ? "border-[#EB489B] bg-[#FFF6FA]"
+                        : "border-[#E8EDF4]"
+                    }`}
+                  >
+                    <View className="h-10 w-10 items-center justify-center rounded-xl bg-[#FFF1F6]">
+                      <Text>{isSelected ? selectedIndex + 1 : "📍"}</Text>
+                    </View>
+                    <View className="flex-1">
+                      <Text
+                        className="text-[12px] font-extrabold text-[#2B2233]"
+                        numberOfLines={1}
+                      >
+                        {hotspot.title}
                       </Text>
-                    ) : null}
-                  </View>
-                  <Text className={`text-[11px] font-extrabold ${isSelected ? "text-[#EB489B]" : "text-[#777181]"}`}>
-                    {isSelected ? `Đã chọn #${selectedIndex + 1}` : "+ Thêm"}
-                  </Text>
-                </Pressable>
-              );
-            })}
-            {!filteredSystemHotspots.length ? (
+                      <Text
+                        className="mt-1 text-[10px] text-[#8E869A]"
+                        numberOfLines={1}
+                      >
+                        {hotspot.address}
+                      </Text>
+                      {hotspot.scheduleLabel ? (
+                        <Text className="mt-1 text-[9px] font-bold text-[#F58752]">
+                          🕒 {hotspot.scheduleLabel}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text
+                      className={`text-[11px] font-extrabold ${isSelected ? "text-[#EB489B]" : "text-[#777181]"}`}
+                    >
+                      {isSelected ? `Đã chọn #${selectedIndex + 1}` : "+ Thêm"}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            {!isBrowseLoading && !filteredBrowseHotspots.length ? (
               <View className="items-center rounded-2xl border border-dashed border-[#D9DDE7] px-4 py-6">
                 <Text className="text-[11px] font-bold text-[#8E869A]">
                   Không tìm thấy hotspot phù hợp
@@ -398,6 +753,101 @@ export default function UserPlanScreen() {
               </View>
             ) : null}
           </View>
+
+          {browseMode === "SEARCH" && firstSearchHotspot ? (
+            <View className="mt-5 border-t border-[#EEF0F5] pt-4">
+              <View className="flex-row items-start justify-between gap-3">
+                <View className="flex-1">
+                  <Text className="text-[12px] font-extrabold text-[#2B2233]">
+                    Hotspot gần kết quả đầu tiên
+                  </Text>
+                  <Text className="mt-1 text-[10px] leading-4 text-[#8E869A]">
+                    Các địa điểm trong bán kính 5 km quanh{" "}
+                    {firstSearchHotspot.title}. Bạn có thể thêm trực tiếp vào
+                    User Plan.
+                  </Text>
+                </View>
+                <View className="rounded-full bg-[#FFF1F6] px-3 py-1.5">
+                  <Text className="text-[9px] font-extrabold text-[#D93679]">
+                    NEARBY
+                  </Text>
+                </View>
+              </View>
+
+              {isNearFirstSearchLoading ? (
+                <View className="items-center py-5">
+                  <ActivityIndicator color="#EB489B" />
+                  <Text className="mt-2 text-[10px] font-bold text-[#8E869A]">
+                    Đang quét hotspot lân cận...
+                  </Text>
+                </View>
+              ) : null}
+
+              {nearFirstSearchError ? (
+                <View className="mt-3 rounded-2xl bg-[#FFF0F2] p-3">
+                  <Text className="text-[10px] font-bold text-[#C43D52]">
+                    {nearFirstSearchError}
+                  </Text>
+                </View>
+              ) : null}
+
+              {!isNearFirstSearchLoading ? (
+                <View className="mt-3 gap-2">
+                  {nearFirstSearchHotspots.slice(0, 10).map((hotspot) => {
+                    const selectedIndex = stops.findIndex(
+                      (item) => item.hotspotId === hotspot.hotspotId,
+                    );
+                    const isSelected = selectedIndex >= 0;
+                    return (
+                      <Pressable
+                        key={`near-search-${hotspot.hotspotId}`}
+                        onPress={() => addStop(hotspot)}
+                        className={`flex-row items-center gap-3 rounded-2xl border p-3 ${
+                          isSelected
+                            ? "border-[#EB489B] bg-[#FFF6FA]"
+                            : "border-[#E8EDF4] bg-[#FBFCFE]"
+                        }`}
+                      >
+                        <View className="h-10 w-10 items-center justify-center rounded-xl bg-[#EEF7FF]">
+                          <Text>{isSelected ? selectedIndex + 1 : "🧭"}</Text>
+                        </View>
+                        <View className="flex-1">
+                          <Text
+                            className="text-[12px] font-extrabold text-[#2B2233]"
+                            numberOfLines={1}
+                          >
+                            {hotspot.title}
+                          </Text>
+                          <Text
+                            className="mt-1 text-[10px] text-[#8E869A]"
+                            numberOfLines={1}
+                          >
+                            {hotspot.address}
+                          </Text>
+                        </View>
+                        <Text
+                          className={`text-[11px] font-extrabold ${
+                            isSelected ? "text-[#EB489B]" : "text-[#1677C8]"
+                          }`}
+                        >
+                          {isSelected
+                            ? `Đã chọn #${selectedIndex + 1}`
+                            : "+ Thêm"}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                  {!nearFirstSearchHotspots.length && !nearFirstSearchError ? (
+                    <View className="items-center rounded-2xl border border-dashed border-[#D9DDE7] px-4 py-5">
+                      <Text className="text-[10px] font-bold text-[#8E869A]">
+                        Không có hotspot nào gần kết quả đầu tiên
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         <View className="mt-4 rounded-3xl bg-white p-4">
@@ -405,7 +855,8 @@ export default function UserPlanScreen() {
             2. Mô tả chuyến đi để AI gợi ý
           </Text>
           <Text className="mt-1 text-[10px] leading-4 text-[#8E869A]">
-            AI trả lời bằng nội dung mô tả trước. Sau khi Explorer xác nhận, đề xuất mới được chuyển thành hotspot để lựa chọn.
+            AI trả lời bằng nội dung mô tả trước. Sau khi Explorer xác nhận, đề
+            xuất mới được chuyển thành hotspot để lựa chọn.
           </Text>
           <TextInput
             value={aiPrompt}
@@ -420,17 +871,27 @@ export default function UserPlanScreen() {
             onPress={generateAiTextSuggestion}
             className="mt-3 flex-row items-center justify-center gap-2 rounded-2xl bg-[#2B2233] py-3.5"
           >
-            {isAiLoading ? <ActivityIndicator size="small" color="#fff" /> : <Text>✨</Text>}
-            <Text className="text-[12px] font-extrabold text-white">Nhận gợi ý dạng text</Text>
+            {isAiLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text>✨</Text>
+            )}
+            <Text className="text-[12px] font-extrabold text-white">
+              Nhận gợi ý dạng text
+            </Text>
           </Pressable>
 
           {aiText ? (
             <View className="mt-3 rounded-2xl bg-[#F7F3FA] p-4">
               <View className="flex-row items-center gap-2">
                 <Text>✨</Text>
-                <Text className="text-[12px] font-extrabold text-[#2B2233]">Đề xuất của AI</Text>
+                <Text className="text-[12px] font-extrabold text-[#2B2233]">
+                  Đề xuất của AI
+                </Text>
               </View>
-              <Text className="mt-2 text-[11px] leading-5 text-[#5E5868]">{aiText}</Text>
+              <Text className="mt-2 text-[11px] leading-5 text-[#5E5868]">
+                {aiText}
+              </Text>
               {!isAiConfirmed ? (
                 <Pressable
                   onPress={confirmAiSuggestion}
@@ -456,7 +917,9 @@ export default function UserPlanScreen() {
                     key={String(stop.id)}
                     onPress={() => addStop(stop)}
                     className={`flex-row items-center gap-3 rounded-2xl border p-3 ${
-                      isSelected ? "border-[#EB489B] bg-[#FFF6FA]" : "border-[#E8EDF4]"
+                      isSelected
+                        ? "border-[#EB489B] bg-[#FFF6FA]"
+                        : "border-[#E8EDF4]"
                     }`}
                   >
                     <View className="h-9 w-9 items-center justify-center rounded-xl bg-[#F4EFF8]">
@@ -466,7 +929,10 @@ export default function UserPlanScreen() {
                       <Text className="text-[12px] font-extrabold text-[#2B2233]">
                         {stop.title}
                       </Text>
-                      <Text className="text-[10px] text-[#8E869A]" numberOfLines={1}>
+                      <Text
+                        className="text-[10px] text-[#8E869A]"
+                        numberOfLines={1}
+                      >
                         {stop.address}
                       </Text>
                     </View>
@@ -476,6 +942,15 @@ export default function UserPlanScreen() {
                   </Pressable>
                 );
               })}
+            </View>
+          ) : null}
+
+          {currentPlan?.status === "STARTED" ? (
+            <View className="mt-3 rounded-2xl bg-[#EEF9F1] p-3">
+              <Text className="text-center text-[11px] font-extrabold text-[#28844A]">
+                Kế hoạch đang được thực hiện • {currentPlan.completedStops}/
+                {currentPlan.totalStops} điểm
+              </Text>
             </View>
           ) : null}
         </View>
@@ -506,7 +981,9 @@ export default function UserPlanScreen() {
                     optimizeMode === mode ? "text-white" : "text-[#777181]"
                   }`}
                 >
-                  {mode === "OPENING_HOURS" ? "Thời gian mở cửa" : "Tổng quãng đường"}
+                  {mode === "OPENING_HOURS"
+                    ? "Thời gian mở cửa"
+                    : "Tổng quãng đường"}
                 </Text>
               </Pressable>
             ))}
@@ -528,7 +1005,9 @@ export default function UserPlanScreen() {
 
           {aiOptimizeExplanation ? (
             <View className="mt-3 rounded-2xl bg-[#FFF8EC] p-3">
-              <Text className="text-[10px] font-extrabold text-[#9B641F]">AI giải thích</Text>
+              <Text className="text-[10px] font-extrabold text-[#9B641F]">
+                AI giải thích
+              </Text>
               <Text className="mt-1 text-[10px] leading-4 text-[#735A3D]">
                 {aiOptimizeExplanation}
               </Text>
@@ -542,13 +1021,21 @@ export default function UserPlanScreen() {
                 className="flex-row items-center gap-3 rounded-2xl border border-[#E8EDF4] p-3"
               >
                 <View className="h-9 w-9 items-center justify-center rounded-full bg-[#EB489B]">
-                  <Text className="text-[12px] font-extrabold text-white">{index + 1}</Text>
+                  <Text className="text-[12px] font-extrabold text-white">
+                    {index + 1}
+                  </Text>
                 </View>
                 <View className="flex-1">
-                  <Text className="text-[12px] font-extrabold text-[#2B2233]" numberOfLines={1}>
+                  <Text
+                    className="text-[12px] font-extrabold text-[#2B2233]"
+                    numberOfLines={1}
+                  >
                     {stop.title}
                   </Text>
-                  <Text className="text-[10px] text-[#8E869A]" numberOfLines={1}>
+                  <Text
+                    className="text-[10px] text-[#8E869A]"
+                    numberOfLines={1}
+                  >
                     {stop.address}
                   </Text>
                   {stop.scheduleLabel ? (
@@ -576,12 +1063,18 @@ export default function UserPlanScreen() {
                   </View>
                   <Pressable
                     onPress={() => {
-                      setStops((current) => current.filter((_, currentIndex) => currentIndex !== index));
+                      setStops((current) =>
+                        current.filter(
+                          (_, currentIndex) => currentIndex !== index,
+                        ),
+                      );
                       setIsReviewed(false);
                     }}
                     className="h-7 items-center justify-center rounded-lg bg-[#FFF0F2]"
                   >
-                    <Text className="text-[9px] font-bold text-[#D13C54]">Xóa</Text>
+                    <Text className="text-[9px] font-bold text-[#D13C54]">
+                      Xóa
+                    </Text>
                   </Pressable>
                 </View>
               </View>
@@ -601,7 +1094,9 @@ export default function UserPlanScreen() {
             4. Explorer duyệt và bắt đầu hành trình
           </Text>
           <Text className="mt-1 text-[10px] leading-4 text-[#8E869A]">
-            Sau khi duyệt, Custom Route sẽ hoạt động giống một hành trình bình thường: hiển thị Route Detail, thứ tự hotspot, đường đi, check-in và tiến độ hoàn thành.
+            Sau khi duyệt, Custom Route sẽ hoạt động giống một hành trình bình
+            thường: hiển thị Route Detail, thứ tự hotspot, đường đi, check-in và
+            tiến độ hoàn thành.
           </Text>
 
           <Pressable
@@ -616,26 +1111,23 @@ export default function UserPlanScreen() {
 
           <Pressable
             disabled={stops.length < 2}
-            onPress={reviewPlan}
+            onPress={() => void reviewPlan()}
             className={`mt-3 rounded-2xl py-4 ${stops.length >= 2 ? "bg-[#EB489B]" : "bg-[#D9DDE7]"}`}
           >
             <Text className="text-center text-[13px] font-extrabold text-white">
-              Duyệt và tạo Custom Route
+              {isSaving ? "Đang tạo kế hoạch..." : "Duyệt và tạo kế hoạch"}
             </Text>
           </Pressable>
 
-          {isReviewed ? (
+          {isReviewed && currentPlan?.status !== "STARTED" ? (
             <Pressable
-              onPress={() =>
-                Alert.alert(
-                  "Bắt đầu hành trình",
-                  "UI đã sẵn sàng. Khi có API, nút này sẽ chuyển sang Route Detail và gọi API bắt đầu journey như route thông thường.",
-                )
-              }
+              onPress={() => void beginPlan()}
               className="mt-3 rounded-2xl bg-[#2B2233] py-4"
             >
               <Text className="text-center text-[13px] font-extrabold text-white">
-                Bắt đầu hành trình
+                {isSaving
+                  ? "Đang bắt đầu..."
+                  : `Bắt đầu kế hoạch #${currentPlan?.userPlanId ?? ""}`}
               </Text>
             </Pressable>
           ) : null}
