@@ -2,11 +2,18 @@ import '../global.css';
 
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Text, TextInput } from 'react-native';
+import { useEffect } from 'react';
+import {
+  AppState,
+  InteractionManager,
+  Text,
+  TextInput,
+} from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { warnForInvalidPublicEnv } from '@/constants/env';
 import '@/lib/nativewind';
+import { requestForegroundLocationPermissionOnAppLaunch } from '@/lib/location';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const AppText = Text as typeof Text & {
@@ -35,6 +42,39 @@ export default function RootLayout() {
   warnForInvalidPublicEnv();
 
   const colorScheme = useColorScheme();
+
+  useEffect(() => {
+    let isCancelled = false;
+    let interactionTask: ReturnType<typeof InteractionManager.runAfterInteractions> | null =
+      null;
+
+    const scheduleLocationPermissionRequest = () => {
+      interactionTask?.cancel();
+      interactionTask = InteractionManager.runAfterInteractions(() => {
+        if (isCancelled || AppState.currentState !== 'active') {
+          return;
+        }
+
+        void requestForegroundLocationPermissionOnAppLaunch();
+      });
+    };
+
+    if (AppState.currentState === 'active') {
+      scheduleLocationPermissionRequest();
+    }
+
+    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        scheduleLocationPermissionRequest();
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+      interactionTask?.cancel();
+      appStateSubscription.remove();
+    };
+  }, []);
 
   return (
     <SafeAreaProvider>

@@ -525,7 +525,7 @@ function VerificationMapPreview({
             padding: 12,
           }}
         >
-          <Text className="text-[12px] font-bold text-white">
+          <Text className="text-[12px] font-medium text-white">
             Google Maps error:
           </Text>
           <Text className="mt-1 text-[12px] text-white">{activeMapError}</Text>
@@ -610,7 +610,7 @@ function VerificationMapPreview({
                   className="mb-2 rounded-full px-3 py-1.5"
                   style={{ backgroundColor: SOFT_SURFACE_OVERLAY_SOFT }}
                 >
-                  <Text className="text-[11px] font-black uppercase tracking-[0.8px] text-[#EB489B]">
+                  <Text className="text-[11px] font-medium uppercase tracking-[0.8px] text-[#EB489B]">
                     Hotspot
                   </Text>
                 </View>
@@ -707,7 +707,7 @@ function VerificationMapPreview({
                     />
                   </LinearGradient>
                 </View>
-                <Text className="mt-4 text-center text-[17px] font-black text-[#2B2233]">
+                <Text className="mt-4 text-center text-[16px] font-semibold text-[#2B2233]">
                   Không tải được preview bản đồ check-in
                 </Text>
                 <Text className="mt-2 text-center text-[13px] leading-5 text-[#6F657A]">
@@ -799,7 +799,7 @@ function VerificationMapPreview({
               className="mt-2 rounded-full px-3 py-1.5"
               style={{ backgroundColor: SOFT_SURFACE_OVERLAY_SOFT }}
             >
-              <Text className="text-[11px] font-black uppercase tracking-[0.8px] text-[#10B981]">
+              <Text className="text-[11px] font-medium uppercase tracking-[0.8px] text-[#10B981]">
                 Vị trí của bạn
               </Text>
             </View>
@@ -821,11 +821,11 @@ function VerificationMapPreview({
               className="h-2.5 w-2.5 rounded-full"
               style={{ backgroundColor: distanceBadgeColor }}
             />
-            <Text className="ml-2 text-[12px] font-black uppercase tracking-[0.8px] text-[#2B2233]">
+            <Text className="ml-2 text-[12px] font-medium uppercase tracking-[0.8px] text-[#2B2233]">
               {distanceBadgeState}
             </Text>
           </View>
-          <Text className="mt-1 text-center text-[13px] font-medium text-[#6F657A]">
+          <Text className="mt-1 text-center text-[13px] text-[#6F657A]">
             {distanceBadgeLabel}
           </Text>
         </View>
@@ -840,7 +840,7 @@ function VerificationMapPreview({
           position: "absolute",
         }}
       >
-        <Text className="text-[11px] font-bold text-[#8E869A]">
+        <Text className="text-[11px] text-[#8E869A]">
           {showMapFallback
             ? "Sửa Google Maps config rồi rebuild để hiện preview bản đồ"
             : Platform.OS === "android"
@@ -860,7 +860,7 @@ function VerificationMapPreview({
             right: 10,
           }}
         >
-          <Text className="text-[10px] font-bold text-[#8E869A]">
+          <Text className="text-[10px] text-[#8E869A]">
             Map tương tác khả dụng trên iOS/Android
           </Text>
         </View>
@@ -900,25 +900,17 @@ function SuccessRing() {
 }
 
 export function HotspotGpsCheckinOverlay({
-  audioStoryDurationLabel,
   hotspot,
   hotspotId,
   isStoryAvailable = true,
   onClose,
   onSuccess,
-  rewardXp,
-  totalRouteStopsCount,
-  visitedRouteStopsCount,
 }: {
-  audioStoryDurationLabel: string;
   hotspot: HotspotDetail;
   hotspotId?: number | null;
   isStoryAvailable?: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  rewardXp: string;
-  totalRouteStopsCount?: number;
-  visitedRouteStopsCount?: number;
 }) {
   const router = useRouter();
   const authSession = useAuthSession();
@@ -1174,29 +1166,19 @@ export function HotspotGpsCheckinOverlay({
         .filter(Boolean),
     ),
   );
-  const routeProgressLabel =
-    typeof totalRouteStopsCount === "number" &&
-    typeof visitedRouteStopsCount === "number"
-      ? `${visitedRouteStopsCount}/${totalRouteStopsCount} chặng đã ghé`
-      : isExistingCheckIn
-        ? "Đã ghi nhận check-in trước đó"
-        : "Đã xác minh tại hotspot này";
-  const parsedRewardXp = Number(rewardXp.replace(/\D/g, ""));
-  const xpEarned =
+  const totalXpEarned =
     isExistingCheckIn
       ? 0
-      : (checkInResult?.xpEarned ??
-          (Number.isFinite(parsedRewardXp) ? parsedRewardXp : 0));
-  const pointEarned = isExistingCheckIn
+      : (checkInResult?.totalXpEarned ?? 0);
+  const totalPointEarned = isExistingCheckIn
     ? null
-    : (checkInResult?.pointEarned ?? null);
+    : (checkInResult?.totalPointEarned ?? null);
   const checkInMetaLabel = isExistingCheckIn
     ? "Hệ thống xác nhận bạn đã check-in hotspot này trước đó."
     : checkInResult
       ? [
-          `Check-in #${checkInResult.checkInId}`,
+          `Progress #${checkInResult.userProgressId}`,
           `Hotspot #${checkInResult.hotspotId}`,
-          formatCheckInTimestamp(checkInResult.checkInAt),
         ]
           .filter(Boolean)
           .join(" · ")
@@ -1223,10 +1205,21 @@ export function HotspotGpsCheckinOverlay({
             iconBackground: SUCCESS_CHECK_ICON_COLOR,
             label: "Trạng thái",
             trailing: "✓",
-            value: "Hotspot này đã được check-in trước đó",
+            value: "Đã check-in trước đó",
           },
         ]
       : [
+          {
+            icon: {
+              ios: "checkmark.seal.fill",
+              android: "verified",
+              web: "verified",
+            } as SymbolName,
+            iconBackground: SUCCESS_CHECK_ICON_COLOR,
+            label: "Trạng thái",
+            trailing: "✓",
+            value: checkInResult?.isCheckedIn ? "Đã check-in" : "Đang cập nhật",
+          },
           {
             icon: {
               ios: "sparkles",
@@ -1234,12 +1227,12 @@ export function HotspotGpsCheckinOverlay({
               web: "auto_awesome",
             } as SymbolName,
             iconBackground: "#FFC93C",
-            label: "Phần thưởng",
-            trailing: `+${formatNumericValue(xpEarned)}`,
-            value: `+${formatNumericValue(xpEarned)} XP`,
+            label: "Tổng XP",
+            trailing: `+${formatNumericValue(totalXpEarned)}`,
+            value: `+${formatNumericValue(totalXpEarned)} XP`,
           },
         ]),
-    ...(pointEarned !== null
+    ...(totalPointEarned !== null
       ? [
           {
             icon: {
@@ -1248,37 +1241,44 @@ export function HotspotGpsCheckinOverlay({
               web: "monetization_on",
             } as SymbolName,
             iconBackground: "#F58752",
-            label: "Điểm nhận",
-            trailing: `+${formatNumericValue(pointEarned)}`,
-            value: `+${formatNumericValue(pointEarned)} điểm`,
+            label: "Tổng điểm",
+            trailing: `+${formatNumericValue(totalPointEarned)}`,
+            value: `+${formatNumericValue(totalPointEarned)} điểm`,
           },
         ]
       : []),
-    {
-      icon: {
-        ios: "speaker.wave.2.fill",
-        android: "volume_up",
-        web: "volume_up",
-      } as SymbolName,
-      iconBackground: SUCCESS_CHECK_ICON_COLOR,
-      label: "Mở khóa",
-      trailing: "✓",
-      value: `Story hotspot ${audioStoryDurationLabel}`,
-    },
-    {
-      icon: {
-        ios: "map.fill",
-        android: "map",
-        web: "map",
-      } as SymbolName,
-      iconBackground: SUCCESS_CHECK_ICON_COLOR,
-      label: "Tiến độ tuyến",
-      trailing:
-        checkInResult?.userRouteProgressId != null
-          ? `#${checkInResult.userRouteProgressId}`
-          : "✓",
-      value: routeProgressLabel,
-    },
+    ...(checkInResult
+      ? [
+          {
+            icon: {
+              ios: "clock.fill",
+              android: "schedule",
+              web: "schedule",
+            } as SymbolName,
+            iconBackground: SUCCESS_CHECK_ICON_COLOR,
+            label: "Check-in lúc",
+            trailing: "✓",
+            value:
+              formatCheckInTimestamp(checkInResult.firstVisitedAt) ??
+              checkInResult.firstVisitedAt,
+          },
+        ]
+      : []),
+    ...(checkInResult
+      ? [
+          {
+            icon: {
+              ios: "mappin.and.ellipse",
+              android: "place",
+              web: "place",
+            } as SymbolName,
+            iconBackground: SUCCESS_CHECK_ICON_COLOR,
+            label: "Tọa độ ghi nhận",
+            trailing: "✓",
+            value: `${checkInResult.latitude.toFixed(6)}, ${checkInResult.longitude.toFixed(6)}`,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -1372,7 +1372,7 @@ export function HotspotGpsCheckinOverlay({
                 <SuccessRing />
 
                 <Text
-                  className="mt-3 text-center text-[22px] font-black leading-8"
+                  className="mt-3 text-center text-[21px] font-semibold leading-7"
                   style={{ color: SUCCESS_TITLE_COLOR }}
                 >
                   {isExistingCheckIn
@@ -1380,7 +1380,7 @@ export function HotspotGpsCheckinOverlay({
                     : "Check-in thành\ncông!"}
                 </Text>
                 <Text
-                  className="mt-2 text-[14px] font-semibold"
+                  className="mt-2 text-[13px] font-medium"
                   style={{ color: SUCCESS_SUBTITLE_COLOR }}
                 >
                   {hotspot.title}
@@ -1421,13 +1421,13 @@ export function HotspotGpsCheckinOverlay({
 
                     <View className="ml-3 flex-1">
                       <Text
-                        className="text-[12px] font-black uppercase tracking-[0.9px]"
+                        className="text-[11px] font-medium uppercase tracking-[0.8px]"
                         style={{ color: SUCCESS_CARD_LABEL }}
                       >
                         {item.label}
                       </Text>
                       <Text
-                        className="mt-0.5 text-[17px] font-black"
+                        className="mt-0.5 text-[15px] leading-5"
                         style={{ color: SUCCESS_CARD_VALUE }}
                       >
                         {item.value}
@@ -1435,11 +1435,11 @@ export function HotspotGpsCheckinOverlay({
                     </View>
 
                     <Text
-                      className="text-[17px] font-black"
+                      className="text-[15px] font-medium"
                       style={{
                         color:
-                          item.label === "Phần thưởng" ||
-                          item.label === "Điểm nhận"
+                          item.label === "Tổng XP" ||
+                          item.label === "Tổng điểm"
                             ? "#F58752"
                             : SUCCESS_CHECK_ICON_COLOR,
                       }}
@@ -1474,7 +1474,7 @@ export function HotspotGpsCheckinOverlay({
                       size={16}
                       tintColor="#FFFFFF"
                     />
-                    <Text className="ml-2 text-[16px] font-black text-white">
+                    <Text className="ml-2 text-[15px] font-medium text-white">
                       Xem story hotspot
                     </Text>
                   </LinearGradient>
@@ -1482,32 +1482,22 @@ export function HotspotGpsCheckinOverlay({
               ) : null}
 
               {isStoryAvailable && isStoryPrefetching ? (
-                <Text className="mt-4 text-center text-[13px] font-medium text-[#A897B2]">
+                <Text className="mt-4 text-center text-[13px] text-[#A897B2]">
                   Đang tải story từ API cho hotspot này...
                 </Text>
               ) : null}
 
               {isStoryAvailable && storyPrefetchError ? (
-                <Text className="mt-4 text-center text-[13px] font-medium text-[#D97706]">
+                <Text className="mt-4 text-center text-[13px] text-[#D97706]">
                   {storyPrefetchError}
                 </Text>
               ) : null}
 
               {checkInMetaLabel ? (
-                <Text className="mt-4 text-center text-[13px] font-medium text-[#8E869A]">
+                <Text className="mt-4 text-center text-[13px] text-[#8E869A]">
                   {checkInMetaLabel}
                 </Text>
               ) : null}
-
-              <Text className="mt-6 text-center text-[13px] leading-5 text-[#8E869A]">
-                {isExistingCheckIn
-                  ? isStoryAvailable
-                    ? "Hotspot này đã ở trạng thái đã check-in. Bạn có thể xem story ngay bây giờ."
-                    : "Hotspot này đã ở trạng thái đã check-in. Story riêng cho điểm đến này đang được cập nhật."
-                  : isStoryAvailable
-                    ? `Mở khóa +${formatNumericValue(xpEarned)} XP, story hotspot và đánh giá địa điểm.`
-                    : `Mở khóa +${formatNumericValue(xpEarned)} XP và hoàn tất check-in cho địa điểm này.`}
-              </Text>
 
               <Pressable
                 className="mt-5 items-center rounded-full border px-5 py-4"
@@ -1517,7 +1507,7 @@ export function HotspotGpsCheckinOverlay({
                   borderColor: SUCCESS_SECONDARY_BUTTON_BORDER,
                 }}
               >
-                <Text className="text-[16px] font-black text-[#6F657A]">
+                <Text className="text-[15px] font-medium text-[#6F657A]">
                   Tiếp tục khám phá
                 </Text>
               </Pressable>
@@ -1588,7 +1578,7 @@ export function HotspotGpsCheckinOverlay({
                         size={13}
                         tintColor="#FFFFFF"
                       />
-                      <Text className="ml-1.5 text-[12px] font-bold text-white">
+                      <Text className="ml-1.5 text-[12px] font-medium text-white">
                         Đang khám phá
                       </Text>
                     </LinearGradient>
@@ -1617,14 +1607,14 @@ export function HotspotGpsCheckinOverlay({
                       className="self-start rounded-full px-3 py-1.5"
                       style={{ backgroundColor: SOFT_SURFACE_ELEVATED }}
                     >
-                      <Text className="text-[10px] font-black uppercase tracking-[0.8px] text-[#EB489B]">
+                      <Text className="text-[10px] font-medium uppercase tracking-[0.8px] text-[#EB489B]">
                         {tag}
                       </Text>
                     </View>
                   ))}
                 </View>
 
-                <Text className="mt-4 text-[24px] font-black leading-[28px] text-[#2B2233]">
+                <Text className="mt-4 text-[22px] font-semibold leading-[27px] text-[#2B2233]">
                   {hotspot.title}
                 </Text>
                 <Text className="mt-2 text-[14px] leading-[22px] text-[#8E869A]">
@@ -1647,11 +1637,11 @@ export function HotspotGpsCheckinOverlay({
                       className="h-2.5 w-2.5 rounded-full"
                       style={{ backgroundColor: verificationCopy.accentColor }}
                     />
-                    <Text className="ml-2 text-[10px] font-black uppercase tracking-[0.9px] text-[#EB489B]">
+                    <Text className="ml-2 text-[10px] font-medium uppercase tracking-[0.9px] text-[#EB489B]">
                       {verificationCopy.badgeLabel}
                     </Text>
                   </View>
-                  <Text className="mt-2 text-[14px] font-medium leading-5 text-[#6F657A]">
+                  <Text className="mt-2 text-[14px] leading-5 text-[#6F657A]">
                     {verificationCopy.helperText}
                   </Text>
                 </View>
@@ -1699,21 +1689,17 @@ export function HotspotGpsCheckinOverlay({
                       size={16}
                       tintColor="#FFFFFF"
                     />
-                    <Text className="ml-2 text-[16px] font-black text-white">
+                    <Text className="ml-2 text-[15px] font-medium text-white">
                       {primaryButtonLabel}
                     </Text>
                   </LinearGradient>
                 </Pressable>
 
                 {checkInError ? (
-                  <Text className="mt-4 text-center text-[12px] font-medium text-[#D97706]">
+                  <Text className="mt-4 text-center text-[12px] text-[#D97706]">
                     {checkInError}
                   </Text>
                 ) : null}
-
-                <Text className="mt-4 text-center text-[12px] leading-5 text-[#8E869A]">
-                  {`Mở khóa +${rewardXp} XP, story hotspot và đánh giá địa điểm.`}
-                </Text>
               </View>
             </ScrollView>
           )}

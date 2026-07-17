@@ -3,6 +3,8 @@ import { File as ExpoFile } from "expo-file-system";
 
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 
+export type PostVisibility = "PUBLIC" | "PRIVATE";
+
 export type CreatePostUploadFile = {
   fileName: string;
   mimeType: string;
@@ -22,36 +24,40 @@ export type CreatedPostMedia = {
 };
 
 export type CreatedPostTag = {
-  id: number;
-  name: string;
+  tagId: number;
+  tagName: string;
 };
 
 export type CreatedPostResponse = {
+  commentCount: number | null;
   content: string;
   createdAt: string;
   displayName: string;
   hotspotIds: number[];
   isTaggedHotspot: boolean;
   isTaggedRoute: boolean;
+  likeCount: number | null;
   medias: CreatedPostMedia[];
   pointRemaining: number | null;
   postId: number;
   reason: string | null;
   routeIds: number[];
+  shareCount: number | null;
+  sharedPost: string | null;
   status: string;
   tags: CreatedPostTag[];
   userId: number;
   username: string;
-  visibility: string;
+  visibility: PostVisibility | string;
 };
 
 type CreatePostRequest = {
   accessToken: string;
   content: string;
   files: CreatePostUploadFile[];
-  hotspotId: number;
+  hotspotIds: number[];
   tokenType?: string | null;
-  visibility?: string;
+  visibility?: PostVisibility;
 };
 
 function resolveCreatePostUrl() {
@@ -59,7 +65,7 @@ function resolveCreatePostUrl() {
     return buildApiUrl("/api/posts");
   }
 
-  return "http://13.158.40.56:8080/api/posts";
+  return "http://3.113.215.65:8080/api/posts";
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -102,8 +108,8 @@ function parseCreatedPostTag(value: unknown): CreatedPostTag | null {
   }
 
   return {
-    id: tagId,
-    name: readString(value.tagName),
+    tagId,
+    tagName: readString(value.tagName),
   };
 }
 
@@ -158,17 +164,21 @@ function parseCreatedPostResponse(value: unknown): CreatedPostResponse | null {
     : [];
 
   return {
+    commentCount: readNullableNumber(value.commentCount),
     content: readString(value.content),
     createdAt,
     displayName: readString(value.displayName),
     hotspotIds,
     isTaggedHotspot: readBoolean(value.isTaggedHotspot),
     isTaggedRoute: readBoolean(value.isTaggedRoute),
+    likeCount: readNullableNumber(value.likeCount),
     medias,
     pointRemaining: readNullableNumber(value.pointRemaining),
     postId,
     reason: readNullableString(value.reason),
     routeIds,
+    shareCount: readNullableNumber(value.shareCount),
+    sharedPost: readNullableString(value.sharedPost),
     status: readString(value.status),
     tags,
     userId,
@@ -271,17 +281,34 @@ export async function createPost({
   accessToken,
   content,
   files,
-  hotspotId,
+  hotspotIds,
   tokenType,
   visibility = "PUBLIC",
 }: CreatePostRequest): Promise<CreatedPostResponse> {
   const createPostUrl = resolveCreatePostUrl();
+  const normalizedContent = content.trim();
+  const normalizedHotspotIds = hotspotIds.filter(
+    (hotspotId) =>
+      Number.isInteger(hotspotId) && Number.isFinite(hotspotId) && hotspotId > 0,
+  );
+  const normalizedVisibility = visibility === "PRIVATE" ? "PRIVATE" : "PUBLIC";
   const formData = new FormData();
   let response: Response;
 
-  formData.append("content", content.trim());
-  formData.append("visibility", visibility);
-  formData.append("hotspotIds", `${hotspotId}`);
+  if (!normalizedContent) {
+    throw new Error("Nội dung bài đánh giá không được để trống.");
+  }
+
+  if (normalizedHotspotIds.length === 0) {
+    throw new Error("Bài đánh giá phải gắn với ít nhất một hotspot.");
+  }
+
+  formData.append("content", normalizedContent);
+  formData.append("visibility", normalizedVisibility);
+
+  for (const hotspotId of normalizedHotspotIds) {
+    formData.append("hotspotIds", `${hotspotId}`);
+  }
 
   for (const file of files) {
     const uploadFile = new ExpoFile(file.uri);
@@ -303,9 +330,10 @@ export async function createPost({
     console.warn("[posts] create post network failure", {
       error: serializeError(error),
       filesCount: files.length,
-      hotspotId,
+      hotspotIds: normalizedHotspotIds,
       platform: Platform.OS,
       url: createPostUrl,
+      visibility: normalizedVisibility,
     });
     throw new Error(getConnectionErrorMessage(createPostUrl, error));
   }
@@ -316,9 +344,10 @@ export async function createPost({
     console.warn("[posts] create post rejected", {
       body: summarizeBody(responseBody),
       filesCount: files.length,
-      hotspotId,
+      hotspotIds: normalizedHotspotIds,
       status: response.status,
       url: createPostUrl,
+      visibility: normalizedVisibility,
     });
     throw new Error(getErrorMessage(responseBody, response.status));
   }
@@ -329,8 +358,9 @@ export async function createPost({
     console.warn("[posts] create post invalid payload", {
       body: summarizeBody(responseBody),
       filesCount: files.length,
-      hotspotId,
+      hotspotIds: normalizedHotspotIds,
       url: createPostUrl,
+      visibility: normalizedVisibility,
     });
     throw new Error("API bài viết trả về dữ liệu không đúng định dạng.");
   }

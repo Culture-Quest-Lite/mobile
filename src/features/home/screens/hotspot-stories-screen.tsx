@@ -1,9 +1,8 @@
+import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { SymbolView } from "@/components/ui/symbol-view";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import {
   SafeAreaView,
@@ -14,8 +13,9 @@ import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
+import { useCheckedInApiHotspots, useCheckins } from "@/lib/checkin-store";
 
-import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
+import { getHotspotById } from "../api/get-hotspot-by-id";
 import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
 import {
   cacheHotspotStories,
@@ -42,6 +42,10 @@ const cardShadowStyle = {
   elevation: 8,
 } as const;
 
+const pageBackground = "#FFF9FD";
+
+type StoryImageSource = ComponentProps<typeof Image>["source"];
+
 type StoryThemeTabItem = {
   id: string;
   imageSource: number;
@@ -57,7 +61,9 @@ const fallbackStoryThemeOrder: StoryThemeTag[] = [
 ];
 
 function getFallbackStoryThemeTag(index: number) {
-  return fallbackStoryThemeOrder[index % fallbackStoryThemeOrder.length] ?? "history";
+  return (
+    fallbackStoryThemeOrder[index % fallbackStoryThemeOrder.length] ?? "history"
+  );
 }
 
 function normalizeApiTagId(value?: number | null) {
@@ -165,95 +171,190 @@ function ThemeTagChip({
   );
 }
 
+function getStoryCardAccent(tag: StoryThemeTag) {
+  switch (tag) {
+    case "history":
+      return {
+        badgeBackground: "rgba(255, 255, 255, 0.9)",
+        badgeText: "#C73A86",
+        dot: "#EB489B",
+        dotInactive: "rgba(255, 255, 255, 0.52)",
+        moreText: "#B45384",
+      };
+    case "culture":
+      return {
+        badgeBackground: "rgba(255, 255, 255, 0.9)",
+        badgeText: "#0F8A5F",
+        dot: "#10B981",
+        dotInactive: "rgba(255, 255, 255, 0.52)",
+        moreText: "#0F8A5F",
+      };
+    case "food":
+      return {
+        badgeBackground: "rgba(255, 255, 255, 0.9)",
+        badgeText: "#DD6B20",
+        dot: "#F97316",
+        dotInactive: "rgba(255, 255, 255, 0.52)",
+        moreText: "#D97706",
+      };
+    case "education":
+      return {
+        badgeBackground: "rgba(255, 255, 255, 0.9)",
+        badgeText: "#7C3AED",
+        dot: "#8B5CF6",
+        dotInactive: "rgba(255, 255, 255, 0.52)",
+        moreText: "#7C3AED",
+      };
+  }
+}
+
+function getStoryPreviewImages(item: HotspotThemeStory): StoryImageSource[] {
+  const previewImages = [
+    ...(item.heroGallery.length > 0
+      ? item.heroGallery
+      : item.gallery.length > 0
+        ? item.gallery
+        : [item.imageSource]),
+  ];
+
+  return [...new Set(previewImages)];
+}
+
 function StoryCard({
+  hotspotTitle,
   item,
   onPress,
 }: {
+  hotspotTitle: string;
   item: HotspotThemeStory;
   onPress: () => void;
 }) {
+  const previewImages = getStoryPreviewImages(item);
+  const accent = getStoryCardAccent(item.tag);
+  const previewDescription =
+    item.summary.trim() ||
+    item.scriptParagraphs.find((paragraph) => paragraph.trim())?.trim() ||
+    "Story này đang được cập nhật nội dung.";
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  useEffect(() => {
+    if (previewImages.length <= 1) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setActiveImageIndex((currentIndex) => {
+        return (currentIndex + 1) % previewImages.length;
+      });
+    }, 3200);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [previewImages.length]);
+
+  const activeImage =
+    previewImages[activeImageIndex] ?? previewImages[0] ?? item.imageSource;
+
   return (
     <Pressable
-      className="pb-5 pt-6"
+      className="rounded-[22px]"
       onPress={onPress}
-      style={{ overflow: "visible" }}
     >
-      <View
-        style={{
-          minHeight: Math.max(item.cardHeight + 24, item.imageHeight - 32),
-          overflow: "visible",
-          position: "relative",
-        }}
-      >
-        <LinearGradient
-          colors={[item.cardColors[0], item.cardColors[1]]}
-          end={{ x: 1, y: 0.5 }}
-          start={{ x: 0, y: 0.5 }}
-          className="overflow-hidden rounded-[30px] px-5 py-4"
-          style={[
-            cardShadowStyle,
-            {
-              minHeight: item.cardHeight,
-              paddingRight: 120,
-            },
-          ]}
-        >
-          <View
-            className="absolute rounded-full"
-            style={{
-              backgroundColor: "rgba(255,255,255,0.18)",
-              height: 136,
-              right: -24,
-              top: -18,
-              width: 136,
-            }}
-          />
-          <View
-            className="absolute rounded-full"
-            style={{
-              backgroundColor: "rgba(255,255,255,0.10)",
-              bottom: -44,
-              height: 110,
-              right: 36,
-              width: 110,
-            }}
-          />
+      <View className="overflow-hidden rounded-[8px]">
+        <Image
+          source={activeImage}
+          contentFit="cover"
+          transition={420}
+          cachePolicy="memory-disk"
+          style={{
+            backgroundColor: "#F6EFF8",
+            height: 188,
+            width: "100%",
+          }}
+        />
 
-          <View style={{ maxWidth: `${item.textWidth}%` }}>
-            <Text
-              className="text-[20px] font-black leading-6 text-white"
-              style={{
-                textShadowColor: "rgba(76, 53, 76, 0.12)",
-                textShadowOffset: { width: 0, height: 1 },
-                textShadowRadius: 8,
-              }}
-            >
-              {item.title}
+        {previewImages.length > 1 ? (
+          <View className="absolute right-3 top-3 rounded-full bg-black/30 px-2.5 py-1">
+            <Text className="text-[11px] font-medium text-white">
+              {activeImageIndex + 1}/{previewImages.length}
             </Text>
           </View>
-        </LinearGradient>
+        ) : null}
 
-        <View
-          pointerEvents="none"
+        {previewImages.length > 1 ? (
+          <View className="absolute bottom-3 left-0 right-0 flex-row items-center justify-center">
+            {previewImages.map((_, index) => (
+              <View
+                key={`${item.id}-preview-dot-${index}`}
+                className={index === previewImages.length - 1 ? "" : "mr-1.5"}
+                style={{
+                  backgroundColor:
+                    index === activeImageIndex ? accent.dot : accent.dotInactive,
+                  borderRadius: 999,
+                  height: 6,
+                  width: index === activeImageIndex ? 18 : 6,
+                }}
+              />
+            ))}
+          </View>
+        ) : null}
+      </View>
+
+      <View
+        style={{
+          paddingTop: 12,
+        }}
+      >
+        <Text
+          className="text-[16px] font-semibold text-[#2B2233]"
+          numberOfLines={2}
           style={{
-            bottom: item.imageBottom + 10,
-            elevation: 18,
-            position: "absolute",
-            right: item.imageRight + 6,
-            zIndex: 8,
+            includeFontPadding: false,
+            lineHeight: 16,
           }}
         >
-          <Image
-            source={item.imageSource}
-            contentFit="contain"
-            transition={120}
-            cachePolicy="memory-disk"
-            style={{
-              borderRadius: 26,
-              height: item.imageHeight,
-              width: item.imageWidth,
-            }}
-          />
+          {item.title}
+        </Text>
+
+        <Text
+          className="mt-0 text-[14px] text-[#6F657A]"
+          numberOfLines={2}
+          style={{
+            includeFontPadding: false,
+            lineHeight: 15,
+          }}
+        >
+          {previewDescription}
+        </Text>
+
+        <View className="mt-1 flex-row flex-wrap gap-2">
+          <View className="rounded-full bg-[#FFF7DD] px-3 py-1.5">
+            <Text
+              className="text-[12px] font-medium"
+              style={{
+                color: "#A16207",
+                includeFontPadding: false,
+                lineHeight: 13,
+              }}
+            >
+              {item.tagLabel}
+            </Text>
+          </View>
+
+          <View className="rounded-full bg-[#FFF7DD] px-3 py-1.5">
+            <Text
+              className="text-[12px] font-medium"
+              numberOfLines={1}
+              style={{
+                color: "#A16207",
+                includeFontPadding: false,
+                lineHeight: 13,
+              }}
+            >
+              {hotspotTitle}
+            </Text>
+          </View>
         </View>
       </View>
     </Pressable>
@@ -312,10 +413,37 @@ function EmptyStoriesState({ message }: { message: string }) {
   );
 }
 
+function LockedStoriesState({ onBack }: { onBack: () => void }) {
+  return (
+    <View
+      className="rounded-[28px] border border-[#F4DCE6] bg-[#FFF9FD] px-5 py-6"
+      style={cardShadowStyle}
+    >
+      <Text className="text-[19px] font-black text-[#2B2233]">
+        Story đang khóa
+      </Text>
+      <Text className="mt-2 text-[15px] leading-6 text-[#6F657A]">
+        Check-in tại hotspot trước, sau đó story từ API mới được hiển thị trên
+        màn này.
+      </Text>
+      <Pressable
+        className="mt-5 self-start rounded-full bg-[#FFF0F6] px-4 py-3"
+        onPress={onBack}
+      >
+        <Text className="text-[14px] font-black text-[#EB489B]">
+          Quay lại hotspot
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function HotspotStoriesScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
+  const checkedInHotspotSlugs = useCheckins();
+  const checkedInApiHotspots = useCheckedInApiHotspots();
   const { hotspotId, slug } = useLocalSearchParams<{
     hotspotId?: string;
     slug: string;
@@ -334,16 +462,24 @@ export default function HotspotStoriesScreen() {
     hotspotId: resolvedHotspotId,
     slug: resolvedSlug,
   });
+  const isCheckedIn =
+    resolvedHotspotId === null
+      ? true
+      : checkedInApiHotspots.includes(resolvedHotspotId) ||
+        checkedInHotspotSlugs.includes(resolvedSlug);
   const [activeTabId, setActiveTabId] = useState("");
   const [apiStoryCards, setApiStoryCards] = useState<
     HotspotThemeStory[] | null
-  >(() => cachedStoriesEntry?.stories ?? null);
+  >(() => (isCheckedIn ? (cachedStoriesEntry?.stories ?? null) : null));
   const [isStoriesLoading, setIsStoriesLoading] = useState(
-    () => cachedStoriesEntry === null && resolvedHotspotId !== null,
+    () =>
+      isCheckedIn && cachedStoriesEntry === null && resolvedHotspotId !== null,
   );
   const [storiesError, setStoriesError] = useState<string | null>(null);
   const fallbackStoryCards =
-    hotspot && resolvedHotspotId === null ? buildHotspotThemeStories(hotspot) : [];
+    hotspot && resolvedHotspotId === null
+      ? buildHotspotThemeStories(hotspot)
+      : [];
   const storyCards = apiStoryCards ?? fallbackStoryCards;
   const resolvedThemeTabs = buildStoryThemeTabsFromStories(storyCards);
   const resolvedActiveTab =
@@ -364,6 +500,17 @@ export default function HotspotStoriesScreen() {
         hotspotId: resolvedHotspotId,
         slug: resolvedSlug,
       });
+
+      if (!isCheckedIn && resolvedHotspotId !== null) {
+        if (!isActive) {
+          return;
+        }
+
+        setApiStoryCards(null);
+        setIsStoriesLoading(false);
+        setStoriesError(null);
+        return;
+      }
 
       if (nextCachedStoriesEntry) {
         if (!isActive) {
@@ -396,14 +543,14 @@ export default function HotspotStoriesScreen() {
         const accessToken = authSession.isAuthenticated
           ? await getValidAccessToken()
           : null;
-        const stories = await getUnlockedHotspotStories({
+        const remoteHotspot = await getHotspotById({
           accessToken,
           hotspotId: resolvedHotspotId,
           tokenType: authSession.tokenType,
         });
         const mappedStories = buildHotspotThemeStoriesFromApi(
           resolvedHotspot,
-          stories,
+          remoteHotspot.stories,
         );
 
         cacheHotspotStories({
@@ -434,7 +581,7 @@ export default function HotspotStoriesScreen() {
         setStoriesError(
           error instanceof Error
             ? error.message
-            : "Không tải được story từ API cho hotspot này.",
+            : "Không tải được story từ dữ liệu hotspot này.",
         );
       } finally {
         if (isActive) {
@@ -452,6 +599,7 @@ export default function HotspotStoriesScreen() {
     authSession.isAuthenticated,
     authSession.tokenType,
     hotspot,
+    isCheckedIn,
     resolvedHotspotId,
     resolvedSlug,
   ]);
@@ -472,16 +620,20 @@ export default function HotspotStoriesScreen() {
         );
 
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1" style={{ backgroundColor: pageBackground }}>
       <StatusBar style="dark" />
 
       <SafeAreaView
-        className="flex-1 bg-white"
+        className="flex-1"
+        style={{ backgroundColor: pageBackground }}
         edges={["left", "right", "bottom"]}
       >
         <View
-          className="border-b border-[#F2E8F7] bg-white px-5"
-          style={{ paddingTop: insets.top + 6 }}
+          className="border-b border-[#F2E8F7] px-5"
+          style={{
+            backgroundColor: pageBackground,
+            paddingTop: insets.top + 6,
+          }}
         >
           <View className="flex-row items-center justify-between pb-3">
             <Pressable
@@ -501,59 +653,70 @@ export default function HotspotStoriesScreen() {
             </Pressable>
 
             <Text className="text-[16px] font-black text-[#EB489B]">
-              Story hotspot
+              Câu chuyện
             </Text>
 
             <View className="h-11 w-11" />
           </View>
 
-          <ScrollView
-            horizontal
-            contentContainerStyle={{
-              columnGap: 18,
-              paddingBottom: 4,
-              paddingTop: 4,
-            }}
-            showsHorizontalScrollIndicator={false}
-          >
-            {resolvedThemeTabs.map((tab) => (
-              <ThemeTagChip
-                key={tab.id}
-                imageSource={tab.imageSource}
-                isActive={tab.id === resolvedActiveTab?.id}
-                label={tab.label}
-                onPress={() => setActiveTabId(tab.id)}
-              />
-            ))}
-          </ScrollView>
+          {isCheckedIn || resolvedHotspotId === null ? (
+            <>
+              <ScrollView
+                horizontal
+                contentContainerStyle={{
+                  columnGap: 18,
+                  paddingBottom: 4,
+                  paddingTop: 4,
+                }}
+                showsHorizontalScrollIndicator={false}
+              >
+                {resolvedThemeTabs.map((tab) => (
+                  <ThemeTagChip
+                    key={tab.id}
+                    imageSource={tab.imageSource}
+                    isActive={tab.id === resolvedActiveTab?.id}
+                    label={tab.label}
+                    onPress={() => setActiveTabId(tab.id)}
+                  />
+                ))}
+              </ScrollView>
 
-          {isStoriesLoading ? (
+              {isStoriesLoading ? (
+                <Text className="pb-3 pt-2 text-[13px] font-medium text-[#A897B2]">
+                  Đang tải story của hotspot...
+                </Text>
+              ) : null}
+
+              {storiesError ? (
+                <Text className="pb-3 pt-2 text-[13px] font-medium text-[#D97706]">
+                  {storiesError}
+                </Text>
+              ) : null}
+            </>
+          ) : (
             <Text className="pb-3 pt-2 text-[13px] font-medium text-[#A897B2]">
-              Đang tải story của hotspot...
+              Story sẽ mở sau khi bạn check-in hotspot này.
             </Text>
-          ) : null}
-
-          {storiesError ? (
-            <Text className="pb-3 pt-2 text-[13px] font-medium text-[#D97706]">
-              {storiesError}
-            </Text>
-          ) : null}
+          )}
         </View>
 
         <ScrollView
           className="flex-1"
           contentContainerStyle={{
             paddingBottom: Math.max(insets.bottom + 30, 34),
-            paddingHorizontal: 20,
+            paddingHorizontal: 23,
             paddingTop: 18,
             rowGap: 18,
           }}
           showsVerticalScrollIndicator={false}
         >
-          {visibleStories.length > 0 ? (
+          {!isCheckedIn && resolvedHotspotId !== null ? (
+            <LockedStoriesState onBack={() => router.back()} />
+          ) : visibleStories.length > 0 ? (
             visibleStories.map((story) => (
               <StoryCard
                 key={story.id}
+                hotspotTitle={hotspot.title}
                 item={story}
                 onPress={() =>
                   router.push(

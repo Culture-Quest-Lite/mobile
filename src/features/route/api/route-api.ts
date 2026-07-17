@@ -313,22 +313,32 @@ function parseHotspot(value: unknown): RouteHotspotDto | null {
 export function parseRoute(value: unknown): RouteDto | null {
   if (!isObject(value)) return null;
 
-  const routeId = readNumber(value.routeId, -1);
-  const routeName = readString(value.routeName);
+  const routeId = readNumber(value.routeId ?? value.id, -1);
+  const routeName =
+    readString(value.routeName) ||
+    readString(value.title) ||
+    readString(value.name);
+  const description =
+    readString(value.description) ||
+    readString(value.subtitle) ||
+    readString(value.summary) ||
+    readString(value.routeDescription);
 
   if (routeId < 0 || !routeName.trim()) return null;
 
   return {
-    description: readString(value.description),
+    description,
     difficulty: readString(value.difficulty, "EASY"),
-    estimateTime: readNumber(value.estimateTime),
+    estimateTime: readNumber(
+      value.estimateTime ?? value.duration ?? value.estimatedDuration,
+    ),
     hotspots: Array.isArray(value.hotspots)
       ? value.hotspots.map(parseHotspot).filter(isNonNull)
       : [],
     medias: Array.isArray(value.medias)
       ? value.medias.map(parseMedia).filter(isNonNull)
       : [],
-    point: readNumber(value.point),
+    point: readNumber(value.point ?? value.rating),
     routeId,
     routeName,
     status: readString(value.status, "DRAFT"),
@@ -338,8 +348,8 @@ export function parseRoute(value: unknown): RouteDto | null {
           const singleTag = parseTag(value.tag);
           return singleTag ? [singleTag] : [];
         })(),
-    totalDistance: readNumber(value.totalDistance),
-    xp: readNumber(value.xp),
+    totalDistance: readNumber(value.totalDistance ?? value.distance),
+    xp: readNumber(value.xp ?? value.totalXp),
   };
 }
 
@@ -706,6 +716,11 @@ export function mapRouteToRouteItem(route: RouteDto) {
   const cover =
     getRouteCoverUrl(route) ||
     "https://i.pinimg.com/1200x/80/69/f9/8069f9581583a196f9f39bda000b9312.jpg";
+  const description = route.description.trim();
+  const normalizedRating =
+    typeof route.point === "number" && Number.isFinite(route.point)
+      ? Math.max(0, route.point)
+      : 0;
 
   return {
     connection:
@@ -719,17 +734,18 @@ export function mapRouteToRouteItem(route: RouteDto) {
     era: firstTag,
     hotspotIds: route.hotspots.map((hotspot) => String(hotspot.hotspotId)),
     id: String(route.routeId),
+    description,
     meaning:
-      route.description ||
+      description ||
       "Tuyến tham quan được lấy trực tiếp từ hệ thống CultureQuest Lite.",
-    rating: 4.8,
+    rating: normalizedRating,
     story:
-      route.description ||
+      description ||
       "Mỗi điểm dừng trong tuyến mở ra một lớp câu chuyện văn hoá khác nhau.",
     subtitle:
-      route.description ||
+      description ||
       `${route.hotspots.length} điểm dừng · ${route.totalDistance || 0} km`,
-    theme: route.description || firstTag,
+    theme: description || firstTag,
     title: route.routeName,
     xp: route.xp || route.point || 0,
   };

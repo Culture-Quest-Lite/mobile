@@ -1,4 +1,5 @@
 import * as Location from "expo-location";
+import { Platform } from "react-native";
 
 import { PublicEnv } from "@/constants/env";
 
@@ -14,6 +15,10 @@ export type ForegroundLocationPermissionResult = {
   granted: boolean;
   status: Location.PermissionStatus;
 };
+
+let foregroundPermissionRequestPromise:
+  | Promise<ForegroundLocationPermissionResult>
+  | null = null;
 
 export async function ensureForegroundLocationPermission(): Promise<ForegroundLocationPermissionResult> {
   const currentPermission = await Location.getForegroundPermissionsAsync();
@@ -36,13 +41,39 @@ export async function ensureForegroundLocationPermission(): Promise<ForegroundLo
     };
   }
 
-  const requestedPermission = await Location.requestForegroundPermissionsAsync();
+  if (!foregroundPermissionRequestPromise) {
+    foregroundPermissionRequestPromise =
+      Location.requestForegroundPermissionsAsync()
+        .then((requestedPermission) => {
+          return {
+            canAskAgain: requestedPermission.canAskAgain,
+            granted: requestedPermission.granted,
+            status: requestedPermission.status,
+          };
+        })
+        .finally(() => {
+          foregroundPermissionRequestPromise = null;
+        });
+  }
 
-  return {
-    canAskAgain: requestedPermission.canAskAgain,
-    granted: requestedPermission.granted,
-    status: requestedPermission.status,
-  };
+  return foregroundPermissionRequestPromise;
+}
+
+export async function requestForegroundLocationPermissionOnAppLaunch() {
+  if (Platform.OS === "web" || getDevelopmentLocationOverride()) {
+    return;
+  }
+
+  const currentPermission = await Location.getForegroundPermissionsAsync();
+
+  if (
+    currentPermission.granted ||
+    currentPermission.status !== Location.PermissionStatus.UNDETERMINED
+  ) {
+    return;
+  }
+
+  await ensureForegroundLocationPermission();
 }
 
 type DeviceCoordinateOptions = {

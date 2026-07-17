@@ -1,7 +1,11 @@
 import { Platform } from "react-native";
 
 import { PublicEnv, buildApiUrl } from "@/constants/env";
-import type { ProfilePost, ProfilePostMedia, ProfilePostTag } from "@/features/profile/types";
+import type {
+  ProfilePost,
+  ProfilePostMedia,
+  ProfilePostTag,
+} from "@/features/profile/types";
 
 type GetHotspotPostsRequest = {
   accessToken?: string | null;
@@ -12,12 +16,41 @@ type GetHotspotPostsRequest = {
   tokenType?: string | null;
 };
 
+export type HotspotPostsSortState = {
+  empty: boolean;
+  sorted: boolean;
+  unsorted: boolean;
+};
+
+export type HotspotPostsPageable = {
+  offset: number;
+  pageNumber: number;
+  pageSize: number;
+  paged: boolean;
+  sort: HotspotPostsSortState | null;
+  unpaged: boolean;
+};
+
+export type HotspotPost = ProfilePost & {
+  commentCount: number | null;
+  likeCount: number | null;
+  postId: number;
+  shareCount: number | null;
+  userNumericId: number;
+};
+
 export type HotspotPostsPage = {
-  content: ProfilePost[];
+  content: HotspotPost[];
+  empty: boolean;
+  first: boolean;
   isLast: boolean;
+  last: boolean;
+  number: number;
   numberOfElements: number;
   page: number;
+  pageable: HotspotPostsPageable | null;
   size: number;
+  sort: HotspotPostsSortState | null;
 };
 
 function resolveHotspotPostsUrl(hotspotId: number, query: URLSearchParams) {
@@ -33,7 +66,7 @@ function resolveHotspotPostsUrl(hotspotId: number, query: URLSearchParams) {
 function buildPostsQuery({
   page = 0,
   size = 10,
-  sort = [],
+  sort = ["createdAt,DESC"],
 }: Pick<GetHotspotPostsRequest, "page" | "size" | "sort">) {
   const query = new URLSearchParams({
     page: `${page}`,
@@ -61,6 +94,10 @@ function readNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function readNullableNumber(value: unknown) {
+  return value === null ? null : readNumber(value);
+}
+
 function readString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
@@ -71,6 +108,33 @@ function readBoolean(value: unknown) {
 
 function isNonNull<T>(value: T | null): value is T {
   return value !== null;
+}
+
+function parseSortState(value: unknown): HotspotPostsSortState | null {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  return {
+    empty: readBoolean(value.empty),
+    sorted: readBoolean(value.sorted),
+    unsorted: readBoolean(value.unsorted),
+  };
+}
+
+function parsePageable(value: unknown): HotspotPostsPageable | null {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  return {
+    offset: readNumber(value.offset) ?? 0,
+    pageNumber: readNumber(value.pageNumber) ?? 0,
+    pageSize: readNumber(value.pageSize) ?? 0,
+    paged: readBoolean(value.paged),
+    sort: parseSortState(value.sort),
+    unpaged: readBoolean(value.unpaged),
+  };
 }
 
 function parsePostTag(value: unknown): ProfilePostTag | null {
@@ -114,7 +178,7 @@ function parsePostMedia(value: unknown): ProfilePostMedia | null {
   };
 }
 
-function parsePost(value: unknown): ProfilePost | null {
+function parsePost(value: unknown): HotspotPost | null {
   if (!isObject(value)) {
     return null;
   }
@@ -150,7 +214,9 @@ function parsePost(value: unknown): ProfilePost | null {
 
   return {
     id: `${postId}`,
+    postId,
     userId: `${userId}`,
+    userNumericId: userId,
     username: readString(value.username),
     displayName: readString(value.displayName),
     text: readString(value.content),
@@ -170,6 +236,9 @@ function parsePost(value: unknown): ProfilePost | null {
     medias: sortedMedias,
     createdAt,
     pointRemaining: readNumber(value.pointRemaining),
+    likeCount: readNullableNumber(value.likeCount),
+    commentCount: readNullableNumber(value.commentCount),
+    shareCount: readNullableNumber(value.shareCount),
   };
 }
 
@@ -186,10 +255,16 @@ function parsePostsResponse(value: unknown): HotspotPostsPage | null {
 
   return {
     content: posts,
+    empty: readBoolean(value.empty),
+    first: readBoolean(value.first),
     isLast: readBoolean(value.last),
+    last: readBoolean(value.last),
+    number: readNumber(value.number) ?? 0,
     numberOfElements: readNumber(value.numberOfElements) ?? posts.length,
     page: readNumber(value.number) ?? 0,
+    pageable: parsePageable(value.pageable),
     size: readNumber(value.size) ?? posts.length,
+    sort: parseSortState(value.sort),
   };
 }
 
