@@ -1,6 +1,6 @@
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 
-export type PlanStatus = "DRAFT" | "READY" | "STARTED";
+export type PlanStatus = "DRAFT" | "READY" | "STARTED" | "COMPLETED";
 export type OptimizeCriterion = "DISTANCE" | "TIME";
 
 export type PlannerHotspot = {
@@ -11,6 +11,21 @@ export type PlannerHotspot = {
   longitude: number;
   openingTime?: string;
   closingTime?: string;
+  description?: string;
+  historyInformation?: string;
+  xp?: number;
+  point?: number;
+  estimatedDurationMin?: number;
+  estimatedDurationMax?: number;
+  startTime?: string;
+  endTime?: string;
+  status?: string;
+  medias?: Array<{
+    mediaId?: number;
+    fileUrl?: string;
+    mediaType?: string;
+    mimeType?: string;
+  }>;
 };
 
 export type HotspotSuggestion = {
@@ -42,7 +57,7 @@ export type UserPlan = {
   startLatitude: number | null;
   startLongitude: number | null;
   isOptimized: boolean;
-  startedAt: string;
+  startedAt: string | null;
   createdAt: string;
   updatedAt: string;
   completedStops: number;
@@ -50,7 +65,7 @@ export type UserPlan = {
   stops: Array<{
     planHotspotId: number;
     stopIndex: number;
-    userNote: string;
+    userNote: string | null;
     isCheckedIn: boolean;
     hotspot: PlannerHotspot;
   }>;

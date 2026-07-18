@@ -137,6 +137,9 @@ type SearchRoutesRequest = {
   sortBy?: string;
   sortDirection?: "ASC" | "DESC";
   status?: string;
+  type?: string;
+  tagName?: string;
+  createdByUserId?: number;
   tokenType?: string | null;
 };
 
@@ -620,6 +623,9 @@ export async function searchRoutes({
   sortBy = "routeId",
   sortDirection = "DESC",
   status,
+  type,
+  tagName,
+  createdByUserId,
   tokenType,
 }: SearchRoutesRequest = {}): Promise<RoutePageDto> {
   const params = new URLSearchParams({
@@ -631,12 +637,19 @@ export async function searchRoutes({
 
   // Backend SearchRequest có thể hỗ trợ filter động. Nếu BE chưa nhận filter này,
   // mobile vẫn lọc status ở client sau khi nhận content.
-  if (status) {
-    params.set("status", status);
-    params.set("filters[0].field", "status");
-    params.set("filters[0].operator", "EQUALS");
-    params.set("filters[0].value", status);
+  const filters: Array<{ field: string; value: string }> = [];
+  if (status) filters.push({ field: "status", value: status });
+  if (type) filters.push({ field: "type", value: type });
+  if (tagName) filters.push({ field: "tag.tagName", value: tagName });
+  if (createdByUserId != null) {
+    filters.push({ field: "createdBy.userId", value: String(createdByUserId) });
   }
+
+  filters.forEach((filter, index) => {
+    params.set(`filters[${index}].field`, filter.field);
+    params.set(`filters[${index}].operator`, "EQUALS");
+    params.set(`filters[${index}].value`, filter.value);
+  });
 
   const url = `${resolveRouteUrl("/api/v1/routes/search")}?${params.toString()}`;
   const body = await fetchRouteJson(url, accessToken, tokenType);
