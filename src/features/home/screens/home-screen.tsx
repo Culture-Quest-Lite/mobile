@@ -40,9 +40,8 @@ import { getMyProfile } from "@/features/profile/api/get-me";
 import { applyLevelProgressToProfile } from "@/features/profile/lib/level-progress";
 import {
   type RouteDto,
-  getRouteCoverUrl,
-  getRouteStopCount,
   getRoutesByHotspot,
+  mapRouteToRouteItem,
 } from "@/features/route/api/route-api";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import {
@@ -50,6 +49,7 @@ import {
   useCheckedInApiHotspots,
   useCheckins,
 } from "@/lib/checkin-store";
+import { type RouteItem } from "@/lib/demo-data";
 import {
   type AppCoordinate,
   ensureForegroundLocationPermission,
@@ -67,8 +67,6 @@ import { getActiveTagNames } from "../api/get-tags";
 import {
   type CommunityBoardTab,
   type NearbyCategoryCard,
-  type NearbyRouteCard,
-  type RouteDifficulty,
   activeJourney,
   communityBoards,
   communityTabs,
@@ -237,10 +235,7 @@ const nearbyPlaceShadowStyle = {
   elevation: 5,
 } as const;
 
-const routeDifficultyStyles: Record<
-  RouteDifficulty,
-  { background: string; color: string }
-> = {
+const routeDifficultyStyles: Record<string, { background: string; color: string }> = {
   Dễ: {
     background: "#DCFCE7",
     color: "#15803D",
@@ -250,6 +245,10 @@ const routeDifficultyStyles: Record<
     color: "#DC2626",
   },
   "Trung bình": {
+    background: "#FEF3C7",
+    color: "#B45309",
+  },
+  Vừa: {
     background: "#FEF3C7",
     color: "#B45309",
   },
@@ -382,19 +381,14 @@ type NearbyPlaceListItem = {
 
 type NearbyPlacesSectionStatus = "empty" | "loading" | "ready";
 type SuggestedRoutesSectionStatus = "empty" | "loading" | "ready";
-type SuggestedRouteCard = NearbyRouteCard & {
-  id: string | null;
-};
+type SuggestedRouteCard = RouteItem;
 
 const defaultNearbySearchDistanceMeters = 20;
 const nearbyDistanceSliderMinimumMeters = 20;
 const nearbyDistanceSliderMaximumMeters = 1000;
 const nearbyDistanceSliderStepMeters = 20;
-const suggestedRouteCardImageHeight = 142;
-const suggestedRouteSubtitleHeight = 30;
-const suggestedRouteCardHeight = 254;
-const suggestedRouteSubtitleLineCount = 2;
-const suggestedRouteSubtitleReservedCharacters = 14;
+const suggestedRouteCardImageHeight = 136;
+const suggestedRouteCardHeight = 248;
 const nearbyPlaceTitleHeight = 22;
 const nearbyPlaceCategoryHeight = 16;
 const nearbyPlaceDetailRowHeight = 18;
@@ -402,8 +396,6 @@ const nearbyPlaceContentHeight = 132;
 const nearbyPlaceFallbackImageUri =
   "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
 const nearbyPlaceFallbackRating = "4.9";
-const suggestedRouteFallbackImageUri =
-  "https://i.pinimg.com/1200x/b9/05/dd/b905ddb3d6e87ba4f85692125c1eec2a.jpg";
 const defaultLocationPreviewRegion: Region = {
   latitude: 10.8414,
   longitude: 106.8288,
@@ -502,48 +494,6 @@ function formatNearbyTimeWindow(start?: string | null, end?: string | null) {
   return formattedStart ?? formattedEnd;
 }
 
-function trimTrailingZeroDecimal(value: number) {
-  if (!Number.isFinite(value)) {
-    return "0";
-  }
-
-  if (Number.isInteger(value)) {
-    return `${value}`;
-  }
-
-  return value.toFixed(value >= 10 ? 0 : 1).replace(/\.0$/, "");
-}
-
-function formatRouteDistanceLabel(distanceKm: number) {
-  if (!Number.isFinite(distanceKm) || distanceKm <= 0) {
-    return "0 km";
-  }
-
-  return `${trimTrailingZeroDecimal(distanceKm)} km`;
-}
-
-function formatRouteDurationLabel(estimateTime: number) {
-  if (!Number.isFinite(estimateTime) || estimateTime <= 0) {
-    return "0 phút";
-  }
-
-  const unit = estimateTime <= 12 ? "giờ" : "phút";
-  return `${trimTrailingZeroDecimal(estimateTime)} ${unit}`;
-}
-
-function mapApiRouteDifficultyToCardDifficulty(
-  difficulty: string,
-): RouteDifficulty {
-  switch (difficulty.trim().toUpperCase()) {
-    case "EASY":
-      return "Dễ";
-    case "HARD":
-      return "Khó";
-    default:
-      return "Trung bình";
-  }
-}
-
 function sortNearbyHotspotsByDistance(
   hotspots: NearbyHotspotDto[],
   currentCoordinate: Pick<AppCoordinate, "latitude" | "longitude">,
@@ -574,19 +524,15 @@ function dedupeRoutesById(routes: RouteDto[]) {
 }
 
 function mapRouteToSuggestedRouteCard(route: RouteDto): SuggestedRouteCard {
-  return {
-    difficulty: mapApiRouteDifficultyToCardDifficulty(route.difficulty),
-    distance: formatRouteDistanceLabel(route.totalDistance),
-    duration: formatRouteDurationLabel(route.estimateTime),
-    id: String(route.routeId),
-    imageUri: getRouteCoverUrl(route) || suggestedRouteFallbackImageUri,
-    stops: `${getRouteStopCount(route).toString().padStart(2, "0")} điểm`,
-    subtitle:
-      route.description ||
-      `${getRouteStopCount(route)} điểm dừng phù hợp để bắt đầu từ địa điểm gần bạn.`,
-    title: route.routeName,
-    xp: `${formatRewardLabel(route.xp || route.point, "+0")} XP`,
-  };
+  return mapRouteToRouteItem(route);
+}
+
+function getSuggestedRouteDescription(route: SuggestedRouteCard) {
+  return route.description?.trim() || route.subtitle.trim() || route.theme.trim();
+}
+
+function getSuggestedRouteTagLabel(route: SuggestedRouteCard) {
+  return route.era.trim() || route.theme.trim();
 }
 
 function getProfileInitials(name: string, username: string) {
@@ -917,98 +863,6 @@ function SectionEmptyState({
       <Text className="text-[15px] font-bold text-[#3B4454]">{title}</Text>
       <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
         {description}
-      </Text>
-    </View>
-  );
-}
-
-function trimInlineReadMoreBaseText(text: string) {
-  return text.replace(/[\s.,;:!?-]+$/u, "").trimEnd();
-}
-
-function SuggestedRouteSubtitle({ text }: { text: string }) {
-  const normalizedText = text.trim();
-  const [containerWidth, setContainerWidth] = useState(0);
-  const measurementSignature = `${containerWidth}:${normalizedText}`;
-  const [measuredSubtitle, setMeasuredSubtitle] = useState<{
-    collapsedText: string | null;
-    shouldShowInlineReadMore: boolean;
-    signature: string;
-  }>({
-    collapsedText: null,
-    shouldShowInlineReadMore: false,
-    signature: "",
-  });
-  const hasMeasuredCurrentSubtitle =
-    measuredSubtitle.signature === measurementSignature;
-
-  return (
-    <View
-      className="w-full"
-      style={{ height: suggestedRouteSubtitleHeight }}
-      onLayout={(event) => {
-        const nextWidth = Math.round(event.nativeEvent.layout.width);
-        setContainerWidth((currentWidth) =>
-          currentWidth === nextWidth ? currentWidth : nextWidth,
-        );
-      }}
-    >
-      {containerWidth > 0 && !hasMeasuredCurrentSubtitle ? (
-        <Text
-          pointerEvents="none"
-          className="absolute opacity-0 text-[13px] leading-[17px] text-[#8E869A]"
-          style={{ width: containerWidth }}
-          onTextLayout={(event) => {
-            const lines = event.nativeEvent.lines;
-
-            if (lines.length <= suggestedRouteSubtitleLineCount) {
-              setMeasuredSubtitle({
-                collapsedText: normalizedText,
-                shouldShowInlineReadMore: false,
-                signature: measurementSignature,
-              });
-              return;
-            }
-
-            const visibleText = lines
-              .slice(0, suggestedRouteSubtitleLineCount)
-              .map((line) => line.text)
-              .join("")
-              .replace(/\s+/g, " ")
-              .trim();
-            const nextCollapsedText = trimInlineReadMoreBaseText(
-              visibleText.slice(
-                0,
-                Math.max(
-                  visibleText.length - suggestedRouteSubtitleReservedCharacters,
-                  suggestedRouteSubtitleLineCount * 8,
-                ),
-              ),
-            );
-
-            setMeasuredSubtitle({
-              collapsedText:
-                nextCollapsedText || trimInlineReadMoreBaseText(visibleText),
-              shouldShowInlineReadMore: true,
-              signature: measurementSignature,
-            });
-          }}
-        >
-          {normalizedText}
-        </Text>
-      ) : null}
-
-      <Text
-        className="text-[13px] leading-[17px] text-[#8E869A]"
-        numberOfLines={suggestedRouteSubtitleLineCount}
-      >
-        {hasMeasuredCurrentSubtitle
-          ? (measuredSubtitle.collapsedText ?? normalizedText)
-          : normalizedText}
-        {hasMeasuredCurrentSubtitle &&
-        measuredSubtitle.shouldShowInlineReadMore ? (
-          <Text className="font-bold text-[#7E6F82]">... Xem thêm</Text>
-        ) : null}
       </Text>
     </View>
   );
@@ -2946,28 +2800,28 @@ export default function HomeScreen() {
               >
                 {suggestedRoutes.map((route, index) => (
                   <Pressable
-                    key={route.id ?? `${route.title}-${index}`}
+                    key={route.id || `${route.title}-${index}`}
                     className={
                       index === suggestedRoutes.length - 1 ? "" : "mr-4"
                     }
-                    disabled={!route.id}
                     onPress={() => {
-                      if (route.id) {
-                        router.push(`/route/${route.id}` as Href);
-                      }
+                      router.push(`/route/${route.id}` as Href);
                     }}
                     style={{ width: nearbyRouteCardWidth }}
                   >
                     <View
-                      className="overflow-hidden rounded-[10px] border border-[#EEF1F4] bg-white"
+                      className="overflow-hidden border border-[#EEF1F4] bg-white"
                       style={[
                         cardShadowStyle,
-                        { height: suggestedRouteCardHeight },
+                        {
+                          borderRadius: 16,
+                          minHeight: suggestedRouteCardHeight,
+                        },
                       ]}
                     >
                       <View className="relative">
                         <Image
-                          source={route.imageUri}
+                          source={route.cover}
                           contentFit="cover"
                           transition={220}
                           cachePolicy="memory-disk"
@@ -2977,42 +2831,46 @@ export default function HomeScreen() {
                           }}
                         />
 
-                        <View className="absolute right-3 top-3 rounded-full bg-[#FFF1F6] px-2.5 py-1">
-                          <Text className="text-[11px] font-extrabold text-[#EB489B]">
-                            {route.xp}
+                        <View className="absolute right-2 top-2 rounded-full bg-[#FFF1F6] px-2 py-[5px]">
+                          <Text className="text-[10px] font-extrabold text-[#EB489B]">
+                            +{route.xp} XP
                           </Text>
                         </View>
                       </View>
 
-                      <View className="flex-1 gap-1 px-4 pb-3 pt-3">
+                      <View className="px-3 pb-3 pt-2" style={{ gap: 1 }}>
                         <View
-                          className="flex-row flex-wrap items-center gap-1"
-                          style={{ minHeight: 20 }}
+                          className="flex-row flex-wrap items-center gap-1.5"
                         >
-                          <View className="rounded-full bg-[#FFF1F6] px-2.5 py-1">
-                            <Text className="text-[11px] font-extrabold text-[#EB489B]">
+                          <View className="rounded-full bg-[#FFF1F6] px-2 py-[5px]">
+                            <Text className="text-[10px] font-extrabold text-[#EB489B]">
                               {route.distance}
                             </Text>
                           </View>
-                          <View className="rounded-full bg-[#FFF4EF] px-2.5 py-1">
-                            <Text className="text-[11px] font-extrabold text-[#F58752]">
+                          <View className="rounded-full bg-[#FFF4EF] px-2 py-[5px]">
+                            <Text className="text-[10px] font-extrabold text-[#F58752]">
                               {route.duration}
                             </Text>
                           </View>
 
                           <View
-                            className="rounded-full px-2.5 py-1"
+                            className="rounded-full px-2 py-[5px]"
                             style={{
                               backgroundColor:
-                                routeDifficultyStyles[route.difficulty]
-                                  .background,
+                                (
+                                  routeDifficultyStyles[route.difficulty] ??
+                                  routeDifficultyStyles["Trung bình"]
+                                ).background,
                             }}
                           >
                             <Text
-                              className="text-[11px] font-extrabold"
+                              className="text-[10px] font-extrabold"
                               style={{
                                 color:
-                                  routeDifficultyStyles[route.difficulty].color,
+                                  (
+                                    routeDifficultyStyles[route.difficulty] ??
+                                    routeDifficultyStyles["Trung bình"]
+                                  ).color,
                               }}
                             >
                               {route.difficulty}
@@ -3021,13 +2879,38 @@ export default function HomeScreen() {
                         </View>
 
                         <Text
-                          className="text-[16px] font-extrabold leading-4 text-[#2B2233]"
-                          numberOfLines={1}
+                          className="text-[14px] font-semibold text-[#2B2233]"
+                          numberOfLines={2}
+                          ellipsizeMode="tail"
+                          style={{ lineHeight: 16 }}
                         >
                           {route.title}
                         </Text>
 
-                        <SuggestedRouteSubtitle text={route.subtitle} />
+                        <Text
+                          className="text-[12px] text-[#7A6F67]"
+                          numberOfLines={2}
+                          ellipsizeMode="tail"
+                          style={{ lineHeight: 13 }}
+                        >
+                          {getSuggestedRouteDescription(route)}
+                        </Text>
+
+                        <View className="flex-row flex-wrap items-center justify-end gap-1.5 pt-0.5">
+                          {getSuggestedRouteTagLabel(route) ? (
+                            <View className="rounded-full bg-[#F4EFF8] px-2 py-[5px]">
+                              <Text className="text-[10px] font-extrabold text-[#6F657A]">
+                                {getSuggestedRouteTagLabel(route)}
+                              </Text>
+                            </View>
+                          ) : null}
+
+                          <View className="rounded-full bg-[#FFF7E8] px-2 py-[5px]">
+                            <Text className="text-[10px] font-extrabold text-[#D97706]">
+                              {route.hotspotIds.length} điểm dừng
+                            </Text>
+                          </View>
+                        </View>
                       </View>
                     </View>
                   </Pressable>

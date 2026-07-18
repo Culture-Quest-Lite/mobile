@@ -116,6 +116,7 @@ function parseStory(value: unknown) {
   }
 
   return {
+    audioScript: readString(value.audioScript) || readString(value.audio_script),
     content: readString(value.content),
     distanceToNext: readNumber(value.distanceToNext),
     medias: Array.isArray(value.medias)

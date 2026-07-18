@@ -34,6 +34,7 @@ export type NearbyHotspotStoryTagDto = {
 };
 
 export type NearbyHotspotStoryDto = {
+  audioScript: string;
   content: string;
   distanceToNext: number | null;
   medias: NearbyHotspotMediaDto[];
@@ -191,6 +192,7 @@ function parseStory(value: unknown): NearbyHotspotStoryDto | null {
   }
 
   return {
+    audioScript: readString(value.audioScript) || readString(value.audio_script),
     content: readString(value.content),
     distanceToNext: readNumber(value.distanceToNext),
     medias: Array.isArray(value.medias)
