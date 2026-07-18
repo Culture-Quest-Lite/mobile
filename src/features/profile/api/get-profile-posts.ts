@@ -33,12 +33,12 @@ function resolveProfilePostsUrl(path: string, query: URLSearchParams) {
     return buildApiUrl(normalizedPath);
   }
 
-  return `http://13.158.40.56:8080${normalizedPath}`;
+  return `http://3.113.215.65:8080${normalizedPath}`;
 }
 
 function buildPostsQuery({
   page = 0,
-  size = 20,
+  size = 10,
   sort = ["createdAt,DESC"],
 }: FetchProfilePostsRequest) {
   const query = new URLSearchParams({
@@ -65,6 +65,10 @@ function isNullableString(value: unknown): value is string | null {
 
 function readNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readNullableNumber(value: unknown) {
+  return value === null ? null : readNumber(value);
 }
 
 function readString(value: unknown) {
@@ -155,6 +159,7 @@ function parsePost(value: unknown): ProfilePost | null {
     null;
 
   return {
+    commentCount: readNullableNumber(value.commentCount),
     id: `${postId}`,
     userId: `${userId}`,
     username: readString(value.username),
@@ -175,7 +180,9 @@ function parsePost(value: unknown): ProfilePost | null {
     tags,
     medias: sortedMedias,
     createdAt,
+    likeCount: readNullableNumber(value.likeCount),
     pointRemaining: readNumber(value.pointRemaining),
+    shareCount: readNullableNumber(value.shareCount),
   };
 }
 

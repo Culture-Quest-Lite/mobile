@@ -34,6 +34,7 @@ export type HotspotStoryMediaDto = {
 };
 
 export type HotspotStoryDto = {
+  audioScript: string;
   content: string;
   hotspotId: number;
   medias: HotspotStoryMediaDto[];
@@ -149,6 +150,7 @@ function parseStory(value: unknown): HotspotStoryDto | null {
   }
 
   return {
+    audioScript: readString(value.audioScript) || readString(value.audio_script),
     content: readString(value.content),
     hotspotId,
     medias: Array.isArray(value.medias)

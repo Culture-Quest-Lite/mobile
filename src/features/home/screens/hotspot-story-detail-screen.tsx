@@ -19,8 +19,8 @@ import {
   type TextProps,
 } from "react-native";
 import Animated, {
-  cancelAnimation,
   Easing,
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -336,6 +336,9 @@ export default function HotspotStoryDetailScreen() {
   const [descriptionExpandedStoryId, setDescriptionExpandedStoryId] = useState<
     string | null
   >(null);
+  const [audioScriptExpandedStoryId, setAudioScriptExpandedStoryId] = useState<
+    string | null
+  >(null);
   const [gallerySelection, setGallerySelection] = useState<{
     index: number;
     storyId: string;
@@ -595,6 +598,10 @@ export default function HotspotStoryDetailScreen() {
   const shouldShowDescriptionToggle =
     story.scriptParagraphs.length > 1 || storyDescription.length > 220;
   const isDescriptionExpanded = descriptionExpandedStoryId === resolvedStoryId;
+  const audioScript = story.audioScript.trim();
+  const shouldShowAudioScriptToggle =
+    audioScript.length > 220 || audioScript.includes("\n");
+  const isAudioScriptExpanded = audioScriptExpandedStoryId === resolvedStoryId;
   const vinylImageSource = resolveStoryImageSource(story);
   const isAudioDiscSpinning = audioStatus.playing || audioStatus.isBuffering;
 
@@ -624,7 +631,7 @@ export default function HotspotStoryDetailScreen() {
               source={heroImageSource}
               contentFit="cover"
               contentPosition="center"
-              transition={220}
+              transition={520}
               cachePolicy="memory-disk"
               style={{ height: "100%", width: "100%" }}
             />
@@ -733,16 +740,16 @@ export default function HotspotStoryDetailScreen() {
                 style={{ backgroundColor: pageBackground }}
               >
                 <View className="items-center">
-                    <Pressable
-                      onPress={() => void handleToggleAudioPlayback()}
-                      hitSlop={8}
-                      style={{ alignItems: "center" }}
-                    >
-                      <VinylRecord
-                        imageSource={vinylImageSource}
-                        isPlaying={isAudioDiscSpinning}
-                      />
-                    </Pressable>
+                  <Pressable
+                    onPress={() => void handleToggleAudioPlayback()}
+                    hitSlop={8}
+                    style={{ alignItems: "center" }}
+                  >
+                    <VinylRecord
+                      imageSource={vinylImageSource}
+                      isPlaying={isAudioDiscSpinning}
+                    />
+                  </Pressable>
                   <Text
                     className="mt-1 text-center text-[18px] font-semibold text-[#201B18]"
                     style={{ lineHeight: 22 }}
@@ -901,6 +908,49 @@ export default function HotspotStoryDetailScreen() {
                 ) : null}
               </View>
             </View>
+
+            {audioScript ? (
+              <View className="mt-2">
+                <Text
+                  className="text-[14px] font-black uppercase tracking-[1.4px]"
+                  style={{ color: palette.mutedText, lineHeight: 18 }}
+                >
+                  Kịch bản audio
+                </Text>
+
+                <View
+                  className="mt-2 rounded-[16px] px-4 py-3"
+                  style={{ backgroundColor: pageBackground }}
+                >
+                  <Text
+                    className="text-[15px] text-[#6F657A]"
+                    numberOfLines={isAudioScriptExpanded ? undefined : 4}
+                    style={{ lineHeight: 20, paddingBottom: 4, textAlign: "left" }}
+                  >
+                    {audioScript}
+                  </Text>
+
+                  {shouldShowAudioScriptToggle ? (
+                    <Pressable
+                      className="mt-2 self-end"
+                      hitSlop={8}
+                      onPress={() =>
+                        setAudioScriptExpandedStoryId((current) =>
+                          current === resolvedStoryId ? null : resolvedStoryId,
+                        )
+                      }
+                    >
+                      <Text
+                        className="text-[12px]"
+                        style={{ color: palette.mutedText, lineHeight: 14 }}
+                      >
+                        {isAudioScriptExpanded ? "Rút gọn" : "Xem thêm"}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
 
             <View className="mt-2">
               <View className="flex-row items-center justify-between gap-3">

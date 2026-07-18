@@ -73,14 +73,9 @@ import { HotspotGpsCheckinOverlay } from "../components/hotspot-gps-checkin-over
 import { avatarImageUri } from "../data/home-screen.mock";
 import { cacheHotspotDetail } from "../data/hotspot-detail-cache";
 import {
-  useHotspotPersonalPosts,
-  type HotspotPersonalPost,
-} from "../data/hotspot-post-store";
-import {
   getCachedHotspotStories,
 } from "../data/hotspot-story-cache";
 import {
-  getHotspotBySlug,
   type HotspotDetail,
 } from "../data/hotspots";
 import { resolveSelectedHotspotId } from "../utils/resolve-selected-hotspot-id";
@@ -660,18 +655,6 @@ function getRouteBadgeColors(label: string) {
   return { backgroundColor: "rgba(255,255,255,0.9)", textColor: "#5E7486" };
 }
 
-function getRouteLookupIds(hotspot: HotspotDetail) {
-  const explicitLookup: Record<string, string[]> = {
-    "bao-tang-my-thuat": ["bao-tang"],
-    "buu-dien-sai-gon": ["buu-dien"],
-    "dinh-doc-lap": ["dinh-doc-lap"],
-    "nha-tho-duc-ba": ["nha-tho-duc-ba"],
-    "pho-di-bo-nguyen-hue": ["pho-di-bo"],
-  };
-
-  return explicitLookup[hotspot.slug] ?? [];
-}
-
 
 function dedupeRouteItemsById(items: RouteItem[]) {
   return Array.from(
@@ -713,24 +696,6 @@ function formatPersonalExperienceDate(isoTimestamp: string) {
   return `${parsedDate.getDate().toString().padStart(2, "0")}/${(parsedDate.getMonth() + 1)
     .toString()
     .padStart(2, "0")}/${parsedDate.getFullYear()}`;
-}
-
-function buildSavedPersonalExperienceItems(
-  posts: HotspotPersonalPost[],
-): PersonalExperienceItem[] {
-  return posts.map((post) => ({
-    avatarUri: post.authorAvatarUri || avatarImageUri,
-    date: formatPersonalExperienceDate(post.createdAt),
-    id: post.id,
-    media: post.media.map((media) => ({
-      duration: media.durationLabel,
-      type: media.type,
-      uri: media.uri,
-    })),
-    rating: post.rating,
-    text: post.text,
-    user: post.authorName,
-  }));
 }
 
 function buildApiPersonalExperienceItems(
@@ -1841,7 +1806,7 @@ function HotspotRouteCarouselCard({
           </View>
         </View>
 
-        <View className="gap-1.5 px-3 pb-3 pt-2">
+        <View className="px-3 pb-3 pt-2" style={{ gap: 1 }}>
           <View className="flex-row flex-wrap items-center gap-1.5">
             <View className="rounded-full bg-[#FFF1F6] px-2 py-[5px]">
               <Text className="text-[10px] font-extrabold text-[#EB489B]">
@@ -1870,7 +1835,7 @@ function HotspotRouteCarouselCard({
             className="text-[14px] font-semibold text-[#2B2233]"
             numberOfLines={2}
             ellipsizeMode="tail"
-            style={{ lineHeight: 18 }}
+            style={{ lineHeight: 16 }}
           >
             {route.title}
           </Text>
@@ -1879,12 +1844,12 @@ function HotspotRouteCarouselCard({
             className="text-[12px] text-[#7A6F67]"
             numberOfLines={2}
             ellipsizeMode="tail"
-            style={{ lineHeight: 17 }}
+            style={{ lineHeight: 13 }}
           >
             {routeDescription}
           </Text>
 
-          <View className="flex-row flex-wrap items-center justify-end gap-1.5 pt-1">
+          <View className="flex-row flex-wrap items-center justify-end gap-1.5 pt-0.5">
             {routeTagLabel ? (
               <View className="rounded-full bg-[#F4EFF8] px-2 py-[5px]">
                 <Text className="text-[10px] font-extrabold text-[#6F657A]">
@@ -2938,7 +2903,6 @@ export default function HotspotDetailScreen() {
     [remoteHotspot, resolvedSlug],
   );
   const hotspot = remoteHotspotResult?.hotspot ?? null;
-  const savedPersonalPosts = useHotspotPersonalPosts(hotspot?.slug ?? resolvedSlug);
 
   useEffect(() => {
     if (!hotspot) {
@@ -3127,16 +3091,12 @@ export default function HotspotDetailScreen() {
     Math.max((screenWidth - relatedRouteScrollInset * 2) * 0.62, 208),
     232,
   );
-  const savedPersonalExperienceItems = buildSavedPersonalExperienceItems(
-    savedPersonalPosts,
-  );
   const apiPersonalExperienceItems = buildApiPersonalExperienceItems(
     apiHotspotPosts,
   );
-  const personalExperienceItems = dedupePersonalExperienceItems([
-    ...savedPersonalExperienceItems,
-    ...apiPersonalExperienceItems,
-  ]);
+  const personalExperienceItems = dedupePersonalExperienceItems(
+    apiPersonalExperienceItems,
+  );
   const summaryStats = buildSummaryStats({
     apiHotspot: remoteHotspot,
     hotspot,
