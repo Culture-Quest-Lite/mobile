@@ -21,6 +21,7 @@ export type StoryThemeTag = "history" | "culture" | "food" | "education";
 export type HotspotThemeStory = {
   audioDescription: string;
   audioDurationLabel: string;
+  audioScript: string;
   audioTitle: string;
   audioUrl?: string | null;
   cardColors: readonly [string, string];
@@ -339,6 +340,7 @@ export function buildHotspotThemeStories(
       audioDescription:
         "Một track kể chuyện ngắn giúp bạn nắm nhanh bối cảnh và cảm xúc chính của địa điểm.",
       audioDurationLabel,
+      audioScript: "",
       audioTitle: `Audio mở khóa về ${hotspot.title}`,
       cardColors: ["#D8E8FF", "#C8DCFF"],
       gallery: historyGallery,
@@ -362,6 +364,7 @@ export function buildHotspotThemeStories(
       audioDescription:
         "Nghe nhanh về không khí địa phương, vibe xung quanh và cách người ta trải nghiệm nơi này.",
       audioDurationLabel: "1 min khám phá",
+      audioScript: "",
       audioTitle: "Audio về không khí và văn hóa",
       cardColors: ["#F8D1DE", "#F2C2D3"],
       gallery: cultureGallery,
@@ -386,6 +389,7 @@ export function buildHotspotThemeStories(
       audioDescription:
         "Track ngắn gợi ý mạch trải nghiệm ăn uống sau check-in, phù hợp để bạn lên route tiếp.",
       audioDurationLabel: "58s audio",
+      audioScript: "",
       audioTitle: "Gợi ý ẩm thực sau check-in",
       cardColors: ["#F8D5C0", "#F3C2A4"],
       gallery: foodGallery,
@@ -410,6 +414,7 @@ export function buildHotspotThemeStories(
       audioDescription:
         "Một đoạn audio tóm tắt lưu ý, thời điểm phù hợp và mẹo nhỏ để bạn tiếp tục route hiệu quả hơn.",
       audioDurationLabel: "47s audio",
+      audioScript: "",
       audioTitle: "Ghi chú nhanh trước khi đi tiếp",
       cardColors: ["#DDD6FF", "#CEC6FF"],
       gallery: educationGallery,
@@ -464,6 +469,7 @@ export function buildHotspotThemeStoriesFromApi(
     const nextTagLabel = story.tag?.tagName.trim() || fallbackStory.tagLabel;
     const nextSummary =
       buildSummaryFromContent(story.content) ?? fallbackStory.summary;
+    const nextAudioScript = story.audioScript.trim();
 
     return {
       ...fallbackStory,
@@ -473,6 +479,7 @@ export function buildHotspotThemeStoriesFromApi(
       audioDurationLabel: audioUrl
         ? "Audio API"
         : getAudioStoryDurationLabel(story.content || hotspot.story),
+      audioScript: nextAudioScript || fallbackStory.audioScript,
       audioTitle: audioUrl ? nextTitle : fallbackStory.audioTitle,
       audioUrl,
       gallery: nextGallery,

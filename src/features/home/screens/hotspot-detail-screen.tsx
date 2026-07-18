@@ -1841,7 +1841,7 @@ function HotspotRouteCarouselCard({
           </View>
         </View>
 
-        <View className="gap-1.5 px-3 pb-3 pt-2">
+        <View className="px-3 pb-3 pt-2" style={{ gap: 1 }}>
           <View className="flex-row flex-wrap items-center gap-1.5">
             <View className="rounded-full bg-[#FFF1F6] px-2 py-[5px]">
               <Text className="text-[10px] font-extrabold text-[#EB489B]">
@@ -1870,7 +1870,7 @@ function HotspotRouteCarouselCard({
             className="text-[14px] font-semibold text-[#2B2233]"
             numberOfLines={2}
             ellipsizeMode="tail"
-            style={{ lineHeight: 18 }}
+            style={{ lineHeight: 16 }}
           >
             {route.title}
           </Text>
@@ -1879,12 +1879,12 @@ function HotspotRouteCarouselCard({
             className="text-[12px] text-[#7A6F67]"
             numberOfLines={2}
             ellipsizeMode="tail"
-            style={{ lineHeight: 17 }}
+            style={{ lineHeight: 13 }}
           >
             {routeDescription}
           </Text>
 
-          <View className="flex-row flex-wrap items-center justify-end gap-1.5 pt-1">
+          <View className="flex-row flex-wrap items-center justify-end gap-1.5 pt-0.5">
             {routeTagLabel ? (
               <View className="rounded-full bg-[#F4EFF8] px-2 py-[5px]">
                 <Text className="text-[10px] font-extrabold text-[#6F657A]">
