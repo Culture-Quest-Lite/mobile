@@ -2,6 +2,15 @@ import { PublicEnv, buildApiUrl } from "@/constants/env";
 
 export type RecordRouteStatus = "RECORDING" | "DRAFT" | "TRIAL" | string;
 
+export type RecordRouteHotspotDto = {
+  hotspotId: number;
+  hotspotName?: string;
+  address?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  orderIndex?: number | null;
+};
+
 export type RecordRouteDto = {
   routeId: number;
   routeName?: string;
@@ -12,7 +21,8 @@ export type RecordRouteDto = {
     tagId: number;
     tagName: string;
   } | null;
-  hotspotIds?: number[];
+  hotspots?: RecordRouteHotspotDto[];
+  medias?: unknown[];
 };
 
 type AuthRequest = {
@@ -30,6 +40,21 @@ function resolveUrl(path: string) {
     : `http://13.158.40.56:8080${path}`;
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function getErrorMessage(body: unknown, status: number) {
+  if (isObject(body)) {
+    for (const key of ["message", "error", "detail", "title"]) {
+      const value = body[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+  }
+  if (typeof body === "string" && body.trim()) return body.trim();
+  return `API ghi hành trình lỗi ${status}.`;
+}
+
 async function requestRecordRoute(
   path: string,
   { accessToken, tokenType }: AuthRequest,
@@ -44,37 +69,42 @@ async function requestRecordRoute(
     headers: {
       Accept: "application/json",
       Authorization: `${tokenType || "Bearer"} ${accessToken}`,
+      "X-Client-Type": "mobile",
     },
   });
 
   const text = await response.text();
-  const body = text ? JSON.parse(text) : null;
-
-  if (!response.ok) {
-    throw new Error(
-      body?.message || body?.error || `API ghi hành trình lỗi ${response.status}.`,
-    );
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text) as unknown;
+    } catch {
+      body = text;
+    }
   }
 
-  return (body?.data ?? body) as RecordRouteDto;
+  if (!response.ok) throw new Error(getErrorMessage(body, response.status));
+
+  const payload = isObject(body) && isObject(body.data) ? body.data : body;
+  if (!isObject(payload) || typeof payload.routeId !== "number") {
+    throw new Error("API ghi hành trình trả về dữ liệu không hợp lệ.");
+  }
+
+  return payload as RecordRouteDto;
 }
 
-/** B1: Tạo route CUSTOM với status RECORDING và tagDefault. */
+/** B1: tạo route CUSTOM/RECORDING. Explorer chỉ được có một route RECORDING. */
 export function startRecordRoute(auth: AuthRequest) {
   return requestRecordRoute("/api/v1/routes/record", auth, "POST");
 }
 
-/** B3: Kết thúc route đang record của explorer, chuyển RECORDING -> DRAFT. */
+/** B3: kết thúc route RECORDING hiện tại và chuyển sang DRAFT. */
 export function finishRecordRoute(auth: AuthRequest) {
   return requestRecordRoute("/api/v1/routes/record/finish", auth, "PUT");
 }
 
-/** B4: Submit một route nháp cụ thể, chuyển DRAFT -> TRIAL. */
-export function finalizeRecordRoute({
-  accessToken,
-  routeId,
-  tokenType,
-}: FinalizeRecordRouteRequest) {
+/** B4: submit một route DRAFT cụ thể và chuyển sang TRIAL. */
+export function finalizeRecordRoute({ accessToken, routeId, tokenType }: FinalizeRecordRouteRequest) {
   return requestRecordRoute(
     `/api/v1/routes/record/finalize/${routeId}`,
     { accessToken, tokenType },

@@ -88,6 +88,7 @@ export default function RootLayout() {
           <Stack.Screen name="profile/menu" />
           <Stack.Screen name="route/[id]" />
           <Stack.Screen name="route/custom/plan" />
+          <Stack.Screen name="route/custom/plan/[id]" />
           <Stack.Screen name="route/custom/record" />
           <Stack.Screen name="checkin/[id]" />
           <Stack.Screen name="hotspot/[slug]" />

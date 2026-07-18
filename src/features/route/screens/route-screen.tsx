@@ -38,8 +38,9 @@ import {
   unSaveRoute,
   type UserRouteProgressDto,
 } from "@/features/route/api/route-api";
+import { getMyUserPlans, type UserPlan } from "@/features/route/api/user-plan-api";
 
-type Tab = "official" | "active" | "completed" | "bookmarked" | "community";
+type Tab = "official" | "active" | "completed" | "bookmarked" | "plans" | "community";
 type RouteVariant =
   "official" | "active" | "completed" | "bookmarked" | "community";
 
@@ -115,6 +116,7 @@ const TAB_ITEMS: { key: Tab; label: string }[] = [
   { key: "active", label: "Đang đi" },
   { key: "completed", label: "Đã xong" },
   { key: "bookmarked", label: "Đã lưu" },
+  { key: "plans", label: "Kế hoạch của tôi" },
   { key: "community", label: "Cộng đồng" },
 ];
 
@@ -222,6 +224,8 @@ export default function RouteScreen() {
   const [abandoningProgressId, setAbandoningProgressId] = useState<
     number | null
   >(null);
+  const [myPlans, setMyPlans] = useState<UserPlan[]>([]);
+  const [planError, setPlanError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -234,7 +238,7 @@ export default function RouteScreen() {
         try {
           const accessToken = await getValidAccessToken();
 
-          const [officialResult, progressResult, savedResult] =
+          const [officialResult, progressResult, savedResult, plansResult] =
             await Promise.allSettled([
               getRoutes({
                 accessToken,
@@ -261,6 +265,9 @@ export default function RouteScreen() {
                   }),
               accessToken
                 ? getSavedRoutes({ accessToken, tokenType: session.tokenType })
+                : Promise.resolve([]),
+              accessToken
+                ? getMyUserPlans({ accessToken, tokenType: session.tokenType })
                 : Promise.resolve([]),
             ]);
 
@@ -357,6 +364,18 @@ export default function RouteScreen() {
             setSavedRoutesFromApi([]);
           }
 
+          if (plansResult.status === "fulfilled") {
+            setMyPlans(Array.isArray(plansResult.value) ? plansResult.value : []);
+            setPlanError(null);
+          } else {
+            setMyPlans([]);
+            setPlanError(
+              plansResult.reason instanceof Error
+                ? plansResult.reason.message
+                : "Không thể tải kế hoạch cá nhân.",
+            );
+          }
+
           if (officialResult.status === "rejected") {
             setRouteError(
               officialResult.reason instanceof Error
@@ -373,6 +392,7 @@ export default function RouteScreen() {
             setActiveRouteProgresses([]);
             setActiveRoutesFromApi([]);
             setSavedRoutesFromApi([]);
+            setMyPlans([]);
             setRouteError(
               error instanceof Error
                 ? error.message
@@ -674,6 +694,9 @@ export default function RouteScreen() {
             ) : (
               <EmptyState text="Bạn chưa lưu tuyến nào" />
             ))}
+          {tab === "plans" && (
+            <UserPlanTab plans={myPlans} error={planError} />
+          )}
           {tab === "community" && <CommunityTab />}
         </View>
       </ScrollView>
@@ -764,6 +787,73 @@ function ActiveProgressSummary({
           </Pressable>
         </View>
       </LinearGradient>
+    </View>
+  );
+}
+
+function UserPlanTab({ plans, error }: { plans: UserPlan[]; error: string | null }) {
+  const router = useRouter();
+
+  return (
+    <View className="gap-3">
+      <Pressable
+        className="overflow-hidden rounded-3xl"
+        onPress={() => router.push("/route/custom/plan" as Href)}
+      >
+        <LinearGradient
+          colors={["#7C5CFC", "#EB489B", "#F58752"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          className="p-4"
+        >
+          <Text className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+            Custom User Plan
+          </Text>
+          <Text className="mt-1 text-[18px] font-black text-white">
+            Tạo kế hoạch hành trình mới
+          </Text>
+          <Text className="mt-1 text-[12px] text-white/90">
+            Chọn hotspot, tối ưu thứ tự và bắt đầu khi bạn sẵn sàng.
+          </Text>
+        </LinearGradient>
+      </Pressable>
+
+      {error ? (
+        <View className="rounded-2xl border border-[#FFE1E8] bg-[#FFF5F8] px-4 py-3">
+          <Text className="text-[12px] font-semibold text-[#B42345]">{error}</Text>
+        </View>
+      ) : null}
+
+      {plans.length ? plans.map((plan) => {
+        const progress = Math.round(plan.progressPercentage || 0);
+        return (
+          <View key={plan.userPlanId} className="rounded-3xl border border-[#ECE7F4] bg-white p-4" style={cardShadowStyle}>
+            <View className="flex-row items-start justify-between gap-3">
+              <View className="flex-1">
+                <Text className="text-[16px] font-black text-[#2B2233]">{plan.name}</Text>
+                <Text className="mt-1 text-[12px] text-[#8E869A]" numberOfLines={2}>
+                  {plan.description || "Kế hoạch hành trình cá nhân"}
+                </Text>
+              </View>
+              <View className="rounded-full bg-[#F4EFFF] px-3 py-1.5">
+                <Text className="text-[10px] font-extrabold text-[#7658CF]">{plan.status}</Text>
+              </View>
+            </View>
+            <View className="mt-3 flex-row justify-between">
+              <Text className="text-[12px] font-semibold text-[#6E6177]">{plan.completedStops}/{plan.totalStops} điểm</Text>
+              <Text className="text-[12px] font-extrabold text-[#EB489B]">{progress}%</Text>
+            </View>
+            <View className="mt-2"><XPBar value={progress} max={100} trackColor="#ECEEF4" height={7} /></View>
+            <Pressable className="mt-3 rounded-2xl bg-[#EB489B] py-3" onPress={() => router.push(`/route/custom/plan/${plan.userPlanId}` as Href)}>
+              <Text className="text-center text-[13px] font-extrabold text-white">
+                {plan.status === "STARTED" ? "Tiếp tục kế hoạch" : "Xem chi tiết"}
+              </Text>
+            </Pressable>
+          </View>
+        );
+      }) : (
+        <EmptyState text="Bạn chưa có Custom User Plan nào" />
+      )}
     </View>
   );
 }
