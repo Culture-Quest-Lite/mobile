@@ -89,9 +89,6 @@ const fallbackPostImageUri =
   "https://i.pinimg.com/1200x/6d/cd/14/6dcd140b80b210ac445a0eddfc40784a.jpg";
 const fallbackPostAuthorName = "Minh Anh";
 const fallbackPostTimestamp = "02/07/2026";
-const fallbackPostLikeCount = 128;
-const fallbackPostCommentCount = 14;
-const fallbackPostShareCount = 2;
 const postMenuSections: {
   items: {
     description?: string;
@@ -1338,6 +1335,9 @@ function PostCard({
   const postMediaSources = resolvePostMediaUris(post);
   const visibilityIcon = getPostVisibilityIcon(post.visibility);
   const visibilityLabel = getPostVisibilityLabel(post.visibility);
+  const likeCount = post.likeCount ?? 0;
+  const commentCount = post.commentCount ?? 0;
+  const shareCount = post.shareCount ?? 0;
 
   return (
     <View className={`px-3 py-3 ${isLast ? "" : "border-b border-[#DEE3EA]"}`}>
@@ -1397,7 +1397,7 @@ function PostCard({
         <PostAction
           icon={{ ios: "heart.fill", android: "favorite", web: "favorite" }}
           tintColor="#F43F5E"
-          value={fallbackPostLikeCount}
+          value={likeCount}
         />
         <PostAction
           icon={{
@@ -1405,7 +1405,7 @@ function PostCard({
             android: "chat_bubble_outline",
             web: "chat_bubble_outline",
           }}
-          value={fallbackPostCommentCount}
+          value={commentCount}
         />
         <PostAction
           icon={{
@@ -1413,7 +1413,7 @@ function PostCard({
             android: "reply",
             web: "reply",
           }}
-          value={fallbackPostShareCount}
+          value={shareCount}
         />
       </View>
 

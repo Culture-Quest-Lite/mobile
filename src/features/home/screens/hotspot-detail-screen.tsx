@@ -73,14 +73,9 @@ import { HotspotGpsCheckinOverlay } from "../components/hotspot-gps-checkin-over
 import { avatarImageUri } from "../data/home-screen.mock";
 import { cacheHotspotDetail } from "../data/hotspot-detail-cache";
 import {
-  useHotspotPersonalPosts,
-  type HotspotPersonalPost,
-} from "../data/hotspot-post-store";
-import {
   getCachedHotspotStories,
 } from "../data/hotspot-story-cache";
 import {
-  getHotspotBySlug,
   type HotspotDetail,
 } from "../data/hotspots";
 import { resolveSelectedHotspotId } from "../utils/resolve-selected-hotspot-id";
@@ -660,18 +655,6 @@ function getRouteBadgeColors(label: string) {
   return { backgroundColor: "rgba(255,255,255,0.9)", textColor: "#5E7486" };
 }
 
-function getRouteLookupIds(hotspot: HotspotDetail) {
-  const explicitLookup: Record<string, string[]> = {
-    "bao-tang-my-thuat": ["bao-tang"],
-    "buu-dien-sai-gon": ["buu-dien"],
-    "dinh-doc-lap": ["dinh-doc-lap"],
-    "nha-tho-duc-ba": ["nha-tho-duc-ba"],
-    "pho-di-bo-nguyen-hue": ["pho-di-bo"],
-  };
-
-  return explicitLookup[hotspot.slug] ?? [];
-}
-
 
 function dedupeRouteItemsById(items: RouteItem[]) {
   return Array.from(
@@ -713,24 +696,6 @@ function formatPersonalExperienceDate(isoTimestamp: string) {
   return `${parsedDate.getDate().toString().padStart(2, "0")}/${(parsedDate.getMonth() + 1)
     .toString()
     .padStart(2, "0")}/${parsedDate.getFullYear()}`;
-}
-
-function buildSavedPersonalExperienceItems(
-  posts: HotspotPersonalPost[],
-): PersonalExperienceItem[] {
-  return posts.map((post) => ({
-    avatarUri: post.authorAvatarUri || avatarImageUri,
-    date: formatPersonalExperienceDate(post.createdAt),
-    id: post.id,
-    media: post.media.map((media) => ({
-      duration: media.durationLabel,
-      type: media.type,
-      uri: media.uri,
-    })),
-    rating: post.rating,
-    text: post.text,
-    user: post.authorName,
-  }));
 }
 
 function buildApiPersonalExperienceItems(
@@ -2938,7 +2903,6 @@ export default function HotspotDetailScreen() {
     [remoteHotspot, resolvedSlug],
   );
   const hotspot = remoteHotspotResult?.hotspot ?? null;
-  const savedPersonalPosts = useHotspotPersonalPosts(hotspot?.slug ?? resolvedSlug);
 
   useEffect(() => {
     if (!hotspot) {
@@ -3127,16 +3091,12 @@ export default function HotspotDetailScreen() {
     Math.max((screenWidth - relatedRouteScrollInset * 2) * 0.62, 208),
     232,
   );
-  const savedPersonalExperienceItems = buildSavedPersonalExperienceItems(
-    savedPersonalPosts,
-  );
   const apiPersonalExperienceItems = buildApiPersonalExperienceItems(
     apiHotspotPosts,
   );
-  const personalExperienceItems = dedupePersonalExperienceItems([
-    ...savedPersonalExperienceItems,
-    ...apiPersonalExperienceItems,
-  ]);
+  const personalExperienceItems = dedupePersonalExperienceItems(
+    apiPersonalExperienceItems,
+  );
   const summaryStats = buildSummaryStats({
     apiHotspot: remoteHotspot,
     hotspot,

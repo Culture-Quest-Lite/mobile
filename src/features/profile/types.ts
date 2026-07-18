@@ -42,6 +42,7 @@ export type ProfilePostMedia = {
 };
 
 export type ProfilePost = {
+  commentCount: number | null;
   id: string;
   userId: string;
   username: string;
@@ -58,5 +59,7 @@ export type ProfilePost = {
   tags: ProfilePostTag[];
   medias: ProfilePostMedia[];
   createdAt: string | null;
+  likeCount: number | null;
   pointRemaining: number | null;
+  shareCount: number | null;
 };

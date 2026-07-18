@@ -77,7 +77,7 @@ export function useProfile(userId?: string): UseProfileResult {
           }),
           getMyProfilePosts({
             accessToken,
-            size: 50,
+            size: 10,
             tokenType: authSession.tokenType,
           }),
         ]);
