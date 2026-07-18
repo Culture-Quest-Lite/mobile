@@ -28,17 +28,16 @@ import {
 import { createPost, type PostVisibility } from "../api/create-post";
 import { avatarImageUri } from "../data/home-screen.mock";
 import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
-import {
-  upsertHotspotPersonalPost,
-  type HotspotPersonalPostMedia,
-} from "../data/hotspot-post-store";
 import { getHotspotBySlug } from "../data/hotspots";
 import { resolveSelectedHotspotId } from "../utils/resolve-selected-hotspot-id";
 
 type TextProps = ComponentProps<typeof RNText>;
-type ComposerMediaItem = HotspotPersonalPostMedia & {
+type ComposerMediaItem = {
+  durationLabel?: string;
   fileName: string;
   mimeType: string;
+  type: "image" | "video";
+  uri: string;
 };
 
 const detailTextMaxFontSizeMultiplier = 1.05;
@@ -319,41 +318,6 @@ export default function HotspotReviewComposeScreen() {
         tokenType: authSession.tokenType,
         visibility: publishVisibility,
       });
-      const resolvedPostMedia: HotspotPersonalPostMedia[] =
-        createdPost.medias.length > 0
-          ? createdPost.medias.map((media) => ({
-              durationLabel:
-                media.mediaType.trim().toUpperCase() === "VIDEO"
-                  ? "Video"
-                  : undefined,
-              type:
-                media.mediaType.trim().toUpperCase() === "VIDEO"
-                  ? ("video" as const)
-                  : ("image" as const),
-              uri: media.fileUrl,
-            }))
-          : selectedMedia.map((media) => ({
-              durationLabel: media.durationLabel,
-              type: media.type,
-              uri: media.uri,
-            }));
-
-      upsertHotspotPersonalPost({
-        authorAvatarUri: avatarImageUri,
-        authorName:
-          createdPost.displayName.trim() ||
-          createdPost.username.trim() ||
-          authSession.displayName.trim() ||
-          "Bạn",
-        createdAt: createdPost.createdAt,
-        hotspotId: resolvedHotspotId,
-        hotspotSlug: resolvedSlug,
-        id: `${createdPost.postId}`,
-        media: resolvedPostMedia,
-        rating: 5,
-        text: createdPost.content,
-      });
-
       Alert.alert(
         "Đăng bài thành công",
         createdPost.status.trim().toUpperCase() === "PENDING"

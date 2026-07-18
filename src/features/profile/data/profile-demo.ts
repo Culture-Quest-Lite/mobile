@@ -34,6 +34,7 @@ const profiles: Profile[] = [
 
 const profilePosts: ProfilePost[] = [
   {
+    commentCount: 14,
     id: "post-1",
     userId: CURRENT_USER_ID,
     username: "ngoc.tran",
@@ -63,9 +64,12 @@ const profilePosts: ProfilePost[] = [
       },
     ],
     createdAt: "2026-06-30T12:00:00.000Z",
+    likeCount: 128,
     pointRemaining: 778,
+    shareCount: 2,
   },
   {
+    commentCount: 7,
     id: "post-2",
     userId: CURRENT_USER_ID,
     username: "ngoc.tran",
@@ -95,7 +99,9 @@ const profilePosts: ProfilePost[] = [
       },
     ],
     createdAt: "2026-06-27T10:00:00.000Z",
+    likeCount: 64,
     pointRemaining: 678,
+    shareCount: 1,
   },
 ];
 
