@@ -611,14 +611,41 @@ export function getApiHotspotRouteSlug(hotspotId: number) {
   return `api-hotspot-${hotspotId}`;
 }
 
-export function getHotspotHref(slug: string, hotspotId?: number | null) {
-  if (hotspotId === null || hotspotId === undefined) {
+function normalizeRouteHrefValue(routeId?: number | string | null) {
+  const parsedRouteId =
+    typeof routeId === "number" ? routeId : Number(routeId ?? NaN);
+
+  return Number.isInteger(parsedRouteId) && parsedRouteId > 0
+    ? parsedRouteId
+    : null;
+}
+
+export function getHotspotHref(
+  slug: string,
+  hotspotId?: number | null,
+  routeId?: number | string | null,
+) {
+  const normalizedHotspotId =
+    typeof hotspotId === "number" && Number.isInteger(hotspotId) && hotspotId > 0
+      ? hotspotId
+      : null;
+  const normalizedRouteId = normalizeRouteHrefValue(routeId);
+
+  if (
+    normalizedHotspotId === null &&
+    normalizedRouteId === null
+  ) {
     return `/hotspot/${slug}` as unknown as Href;
   }
 
   return {
     params: {
-      hotspotId: `${hotspotId}`,
+      ...(normalizedHotspotId !== null
+        ? { hotspotId: `${normalizedHotspotId}` }
+        : {}),
+      ...(normalizedRouteId !== null
+        ? { routeId: `${normalizedRouteId}` }
+        : {}),
       slug,
     },
     pathname: "/hotspot/[slug]",

@@ -902,12 +902,14 @@ function SuccessRing() {
 export function HotspotGpsCheckinOverlay({
   hotspot,
   hotspotId,
+  routeId,
   isStoryAvailable = true,
   onClose,
   onSuccess,
 }: {
   hotspot: HotspotDetail;
   hotspotId?: number | null;
+  routeId?: number | null;
   isStoryAvailable?: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -935,7 +937,16 @@ export function HotspotGpsCheckinOverlay({
   );
   const storiesHref =
     typeof hotspotId === "number" && hotspotId > 0
-      ? (`/hotspot/${hotspot.slug}/stories?hotspotId=${hotspotId}` as Href)
+      ? ({
+          params: {
+            hotspotId: `${hotspotId}`,
+            ...(typeof routeId === "number" && routeId > 0
+              ? { routeId: `${routeId}` }
+              : {}),
+            slug: hotspot.slug,
+          },
+          pathname: "/hotspot/[slug]/stories",
+        } as Href)
       : (`/hotspot/${hotspot.slug}/stories` as Href);
 
   const prefetchUnlockedStories = useCallback(async () => {
@@ -956,12 +967,14 @@ export function HotspotGpsCheckinOverlay({
       const stories = await getUnlockedHotspotStories({
         accessToken,
         hotspotId,
+        routeId,
         tokenType: authSession.tokenType,
       });
       const mappedStories = buildHotspotThemeStoriesFromApi(hotspot, stories);
 
       cacheHotspotStories({
         hotspotId,
+        routeId,
         slug: hotspot.slug,
         stories: mappedStories,
       });
@@ -969,6 +982,7 @@ export function HotspotGpsCheckinOverlay({
       console.warn("[checkin] prefetch hotspot stories failed", {
         error: error instanceof Error ? error.message : error,
         hotspotId,
+        routeId,
         slug: hotspot.slug,
       });
       setStoryPrefetchError(
@@ -985,6 +999,7 @@ export function HotspotGpsCheckinOverlay({
     hotspot,
     hotspotId,
     isStoryAvailable,
+    routeId,
   ]);
 
   const verifyCurrentLocation = useCallback(async () => {

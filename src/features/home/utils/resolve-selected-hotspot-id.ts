@@ -10,6 +10,12 @@ export function resolveHotspotIdParam(value?: string | string[]) {
   return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
 }
 
+export function resolveRouteIdParam(value?: string | string[]) {
+  const parsedValue = Number(readFirstValue(value));
+
+  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
+}
+
 export function resolveApiHotspotIdFromSlug(slug?: string | string[]) {
   const resolvedSlug = readFirstValue(slug)?.trim().toLowerCase() ?? "";
   const matchedHotspotId = resolvedSlug.match(/^api-hotspot-(\d+)$/);

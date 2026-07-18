@@ -30,17 +30,36 @@ function resolveKnownHotspotId(routeHotspotId: string, slug: string) {
   return getCachedHotspotDetail({ slug })?.hotspotId ?? null;
 }
 
-export function getHotspotDetailHref(routeHotspotId: string): Href | undefined {
+export function getHotspotDetailHref(
+  routeHotspotId: string,
+  routeId?: number | string | null,
+): Href | undefined {
   const slug = resolveHotspotDetailSlug(routeHotspotId);
 
   if (!slug) {
     return undefined;
   }
 
-  return getHotspotHref(slug, resolveKnownHotspotId(routeHotspotId, slug));
+  return getHotspotHref(
+    slug,
+    resolveKnownHotspotId(routeHotspotId, slug),
+    routeId,
+  );
 }
 
-export function getHotspotStoriesHref(routeHotspotId: string): Href | undefined {
+function normalizeRouteId(routeId?: number | string | null) {
+  const parsedRouteId =
+    typeof routeId === 'number' ? routeId : Number(routeId ?? NaN);
+
+  return Number.isInteger(parsedRouteId) && parsedRouteId > 0
+    ? parsedRouteId
+    : null;
+}
+
+export function getHotspotStoriesHref(
+  routeHotspotId: string,
+  routeId?: number | string | null,
+): Href | undefined {
   const slug = resolveHotspotDetailSlug(routeHotspotId);
 
   if (!slug) {
@@ -48,11 +67,15 @@ export function getHotspotStoriesHref(routeHotspotId: string): Href | undefined 
   }
 
   const hotspotId = resolveKnownHotspotId(routeHotspotId, slug);
+  const normalizedRouteId = normalizeRouteId(routeId);
 
   return hotspotId !== null
     ? ({
         params: {
           hotspotId: `${hotspotId}`,
+          ...(normalizedRouteId !== null
+            ? { routeId: `${normalizedRouteId}` }
+            : {}),
           slug,
         },
         pathname: '/hotspot/[slug]/stories',

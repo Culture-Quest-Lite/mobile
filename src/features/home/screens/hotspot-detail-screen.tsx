@@ -78,7 +78,10 @@ import {
 import {
   type HotspotDetail,
 } from "../data/hotspots";
-import { resolveSelectedHotspotId } from "../utils/resolve-selected-hotspot-id";
+import {
+  resolveRouteIdParam,
+  resolveSelectedHotspotId,
+} from "../utils/resolve-selected-hotspot-id";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type HotspotCoordinate = NonNullable<HotspotDetail["coordinate"]>;
@@ -2541,8 +2544,9 @@ export default function HotspotDetailScreen() {
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const checkins = useCheckins();
   const checkedInApiHotspots = useCheckedInApiHotspots();
-  const { hotspotId, slug } = useLocalSearchParams<{
+  const { hotspotId, routeId, slug } = useLocalSearchParams<{
     hotspotId?: string;
+    routeId?: string;
     slug: string;
   }>();
   const resolvedSlug = Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "");
@@ -2550,6 +2554,7 @@ export default function HotspotDetailScreen() {
     hotspotId,
     slug: resolvedSlug,
   });
+  const resolvedRouteId = resolveRouteIdParam(routeId);
   const scrollY = useSharedValue(0);
   const [isCheckinOverlayVisible, setIsCheckinOverlayVisible] = useState(false);
   const [isStickyCheckinVisible, setIsStickyCheckinVisible] = useState(false);
@@ -2579,6 +2584,7 @@ export default function HotspotDetailScreen() {
   );
   const cachedStoriesEntry = getCachedHotspotStories({
     hotspotId: resolvedHotspotId,
+    routeId: resolvedRouteId,
     slug: resolvedSlug,
   });
   const [isMapInteracting, setIsMapInteracting] = useState(false);
@@ -3065,8 +3071,19 @@ export default function HotspotDetailScreen() {
     }),
   );
   const hotspotStoriesHref =
-    resolvedHotspotId !== null
-      ? (`/hotspot/${hotspot.slug}/stories?hotspotId=${resolvedHotspotId}` as Href)
+    resolvedHotspotId !== null || resolvedRouteId !== null
+      ? ({
+          params: {
+            ...(resolvedHotspotId !== null
+              ? { hotspotId: `${resolvedHotspotId}` }
+              : {}),
+            ...(resolvedRouteId !== null
+              ? { routeId: `${resolvedRouteId}` }
+              : {}),
+            slug: hotspot.slug,
+          },
+          pathname: "/hotspot/[slug]/stories",
+        } as Href)
       : (`/hotspot/${hotspot.slug}/stories` as Href);
   const reviewComposeHref = {
     params: {
@@ -3496,6 +3513,7 @@ export default function HotspotDetailScreen() {
           <HotspotGpsCheckinOverlay
             hotspot={hotspot}
             hotspotId={resolvedHotspotId}
+            routeId={resolvedRouteId}
             isStoryAvailable={canOpenStories}
             onClose={() => setIsCheckinOverlayVisible(false)}
             onSuccess={() => {
