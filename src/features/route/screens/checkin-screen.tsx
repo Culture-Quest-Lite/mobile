@@ -575,7 +575,9 @@ export default function CheckinScreen() {
               <View className="mt-8 w-full max-w-xs gap-3">
                 <Pressable
                   onPress={() => {
-                    const href = hotspotId ? getHotspotStoriesHref(hotspotId) : undefined;
+                    const href = hotspotId
+                      ? getHotspotStoriesHref(hotspotId, activeRouteId)
+                      : undefined;
                     if (href) router.push(href);
                   }}
                   className="overflow-hidden rounded-[18px]"

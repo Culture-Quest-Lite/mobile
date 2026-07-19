@@ -5,12 +5,11 @@ import { PublicEnv, buildApiUrl } from "@/constants/env";
 type GetHotspotStoriesRequest = {
   accessToken?: string | null;
   hotspotId: number;
-  status?: string;
-  tagId?: number | null;
+  routeId?: number | null;
   tokenType?: string | null;
 };
 
-type GetUnlockedHotspotStoriesRequest = Omit<GetHotspotStoriesRequest, "status">;
+type GetUnlockedHotspotStoriesRequest = GetHotspotStoriesRequest;
 
 export type HotspotStoryTagDto = {
   createdAt: string;
@@ -51,23 +50,18 @@ type GetHotspotStoriesResponse = {
 
 function resolveGetHotspotStoriesUrl({
   hotspotId,
-  status,
-  tagId,
+  routeId,
 }: {
   hotspotId: number;
-  status: string;
-  tagId?: number | null;
+  routeId?: number | null;
 }) {
-  const query = new URLSearchParams({
-    hotspotId: `${hotspotId}`,
-    status,
-  });
+  const query = new URLSearchParams({ hotspotId: `${hotspotId}` });
 
-  if (typeof tagId === "number" && Number.isInteger(tagId) && tagId > 0) {
-    query.set("tagId", `${tagId}`);
+  if (typeof routeId === "number" && Number.isInteger(routeId) && routeId > 0) {
+    query.set("routeId", `${routeId}`);
   }
 
-  const path = `/api/v1/stories?${query.toString()}`;
+  const path = `/api/v1/stories/hotspot?${query.toString()}`;
 
   if (PublicEnv.apiBaseUrl.trim()) {
     return buildApiUrl(path);
@@ -165,13 +159,23 @@ function parseStory(value: unknown): HotspotStoryDto | null {
 }
 
 function parseStoriesResponse(value: unknown): GetHotspotStoriesResponse | null {
-  if (!isObject(value) || !Array.isArray(value.content)) {
+  const rawStories = Array.isArray(value)
+    ? value
+    : isObject(value) && Array.isArray(value.content)
+      ? value.content
+      : isObject(value) && Array.isArray(value.data)
+        ? value.data
+        : isObject(value) && Array.isArray(value.items)
+          ? value.items
+          : null;
+
+  if (!rawStories) {
     return null;
   }
 
-  const stories = value.content.map(parseStory).filter(isNonNull);
+  const stories = rawStories.map(parseStory).filter(isNonNull);
 
-  if (stories.length !== value.content.length) {
+  if (stories.length !== rawStories.length) {
     return null;
   }
 
@@ -249,14 +253,12 @@ function getConnectionErrorMessage(url: string) {
 export async function getHotspotStories({
   accessToken,
   hotspotId,
-  status = "DRAFT",
-  tagId,
+  routeId,
   tokenType,
 }: GetHotspotStoriesRequest): Promise<HotspotStoryDto[]> {
   const getHotspotStoriesUrl = resolveGetHotspotStoriesUrl({
     hotspotId,
-    status,
-    tagId,
+    routeId,
   });
   let response: Response;
 
@@ -277,8 +279,7 @@ export async function getHotspotStories({
       error: serializeError(error),
       hotspotId,
       platform: Platform.OS,
-      status,
-      tagId,
+      routeId,
       url: getHotspotStoriesUrl,
     });
     throw new Error(getConnectionErrorMessage(getHotspotStoriesUrl));
@@ -290,9 +291,8 @@ export async function getHotspotStories({
     console.warn("[stories] get hotspot stories rejected", {
       body: summarizeBody(responseBody),
       hotspotId,
-      status,
       statusCode: response.status,
-      tagId,
+      routeId,
       url: getHotspotStoriesUrl,
     });
     throw new Error(getErrorMessage(responseBody, hotspotId, response.status));
@@ -304,8 +304,7 @@ export async function getHotspotStories({
     console.warn("[stories] get hotspot stories invalid payload", {
       body: summarizeBody(responseBody),
       hotspotId,
-      status,
-      tagId,
+      routeId,
       url: getHotspotStoriesUrl,
     });
     throw new Error("API story trả về dữ liệu không đúng định dạng.");
@@ -326,54 +325,13 @@ export async function getHotspotStories({
 export async function getUnlockedHotspotStories({
   accessToken,
   hotspotId,
-  tagId,
+  routeId,
   tokenType,
 }: GetUnlockedHotspotStoriesRequest): Promise<HotspotStoryDto[]> {
-  try {
-    const publishedStories = await getHotspotStories({
-      accessToken,
-      hotspotId,
-      status: "PUBLISHED",
-      tagId,
-      tokenType,
-    });
-
-    if (publishedStories.length > 0) {
-      return publishedStories;
-    }
-
-    try {
-      const draftStories = await getHotspotStories({
-        accessToken,
-        hotspotId,
-        status: "DRAFT",
-        tagId,
-        tokenType,
-      });
-
-      return draftStories.length > 0 ? draftStories : publishedStories;
-    } catch (draftError) {
-      console.info("[stories] draft fallback failed after empty published result", {
-        error: serializeError(draftError),
-        hotspotId,
-        tagId,
-      });
-
-      return publishedStories;
-    }
-  } catch (publishedError) {
-    console.warn("[stories] published stories load failed, trying draft fallback", {
-      error: serializeError(publishedError),
-      hotspotId,
-      tagId,
-    });
-
-    return getHotspotStories({
-      accessToken,
-      hotspotId,
-      status: "DRAFT",
-      tagId,
-      tokenType,
-    });
-  }
+  return getHotspotStories({
+    accessToken,
+    hotspotId,
+    routeId,
+    tokenType,
+  });
 }

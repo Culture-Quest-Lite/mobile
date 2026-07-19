@@ -155,7 +155,10 @@ function getOrderedRouteHotspots(hotspots: RouteHotspotDto[]) {
     .map((item) => item.stop);
 }
 
-function resolveRouteHotspotHref(stop: RouteHotspotDto): Href {
+function resolveRouteHotspotHref(
+  stop: RouteHotspotDto,
+  routeId?: number | string | null,
+): Href {
   const matchedHotspot = findMatchingHotspotByNameOrCoordinate({
     hotspotName: stop.hotspotName ?? '',
     latitude: Number(stop.latitude ?? 0),
@@ -163,12 +166,12 @@ function resolveRouteHotspotHref(stop: RouteHotspotDto): Href {
   });
 
   if (matchedHotspot) {
-    return getHotspotHref(matchedHotspot.slug, stop.hotspotId);
+    return getHotspotHref(matchedHotspot.slug, stop.hotspotId, routeId);
   }
 
   return (
-    getHotspotDetailHref(String(stop.hotspotId)) ??
-    getHotspotHref(getApiHotspotRouteSlug(stop.hotspotId), stop.hotspotId)
+    getHotspotDetailHref(String(stop.hotspotId), routeId) ??
+    getHotspotHref(getApiHotspotRouteSlug(stop.hotspotId), stop.hotspotId, routeId)
   );
 }
 
@@ -621,7 +624,9 @@ export default function RouteDetailScreen() {
   const completed = orderedStops.filter((stop) => checkedInIds.includes(String(stop.hotspotId))).length;
   const progress = orderedStops.length > 0 ? (completed / orderedStops.length) * 100 : 0;
   const totalStops = orderedStops.length;
-  const continueHref = nextStop ? resolveRouteHotspotHref(nextStop) : undefined;
+  const continueHref = nextStop
+    ? resolveRouteHotspotHref(nextStop, route.routeId)
+    : undefined;
   const routeTheme = route.tags[0]?.tagName || 'Di sản';
   const routeDistanceLabel = `${route.totalDistance || 0} km`;
   const routeDurationLabel = `${route.estimateTime || 0} phút`;
@@ -898,7 +903,7 @@ export default function RouteDetailScreen() {
                   <Pressable
                     key={`${stop.hotspotId}-${index}`}
                     onPress={() => {
-                      router.push(resolveRouteHotspotHref(stop));
+                      router.push(resolveRouteHotspotHref(stop, route.routeId));
                     }}
                     className="relative flex-row gap-3 pb-4"
                   >

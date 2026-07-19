@@ -15,7 +15,7 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 import { useCheckedInApiHotspots, useCheckins } from "@/lib/checkin-store";
 
-import { getHotspotById } from "../api/get-hotspot-by-id";
+import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
 import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
 import {
   cacheHotspotStories,
@@ -29,7 +29,10 @@ import {
   type StoryThemeTag,
 } from "../data/hotspot-theme-stories";
 import { getHotspotBySlug } from "../data/hotspots";
-import { resolveSelectedHotspotId } from "../utils/resolve-selected-hotspot-id";
+import {
+  resolveRouteIdParam,
+  resolveSelectedHotspotId,
+} from "../utils/resolve-selected-hotspot-id";
 
 const cardShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.16)",
@@ -444,8 +447,9 @@ export default function HotspotStoriesScreen() {
   const insets = useSafeAreaInsets();
   const checkedInHotspotSlugs = useCheckins();
   const checkedInApiHotspots = useCheckedInApiHotspots();
-  const { hotspotId, slug } = useLocalSearchParams<{
+  const { hotspotId, routeId, slug } = useLocalSearchParams<{
     hotspotId?: string;
+    routeId?: string;
     slug: string;
   }>();
   const resolvedSlug = Array.isArray(slug) ? (slug[0] ?? "") : (slug ?? "");
@@ -453,6 +457,7 @@ export default function HotspotStoriesScreen() {
     hotspotId,
     slug: resolvedSlug,
   });
+  const resolvedRouteId = resolveRouteIdParam(routeId);
   const cachedHotspotEntry = getCachedHotspotDetail({
     hotspotId: resolvedHotspotId,
     slug: resolvedSlug,
@@ -460,6 +465,7 @@ export default function HotspotStoriesScreen() {
   const hotspot = cachedHotspotEntry?.hotspot ?? getHotspotBySlug(resolvedSlug);
   const cachedStoriesEntry = getCachedHotspotStories({
     hotspotId: resolvedHotspotId,
+    routeId: resolvedRouteId,
     slug: resolvedSlug,
   });
   const isCheckedIn =
@@ -498,6 +504,7 @@ export default function HotspotStoriesScreen() {
     const loadHotspotStories = async () => {
       const nextCachedStoriesEntry = getCachedHotspotStories({
         hotspotId: resolvedHotspotId,
+        routeId: resolvedRouteId,
         slug: resolvedSlug,
       });
 
@@ -543,18 +550,20 @@ export default function HotspotStoriesScreen() {
         const accessToken = authSession.isAuthenticated
           ? await getValidAccessToken()
           : null;
-        const remoteHotspot = await getHotspotById({
+        const stories = await getUnlockedHotspotStories({
           accessToken,
           hotspotId: resolvedHotspotId,
+          routeId: resolvedRouteId,
           tokenType: authSession.tokenType,
         });
         const mappedStories = buildHotspotThemeStoriesFromApi(
           resolvedHotspot,
-          remoteHotspot.stories,
+          stories,
         );
 
         cacheHotspotStories({
           hotspotId: resolvedHotspotId,
+          routeId: resolvedRouteId,
           slug: resolvedSlug,
           stories: mappedStories,
         });
@@ -568,6 +577,7 @@ export default function HotspotStoriesScreen() {
         console.warn("[hotspot-stories] load hotspot stories failed", {
           error: error instanceof Error ? error.message : error,
           hotspotId: resolvedHotspotId,
+          routeId: resolvedRouteId,
           slug: resolvedSlug,
         });
 
@@ -601,6 +611,7 @@ export default function HotspotStoriesScreen() {
     hotspot,
     isCheckedIn,
     resolvedHotspotId,
+    resolvedRouteId,
     resolvedSlug,
   ]);
 
@@ -720,8 +731,20 @@ export default function HotspotStoriesScreen() {
                 item={story}
                 onPress={() =>
                   router.push(
-                    resolvedHotspotId !== null
-                      ? (`/hotspot/${hotspot.slug}/stories/${story.id}?hotspotId=${resolvedHotspotId}` as Href)
+                    resolvedHotspotId !== null || resolvedRouteId !== null
+                      ? ({
+                          params: {
+                            ...(resolvedHotspotId !== null
+                              ? { hotspotId: `${resolvedHotspotId}` }
+                              : {}),
+                            ...(resolvedRouteId !== null
+                              ? { routeId: `${resolvedRouteId}` }
+                              : {}),
+                            slug: hotspot.slug,
+                            storyId: story.id,
+                          },
+                          pathname: "/hotspot/[slug]/stories/[storyId]",
+                        } as Href)
                       : (`/hotspot/${hotspot.slug}/stories/${story.id}` as Href),
                   )
                 }

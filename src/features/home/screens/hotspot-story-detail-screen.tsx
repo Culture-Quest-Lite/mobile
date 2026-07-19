@@ -36,7 +36,7 @@ import {
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 
-import { getHotspotById } from "../api/get-hotspot-by-id";
+import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
 import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
 import {
   cacheHotspotStories,
@@ -48,7 +48,10 @@ import {
   type HotspotThemeStory,
 } from "../data/hotspot-theme-stories";
 import { getHotspotBySlug } from "../data/hotspots";
-import { resolveSelectedHotspotId } from "../utils/resolve-selected-hotspot-id";
+import {
+  resolveRouteIdParam,
+  resolveSelectedHotspotId,
+} from "../utils/resolve-selected-hotspot-id";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type StoryImageSource = ComponentProps<typeof Image>["source"];
@@ -304,8 +307,9 @@ export default function HotspotStoryDetailScreen() {
   const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
-  const { hotspotId, slug, storyId } = useLocalSearchParams<{
+  const { hotspotId, routeId, slug, storyId } = useLocalSearchParams<{
     hotspotId?: string;
+    routeId?: string;
     slug: string;
     storyId: string;
   }>();
@@ -314,6 +318,7 @@ export default function HotspotStoryDetailScreen() {
     hotspotId,
     slug: resolvedSlug,
   });
+  const resolvedRouteId = resolveRouteIdParam(routeId);
   const resolvedStoryId = Array.isArray(storyId)
     ? (storyId[0] ?? "")
     : (storyId ?? "");
@@ -324,6 +329,7 @@ export default function HotspotStoryDetailScreen() {
   const hotspot = cachedHotspotEntry?.hotspot ?? getHotspotBySlug(resolvedSlug);
   const cachedStoriesEntry = getCachedHotspotStories({
     hotspotId: resolvedHotspotId,
+    routeId: resolvedRouteId,
     slug: resolvedSlug,
   });
   const [apiStoryCards, setApiStoryCards] = useState<
@@ -358,6 +364,7 @@ export default function HotspotStoryDetailScreen() {
     async function loadHotspotStories() {
       const nextCachedStoriesEntry = getCachedHotspotStories({
         hotspotId: resolvedHotspotId,
+        routeId: resolvedRouteId,
         slug: resolvedSlug,
       });
 
@@ -380,18 +387,20 @@ export default function HotspotStoryDetailScreen() {
         const accessToken = authSession.isAuthenticated
           ? await getValidAccessToken()
           : null;
-        const remoteHotspot = await getHotspotById({
+        const stories = await getUnlockedHotspotStories({
           accessToken,
           hotspotId: resolvedHotspotId,
+          routeId: resolvedRouteId,
           tokenType: authSession.tokenType,
         });
         const mappedStories = buildHotspotThemeStoriesFromApi(
           resolvedHotspot,
-          remoteHotspot.stories,
+          stories,
         );
 
         cacheHotspotStories({
           hotspotId: resolvedHotspotId,
+          routeId: resolvedRouteId,
           slug: resolvedSlug,
           stories: mappedStories,
         });
@@ -405,6 +414,7 @@ export default function HotspotStoryDetailScreen() {
         console.warn("[hotspot-story-detail] load hotspot stories failed", {
           error: error instanceof Error ? error.message : error,
           hotspotId: resolvedHotspotId,
+          routeId: resolvedRouteId,
           slug: resolvedSlug,
           storyId: resolvedStoryId,
         });
@@ -431,6 +441,7 @@ export default function HotspotStoryDetailScreen() {
     authSession.tokenType,
     hotspot,
     resolvedHotspotId,
+    resolvedRouteId,
     resolvedSlug,
     resolvedStoryId,
   ]);
