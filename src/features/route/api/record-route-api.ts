@@ -25,7 +25,7 @@ export type RecordRouteDto = {
   medias?: unknown[];
 };
 
-type AuthRequest = {
+export type AuthRequest = {
   accessToken: string;
   tokenType?: string | null;
 };
@@ -53,6 +53,41 @@ function getErrorMessage(body: unknown, status: number) {
   }
   if (typeof body === "string" && body.trim()) return body.trim();
   return `API ghi hành trình lỗi ${status}.`;
+}
+
+
+function parseRecordRoute(value: unknown): RecordRouteDto | null {
+  if (!isObject(value)) return null;
+  const routeId = value.routeId;
+  if (typeof routeId !== "number") return null;
+  return value as RecordRouteDto;
+}
+
+function unwrapPayload(body: unknown): unknown {
+  return isObject(body) && "data" in body ? body.data : body;
+}
+
+async function requestJson(path: string, { accessToken, tokenType }: AuthRequest): Promise<unknown> {
+  if (!accessToken.trim()) {
+    throw new Error("Bạn cần đăng nhập để sử dụng chức năng ghi hành trình.");
+  }
+
+  const response = await fetch(resolveUrl(path), {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      Authorization: `${tokenType || "Bearer"} ${accessToken}`,
+      "X-Client-Type": "mobile",
+    },
+  });
+
+  const text = await response.text();
+  let body: unknown = null;
+  if (text) {
+    try { body = JSON.parse(text) as unknown; } catch { body = text; }
+  }
+  if (!response.ok) throw new Error(getErrorMessage(body, response.status));
+  return unwrapPayload(body);
 }
 
 async function requestRecordRoute(
@@ -85,8 +120,8 @@ async function requestRecordRoute(
 
   if (!response.ok) throw new Error(getErrorMessage(body, response.status));
 
-  const payload = isObject(body) && isObject(body.data) ? body.data : body;
-  if (!isObject(payload) || typeof payload.routeId !== "number") {
+  const payload = unwrapPayload(body);
+  if (!parseRecordRoute(payload)) {
     throw new Error("API ghi hành trình trả về dữ liệu không hợp lệ.");
   }
 
@@ -110,4 +145,22 @@ export function finalizeRecordRoute({ accessToken, routeId, tokenType }: Finaliz
     { accessToken, tokenType },
     "PUT",
   );
+}
+
+
+/** Lấy toàn bộ hành trình CUSTOM của Explorer, gồm RECORDING, DRAFT, TRIAL... */
+export async function getMyRecordJourneys(auth: AuthRequest): Promise<RecordRouteDto[]> {
+  const payload = await requestJson("/api/v1/routes/my-journey", auth);
+
+  const candidates = Array.isArray(payload)
+    ? payload
+    : isObject(payload) && Array.isArray(payload.content)
+      ? payload.content
+      : isObject(payload) && Array.isArray(payload.items)
+        ? payload.items
+        : [];
+
+  return candidates
+    .map(parseRecordRoute)
+    .filter((route): route is RecordRouteDto => route !== null);
 }
