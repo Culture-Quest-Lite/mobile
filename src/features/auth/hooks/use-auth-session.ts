@@ -1,13 +1,20 @@
 import { useSyncExternalStore } from "react";
 
+import {
+  loginWithGoogleViaKeycloak,
+  refreshGoogleAccessToken,
+} from "@/features/auth/api/google-login";
 import { loginWithPassword } from "@/features/auth/api/login";
 import { refreshAccessToken } from "@/features/auth/api/refresh-token";
 import { readStoredJson, writeStoredJson } from "@/lib/persistent-json-storage";
 
 export type AuthRole = "guest" | "explorer";
 
+export type AuthProvider = "password" | "google";
+
 export type AuthSession = {
   accessToken: string | null;
+  authProvider: AuthProvider | null;
   displayName: string;
   expiresAt: number | null;
   isAuthenticated: boolean;
@@ -21,6 +28,7 @@ export type AuthSession = {
 
 const guestSession: AuthSession = {
   accessToken: null,
+  authProvider: null,
   displayName: "bạn",
   expiresAt: null,
   isAuthenticated: false,
@@ -101,6 +109,7 @@ function getGreetingName(name?: string) {
 
 function createExplorerSession({
   accessToken = null,
+  authProvider = "password",
   expiresAt = null,
   name,
   refreshExpiresAt = null,
@@ -108,6 +117,7 @@ function createExplorerSession({
   tokenType = null,
 }: {
   accessToken?: string | null;
+  authProvider?: AuthProvider;
   expiresAt?: number | null;
   name?: string;
   refreshExpiresAt?: number | null;
@@ -118,6 +128,7 @@ function createExplorerSession({
 
   return {
     accessToken,
+    authProvider,
     displayName: getGreetingName(normalizedName),
     expiresAt,
     isAuthenticated: true,
@@ -151,12 +162,18 @@ async function refreshAuthSessionInternal() {
   }
 
   try {
-    const response = await refreshAccessToken({
-      refreshToken: currentSession.refreshToken,
-    });
+    // Refresh token Keycloak bị bind theo client: token cấp cho mobile qua
+    // Google/Keycloak không refresh được qua backend nên phải gọi thẳng Keycloak.
+    const response =
+      currentSession.authProvider === "google"
+        ? await refreshGoogleAccessToken(currentSession.refreshToken)
+        : await refreshAccessToken({
+            refreshToken: currentSession.refreshToken,
+          });
     const now = Date.now();
     const refreshedSession = createExplorerSession({
       accessToken: response.accessToken,
+      authProvider: currentSession.authProvider ?? "password",
       expiresAt: now + response.expiresIn * 1000,
       name: currentSession.username ?? currentSession.displayName,
       refreshExpiresAt: now + response.refreshExpiresIn * 1000,
@@ -202,6 +219,25 @@ export async function signInWithPassword(username: string, password: string) {
       accessToken: response.accessToken,
       expiresAt: now + response.expiresIn * 1000,
       name: normalizedUsername,
+      refreshExpiresAt: now + response.refreshExpiresIn * 1000,
+      refreshToken: response.refreshToken,
+      tokenType: response.tokenType,
+    }),
+  );
+
+  return response;
+}
+
+export async function signInWithGoogle() {
+  const response = await loginWithGoogleViaKeycloak();
+  const now = Date.now();
+
+  setAuthSession(
+    createExplorerSession({
+      accessToken: response.accessToken,
+      authProvider: "google",
+      expiresAt: now + response.expiresIn * 1000,
+      name: response.displayName ?? undefined,
       refreshExpiresAt: now + response.refreshExpiresIn * 1000,
       refreshToken: response.refreshToken,
       tokenType: response.tokenType,
