@@ -26,6 +26,7 @@ import { AppMap, type AppMapPoint } from "@/features/map/components/app-map";
 import {
   finalizeRecordRoute,
   finishRecordRoute,
+  getMyRecordJourneys,
   startRecordRoute,
   type RecordRouteDto,
 } from "@/features/route/api/record-route-api";
@@ -73,6 +74,8 @@ export default function RecordJourneyScreen() {
   const session = useAuthSession();
   const [status, setStatus] = useState<RecordStatus>("READY");
   const [routeRecord, setRouteRecord] = useState<RecordRouteDto | null>(null);
+  const [myJourneys, setMyJourneys] = useState<RecordRouteDto[]>([]);
+  const [isLoadingJourneys, setIsLoadingJourneys] = useState(false);
   const [currentCoordinate, setCurrentCoordinate] = useState<Coordinate>(DEFAULT_COORDINATE);
   const [nearbyHotspots, setNearbyHotspots] = useState<NearbyHotspotDto[]>([]);
   const [searchResults, setSearchResults] = useState<NearbyHotspotDto[]>([]);
@@ -93,6 +96,58 @@ export default function RecordJourneyScreen() {
     return { accessToken, tokenType: session.tokenType };
   }, [session.isAuthenticated, session.tokenType]);
 
+
+  const applyRouteRecord = useCallback((route: RecordRouteDto | null) => {
+    setRouteRecord(route);
+    if (!route) {
+      setStatus("READY");
+      setCheckedInHotspots([]);
+      return;
+    }
+
+    const normalizedStatus: RecordStatus =
+      route.status === "RECORDING" || route.status === "DRAFT" || route.status === "TRIAL"
+        ? route.status
+        : "READY";
+    setStatus(normalizedStatus);
+    setCheckedInHotspots(
+      (route.hotspots ?? []).map((hotspot) => ({
+        hotspotId: hotspot.hotspotId,
+        hotspotName: hotspot.hotspotName ?? `Hotspot #${hotspot.hotspotId}`,
+        address: hotspot.address ?? "",
+        latitude: hotspot.latitude ?? DEFAULT_COORDINATE.latitude,
+        longitude: hotspot.longitude ?? DEFAULT_COORDINATE.longitude,
+        closingTime: "", createByUserId: null, createdAt: "", description: "", endTime: "",
+        estimatedDurationMax: null, estimatedDurationMin: null, historyInformation: "",
+        isCheckedIn: true, medias: [], openingTime: "", point: null, startTime: "",
+        status: "", stories: [], tags: [], updatedAt: "", xp: null,
+      })),
+    );
+  }, []);
+
+  const loadMyJourneys = useCallback(async () => {
+    if (!session.isAuthenticated) {
+      setMyJourneys([]);
+      applyRouteRecord(null);
+      return [];
+    }
+
+    setIsLoadingJourneys(true);
+    try {
+      const auth = await getAuth();
+      const journeys = await getMyRecordJourneys(auth);
+      setMyJourneys(journeys);
+      const recording = journeys.find((item) => item.status === "RECORDING") ?? null;
+      applyRouteRecord(recording);
+      return journeys;
+    } catch (error) {
+      Alert.alert("Không thể tải hành trình", error instanceof Error ? error.message : "Vui lòng thử lại.");
+      return [];
+    } finally {
+      setIsLoadingJourneys(false);
+    }
+  }, [applyRouteRecord, getAuth, session.isAuthenticated]);
+
   const resolveCurrentCoordinate = useCallback(async () => {
     const development = getDevelopmentLocationOverride();
     if (development) {
@@ -101,7 +156,7 @@ export default function RecordJourneyScreen() {
     }
 
     const permission = await ensureForegroundLocationPermission();
-    if (!permission.granted) throw new Error("Hãy cấp quyền GPS để tìm hotspot gần bạn và check-in.");
+    if (!permission.granted) throw new Error("");
 
     const coordinate = await getDeviceCoordinate({
       accuracy: Location.Accuracy.High,
@@ -137,6 +192,10 @@ export default function RecordJourneyScreen() {
   useEffect(() => {
     void loadNearby();
   }, [loadNearby]);
+
+  useEffect(() => {
+    void loadMyJourneys();
+  }, [loadMyJourneys]);
 
   useEffect(() => {
     const keyword = query.trim();
@@ -201,9 +260,8 @@ export default function RecordJourneyScreen() {
     try {
       const auth = await getAuth();
       const route = await startRecordRoute(auth);
-      setRouteRecord(route);
-      setCheckedInHotspots([]);
-      setStatus("RECORDING");
+      applyRouteRecord(route);
+      setMyJourneys((current) => [route, ...current.filter((item) => item.routeId !== route.routeId)]);
       Alert.alert("Đã bắt đầu ghi", `Route #${route.routeId} đang ở trạng thái RECORDING.`);
     } catch (error) {
       Alert.alert("Không thể bắt đầu", error instanceof Error ? error.message : "Vui lòng thử lại.");
@@ -233,6 +291,7 @@ export default function RecordJourneyScreen() {
         longitude: coordinate.longitude,
       });
       setCheckedInHotspots((current) => [...current, hotspot]);
+      await loadMyJourneys();
       Alert.alert(
         "Check-in thành công",
         `${hotspot.hotspotName} đã được thêm vào route record. Backend sẽ tạo story mặc định gắn tagDefault, route và hotspot này.`,
@@ -268,6 +327,7 @@ export default function RecordJourneyScreen() {
       const route = await finishRecordRoute(auth);
       setRouteRecord(route);
       setStatus("DRAFT");
+      setMyJourneys((current) => [route, ...current.filter((item) => item.routeId !== route.routeId)]);
       Alert.alert("Đã tạo bản nháp", "Route đã chuyển từ RECORDING sang DRAFT. Bạn có thể chỉnh sửa route và các story trước khi submit.");
     } catch (error) {
       Alert.alert("Không thể kết thúc", error instanceof Error ? error.message : "Vui lòng thử lại.");
@@ -284,6 +344,7 @@ export default function RecordJourneyScreen() {
       const route = await finalizeRecordRoute({ ...auth, routeId: routeRecord.routeId });
       setRouteRecord(route);
       setStatus("TRIAL");
+      setMyJourneys((current) => [route, ...current.filter((item) => item.routeId !== route.routeId)]);
       Alert.alert("Đã submit hành trình", "Custom Route đã chuyển sang trạng thái TRIAL.");
     } catch (error) {
       Alert.alert("Không thể submit", error instanceof Error ? error.message : "Vui lòng thử lại.");
@@ -313,7 +374,7 @@ export default function RecordJourneyScreen() {
       <ScrollView
         contentContainerStyle={{ paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={isLoadingNearby} onRefresh={() => void loadNearby()} />}
+        refreshControl={<RefreshControl refreshing={isLoadingNearby || isLoadingJourneys} onRefresh={() => { void loadNearby(); void loadMyJourneys(); }} />}
         showsVerticalScrollIndicator={false}
       >
         <View className="px-4">
@@ -354,6 +415,44 @@ export default function RecordJourneyScreen() {
             </Pressable>
           </View>
         ) : null}
+
+        <View className="mt-4 px-4">
+          <View className="rounded-3xl bg-white p-4">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 pr-3">
+                <Text className="text-[14px] font-extrabold text-[#2B2233]">Hành trình của tôi</Text>
+                <Text className="mt-1 text-[10px] text-[#8E869A]">Dữ liệu từ GET /api/v1/routes/my-journey</Text>
+              </View>
+              <Pressable onPress={() => void loadMyJourneys()} className="rounded-full bg-[#F1F3F7] px-3 py-2">
+                {isLoadingJourneys ? <ActivityIndicator size="small" color="#EB489B" /> : <Text className="text-[10px] font-extrabold text-[#2B2233]">Làm mới</Text>}
+              </Pressable>
+            </View>
+            <View className="mt-3 gap-2">
+              {myJourneys.map((journey) => (
+                <Pressable
+                  key={journey.routeId}
+                  onPress={() => { if (journey.status === "DRAFT" || journey.status === "TRIAL") applyRouteRecord(journey); }}
+                  className={`rounded-2xl border p-3 ${journey.routeId === routeRecord?.routeId ? "border-[#EB489B] bg-[#FFF5FA]" : "border-[#E8EDF4] bg-white"}`}
+                >
+                  <View className="flex-row items-center justify-between gap-3">
+                    <View className="flex-1">
+                      <Text className="text-[12px] font-extrabold text-[#2B2233]">{journey.routeName ?? `Hành trình #${journey.routeId}`}</Text>
+                      <Text className="mt-1 text-[10px] text-[#8E869A]">Route ID {journey.routeId} · {(journey.hotspots ?? []).length} hotspot</Text>
+                    </View>
+                    <View className="rounded-full bg-[#F1F3F7] px-3 py-1.5">
+                      <Text className="text-[9px] font-extrabold text-[#5C5663]">{journey.status}</Text>
+                    </View>
+                  </View>
+                </Pressable>
+              ))}
+              {!myJourneys.length && !isLoadingJourneys ? (
+                <View className="items-center rounded-2xl border border-dashed border-[#D9DDE7] px-4 py-6">
+                  <Text className="text-[11px] font-bold text-[#8E869A]">Bạn chưa có hành trình record nào</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </View>
 
         <View className="mt-4 px-4">
           <View className="rounded-3xl bg-white p-4">

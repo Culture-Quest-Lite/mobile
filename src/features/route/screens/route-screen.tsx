@@ -39,8 +39,12 @@ import {
   type UserRouteProgressDto,
 } from "@/features/route/api/route-api";
 import { getMyUserPlans, type UserPlan } from "@/features/route/api/user-plan-api";
+import {
+  getMyRecordJourneys,
+  type RecordRouteDto,
+} from "@/features/route/api/record-route-api";
 
-type Tab = "official" | "active" | "completed" | "bookmarked" | "plans" | "community";
+type Tab = "official" | "active" | "completed" | "bookmarked" | "plans" | "journeys" | "community";
 type RouteVariant =
   "official" | "active" | "completed" | "bookmarked" | "community";
 
@@ -116,7 +120,8 @@ const TAB_ITEMS: { key: Tab; label: string }[] = [
   { key: "active", label: "Đang đi" },
   { key: "completed", label: "Đã xong" },
   { key: "bookmarked", label: "Đã lưu" },
-  { key: "plans", label: "Kế hoạch của tôi" },
+  { key: "plans", label: "Kế hoạch" },
+  { key: "journeys", label: "Hành trình của tôi" },
   { key: "community", label: "Cộng đồng" },
 ];
 
@@ -226,6 +231,8 @@ export default function RouteScreen() {
   >(null);
   const [myPlans, setMyPlans] = useState<UserPlan[]>([]);
   const [planError, setPlanError] = useState<string | null>(null);
+  const [myRecordJourneys, setMyRecordJourneys] = useState<RecordRouteDto[]>([]);
+  const [journeyError, setJourneyError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -238,7 +245,7 @@ export default function RouteScreen() {
         try {
           const accessToken = await getValidAccessToken();
 
-          const [officialResult, progressResult, savedResult, plansResult] =
+          const [officialResult, progressResult, savedResult, plansResult, journeysResult] =
             await Promise.allSettled([
               getRoutes({
                 accessToken,
@@ -268,6 +275,9 @@ export default function RouteScreen() {
                 : Promise.resolve([]),
               accessToken
                 ? getMyUserPlans({ accessToken, tokenType: session.tokenType })
+                : Promise.resolve([]),
+              accessToken
+                ? getMyRecordJourneys({ accessToken, tokenType: session.tokenType })
                 : Promise.resolve([]),
             ]);
 
@@ -376,6 +386,20 @@ export default function RouteScreen() {
             );
           }
 
+          if (journeysResult.status === "fulfilled") {
+            setMyRecordJourneys(
+              Array.isArray(journeysResult.value) ? journeysResult.value : [],
+            );
+            setJourneyError(null);
+          } else {
+            setMyRecordJourneys([]);
+            setJourneyError(
+              journeysResult.reason instanceof Error
+                ? journeysResult.reason.message
+                : "Không thể tải hành trình đã ghi.",
+            );
+          }
+
           if (officialResult.status === "rejected") {
             setRouteError(
               officialResult.reason instanceof Error
@@ -393,6 +417,8 @@ export default function RouteScreen() {
             setActiveRoutesFromApi([]);
             setSavedRoutesFromApi([]);
             setMyPlans([]);
+            setMyRecordJourneys([]);
+            setJourneyError(null);
             setRouteError(
               error instanceof Error
                 ? error.message
@@ -697,6 +723,9 @@ export default function RouteScreen() {
           {tab === "plans" && (
             <UserPlanTab plans={myPlans} error={planError} />
           )}
+          {tab === "journeys" && (
+            <MyJourneyTab journeys={myRecordJourneys} error={journeyError} />
+          )}
           {tab === "community" && <CommunityTab />}
         </View>
       </ScrollView>
@@ -858,6 +887,217 @@ function UserPlanTab({ plans, error }: { plans: UserPlan[]; error: string | null
   );
 }
 
+
+function MyJourneyTab({
+  journeys,
+  error,
+}: {
+  journeys: RecordRouteDto[];
+  error: string | null;
+}) {
+  const router = useRouter();
+
+  const grouped = useMemo(() => {
+    const result: Record<string, RecordRouteDto[]> = {
+      RECORDING: [],
+      DRAFT: [],
+      TRIAL: [],
+      PUBLISHED: [],
+      OTHER: [],
+    };
+
+    journeys.forEach((journey) => {
+      const status = String(journey.status || "").trim().toUpperCase();
+      if (status in result) result[status].push(journey);
+      else result.OTHER.push(journey);
+    });
+
+    return result;
+  }, [journeys]);
+
+  const sections = [
+    {
+      key: "RECORDING",
+      title: "Đang ghi",
+      subtitle: "Hành trình đang được ghi nhận theo các lần check-in.",
+      icon: { ios: "record.circle.fill", android: "fiber_manual_record", web: "fiber_manual_record" } as const,
+      iconColor: "#F15B45",
+      badgeClass: "bg-[#FFF0EC]",
+      badgeTextClass: "text-[#C94733]",
+    },
+    {
+      key: "DRAFT",
+      title: "Bản nháp",
+      subtitle: "Kiểm tra route và story trước khi gửi lên hệ thống.",
+      icon: { ios: "doc.text.fill", android: "description", web: "description" } as const,
+      iconColor: "#7C5CFC",
+      badgeClass: "bg-[#F3F0FF]",
+      badgeTextClass: "text-[#684BC7]",
+    },
+    {
+      key: "TRIAL",
+      title: "Đang chờ duyệt",
+      subtitle: "Route đã submit và đang ở trạng thái TRIAL.",
+      icon: { ios: "clock.fill", android: "schedule", web: "schedule" } as const,
+      iconColor: "#F58752",
+      badgeClass: "bg-[#FFF4EA]",
+      badgeTextClass: "text-[#C85D27]",
+    },
+    {
+      key: "PUBLISHED",
+      title: "Đã xuất bản",
+      subtitle: "Các hành trình đã được chia sẻ với cộng đồng.",
+      icon: { ios: "globe.asia.australia.fill", android: "public", web: "public" } as const,
+      iconColor: "#27A56B",
+      badgeClass: "bg-[#EAF8F1]",
+      badgeTextClass: "text-[#208657]",
+    },
+  ] as const;
+
+  return (
+    <View className="gap-4">
+      <Pressable
+        className="overflow-hidden rounded-3xl"
+        onPress={() => router.push("/route/custom/record" as Href)}
+      >
+        <LinearGradient
+          colors={["#E84D6A", "#EB489B", "#F58752"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          className="p-4"
+        >
+          <View className="flex-row items-center gap-3">
+            <View className="h-14 w-14 items-center justify-center rounded-2xl bg-black/20">
+              <SymbolView
+                name={{ ios: "record.circle", android: "fiber_manual_record", web: "fiber_manual_record" }}
+                size={22}
+                tintColor="#FFFFFF"
+              />
+            </View>
+            <View className="flex-1">
+              <Text className="text-[11px] font-bold uppercase tracking-wider text-white/85">
+                Record Journey
+              </Text>
+              <Text className="mt-0.5 text-[18px] font-black text-white">
+                Ghi hành trình mới
+              </Text>
+              <Text className="mt-1 text-[12px] leading-5 text-white/90">
+                Lưu các hotspot đã check-in và hoàn thiện route của riêng bạn.
+              </Text>
+            </View>
+            <View className="h-9 w-9 items-center justify-center rounded-full bg-white/20">
+              <SymbolView
+                name={{ ios: "chevron.right", android: "chevron_right", web: "chevron_right" }}
+                size={16}
+                tintColor="#FFFFFF"
+              />
+            </View>
+          </View>
+        </LinearGradient>
+      </Pressable>
+
+      {error ? (
+        <View className="rounded-2xl border border-[#FFE1E8] bg-[#FFF5F8] px-4 py-3">
+          <Text className="text-[12px] font-semibold text-[#B42345]">{error}</Text>
+        </View>
+      ) : null}
+
+      {journeys.length === 0 && !error ? (
+        <EmptyState text="Bạn chưa ghi hành trình nào" />
+      ) : null}
+
+      {sections.map((section) => {
+        const items = grouped[section.key];
+        if (!items.length) return null;
+
+        return (
+          <View key={section.key} className="gap-2.5">
+            <View className="flex-row items-center justify-between px-1">
+              <View className="flex-1 flex-row items-center gap-2">
+                <SymbolView name={section.icon} size={15} tintColor={section.iconColor} />
+                <View className="flex-1">
+                  <Text className="text-[15px] font-extrabold text-[#2B2233]">{section.title}</Text>
+                  <Text className="mt-0.5 text-[10px] text-[#8E869A]">{section.subtitle}</Text>
+                </View>
+              </View>
+              <View className={`rounded-full px-2.5 py-1 ${section.badgeClass}`}>
+                <Text className={`text-[10px] font-extrabold ${section.badgeTextClass}`}>{items.length}</Text>
+              </View>
+            </View>
+
+            {items.map((journey) => (
+              <View
+                key={journey.routeId}
+                className="rounded-3xl border border-[#ECE7F4] bg-white p-4"
+                style={cardShadowStyle}
+              >
+                <View className="flex-row items-start justify-between gap-3">
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-[16px] font-black text-[#2B2233]" numberOfLines={2}>
+                      {journey.routeName || `Hành trình #${journey.routeId}`}
+                    </Text>
+                    <Text className="mt-1 text-[12px] leading-5 text-[#8E869A]" numberOfLines={2}>
+                      {journey.description || "Hành trình cá nhân được tạo từ các lần check-in của bạn."}
+                    </Text>
+                  </View>
+                  <View className={`rounded-full px-3 py-1.5 ${section.badgeClass}`}>
+                    <Text className={`text-[9px] font-extrabold ${section.badgeTextClass}`}>
+                      {String(journey.status).toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="mt-3 flex-row items-center gap-2">
+                  <View className="flex-row items-center gap-1.5 rounded-full bg-[#F7F8FC] px-3 py-2">
+                    <SymbolView
+                      name={{ ios: "mappin.and.ellipse", android: "location_on", web: "location_on" }}
+                      size={12}
+                      tintColor="#EB489B"
+                    />
+                    <Text className="text-[11px] font-bold text-[#625A68]">
+                      {(journey.hotspots ?? []).length} hotspot
+                    </Text>
+                  </View>
+                  <View className="rounded-full bg-[#F7F8FC] px-3 py-2">
+                    <Text className="text-[11px] font-bold text-[#625A68]">Route #{journey.routeId}</Text>
+                  </View>
+                </View>
+
+                <Pressable
+                  className="mt-3 rounded-2xl bg-[#EB489B] py-3"
+                  onPress={() => router.push("/route/custom/record" as Href)}
+                >
+                  <Text className="text-center text-[13px] font-extrabold text-white">
+                    {section.key === "RECORDING"
+                      ? "Tiếp tục ghi"
+                      : section.key === "DRAFT"
+                        ? "Xem và hoàn thiện"
+                        : section.key === "TRIAL"
+                          ? "Xem trạng thái"
+                          : "Xem hành trình"}
+                  </Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        );
+      })}
+
+      {grouped.OTHER.length > 0 ? (
+        <View className="gap-2.5">
+          <Text className="px-1 text-[15px] font-extrabold text-[#2B2233]">Trạng thái khác</Text>
+          {grouped.OTHER.map((journey) => (
+            <View key={journey.routeId} className="rounded-3xl border border-[#ECE7F4] bg-white p-4" style={cardShadowStyle}>
+              <Text className="text-[15px] font-black text-[#2B2233]">{journey.routeName || `Hành trình #${journey.routeId}`}</Text>
+              <Text className="mt-1 text-[11px] text-[#8E869A]">{journey.status} · {(journey.hotspots ?? []).length} hotspot</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function CommunityTab() {
   const router = useRouter();
   const [showCustomRouteMenu, setShowCustomRouteMenu] = useState(false);
@@ -872,54 +1112,13 @@ function CommunityTab() {
 
   return (
     <View className="gap-5">
-      <Pressable
-        className="overflow-hidden rounded-3xl"
-        onPress={() => setShowCustomRouteMenu(true)}
-      >
-        <LinearGradient
-          colors={["#E84D6A", "#EB489B", "#F58752"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          className="p-4"
-        >
-          <View className="flex-row items-center gap-3">
-            <View className="h-14 w-14 items-center justify-center rounded-2xl bg-black/20">
-              <SymbolView
-                name={{
-                  ios: "map.fill",
-                  android: "route",
-                  web: "route",
-                }}
-                size={20}
-                tintColor="#FFFFFF"
-              />
-            </View>
-            <View className="flex-1">
-              <Text className="text-[11px] font-bold uppercase tracking-wider text-white/90">
-                Custom Route
-              </Text>
-              <Text className="text-[17px] font-extrabold leading-tight text-white">
-                Tạo hành trình của riêng bạn
-              </Text>
-              <Text className="mt-0.5 text-[12px] text-white/90">
-                Tự lên kế hoạch hoặc ghi lại chuyến đi thực tế
-              </Text>
-            </View>
-            <View className="items-center gap-1">
-              <Pressable
-                className="h-8 w-8 items-center justify-center rounded-full bg-white/20"
-                onPress={(event) => {
-                  event.stopPropagation();
-                  setShowCustomRouteHelp(true);
-                }}
-              >
-                <Text className="text-[15px] font-extrabold text-white">?</Text>
-              </Pressable>
-              <Text className="text-[9px] font-bold text-white/80">Hướng dẫn</Text>
-            </View>
-          </View>
-        </LinearGradient>
-      </Pressable>
+      <View className="rounded-3xl border border-[#F2DDE9] bg-[#FFF8FC] p-4">
+        <Text className="text-[11px] font-bold uppercase tracking-wider text-[#EB489B]">Cộng đồng</Text>
+        <Text className="mt-1 text-[17px] font-extrabold text-[#2B2233]">Khám phá hành trình đã xuất bản</Text>
+        <Text className="mt-1 text-[12px] leading-5 text-[#777181]">
+          Những route được cộng đồng chia sẻ sau khi hoàn tất quá trình xét duyệt.
+        </Text>
+      </View>
 
       <View>
         <View className="mb-2 flex-row items-center justify-between">
