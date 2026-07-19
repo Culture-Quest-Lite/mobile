@@ -37,7 +37,7 @@ function resolveUserHotspotProgressUrl() {
     return buildApiUrl("/api/v1/user-hotspot-progress");
   }
 
-  return "http://3.113.215.65:8080/api/v1/user-hotspot-progress";
+  return "https://api.culturequestlite.com/api/v1/user-hotspot-progress";
 }
 
 function resolveUserRouteProgressUrl() {

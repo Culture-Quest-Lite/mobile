@@ -24,10 +24,12 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+import { GoogleSignInCancelledError } from "@/features/auth/api/google-login";
 import { registerWithPassword } from "@/features/auth/api/register";
 import { AuthInput } from "@/features/auth/components/auth-input";
 import { SocialAuthButton } from "@/features/auth/components/social-auth-button";
 import { useAuthScreenLayout } from "@/features/auth/hooks/use-auth-screen-layout";
+import { signInWithGoogle } from "@/features/auth/hooks/use-auth-session";
 import {
   hasAnyFieldError,
   validateRegisterForm,
@@ -86,6 +88,7 @@ export default function RegisterScreen() {
   const [didAttemptSubmit, setDidAttemptSubmit] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [touchedFields, setTouchedFields] = useState({
     confirmPassword: false,
     displayName: false,
@@ -134,7 +137,8 @@ export default function RegisterScreen() {
     touchedFields.confirmPassword || didAttemptSubmit
       ? registerErrors.confirmPassword ?? null
       : null;
-  const isSubmitDisabled = isSubmitting || hasAnyFieldError(registerErrors);
+  const isSubmitDisabled =
+    isSubmitting || isGoogleSubmitting || hasAnyFieldError(registerErrors);
 
   useEffect(() => {
     if (entry !== "home") {
@@ -218,6 +222,36 @@ export default function RegisterScreen() {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleSignUp = async () => {
+    setErrorMessage(null);
+    setIsGoogleSubmitting(true);
+
+    try {
+      await signInWithGoogle();
+      console.info("[auth] google sign-up navigation to /home");
+      router.replace("/home");
+    } catch (error) {
+      if (error instanceof GoogleSignInCancelledError) {
+        console.info("[auth] google sign-up cancelled by user");
+        return;
+      }
+
+      console.warn("[auth] google sign-up screen caught error", {
+        error:
+          error instanceof Error
+            ? { message: error.message, name: error.name, stack: error.stack }
+            : error,
+      });
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Không thể đăng ký với Google. Vui lòng thử lại.",
+      );
+    } finally {
+      setIsGoogleSubmitting(false);
     }
   };
 
@@ -459,7 +493,14 @@ export default function RegisterScreen() {
                     </View>
 
                     <View className="flex-row justify-center gap-3.5">
-                      <SocialAuthButton accentColor="#EA4335" label="G" />
+                      <SocialAuthButton
+                        accentColor="#EA4335"
+                        disabled={isSubmitting || isGoogleSubmitting}
+                        label="G"
+                        onPress={() => {
+                          void handleGoogleSignUp();
+                        }}
+                      />
                       <SocialAuthButton accentColor="#1877F2" label="f" />
                     </View>
 

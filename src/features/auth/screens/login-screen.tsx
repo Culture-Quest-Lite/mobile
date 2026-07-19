@@ -1,5 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect, useState } from "react";
 import {
@@ -27,8 +28,14 @@ import {
 import { useAuthScreenLayout } from "@/features/auth/hooks/use-auth-screen-layout";
 import { AuthInput } from "@/features/auth/components/auth-input";
 import { SocialAuthButton } from "@/features/auth/components/social-auth-button";
-import { signInWithPassword } from "@/features/auth/hooks/use-auth-session";
+import { GoogleSignInCancelledError } from "@/features/auth/api/google-login";
+import {
+  signInWithGoogle,
+  signInWithPassword,
+} from "@/features/auth/hooks/use-auth-session";
 import { hasAnyFieldError, validateLoginForm } from "@/features/auth/utils/validation";
+
+WebBrowser.maybeCompleteAuthSession();
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const authLogoSource = require("../../../../assets/images/logo2-cropped.png");
@@ -73,6 +80,7 @@ export default function LoginScreen() {
   const [didAttemptSubmit, setDidAttemptSubmit] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [touchedFields, setTouchedFields] = useState({
     password: false,
     username: false,
@@ -102,13 +110,22 @@ export default function LoginScreen() {
     touchedFields.username || didAttemptSubmit ? loginErrors.username ?? null : null;
   const passwordError =
     touchedFields.password || didAttemptSubmit ? loginErrors.password ?? null : null;
-  const isSubmitDisabled = isSubmitting || hasAnyFieldError(loginErrors);
+  const isSubmitDisabled =
+    isSubmitting || isGoogleSubmitting || hasAnyFieldError(loginErrors);
 
   useEffect(() => {
     if (entry !== "home") {
       router.replace("/home");
     }
   }, [entry, router]);
+
+  useEffect(() => {
+    void WebBrowser.warmUpAsync();
+
+    return () => {
+      void WebBrowser.coolDownAsync();
+    };
+  }, []);
 
   useEffect(() => {
     logoFloat.set(
@@ -176,6 +193,36 @@ export default function LoginScreen() {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setErrorMessage(null);
+    setIsGoogleSubmitting(true);
+
+    try {
+      await signInWithGoogle();
+      console.info("[auth] google login navigation to /home");
+      router.replace("/home");
+    } catch (error) {
+      if (error instanceof GoogleSignInCancelledError) {
+        console.info("[auth] google login cancelled by user");
+        return;
+      }
+
+      console.warn("[auth] google login screen caught error", {
+        error:
+          error instanceof Error
+            ? { message: error.message, name: error.name, stack: error.stack }
+            : error,
+      });
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Không thể đăng nhập với Google. Vui lòng thử lại.",
+      );
+    } finally {
+      setIsGoogleSubmitting(false);
     }
   };
 
@@ -397,7 +444,14 @@ export default function LoginScreen() {
                     </View>
 
                     <View className="flex-row justify-center gap-3.5">
-                      <SocialAuthButton accentColor="#EA4335" label="G" />
+                      <SocialAuthButton
+                        accentColor="#EA4335"
+                        disabled={isSubmitting || isGoogleSubmitting}
+                        label="G"
+                        onPress={() => {
+                          void handleGoogleLogin();
+                        }}
+                      />
 
                       <SocialAuthButton accentColor="#1877F2" label="f" />
                     </View>

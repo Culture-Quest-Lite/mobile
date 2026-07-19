@@ -65,7 +65,7 @@ function resolveCreatePostUrl() {
     return buildApiUrl("/api/posts");
   }
 
-  return "http://3.113.215.65:8080/api/posts";
+  return "https://api.culturequestlite.com/api/posts";
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
