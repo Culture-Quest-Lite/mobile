@@ -33,7 +33,7 @@ function resolveProfilePostsUrl(path: string, query: URLSearchParams) {
     return buildApiUrl(normalizedPath);
   }
 
-  return `http://3.113.215.65:8080${normalizedPath}`;
+  return `https://api.culturequestlite.com${normalizedPath}`;
 }
 
 function buildPostsQuery({

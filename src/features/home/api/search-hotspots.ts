@@ -52,7 +52,7 @@ function resolveHotspotsUrl() {
     return buildApiUrl("/api/v1/hotspots");
   }
 
-  return "http://3.113.215.65:8080/api/v1/hotspots";
+  return "https://api.culturequestlite.com/api/v1/hotspots";
 }
 
 function resolveSearchHotspotsUrl() {
@@ -60,7 +60,7 @@ function resolveSearchHotspotsUrl() {
     return buildApiUrl("/api/v1/hotspots/search");
   }
 
-  return "http://3.113.215.65:8080/api/v1/hotspots/search";
+  return "https://api.culturequestlite.com/api/v1/hotspots/search";
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
