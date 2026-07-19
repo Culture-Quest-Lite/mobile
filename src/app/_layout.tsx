@@ -83,6 +83,8 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="community/create" />
+          <Stack.Screen name="community/post/[id]" />
           <Stack.Screen name="community/profile/[id]" />
           <Stack.Screen name="profile/information" />
           <Stack.Screen name="profile/menu" />

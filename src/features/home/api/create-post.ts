@@ -55,7 +55,7 @@ type CreatePostRequest = {
   accessToken: string;
   content: string;
   files: CreatePostUploadFile[];
-  hotspotIds: number[];
+  hotspotIds?: number[];
   tokenType?: string | null;
   visibility?: PostVisibility;
 };
@@ -287,7 +287,7 @@ export async function createPost({
 }: CreatePostRequest): Promise<CreatedPostResponse> {
   const createPostUrl = resolveCreatePostUrl();
   const normalizedContent = content.trim();
-  const normalizedHotspotIds = hotspotIds.filter(
+  const normalizedHotspotIds = (hotspotIds ?? []).filter(
     (hotspotId) =>
       Number.isInteger(hotspotId) && Number.isFinite(hotspotId) && hotspotId > 0,
   );
@@ -296,11 +296,7 @@ export async function createPost({
   let response: Response;
 
   if (!normalizedContent) {
-    throw new Error("Nội dung bài đánh giá không được để trống.");
-  }
-
-  if (normalizedHotspotIds.length === 0) {
-    throw new Error("Bài đánh giá phải gắn với ít nhất một hotspot.");
+    throw new Error("Nội dung bài viết không được để trống.");
   }
 
   formData.append("content", normalizedContent);

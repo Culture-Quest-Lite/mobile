@@ -12,6 +12,7 @@ import {
   type ComponentProps,
 } from "react";
 import {
+  Alert,
   ActivityIndicator,
   Platform,
   Pressable,
@@ -67,11 +68,17 @@ import {
   getHotspotPosts,
   type HotspotPost,
 } from "../api/get-hotspot-posts";
+import { likePost } from "../api/like-post";
 import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
 import { HiddenStoryUnlockedContent } from "../components/hidden-story-unlocked-content";
 import { HotspotGpsCheckinOverlay } from "../components/hotspot-gps-checkin-overlay";
 import { avatarImageUri } from "../data/home-screen.mock";
 import { cacheHotspotDetail } from "../data/hotspot-detail-cache";
+import {
+  addLikedPostId,
+  removeLikedPostId,
+  useLikedPostIds,
+} from "../data/liked-post-store";
 import {
   getCachedHotspotStories,
 } from "../data/hotspot-story-cache";
@@ -95,7 +102,11 @@ type PersonalExperienceItem = {
   avatarUri: string;
   date: string;
   id: string;
+  isLiked: boolean;
+  isLikePending: boolean;
+  likeCount: number;
   media: PersonalExperienceMediaItem[];
+  postId: number;
   rating: number;
   text: string;
   user: string;
@@ -180,11 +191,9 @@ const relatedRouteCardImageHeight = 136;
 const relatedRouteCardMinHeight = 172;
 const detailSheetHorizontalPadding = 23;
 const relatedRouteScrollInset = detailSheetHorizontalPadding;
-const reviewCardHorizontalPadding = 16;
 const reviewAuthorRowHorizontalOffset = -6;
 const reviewMediaGridGap = 6;
 const reviewCardBorderRadius = 14;
-const reviewMediaBorderRadius = 16;
 const sectionEyebrowTextStyle = {
   color: "#7A6F67",
   lineHeight: 18,
@@ -703,6 +712,8 @@ function formatPersonalExperienceDate(isoTimestamp: string) {
 
 function buildApiPersonalExperienceItems(
   posts: HotspotPost[],
+  likedPostIds: number[],
+  likingPostIds: number[],
 ): PersonalExperienceItem[] {
   return posts.map((post) => {
     const resolvedMedia = (post.medias.length > 0
@@ -729,7 +740,14 @@ function buildApiPersonalExperienceItems(
       avatarUri: avatarImageUri,
       date: formatPersonalExperienceDate(post.createdAt ?? ""),
       id: post.id,
+      isLiked:
+        post.isLiked === true ||
+        likedPostIds.includes(post.postId) ||
+        likingPostIds.includes(post.postId),
+      isLikePending: likingPostIds.includes(post.postId),
+      likeCount: Math.max(0, Math.round(post.likeCount ?? 0)),
       media: resolvedMedia,
+      postId: post.postId,
       rating: 0,
       text: post.text,
       user:
@@ -1896,7 +1914,7 @@ function PersonalExperienceSectionHeader() {
 }
 
 function PersonalExperienceMediaThumb({
-  borderRadius = reviewMediaBorderRadius,
+  borderRadius = 0,
   height = 104,
   item,
   overlayLabel,
@@ -1912,10 +1930,10 @@ function PersonalExperienceMediaThumb({
     typeof overlayLabel === "string" && overlayLabel.trim().length > 0;
 
   return (
-      <View
-        className="overflow-hidden"
-        style={{
-          borderRadius,
+    <View
+      className="overflow-hidden"
+      style={{
+        borderRadius,
         height,
         width,
       }}
@@ -2015,23 +2033,65 @@ function PersonalExperienceComposer({
   );
 }
 
-function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
+function PersonalExperienceLikeButton({
+  isLiked,
+  isPending = false,
+  onPress,
+  value,
+}: {
+  isLiked: boolean;
+  isPending?: boolean;
+  onPress: () => void;
+  value: number;
+}) {
+  return (
+    <Pressable
+      className="flex-row items-center gap-1.5 self-start py-0.5"
+      disabled={isPending}
+      hitSlop={8}
+      onPress={onPress}
+      style={{ opacity: isPending ? 0.6 : 1 }}
+    >
+      <SymbolView
+        name={
+          isLiked
+            ? { ios: "heart.fill", android: "favorite", web: "favorite" }
+            : { ios: "heart", android: "favorite_border", web: "favorite_border" }
+        }
+        size={20}
+        tintColor={isLiked ? "#F43F5E" : "#2B2233"}
+      />
+      <Text
+        className="text-[14px] font-semibold"
+        style={{ color: isLiked ? "#F43F5E" : "#2B2233", lineHeight: 16 }}
+      >
+        {value}
+      </Text>
+    </Pressable>
+  );
+}
+
+function PersonalExperienceCard({
+  item,
+  onPressLike,
+}: {
+  item: PersonalExperienceItem;
+  onPressLike: (postId: number) => void;
+}) {
   const { width: screenWidth } = useWindowDimensions();
+  const reviewCardInnerHorizontalPadding = 14;
   const hasSingleMedia = item.media.length === 1;
   const hasTwoMedia = item.media.length === 2;
   const hasThreeMedia = item.media.length === 3;
-  const reviewCardContentWidth = Math.max(
-    screenWidth - detailSheetHorizontalPadding * 2 - reviewCardHorizontalPadding * 2,
-    0,
-  );
+  const reviewMediaContentWidth = Math.max(screenWidth, 0);
   const singleMediaHeight = Math.min(Math.max(screenWidth * 0.64, 220), 280);
   const multiMediaPreviewItems = hasSingleMedia ? item.media : item.media.slice(0, 4);
   const hiddenMediaCount = Math.max(item.media.length - multiMediaPreviewItems.length, 0);
   const twoMediaHeight = Math.min(Math.max(screenWidth * 0.44, 156), 182);
   const threeMediaHeight = Math.min(Math.max(screenWidth * 0.50, 188), 214);
-  const threeMediaLeadWidth = Math.max(reviewCardContentWidth * 0.56, 0);
+  const threeMediaLeadWidth = Math.max(reviewMediaContentWidth * 0.56, 0);
   const threeMediaSideWidth = Math.max(
-    reviewCardContentWidth - threeMediaLeadWidth - reviewMediaGridGap,
+    reviewMediaContentWidth - threeMediaLeadWidth - reviewMediaGridGap,
     0,
   );
   const threeMediaStackHeight = Math.max(
@@ -2040,7 +2100,7 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
   );
   const multiMediaHeight = 98;
   const halfWidthMediaItemWidth = Math.max(
-    (reviewCardContentWidth - reviewMediaGridGap) / 2,
+    (reviewMediaContentWidth - reviewMediaGridGap) / 2,
     0,
   );
   const hasText = item.text.trim().length > 0;
@@ -2120,18 +2180,14 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
       {item.media.length > 0 ? (
         <View
           className="mt-2"
-          style={
-            hasSingleMedia
-              ? {
-                  alignSelf: "center",
-                  marginHorizontal: -reviewCardHorizontalPadding,
-                  width: screenWidth - detailSheetHorizontalPadding * 2,
-                }
-              : { width: "100%" }
-          }
+          style={{
+            marginHorizontal: -(detailSheetHorizontalPadding + reviewCardInnerHorizontalPadding),
+            width: reviewMediaContentWidth,
+          }}
         >
           {hasSingleMedia ? (
             <PersonalExperienceMediaThumb
+              borderRadius={0}
               height={singleMediaHeight}
               item={item.media[0]}
               width="100%"
@@ -2143,6 +2199,7 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
             >
               {item.media.map((media, index) => (
                 <PersonalExperienceMediaThumb
+                  borderRadius={0}
                   height={twoMediaHeight}
                   key={`${item.id}-media-${index}`}
                   item={media}
@@ -2156,6 +2213,7 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
               style={{ columnGap: reviewMediaGridGap }}
             >
               <PersonalExperienceMediaThumb
+                borderRadius={0}
                 height={threeMediaHeight}
                 item={item.media[0]}
                 width={threeMediaLeadWidth}
@@ -2163,6 +2221,7 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
               <View style={{ rowGap: reviewMediaGridGap, width: threeMediaSideWidth }}>
                 {item.media.slice(1).map((media, index) => (
                   <PersonalExperienceMediaThumb
+                    borderRadius={0}
                     height={threeMediaStackHeight}
                     key={`${item.id}-media-stack-${index}`}
                     item={media}
@@ -2172,13 +2231,7 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
               </View>
             </View>
           ) : (
-            <View
-              className="overflow-hidden"
-              style={{
-                backgroundColor: panelBackground,
-                borderRadius: reviewMediaBorderRadius,
-              }}
-            >
+            <View className="overflow-hidden">
               <View
                 style={{
                   columnGap: reviewMediaGridGap,
@@ -2197,13 +2250,14 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
 
                   return (
                     <PersonalExperienceMediaThumb
+                      borderRadius={0}
                       height={multiMediaHeight}
                       key={`${item.id}-media-${index}`}
                       item={media}
                       overlayLabel={overlayLabel}
                       width={
                         shouldStretchLastItem
-                          ? reviewCardContentWidth
+                          ? reviewMediaContentWidth
                           : halfWidthMediaItemWidth
                       }
                     />
@@ -2214,6 +2268,18 @@ function PersonalExperienceCard({ item }: { item: PersonalExperienceItem }) {
           )}
         </View>
       ) : null}
+
+      <View
+        className="mt-2 flex-row items-center"
+        style={{ marginHorizontal: reviewAuthorRowHorizontalOffset }}
+      >
+        <PersonalExperienceLikeButton
+          isLiked={item.isLiked}
+          isPending={item.isLikePending}
+          onPress={() => onPressLike(item.postId)}
+          value={item.likeCount}
+        />
+      </View>
     </View>
   );
 }
@@ -2274,12 +2340,14 @@ function PersonalExperienceSection({
   isCheckedIn,
   isLoadingReviews = false,
   items,
+  onPressLike,
   reviewsErrorMessage,
 }: {
   composer?: PersonalExperienceComposerProps | null;
   isCheckedIn: boolean;
   isLoadingReviews?: boolean;
   items: PersonalExperienceItem[];
+  onPressLike: (postId: number) => void;
   reviewsErrorMessage?: string | null;
 }) {
   const [isShowingAllReviews, setIsShowingAllReviews] = useState(false);
@@ -2302,7 +2370,11 @@ function PersonalExperienceSection({
           <PersonalExperienceLoadingCard />
         ) : items.length > 0 ? (
           visibleItems.map((item) => (
-            <PersonalExperienceCard key={item.id} item={item} />
+            <PersonalExperienceCard
+              key={item.id}
+              item={item}
+              onPressLike={onPressLike}
+            />
           ))
         ) : (
           <EmptyPersonalExperienceCard isCheckedIn={isCheckedIn} />
@@ -2555,6 +2627,8 @@ export default function HotspotDetailScreen() {
     slug: resolvedSlug,
   });
   const resolvedRouteId = resolveRouteIdParam(routeId);
+  const likedPostsAccountKey =
+    authSession.username?.trim() || authSession.displayName.trim() || null;
   const scrollY = useSharedValue(0);
   const [isCheckinOverlayVisible, setIsCheckinOverlayVisible] = useState(false);
   const [isStickyCheckinVisible, setIsStickyCheckinVisible] = useState(false);
@@ -2576,9 +2650,11 @@ export default function HotspotDetailScreen() {
     useState(false);
   const [isRemoteHotspotLoading, setIsRemoteHotspotLoading] = useState(false);
   const [apiHotspotPosts, setApiHotspotPosts] = useState<HotspotPost[]>([]);
+  const [likingPostIds, setLikingPostIds] = useState<number[]>([]);
   const [hotspotPostsError, setHotspotPostsError] = useState<string | null>(
     null,
   );
+  const persistedLikedPostIds = useLikedPostIds(likedPostsAccountKey);
   const [isHotspotPostsLoading, setIsHotspotPostsLoading] = useState(
     () => resolvedHotspotId !== null,
   );
@@ -2723,6 +2799,7 @@ export default function HotspotDetailScreen() {
     const loadHotspotPosts = async () => {
       if (resolvedHotspotId === null) {
         setApiHotspotPosts([]);
+        setLikingPostIds([]);
         setHotspotPostsError(null);
         setIsHotspotPostsLoading(false);
         return;
@@ -2730,6 +2807,7 @@ export default function HotspotDetailScreen() {
 
       setIsHotspotPostsLoading(true);
       setApiHotspotPosts([]);
+      setLikingPostIds([]);
       setHotspotPostsError(null);
 
       try {
@@ -2780,6 +2858,127 @@ export default function HotspotDetailScreen() {
       isActive = false;
     };
   }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId, resolvedSlug]);
+
+  async function handlePressLikeHotspotPost(postId: number) {
+    const targetPost = apiHotspotPosts.find((post) => post.postId === postId);
+
+    if (
+      targetPost?.isLiked === true ||
+      persistedLikedPostIds.includes(postId) ||
+      likingPostIds.includes(postId)
+    ) {
+      return;
+    }
+
+    if (!authSession.isAuthenticated) {
+      Alert.alert(
+        "Cần đăng nhập",
+        "Bạn cần đăng nhập để thả tim bài đánh giá này.",
+      );
+      return;
+    }
+
+    const accessToken = await getValidAccessToken();
+
+    if (!accessToken) {
+      Alert.alert(
+        "Phiên đăng nhập hết hạn",
+        "Vui lòng đăng nhập lại trước khi thả tim bài đánh giá.",
+      );
+      return;
+    }
+
+    setLikingPostIds((current) =>
+      current.includes(postId) ? current : [...current, postId],
+    );
+    setApiHotspotPosts((current) =>
+      current.map((post) =>
+        post.postId === postId
+          ? {
+              ...post,
+              isLiked: true,
+              likeCount: Math.max(0, Math.round(post.likeCount ?? 0)) + 1,
+            }
+          : post,
+      ),
+    );
+
+    try {
+      const result = await likePost({
+        accessToken,
+        postId,
+        tokenType: authSession.tokenType,
+      });
+
+      const resolvedLikeCount = result.likeCount;
+
+      setApiHotspotPosts((current) =>
+        current.map((post) =>
+          post.postId === postId
+            ? {
+              ...post,
+              isLiked: true,
+              likeCount:
+                resolvedLikeCount !== null
+                  ? resolvedLikeCount
+                  : post.likeCount,
+            }
+            : post,
+        ),
+      );
+
+      if (likedPostsAccountKey) {
+        addLikedPostId(likedPostsAccountKey, postId);
+      }
+    } catch (error) {
+      setApiHotspotPosts((current) =>
+        current.map((post) =>
+          post.postId === postId
+            ? {
+                ...post,
+                isLiked: false,
+                likeCount: Math.max(0, Math.round(post.likeCount ?? 0) - 1),
+              }
+            : post,
+        ),
+      );
+
+      const errorMessage = error instanceof Error ? error.message : "";
+      const normalizedErrorMessage = normalizeLookupText(errorMessage);
+      const hasAlreadyLikedError =
+        normalizedErrorMessage.includes("already liked") ||
+        normalizedErrorMessage.includes("already like") ||
+        normalizedErrorMessage.includes("da like") ||
+        normalizedErrorMessage.includes("da thich");
+
+      if (hasAlreadyLikedError && likedPostsAccountKey) {
+        setApiHotspotPosts((current) =>
+          current.map((post) =>
+            post.postId === postId
+              ? {
+                  ...post,
+                  isLiked: true,
+                }
+              : post,
+          ),
+        );
+        addLikedPostId(likedPostsAccountKey, postId);
+        return;
+      }
+
+      if (likedPostsAccountKey) {
+        removeLikedPostId(likedPostsAccountKey, postId);
+      }
+      Alert.alert(
+        "Không thể thả tim",
+        error instanceof Error
+          ? error.message
+          : "Đã có lỗi xảy ra khi thả tim bài đánh giá.",
+      );
+    } finally {
+      setLikingPostIds((current) => current.filter((id) => id !== postId));
+    }
+  }
 
   useEffect(() => {
     let isActive = true;
@@ -3110,6 +3309,8 @@ export default function HotspotDetailScreen() {
   );
   const apiPersonalExperienceItems = buildApiPersonalExperienceItems(
     apiHotspotPosts,
+    persistedLikedPostIds,
+    likingPostIds,
   );
   const personalExperienceItems = dedupePersonalExperienceItems(
     apiPersonalExperienceItems,
@@ -3487,6 +3688,7 @@ export default function HotspotDetailScreen() {
               isCheckedIn={isCheckedIn}
               isLoadingReviews={isHotspotPostsLoading}
               items={personalExperienceItems}
+              onPressLike={handlePressLikeHotspotPost}
               reviewsErrorMessage={hotspotPostsError}
             />
           </Animated.View>
