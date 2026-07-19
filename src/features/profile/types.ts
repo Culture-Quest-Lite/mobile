@@ -59,7 +59,9 @@ export type ProfilePost = {
   tags: ProfilePostTag[];
   medias: ProfilePostMedia[];
   createdAt: string | null;
+  isLiked?: boolean;
   likeCount: number | null;
   pointRemaining: number | null;
+  replyCount?: number | null;
   shareCount: number | null;
 };

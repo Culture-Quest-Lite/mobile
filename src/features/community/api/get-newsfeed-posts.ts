@@ -7,40 +7,39 @@ import type {
   ProfilePostTag,
 } from "@/features/profile/types";
 
-type GetHotspotPostsRequest = {
+type GetNewsfeedPostsRequest = {
   accessToken?: string | null;
-  hotspotId: number;
   page?: number;
   size?: number;
-  sort?: string[];
   tokenType?: string | null;
 };
 
-export type HotspotPostsSortState = {
+export type NewsfeedSortState = {
   empty: boolean;
   sorted: boolean;
   unsorted: boolean;
 };
 
-export type HotspotPostsPageable = {
+export type NewsfeedPageable = {
   offset: number;
   pageNumber: number;
   pageSize: number;
   paged: boolean;
-  sort: HotspotPostsSortState | null;
+  sort: NewsfeedSortState | null;
   unpaged: boolean;
 };
 
-export type HotspotPost = ProfilePost & {
+export type NewsfeedPost = ProfilePost & {
   commentCount: number | null;
   likeCount: number | null;
   postId: number;
+  replyCount: number | null;
   shareCount: number | null;
   userNumericId: number;
 };
 
-export type HotspotPostsPage = {
-  content: HotspotPost[];
+export type NewsfeedPostsPage = {
+  content: NewsfeedPost[];
   empty: boolean;
   first: boolean;
   isLast: boolean;
@@ -48,38 +47,29 @@ export type HotspotPostsPage = {
   number: number;
   numberOfElements: number;
   page: number;
-  pageable: HotspotPostsPageable | null;
+  pageable: NewsfeedPageable | null;
   size: number;
-  sort: HotspotPostsSortState | null;
+  sort: NewsfeedSortState | null;
 };
 
-function resolveHotspotPostsUrl(hotspotId: number, query: URLSearchParams) {
-  const normalizedPath = `/api/posts/hotspot/${hotspotId}?${query.toString()}`;
+function resolveNewsfeedPostsUrl(query: URLSearchParams) {
+  const normalizedPath = `/api/posts/newsfeed?${query.toString()}`;
 
   if (PublicEnv.apiBaseUrl.trim()) {
     return buildApiUrl(normalizedPath);
   }
 
-  return `https://api.culturequestlite.com${normalizedPath}`;
+  return `http://3.113.215.65:8080${normalizedPath}`;
 }
 
-function buildPostsQuery({
+function buildNewsfeedQuery({
   page = 0,
   size = 10,
-  sort = ["createdAt,DESC"],
-}: Pick<GetHotspotPostsRequest, "page" | "size" | "sort">) {
-  const query = new URLSearchParams({
+}: Pick<GetNewsfeedPostsRequest, "page" | "size">) {
+  return new URLSearchParams({
     page: `${page}`,
     size: `${size}`,
   });
-
-  for (const value of sort) {
-    if (value.trim()) {
-      query.append("sort", value);
-    }
-  }
-
-  return query;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -110,7 +100,7 @@ function isNonNull<T>(value: T | null): value is T {
   return value !== null;
 }
 
-function parseSortState(value: unknown): HotspotPostsSortState | null {
+function parseSortState(value: unknown): NewsfeedSortState | null {
   if (!isObject(value)) {
     return null;
   }
@@ -122,7 +112,7 @@ function parseSortState(value: unknown): HotspotPostsSortState | null {
   };
 }
 
-function parsePageable(value: unknown): HotspotPostsPageable | null {
+function parsePageable(value: unknown): NewsfeedPageable | null {
   if (!isObject(value)) {
     return null;
   }
@@ -178,7 +168,7 @@ function parsePostMedia(value: unknown): ProfilePostMedia | null {
   };
 }
 
-function parsePost(value: unknown): HotspotPost | null {
+function parsePost(value: unknown): NewsfeedPost | null {
   if (!isObject(value)) {
     return null;
   }
@@ -208,9 +198,7 @@ function parsePost(value: unknown): HotspotPost | null {
     return left.id - right.id;
   });
   const firstImage =
-    sortedMedias.find((media) => media.type.toUpperCase() === "IMAGE") ??
-    sortedMedias[0] ??
-    null;
+    sortedMedias.find((media) => media.type.toUpperCase() === "IMAGE") ?? null;
 
   return {
     id: `${postId}`,
@@ -239,11 +227,12 @@ function parsePost(value: unknown): HotspotPost | null {
     pointRemaining: readNumber(value.pointRemaining),
     likeCount: readNullableNumber(value.likeCount),
     commentCount: readNullableNumber(value.commentCount),
+    replyCount: readNullableNumber(value.replyCount),
     shareCount: readNullableNumber(value.shareCount),
   };
 }
 
-function parsePostsResponse(value: unknown): HotspotPostsPage | null {
+function parsePostsResponse(value: unknown): NewsfeedPostsPage | null {
   if (!isObject(value) || !Array.isArray(value.content)) {
     return null;
   }
@@ -309,7 +298,7 @@ async function parseResponseBody(response: Response) {
   }
 }
 
-function getErrorMessage(body: unknown, hotspotId: number, status: number) {
+function getErrorMessage(body: unknown, status: number) {
   if (isObject(body)) {
     for (const key of ["message", "error", "detail", "title"]) {
       const candidate = body[key];
@@ -328,7 +317,7 @@ function getErrorMessage(body: unknown, hotspotId: number, status: number) {
     return "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.";
   }
 
-  return `Không thể tải bài viết của hotspot #${hotspotId} (${status}).`;
+  return `Không thể tải newsfeed cộng đồng (${status}).`;
 }
 
 function getConnectionErrorMessage(url: string) {
@@ -336,25 +325,22 @@ function getConnectionErrorMessage(url: string) {
     return "Android đang chặn kết nối HTTP tới API. Hãy dùng HTTPS hoặc rebuild Android dev client sau khi bật cleartext traffic.";
   }
 
-  return "Không thể kết nối đến máy chủ bài viết.";
+  return "Không thể kết nối đến máy chủ newsfeed.";
 }
 
-export async function getHotspotPosts({
+export async function getNewsfeedPosts({
   accessToken,
-  hotspotId,
   page = 0,
   size = 10,
-  sort,
   tokenType,
-}: GetHotspotPostsRequest): Promise<HotspotPostsPage> {
-  const hotspotPostsUrl = resolveHotspotPostsUrl(
-    hotspotId,
-    buildPostsQuery({ page, size, sort }),
+}: GetNewsfeedPostsRequest): Promise<NewsfeedPostsPage> {
+  const newsfeedPostsUrl = resolveNewsfeedPostsUrl(
+    buildNewsfeedQuery({ page, size }),
   );
   let response: Response;
 
   try {
-    response = await fetch(hotspotPostsUrl, {
+    response = await fetch(newsfeedPostsUrl, {
       headers: {
         Accept: "application/json",
         ...(accessToken
@@ -366,36 +352,39 @@ export async function getHotspotPosts({
       method: "GET",
     });
   } catch (error) {
-    console.warn("[hotspot-posts] get posts network failure", {
+    console.warn("[community] get newsfeed network failure", {
       error: serializeError(error),
-      hotspotId,
+      page,
       platform: Platform.OS,
-      url: hotspotPostsUrl,
+      size,
+      url: newsfeedPostsUrl,
     });
-    throw new Error(getConnectionErrorMessage(hotspotPostsUrl));
+    throw new Error(getConnectionErrorMessage(newsfeedPostsUrl));
   }
 
   const responseBody = await parseResponseBody(response);
 
   if (!response.ok) {
-    console.warn("[hotspot-posts] get posts rejected", {
+    console.warn("[community] get newsfeed rejected", {
       body: summarizeBody(responseBody),
-      hotspotId,
+      page,
+      size,
       status: response.status,
-      url: hotspotPostsUrl,
+      url: newsfeedPostsUrl,
     });
-    throw new Error(getErrorMessage(responseBody, hotspotId, response.status));
+    throw new Error(getErrorMessage(responseBody, response.status));
   }
 
   const parsedResponse = parsePostsResponse(responseBody);
 
   if (!parsedResponse) {
-    console.warn("[hotspot-posts] get posts invalid payload", {
+    console.warn("[community] get newsfeed invalid payload", {
       body: summarizeBody(responseBody),
-      hotspotId,
-      url: hotspotPostsUrl,
+      page,
+      size,
+      url: newsfeedPostsUrl,
     });
-    throw new Error("API bài viết hotspot trả về dữ liệu không đúng định dạng.");
+    throw new Error("API newsfeed trả về dữ liệu không đúng định dạng.");
   }
 
   return parsedResponse;
