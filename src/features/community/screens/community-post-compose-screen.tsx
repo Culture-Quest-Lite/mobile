@@ -6,14 +6,22 @@ import {
 import {
   createPost,
   type CreatedPostResponse,
+  type PostVisibility,
 } from "@/features/home/api/create-post";
+import {
+  getCreatedPostRewardMessage,
+  isCreatedPostApproved,
+  isCreatedPostPending,
+} from "@/features/home/lib/created-post-feedback";
+import { cacheProfilePost } from "@/features/profile/data/profile-post-cache";
+import { mapCreatedPostToProfilePost } from "@/features/profile/lib/map-created-post-to-profile-post";
 import { getMyProfile } from "@/features/profile/api/get-me";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState, type ComponentProps } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -30,13 +38,13 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import { getPostVisibilityLabel } from "@/lib/post-visibility";
+import { getCommunityPostVisibility } from "../data/community-post-visibility-store";
 import {
   cacheCommunityPost,
   type CommunityFeedMediaItem,
   type CommunityFeedPost,
 } from "../data/community-post-cache";
-
-type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type ComposerIdentity = {
   accountKey: string | null;
   avatarUri: string | null;
@@ -55,6 +63,7 @@ const maxMediaCount = 6;
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const avatarFallbackColors = ["#EB489B", "#F58752"] as const;
 const chipBorderColor = "#E7E5EA";
+const footerActionHeight = 46;
 const pageHorizontalPadding = 16;
 const footerShadowStyle = {
   elevation: 14,
@@ -244,6 +253,7 @@ function mapCreatedPostToCommunityFeedPost(
     readMeaningfulText(createdPost.status)?.toUpperCase() === "PENDING"
       ? "Đang chờ duyệt"
       : "Cập nhật mới từ cộng đồng";
+  const visibilityValue = readMeaningfulText(createdPost.visibility) ?? "PUBLIC";
 
   return {
     id: `newsfeed-post-${createdPost.postId}`,
@@ -257,7 +267,7 @@ function mapCreatedPostToCommunityFeedPost(
     caption:
       readMeaningfulText(createdPost.content) ?? "Bài viết mới từ cộng đồng.",
     location: "",
-    mood: statusLabel,
+    mood: `${statusLabel} · ${getPostVisibilityLabel(visibilityValue)}`,
     badge: "Newsfeed",
     hotScore: "0",
     views: formatCompactCount(createdPost.pointRemaining),
@@ -271,7 +281,7 @@ function mapCreatedPostToCommunityFeedPost(
     image: firstMediaItem?.source ?? null,
     hotspotIds: createdPost.hotspotIds,
     commentCountValue: createdPost.commentCount,
-    isLiked: false,
+    isLiked: createdPost.isLiked,
     likeCountValue: createdPost.likeCount,
     mediaItems,
     postNumericId: createdPost.postId,
@@ -281,6 +291,7 @@ function mapCreatedPostToCommunityFeedPost(
     canComment: true,
     canLike: true,
     canOpenProfile: false,
+    visibility: visibilityValue,
   };
 }
 
@@ -395,29 +406,6 @@ function MediaPreviewCard({
   );
 }
 
-function ToolbarChip({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: SymbolName;
-  label: string;
-  onPress?: () => void;
-}) {
-  return (
-    <Pressable
-      className="flex-row items-center rounded-full border bg-white px-3.5 py-2.5"
-      onPress={onPress}
-      style={{ borderColor: chipBorderColor }}
-    >
-      <SymbolView name={icon} size={16} tintColor="#111827" />
-      <Text className="ml-1.5 text-[14px] font-semibold text-[#111827]">
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 export default function CommunityPostComposeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -432,18 +420,28 @@ export default function CommunityPostComposeScreen() {
   );
   const [draftText, setDraftText] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<ComposerMediaItem[]>([]);
+  const [postVisibility, setPostVisibility] = useState<PostVisibility>(() =>
+    getCommunityPostVisibility(),
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const resolvedComposerIdentity =
     composerIdentity.accountKey === fallbackComposerIdentity.accountKey
       ? composerIdentity
       : fallbackComposerIdentity;
   const trimmedDraftText = draftText.trim();
+  const visibilityLabel = getPostVisibilityLabel(postVisibility);
   const submitDisabledReason = !authSession.isAuthenticated
     ? "Đăng nhập để đăng bài viết cộng đồng."
     : !trimmedDraftText
       ? "Nhập nội dung để bật nút đăng."
       : null;
   const isSubmitDisabled = submitDisabledReason !== null || isSubmitting;
+
+  useFocusEffect(
+    useCallback(() => {
+      setPostVisibility(getCommunityPostVisibility());
+    }, []),
+  );
 
   useEffect(() => {
     let isActive = true;
@@ -582,16 +580,32 @@ export default function CommunityPostComposeScreen() {
         })),
         hotspotIds: [],
         tokenType: authSession.tokenType,
-        visibility: "PUBLIC",
+        visibility: postVisibility,
       });
+      const createdPostStatus = readMeaningfulText(createdPost.status)?.toUpperCase() ?? "";
+      const createdPostVisibility =
+        readMeaningfulText(createdPost.visibility)?.toUpperCase() ?? "PUBLIC";
+      const shouldAppearInCommunityFeed =
+        createdPostVisibility === "PUBLIC" && createdPostStatus === "APPROVED";
 
-      cacheCommunityPost(mapCreatedPostToCommunityFeedPost(createdPost));
+      cacheProfilePost(mapCreatedPostToProfilePost(createdPost));
+
+      if (shouldAppearInCommunityFeed) {
+        cacheCommunityPost(mapCreatedPostToCommunityFeedPost(createdPost));
+      }
+
+      const rewardMessage = getCreatedPostRewardMessage(createdPost);
+      const successMessage = isCreatedPostPending(createdPost)
+        ? "Bài viết đã được gửi và hiện chỉ xuất hiện trong hồ sơ của bạn để chờ duyệt."
+        : createdPostVisibility !== "PUBLIC"
+          ? "Bài viết đã được lưu trong hồ sơ của bạn."
+          : isCreatedPostApproved(createdPost) && shouldAppearInCommunityFeed
+            ? "Bài viết đã được duyệt và xuất hiện trên cộng đồng."
+            : "Bài viết đã được lưu trong hồ sơ của bạn.";
 
       Alert.alert(
         "Đăng bài thành công",
-        readMeaningfulText(createdPost.status)?.toUpperCase() === "PENDING"
-          ? "Bài viết đã được gửi và đang chờ duyệt."
-          : "Bài viết đã được đăng lên cộng đồng.",
+        rewardMessage ? `${successMessage} ${rewardMessage}` : successMessage,
         [
           {
             text: "OK",
@@ -733,11 +747,14 @@ export default function CommunityPostComposeScreen() {
           >
             <View className="flex-row items-center justify-between gap-3">
               <Pressable
-                className="flex-1 flex-row items-center justify-center rounded-[16px] border bg-white px-4 py-3.5"
+                className="flex-1 flex-row items-center justify-center rounded-[15px] border bg-white px-4"
                 onPress={() => {
                   void handlePickMedia();
                 }}
-                style={{ borderColor: chipBorderColor }}
+                style={{
+                  borderColor: chipBorderColor,
+                  height: footerActionHeight,
+                }}
               >
                 <SymbolView
                   name={{
@@ -748,22 +765,40 @@ export default function CommunityPostComposeScreen() {
                   size={18}
                   tintColor="#111827"
                 />
-                <Text className="ml-2 text-[15px] font-semibold text-[#111827]">
+                <Text className="ml-2 text-[14px] font-semibold text-[#111827]">
                   Thư viện
                 </Text>
               </Pressable>
 
-              <View
-                className="rounded-[16px] border bg-[#F9FAFB] px-4 py-3.5"
-                style={{ borderColor: chipBorderColor }}
+              <Pressable
+                className="flex-row items-center rounded-[15px] border bg-[#F9FAFB] px-3.5"
+                onPress={() => {
+                  router.push("/community/post-visibility" as Href);
+                }}
+                style={{
+                  borderColor: chipBorderColor,
+                  height: footerActionHeight,
+                }}
               >
-                <Text className="text-[15px] font-semibold text-[#111827]">
-                  Công khai
+                <Text
+                  className="text-[14px] font-semibold text-[#111827]"
+                  numberOfLines={1}
+                >
+                  {visibilityLabel}
                 </Text>
-              </View>
+                <SymbolView
+                  name={{
+                    ios: "chevron.down",
+                    android: "keyboard_arrow_down",
+                    web: "keyboard_arrow_down",
+                  }}
+                  size={18}
+                  tintColor="#6B7280"
+                />
+              </Pressable>
 
               <Pressable
-                className="overflow-hidden rounded-[16px]"
+                className="overflow-hidden rounded-[15px]"
                 disabled={isSubmitDisabled}
                 onPress={() => {
                   void handleSubmit();
@@ -776,17 +811,18 @@ export default function CommunityPostComposeScreen() {
                   end={{ x: 1, y: 0.5 }}
                   start={{ x: 0, y: 0.5 }}
                   style={{
-                    minWidth: 104,
+                    height: footerActionHeight,
+                    justifyContent: "center",
+                    minWidth: 92,
                     opacity: isSubmitDisabled ? 0.88 : 1,
-                    paddingHorizontal: 22,
-                    paddingVertical: 14,
+                    paddingHorizontal: 20,
                   }}
                 >
                   <View className="items-center justify-center">
                     {isSubmitting ? (
                       <ActivityIndicator color="#FFFFFF" size="small" />
                     ) : (
-                      <Text className="text-[17px] font-black text-white">
+                      <Text className="text-[16px] font-black text-white">
                         Đăng
                       </Text>
                     )}
@@ -797,8 +833,7 @@ export default function CommunityPostComposeScreen() {
 
             <View className="mt-2 flex-row items-center justify-between">
               <Text className="text-[12px] font-medium text-[#9CA3AF]">
-                {submitDisabledReason ??
-                  "Bài viết sẽ được đăng lên newsfeed cộng đồng."}
+                {submitDisabledReason ?? `Quyền riêng tư hiện tại: ${visibilityLabel}.`}
               </Text>
               <Text className="text-[12px] font-medium text-[#9CA3AF]">
                 {`${trimmedDraftText.length}/${maxPostLength}`}

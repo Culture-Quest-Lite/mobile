@@ -1,8 +1,8 @@
 import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { type Href, useRouter } from "expo-router";
-import { type ComponentProps, useState } from "react";
+import { type Href, useFocusEffect, useRouter } from "expo-router";
+import { type ComponentProps, useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -17,6 +17,11 @@ import {
 } from "react-native-safe-area-context";
 
 import { useAuthSession } from "@/features/auth/hooks/use-auth-session";
+import {
+  cacheCommunityPost,
+  type CommunityFeedMediaItem,
+  type CommunityFeedPost,
+} from "@/features/community/data/community-post-cache";
 import { getCachedHotspotDetail } from "@/features/home/data/hotspot-detail-cache";
 import {
   getHotspotHref,
@@ -24,10 +29,18 @@ import {
 } from "@/features/home/data/hotspots";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import type { RouteItem } from "@/lib/demo-data";
+import {
+  getPostVisibilityIcon,
+  getPostVisibilityLabel,
+} from "@/lib/post-visibility";
+import { buildLevelProgressBarState } from "../lib/level-progress-bar";
 import { useProfile } from "../hooks/use-profile";
-import type { ProfilePost } from "../types";
+import type {
+  ProfilePost,
+  ProfilePostStatus,
+} from "../types";
 
-type Tab = "posts" | "routes" | "liked-hotspots";
+type Tab = "posts" | "pending-posts" | "routes" | "liked-hotspots";
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 
 const cardShadow = {
@@ -64,6 +77,13 @@ const guestBackButtonShadow = {
   shadowOffset: { width: 0, height: 8 },
   elevation: 6,
 } as const;
+const profilePostAvatarPalettes = [
+  ["#EB489B", "#F58752"],
+  ["#F58752", "#FFC93C"],
+  ["#4F46E5", "#38BDF8"],
+  ["#10B981", "#2DD4BF"],
+  ["#9333EA", "#EC4899"],
+] as const;
 const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
   {
     key: "posts",
@@ -72,6 +92,15 @@ const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
       ios: "rectangle.grid.1x2",
       android: "view_agenda",
       web: "view_agenda",
+    },
+  },
+  {
+    key: "pending-posts",
+    label: "Chờ duyệt",
+    icon: {
+      ios: "lock",
+      android: "lock",
+      web: "lock",
     },
   },
   {
@@ -220,33 +249,57 @@ const GUEST_MENU_ITEMS: {
 ];
 
 function XPBar({
+  markerLabel,
   value,
   max,
   trackColor = "rgba(255,255,255,0.65)",
   height = 8,
 }: {
+  markerLabel?: string;
   value: number;
   max: number;
   trackColor?: string;
   height?: number;
 }) {
   const percent = Math.min(Math.max((value / max) * 100, 0), 100);
+  const markerLeftPercent = Math.min(Math.max(percent, 6), 94);
 
   return (
-    <View
-      style={{
-        backgroundColor: trackColor,
-        borderRadius: 999,
-        height,
-        overflow: "hidden",
-      }}
-    >
-      <LinearGradient
-        colors={["#F58752", "#FF6B2C", "#EB489B"]}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        style={{ borderRadius: 999, height: "100%", width: `${percent}%` }}
-      />
+    <View style={{ paddingTop: markerLabel ? 30 : 0 }}>
+      {markerLabel ? (
+        <View
+          pointerEvents="none"
+          style={{
+            left: `${markerLeftPercent}%`,
+            position: "absolute",
+            top: 0,
+            transform: [{ translateX: -26 }],
+          }}
+        >
+          <View className="rounded-full bg-[#2B2233] px-2.5 py-1">
+            <Text className="text-[10px] font-extrabold text-white">{markerLabel}</Text>
+          </View>
+          <View className="items-center">
+            <View className="h-2 w-[1.5px] bg-[#2B2233]" />
+          </View>
+        </View>
+      ) : null}
+
+      <View
+        style={{
+          backgroundColor: trackColor,
+          borderRadius: 999,
+          height,
+          overflow: "hidden",
+        }}
+      >
+        <LinearGradient
+          colors={["#F58752", "#FF6B2C", "#EB489B"]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={{ borderRadius: 999, height: "100%", width: `${percent}%` }}
+        />
+      </View>
     </View>
   );
 }
@@ -289,35 +342,93 @@ function formatPostTimestamp(value: string | null) {
   return dateText;
 }
 
-function getPostVisibilityLabel(visibility: string) {
-  switch (visibility.toUpperCase()) {
-    case "PRIVATE":
-      return "Riêng tư";
-    case "FOLLOWER":
-      return "Chỉ follower";
-    case "PUBLIC":
-      return "Công khai";
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("vi-VN").format(value);
+}
+
+function formatCompactCount(value?: number | null) {
+  const resolvedValue =
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.max(0, Math.round(value))
+      : 0;
+
+  if (resolvedValue < 1000) {
+    return `${resolvedValue}`;
+  }
+
+  const formattedValue = resolvedValue / 1000;
+
+  return `${formattedValue >= 10 ? formattedValue.toFixed(0) : formattedValue.toFixed(1)}k`;
+}
+
+function getProfileAvatarPalette(seed: string) {
+  const paletteIndex =
+    Array.from(seed).reduce((total, char) => total + char.charCodeAt(0), 0) %
+    profilePostAvatarPalettes.length;
+
+  return profilePostAvatarPalettes[paletteIndex] as readonly [string, string];
+}
+
+function normalizeProfilePostStatus(value?: string | null): ProfilePostStatus | null {
+  const normalizedValue = typeof value === "string" ? value.trim().toUpperCase() : "";
+
+  switch (normalizedValue) {
+    case "APPROVED":
+    case "PENDING":
+    case "REJECTED":
+    case "DELETED":
+      return normalizedValue;
     default:
-      return visibility || "Công khai";
+      return null;
   }
 }
 
-function getPostVisibilityIcon(visibility: string): SymbolName {
-  switch (visibility.toUpperCase()) {
-    case "PRIVATE":
-      return { ios: "lock.fill", android: "lock", web: "lock" };
-    case "FOLLOWER":
+function getProfilePostStatusLabel(value?: string | null) {
+  switch (normalizeProfilePostStatus(value)) {
+    case "APPROVED":
+      return "Đã duyệt";
+    case "PENDING":
+      return "Chờ duyệt";
+    case "REJECTED":
+      return "Bị từ chối";
+    case "DELETED":
+      return "Đã xóa";
+    default:
+      return typeof value === "string" && value.trim() ? value.trim() : "Chưa rõ";
+  }
+}
+
+function getProfilePostStatusTone(value?: string | null) {
+  switch (normalizeProfilePostStatus(value)) {
+    case "APPROVED":
       return {
-        ios: "person.2.fill",
-        android: "groups",
-        web: "groups",
+        backgroundColor: "#E8F7EE",
+        borderColor: "#B7E4C7",
+        textColor: "#137333",
       };
-    case "PUBLIC":
+    case "PENDING":
+      return {
+        backgroundColor: "#FFF4E5",
+        borderColor: "#FAD7A0",
+        textColor: "#B45309",
+      };
+    case "REJECTED":
+      return {
+        backgroundColor: "#FDECEC",
+        borderColor: "#F5C2C7",
+        textColor: "#B42318",
+      };
+    case "DELETED":
+      return {
+        backgroundColor: "#F3F4F6",
+        borderColor: "#E5E7EB",
+        textColor: "#6B7280",
+      };
     default:
       return {
-        ios: "globe.asia.australia.fill",
-        android: "public",
-        web: "public",
+        backgroundColor: "#F3F4F6",
+        borderColor: "#E5E7EB",
+        textColor: "#6B7280",
       };
   }
 }
@@ -347,11 +458,94 @@ function resolvePostMediaUris(post: ProfilePost) {
   return [fallbackPostImageUri];
 }
 
+function buildProfileCommunityMediaItems(post: ProfilePost): CommunityFeedMediaItem[] {
+  return post.medias
+    .filter((media) => {
+      const trimmedUrl = media.url.trim();
+      const normalizedType = media.type.trim().toUpperCase();
+      const normalizedMime = media.mimeType.trim().toLowerCase();
+
+      return (
+        trimmedUrl.length > 0 &&
+        (normalizedType === "IMAGE" || normalizedMime.startsWith("image/"))
+      );
+    })
+    .map((media) => ({
+      key: `${post.id}-media-${media.id}`,
+      source: {
+        uri: media.url.trim(),
+      },
+    }));
+}
+
+function mapProfilePostToCommunityFeedPost(
+  post: ProfilePost,
+  {
+    profileName,
+    profileUsername,
+  }: {
+    profileName: string;
+    profileUsername: string;
+  },
+): CommunityFeedPost {
+  const author =
+    post.displayName.trim() || profileName.trim() || fallbackPostAuthorName;
+  const normalizedUsername = post.username.trim() || profileUsername.trim();
+  const mediaItems = buildProfileCommunityMediaItems(post);
+  const parsedPostId = Number.parseInt(post.id, 10);
+  const visibilityLabel = getPostVisibilityLabel(post.visibility);
+  const statusLabel = getProfilePostStatusLabel(post.status);
+
+  return {
+    id: `profile-post-${post.id}`,
+    authorId: post.userId,
+    author,
+    avatarColors: getProfileAvatarPalette(`${author}-${post.userId}`),
+    badge: "Hồ sơ",
+    caption: post.text.trim() || "Bài viết mới từ hồ sơ cá nhân.",
+    comments: formatCompactCount(post.commentCount),
+    hotScore: "0",
+    image: mediaItems[0]?.source ?? null,
+    initials: getProfileInitials(author, normalizedUsername),
+    likes: formatCompactCount(post.likeCount),
+    location: "",
+    mood: `${statusLabel} · ${visibilityLabel}`,
+    topic: "culture",
+    role: normalizedUsername ? `@${normalizedUsername.replace(/^@/, "")}` : "Explorer profile",
+    shares: formatCompactCount(post.shareCount),
+    isFollowing: false,
+    tags: post.tags.map((tag) => tag.name.trim()).filter(Boolean).slice(0, 4),
+    time: formatPostTimestamp(post.createdAt),
+    views: formatCompactCount(post.pointRemaining),
+    canComment: true,
+    canLike: true,
+    canOpenProfile: false,
+    commentCountValue: post.commentCount,
+    hotspotIds: post.hotspotIds,
+    isLiked: post.isLiked === true,
+    likeCountValue: post.likeCount,
+    mediaItems,
+    postNumericId: Number.isInteger(parsedPostId) ? parsedPostId : null,
+    replies: formatCompactCount(post.replyCount),
+    replyCountValue: post.replyCount ?? 0,
+    shareCountValue: post.shareCount,
+    visibility: post.visibility,
+  };
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
-  const { likedHotspots, profile, posts, userRoutes, isLoading, error } =
-    useProfile();
+  const hasFocusedProfileRef = useRef(false);
+  const {
+    likedHotspots,
+    profile,
+    posts,
+    userRoutes,
+    isLoading,
+    error,
+    reloadProfile,
+  } = useProfile();
   const [tab, setTab] = useState<Tab>("posts");
   const insets = useSafeAreaInsets();
   const { gutter, safeWidth } = useScreenLayout({ maxContentWidth: 640 });
@@ -364,6 +558,21 @@ export default function ProfileScreen() {
   const handleBackToHome = () => {
     router.replace("/home");
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!authSession.isAuthenticated) {
+        return;
+      }
+
+      if (!hasFocusedProfileRef.current) {
+        hasFocusedProfileRef.current = true;
+        return;
+      }
+
+      void reloadProfile();
+    }, [authSession.isAuthenticated, reloadProfile]),
+  );
 
   if (!authSession.isAuthenticated) {
     return (
@@ -410,30 +619,40 @@ export default function ProfileScreen() {
   }
 
   const levelNumber = typeof profile.level === "number" ? profile.level : null;
+  const levelDisplayName = profile.levelName?.trim() ?? "";
   const isMaxLevel = profile.isMaxLevel === true;
+  const currentTotalXp = Math.max(profile.totalXp, 0);
   const currentLevelXp =
     typeof profile.currentLevelXp === "number" ? profile.currentLevelXp : null;
   const xpToNext =
     typeof profile.xpToNext === "number" ? profile.xpToNext : null;
-  const resolvedCurrentLevelXp = currentLevelXp ?? 0;
-  const resolvedXpToNext = xpToNext ?? 0;
-  const canShowLevelProgress =
-    levelNumber !== null &&
-    (isMaxLevel ||
-      (currentLevelXp !== null && xpToNext !== null && xpToNext > 0));
-  const levelProgressPercent = canShowLevelProgress
+  const canShowLevelSection = levelNumber !== null || levelDisplayName.length > 0;
+  const levelBadgeLabel =
+    levelNumber !== null ? `Cấp ${levelNumber}` : levelDisplayName || "Level";
+  const levelProgressBarState = buildLevelProgressBarState({
+    currentLevelLabel: levelBadgeLabel,
+    currentLevelXp,
+    currentXp: currentTotalXp,
+    isMaxLevel,
+    xpToNext,
+  });
+  const canShowExactLevelProgress =
+    levelNumber !== null && (isMaxLevel || levelProgressBarState.targetXp !== null);
+  const levelProgressPercent = canShowExactLevelProgress
     ? isMaxLevel
       ? 100
-      : Math.min(
-          Math.max((resolvedCurrentLevelXp / resolvedXpToNext) * 100, 0),
-          100,
-        )
+      : levelProgressBarState.fillPercent
     : 0;
-  const remainingXp = canShowLevelProgress
+  const remainingXp = canShowExactLevelProgress
     ? isMaxLevel
       ? 0
-      : Math.max(resolvedXpToNext - resolvedCurrentLevelXp, 0)
+      : levelProgressBarState.remainingXp
     : 0;
+  const levelFallbackMessage = `Tổng ${formatNumber(profile.totalXp)} XP`;
+  const levelProgressSummary =
+    canShowExactLevelProgress && !isMaxLevel && levelProgressBarState.targetXp !== null
+      ? `${formatNumber(currentTotalXp)} / ${formatNumber(levelProgressBarState.targetXp)} XP`
+      : `${formatNumber(currentTotalXp)} XP`;
   const postCount =
     typeof profile.totalPosts === "number" ? profile.totalPosts : posts.length;
   const statItems = [
@@ -447,6 +666,15 @@ export default function ProfileScreen() {
       : profile.isPremium
         ? "PRO"
         : null;
+  const approvedPosts = posts.filter(
+    (post) => normalizeProfilePostStatus(post.status) === "APPROVED",
+  );
+  const pendingPosts = posts.filter(
+    (post) => normalizeProfilePostStatus(post.status) === "PENDING",
+  );
+  const visiblePosts = tab === "pending-posts" ? pendingPosts : approvedPosts;
+  const postSectionTitle =
+    tab === "pending-posts" ? "Bài viết chờ duyệt" : "Bài viết đã duyệt";
 
   return (
     <SafeAreaView className="flex-1 bg-[#F7F8FC]" edges={["left", "right"]}>
@@ -541,7 +769,7 @@ export default function ProfileScreen() {
                 </Text>
               </View>
 
-              {canShowLevelProgress ? (
+              {canShowLevelSection ? (
                 <View className="mt-1.5">
                   <View className="mb-1 flex-row items-center justify-between gap-2">
                     <Text className="text-[13px] font-bold text-[#2B2233]">
@@ -558,26 +786,49 @@ export default function ProfileScreen() {
                         tintColor="#F58752"
                       />
                       <Text className="text-[11px] font-extrabold text-[#F58752]">
-                        Cấp {levelNumber}
+                        {levelBadgeLabel}
                       </Text>
                     </View>
                   </View>
-                  <XPBar
-                    value={isMaxLevel ? 1 : (currentLevelXp ?? 0)}
-                    max={isMaxLevel ? 1 : (xpToNext ?? 1)}
-                    height={8}
-                    trackColor="#F4EAF0"
-                  />
-                  <View className="mt-1 flex-row items-center justify-between">
-                    <Text className="flex-1 pr-2 text-[10px] text-[#8E869A]">
-                      {isMaxLevel
-                        ? "Đã đạt cấp tối đa"
-                        : `Còn ${remainingXp} XP để lên cấp ${levelNumber + 1}`}
-                    </Text>
-                    <Text className="text-[10px] font-extrabold text-[#F58752]">
-                      {Math.round(levelProgressPercent)}%
-                    </Text>
-                  </View>
+                  {canShowExactLevelProgress ? (
+                    <>
+                      <XPBar
+                        markerLabel={levelProgressBarState.markerLabel}
+                        value={isMaxLevel ? 1 : currentTotalXp}
+                        max={isMaxLevel ? 1 : (levelProgressBarState.targetXp ?? 1)}
+                        height={8}
+                        trackColor="#F4EAF0"
+                      />
+                      <View className="mt-1 flex-row items-center justify-between">
+                        <Text className="flex-1 pr-2 text-[10px] text-[#8E869A]">
+                          {levelProgressSummary}
+                        </Text>
+                      </View>
+                      <View className="mt-1 flex-row items-center justify-between">
+                        <Text className="flex-1 pr-2 text-[10px] text-[#8E869A]">
+                          {isMaxLevel
+                            ? "Đã đạt cấp tối đa"
+                            : `Còn ${formatNumber(remainingXp)} XP để đạt cấp ${levelNumber + 1}`}
+                        </Text>
+                        <Text className="text-[10px] font-extrabold text-[#F58752]">
+                          {Math.round(levelProgressPercent)}%
+                        </Text>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View
+                        style={{
+                          backgroundColor: "#F4EAF0",
+                          borderRadius: 999,
+                          height: 8,
+                        }}
+                      />
+                      <Text className="mt-1 text-[10px] text-[#8E869A]">
+                        {levelFallbackMessage}
+                      </Text>
+                    </>
+                  )}
                 </View>
               ) : null}
             </View>
@@ -616,15 +867,19 @@ export default function ProfileScreen() {
           </View>
 
           <View className="mt-4">
-            {tab === "posts" ? (
-              posts.length === 0 ? (
-                <EmptyPosts />
+            {tab === "posts" || tab === "pending-posts" ? (
+              visiblePosts.length === 0 ? (
+                <View>
+                  <ProfilePostsSectionHeader title={postSectionTitle} />
+                  <EmptyPosts tab={tab} />
+                </View>
               ) : (
                 <View>
-                  {posts.map((post, index) => (
+                  <ProfilePostsSectionHeader title={postSectionTitle} />
+                  {visiblePosts.map((post, index) => (
                     <PostCard
                       key={post.id}
-                      isLast={index === posts.length - 1}
+                      isLast={index === visiblePosts.length - 1}
                       pageGutter={gutter}
                       post={post}
                       profileAvatar={profile.avatar}
@@ -1145,21 +1400,37 @@ function PostAuthorAvatar({
 }
 
 function PostAction({
+  active = false,
   icon,
+  onPress,
   tintColor = "#6B7280",
   value,
 }: {
+  active?: boolean;
   icon: SymbolName;
+  onPress?: () => void;
   tintColor?: string;
   value?: number;
 }) {
+  const resolvedTintColor = active ? tintColor : "#6B7280";
+  const ActionContainer = onPress ? Pressable : View;
+
   return (
-    <View className="flex-row items-center gap-1.5">
-      <SymbolView name={icon} size={17} tintColor={tintColor} />
+    <ActionContainer
+      className="flex-row items-center gap-1.5"
+      onPress={onPress}
+      style={onPress ? ({ pressed }: { pressed: boolean }) => ({ opacity: pressed ? 0.72 : 1 }) : undefined}
+    >
+      <SymbolView name={icon} size={17} tintColor={resolvedTintColor} />
       {typeof value === "number" ? (
-        <Text className="text-[14px] font-medium text-[#4B5563]">{value}</Text>
+        <Text
+          className="text-[14px] font-medium"
+          style={{ color: active ? resolvedTintColor : "#4B5563" }}
+        >
+          {value}
+        </Text>
       ) : null}
-    </View>
+    </ActionContainer>
   );
 }
 
@@ -1326,6 +1597,7 @@ function PostCard({
   profileName: string;
   profileUsername: string;
 }) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [isPostMenuVisible, setIsPostMenuVisible] = useState(false);
   const authorName =
@@ -1335,9 +1607,30 @@ function PostCard({
   const postMediaSources = resolvePostMediaUris(post);
   const visibilityIcon = getPostVisibilityIcon(post.visibility);
   const visibilityLabel = getPostVisibilityLabel(post.visibility);
+  const statusLabel = getProfilePostStatusLabel(post.status);
+  const statusTone = getProfilePostStatusTone(post.status);
+  const normalizedStatus = normalizeProfilePostStatus(post.status);
+  const normalizedVisibility = post.visibility.trim().toUpperCase();
+  const canHighlightLikeState =
+    normalizedStatus === "APPROVED" && normalizedVisibility === "PUBLIC";
+  const isLiked = canHighlightLikeState && post.isLiked === true;
   const likeCount = post.likeCount ?? 0;
   const commentCount = post.commentCount ?? 0;
   const shareCount = post.shareCount ?? 0;
+
+  function handleOpenComments() {
+    const cachedPost = mapProfilePostToCommunityFeedPost(post, {
+      profileName,
+      profileUsername,
+    });
+
+    if (typeof cachedPost.postNumericId !== "number" || cachedPost.postNumericId <= 0) {
+      return;
+    }
+
+    cacheCommunityPost(cachedPost);
+    router.push(`/community/post/${cachedPost.postNumericId}` as Href);
+  }
 
   return (
     <View className={`px-3 py-3 ${isLast ? "" : "border-b border-[#DEE3EA]"}`}>
@@ -1357,7 +1650,7 @@ function PostCard({
               {authorName}
             </Text>
 
-            <View className="flex-row items-center gap-1">
+            <View className="flex-row flex-wrap items-center gap-1.5">
               <Text className="text-[12px] leading-[14px] text-[#6B7280]">
                 {formatPostTimestamp(post.createdAt)}
               </Text>
@@ -1366,6 +1659,20 @@ function PostCard({
               <Text className="text-[12px] leading-[14px] text-[#6B7280]">
                 {visibilityLabel}
               </Text>
+              <View
+                className="rounded-full border px-2 py-0.5"
+                style={{
+                  backgroundColor: statusTone.backgroundColor,
+                  borderColor: statusTone.borderColor,
+                }}
+              >
+                <Text
+                  className="text-[11px] font-extrabold"
+                  style={{ color: statusTone.textColor }}
+                >
+                  {statusLabel}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
@@ -1395,8 +1702,21 @@ function PostCard({
 
       <View className="mt-2 flex-row items-center gap-5">
         <PostAction
-          icon={{ ios: "heart.fill", android: "favorite", web: "favorite" }}
-          tintColor="#F43F5E"
+          active={isLiked}
+          icon={
+            isLiked
+              ? {
+                  ios: "hand.thumbsup.fill",
+                  android: "thumb_up",
+                  web: "thumb_up",
+                }
+              : {
+                  ios: "hand.thumbsup",
+                  android: "thumb_up_off_alt",
+                  web: "thumb_up_off_alt",
+                }
+          }
+          tintColor="#2563EB"
           value={likeCount}
         />
         <PostAction
@@ -1405,6 +1725,7 @@ function PostCard({
             android: "chat_bubble_outline",
             web: "chat_bubble_outline",
           }}
+          onPress={handleOpenComments}
           value={commentCount}
         />
         <PostAction
@@ -1518,16 +1839,36 @@ function LikedHotspotCard({
   );
 }
 
-function EmptyPosts() {
+function ProfilePostsSectionHeader({
+  title,
+}: {
+  title: string;
+}) {
+  return (
+    <View className="mb-3 px-1">
+      <Text className="text-[14px] font-semibold text-[#2B2233]">
+        {title}
+      </Text>
+    </View>
+  );
+}
+
+function EmptyPosts({ tab }: { tab: Extract<Tab, "posts" | "pending-posts"> }) {
   return (
     <View className="items-center py-12">
       <SymbolView
-        name={{ ios: "photo", android: "image", web: "image" }}
+        name={
+          tab === "pending-posts"
+            ? ({ ios: "lock", android: "lock", web: "lock" } as SymbolName)
+            : ({ ios: "photo", android: "image", web: "image" } as SymbolName)
+        }
         size={30}
         tintColor="#AA9FB0"
       />
       <Text className="mt-2 text-[13px] text-[#8E869A]">
-        Bạn chưa có bài đăng nào
+        {tab === "pending-posts"
+          ? "Bạn chưa có bài viết nào đang chờ duyệt"
+          : "Bạn chưa có bài viết nào đã được duyệt"}
       </Text>
     </View>
   );

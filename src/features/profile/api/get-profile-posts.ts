@@ -2,12 +2,18 @@ import { Platform } from "react-native";
 
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 
-import type { ProfilePost, ProfilePostMedia, ProfilePostTag } from "../types";
+import type {
+  ProfilePost,
+  ProfilePostMedia,
+  ProfilePostStatus,
+  ProfilePostTag,
+} from "../types";
 
 type FetchProfilePostsRequest = {
   accessToken?: string | null;
   page?: number;
   size?: number;
+  status?: ProfilePostStatus | null;
   sort?: string[];
   tokenType?: string | null;
 };
@@ -39,12 +45,17 @@ function resolveProfilePostsUrl(path: string, query: URLSearchParams) {
 function buildPostsQuery({
   page = 0,
   size = 10,
-  sort = ["createdAt,DESC"],
+  sort = [],
+  status,
 }: FetchProfilePostsRequest) {
   const query = new URLSearchParams({
     page: `${page}`,
     size: `${size}`,
   });
+
+  if (typeof status === "string" && status.trim()) {
+    query.set("status", status.trim().toUpperCase());
+  }
 
   for (const value of sort) {
     if (value.trim()) {
@@ -169,6 +180,7 @@ function parsePost(value: unknown): ProfilePost | null {
     visibility: readString(value.visibility),
     status: readString(value.status),
     reason: isNullableString(value.reason) ? value.reason : null,
+    isLiked: readBoolean(value.isLiked),
     isTaggedHotspot: readBoolean(value.isTaggedHotspot),
     isTaggedRoute: readBoolean(value.isTaggedRoute),
     hotspotIds: Array.isArray(value.hotspotIds)
@@ -370,6 +382,7 @@ export async function getMyProfilePosts({
   accessToken,
   page,
   size,
+  status,
   sort,
   tokenType,
 }: GetMyProfilePostsRequest): Promise<ProfilePost[]> {
@@ -378,8 +391,8 @@ export async function getMyProfilePosts({
     page,
     resolvePageUrl: (nextPage) =>
       resolveProfilePostsUrl(
-        "/api/posts/my-posts",
-        buildPostsQuery({ page: nextPage, size, sort }),
+        "/api/posts",
+        buildPostsQuery({ page: nextPage, size, sort, status }),
       ),
     size,
     tokenType,

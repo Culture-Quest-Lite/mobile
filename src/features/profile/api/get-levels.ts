@@ -8,36 +8,42 @@ type GetLevelsRequest = {
 };
 
 type GetLevelsResponseItem = {
-  createdAt?: string | null;
-  description?: string | null;
+  levelProgressId: number | null;
   levelId: number;
-  name: string;
+  userId: number | null;
+  levelName: string;
   requiredXp: number;
-  status?: string | null;
-  updatedAt?: string | null;
+  xpAtUnlock: number | null;
+  unlockedAt: string | null;
 };
 
 export type GamificationLevel = {
-  createdAt: string | null;
-  description: string | null;
   id: number;
+  levelId: number;
   levelNumber: number;
+  levelProgressId: number | null;
   name: string;
+  levelName: string;
   requiredXp: number;
-  status: string | null;
-  updatedAt: string | null;
+  unlockedAt: string | null;
+  userId: number | null;
+  xpAtUnlock: number | null;
 };
 
 function resolveGetLevelsUrl() {
   if (PublicEnv.apiBaseUrl.trim()) {
-    return buildApiUrl("/api/gamification/levels");
+    return buildApiUrl("/api/gamification/levels/progress/me");
   }
 
-  return "http://13.158.40.56:8080/api/gamification/levels";
+  return "https://api.culturequestlite.com/api/gamification/levels/progress/me";
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isNullableNumber(value: unknown): value is number | null | undefined {
+  return typeof value === "number" || value === null || value === undefined;
 }
 
 function isNullableString(value: unknown): value is string | null | undefined {
@@ -51,12 +57,12 @@ function isGetLevelsResponseItem(value: unknown): value is GetLevelsResponseItem
 
   return (
     typeof value.levelId === "number" &&
-    typeof value.name === "string" &&
+    typeof value.levelName === "string" &&
     typeof value.requiredXp === "number" &&
-    isNullableString(value.description) &&
-    isNullableString(value.status) &&
-    isNullableString(value.createdAt) &&
-    isNullableString(value.updatedAt)
+    isNullableNumber(value.levelProgressId) &&
+    isNullableString(value.unlockedAt) &&
+    isNullableNumber(value.userId) &&
+    isNullableNumber(value.xpAtUnlock)
   );
 }
 
@@ -123,7 +129,7 @@ function getErrorMessage(body: unknown, status: number) {
     return "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.";
   }
 
-  return `Không thể tải danh sách cấp độ (${status}).`;
+  return `Không thể tải tiến độ cấp độ (${status}).`;
 }
 
 function getConnectionErrorMessage(url: string) {
@@ -131,7 +137,7 @@ function getConnectionErrorMessage(url: string) {
     return "Android đang chặn kết nối HTTP tới API. Hãy dùng HTTPS hoặc rebuild Android dev client sau khi bật cleartext traffic.";
   }
 
-  return "Không thể kết nối đến máy chủ cấp độ.";
+  return "Không thể kết nối đến máy chủ tiến độ cấp độ.";
 }
 
 function extractLevelNumber(name: string) {
@@ -150,14 +156,16 @@ function mapResponseItemToLevel(
   index: number,
 ): GamificationLevel {
   return {
-    createdAt: response.createdAt ?? null,
-    description: response.description ?? null,
+    levelId: response.levelId,
+    levelName: response.levelName.trim(),
     id: response.levelId,
-    levelNumber: extractLevelNumber(response.name) ?? index + 1,
-    name: response.name.trim(),
+    levelNumber: extractLevelNumber(response.levelName) ?? index + 1,
+    levelProgressId: response.levelProgressId ?? null,
+    name: response.levelName.trim(),
     requiredXp: response.requiredXp,
-    status: response.status ?? null,
-    updatedAt: response.updatedAt ?? null,
+    unlockedAt: response.unlockedAt ?? null,
+    userId: response.userId ?? null,
+    xpAtUnlock: response.xpAtUnlock ?? null,
   };
 }
 
@@ -179,7 +187,7 @@ export async function getGamificationLevels({
       method: "GET",
     });
   } catch (error) {
-    console.warn("[profile] get levels network failure", {
+    console.warn("[profile] get level progress network failure", {
       error: serializeError(error),
       platform: Platform.OS,
       url: getLevelsUrl,
@@ -190,7 +198,7 @@ export async function getGamificationLevels({
   const responseBody = await parseResponseBody(response);
 
   if (!response.ok) {
-    console.warn("[profile] get levels rejected", {
+    console.warn("[profile] get level progress rejected", {
       body: summarizeBody(responseBody),
       status: response.status,
       url: getLevelsUrl,
@@ -199,21 +207,17 @@ export async function getGamificationLevels({
   }
 
   if (!Array.isArray(responseBody) || !responseBody.every(isGetLevelsResponseItem)) {
-    console.warn("[profile] get levels invalid payload", {
+    console.warn("[profile] get level progress invalid payload", {
       body: summarizeBody(responseBody),
       url: getLevelsUrl,
     });
-    throw new Error("API cấp độ trả về dữ liệu không đúng định dạng.");
+    throw new Error("API tiến độ cấp độ trả về dữ liệu không đúng định dạng.");
   }
 
   const sortedLevels = [...responseBody].sort(
     (left, right) =>
       left.requiredXp - right.requiredXp || left.levelId - right.levelId,
   );
-  const activeLevels = sortedLevels.filter(
-    (level) => !level.status || level.status === "ACTIVE",
-  );
-  const resolvedLevels = activeLevels.length > 0 ? activeLevels : sortedLevels;
 
-  return resolvedLevels.map(mapResponseItemToLevel);
+  return sortedLevels.map(mapResponseItemToLevel);
 }

@@ -24,6 +24,13 @@ import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
+import {
+  getCreatedPostRewardMessage,
+  isCreatedPostApproved,
+  isCreatedPostPending,
+} from "@/features/home/lib/created-post-feedback";
+import { cacheProfilePost } from "@/features/profile/data/profile-post-cache";
+import { mapCreatedPostToProfilePost } from "@/features/profile/lib/map-created-post-to-profile-post";
 
 import { createPost, type PostVisibility } from "../api/create-post";
 import { avatarImageUri } from "../data/home-screen.mock";
@@ -318,11 +325,17 @@ export default function HotspotReviewComposeScreen() {
         tokenType: authSession.tokenType,
         visibility: publishVisibility,
       });
+      cacheProfilePost(mapCreatedPostToProfilePost(createdPost));
+      const rewardMessage = getCreatedPostRewardMessage(createdPost);
+      const successMessage = isCreatedPostPending(createdPost)
+        ? "Bài viết đã được gửi lên hệ thống và hiện chỉ hiển thị trong hồ sơ của bạn để chờ duyệt."
+        : isCreatedPostApproved(createdPost)
+          ? "Bài viết đã được duyệt và có thể xuất hiện ở hotspot tương ứng."
+          : "Bài viết đã được gửi lên hệ thống và được lưu trong hồ sơ của bạn.";
+
       Alert.alert(
         "Đăng bài thành công",
-        createdPost.status.trim().toUpperCase() === "PENDING"
-          ? "Bài viết đã được gửi lên hệ thống và đang chờ duyệt."
-          : "Bài viết đã được gửi lên hệ thống.",
+        rewardMessage ? `${successMessage} ${rewardMessage}` : successMessage,
         [
           {
             text: "OK",
