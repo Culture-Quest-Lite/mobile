@@ -764,6 +764,10 @@ function dedupePersonalExperienceItems(items: PersonalExperienceItem[]) {
   );
 }
 
+function isApprovedPostStatus(value?: string | null) {
+  return value?.trim().toUpperCase() === "APPROVED";
+}
+
 function getAudioStoryDurationLabel(story: string) {
   const wordCount = story.trim().split(/\s+/).filter(Boolean).length;
   const minutes = Math.max(1, Math.ceil(wordCount / 110));
@@ -2827,7 +2831,9 @@ export default function HotspotDetailScreen() {
           return;
         }
 
-        setApiHotspotPosts(response.content);
+        setApiHotspotPosts(
+          response.content.filter((post) => isApprovedPostStatus(post.status)),
+        );
       } catch (error) {
         console.warn("[hotspot-detail] load hotspot posts failed", {
           error: error instanceof Error ? error.message : error,

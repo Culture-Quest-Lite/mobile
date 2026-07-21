@@ -2,8 +2,12 @@ import { Platform } from "react-native";
 import { File as ExpoFile } from "expo-file-system";
 
 import { PublicEnv, buildApiUrl } from "@/constants/env";
+import {
+  normalizePostVisibilityValue,
+  type PostVisibilityValue,
+} from "@/lib/post-visibility";
 
-export type PostVisibility = "PUBLIC" | "PRIVATE";
+export type PostVisibility = PostVisibilityValue;
 
 export type CreatePostUploadFile = {
   fileName: string;
@@ -34,6 +38,7 @@ export type CreatedPostResponse = {
   createdAt: string;
   displayName: string;
   hotspotIds: number[];
+  isLiked: boolean;
   isTaggedHotspot: boolean;
   isTaggedRoute: boolean;
   likeCount: number | null;
@@ -169,6 +174,7 @@ function parseCreatedPostResponse(value: unknown): CreatedPostResponse | null {
     createdAt,
     displayName: readString(value.displayName),
     hotspotIds,
+    isLiked: readBoolean(value.isLiked),
     isTaggedHotspot: readBoolean(value.isTaggedHotspot),
     isTaggedRoute: readBoolean(value.isTaggedRoute),
     likeCount: readNullableNumber(value.likeCount),
@@ -291,7 +297,7 @@ export async function createPost({
     (hotspotId) =>
       Number.isInteger(hotspotId) && Number.isFinite(hotspotId) && hotspotId > 0,
   );
-  const normalizedVisibility = visibility === "PRIVATE" ? "PRIVATE" : "PUBLIC";
+  const normalizedVisibility = normalizePostVisibilityValue(visibility);
   const formData = new FormData();
   let response: Response;
 

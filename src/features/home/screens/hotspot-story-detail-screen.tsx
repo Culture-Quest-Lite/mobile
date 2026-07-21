@@ -683,7 +683,7 @@ export default function HotspotStoryDetailScreen() {
                 {story.tagLabel ? (
                   <Text
                     className="text-[15px] font-semibold"
-                    style={{ color: "#EB489B", lineHeight: 18 }}
+                    style={{ color: "#EB489B", lineHeight: 16 }}
                   >
                     {story.tagLabel}
                   </Text>
@@ -692,7 +692,7 @@ export default function HotspotStoryDetailScreen() {
 
               <Text
                 className="mt-0 text-[22px] font-semibold text-[#2B2233]"
-                style={{ lineHeight: 24 }}
+                style={{ lineHeight: 22 }}
               >
                 {story.title}
               </Text>
@@ -700,7 +700,7 @@ export default function HotspotStoryDetailScreen() {
               <View className="mt-1">
                 <Text
                   className="text-[14px] font-black uppercase tracking-[1.4px]"
-                  style={{ color: palette.mutedText, lineHeight: 18 }}
+                  style={{ color: palette.mutedText, lineHeight: 16 }}
                 >
                   Thông tin về câu chuyện
                 </Text>
@@ -709,7 +709,7 @@ export default function HotspotStoryDetailScreen() {
                   className="mt-1 text-[15px] text-[#6F657A]"
                   numberOfLines={isDescriptionExpanded ? undefined : 4}
                   style={{
-                    lineHeight: 19,
+                    lineHeight: 17,
                     textAlign: "left",
                     paddingBottom: 4,
                   }}
@@ -729,7 +729,7 @@ export default function HotspotStoryDetailScreen() {
                   >
                     <Text
                       className="text-[12px]"
-                      style={{ color: palette.mutedText, lineHeight: 14 }}
+                      style={{ color: palette.mutedText, lineHeight: 13 }}
                     >
                       {isDescriptionExpanded ? "Rút gọn" : "Xem thêm"}
                     </Text>
@@ -741,7 +741,7 @@ export default function HotspotStoryDetailScreen() {
             <View className="mt-2">
               <Text
                 className="text-[14px] font-black uppercase tracking-[1.4px]"
-                style={{ color: palette.mutedText, lineHeight: 20 }}
+                style={{ color: palette.mutedText, lineHeight: 17 }}
               >
                 Đoạn audio
               </Text>
@@ -763,13 +763,13 @@ export default function HotspotStoryDetailScreen() {
                   </Pressable>
                   <Text
                     className="mt-1 text-center text-[18px] font-semibold text-[#201B18]"
-                    style={{ lineHeight: 22 }}
+                    style={{ lineHeight: 20 }}
                   >
                     {story.title}
                   </Text>
                   <Text
                     className="mt-1 text-center text-[13px]"
-                    style={{ color: palette.mutedText, lineHeight: 18 }}
+                    style={{ color: palette.mutedText, lineHeight: 16 }}
                   >
                     {audioStatusLabel}
                   </Text>
@@ -912,7 +912,7 @@ export default function HotspotStoryDetailScreen() {
                 {audioStatus.error ? (
                   <Text
                     className="mt-3 text-center text-[14px] text-[#C2410C]"
-                    style={{ lineHeight: 18 }}
+                    style={{ lineHeight: 16 }}
                   >
                     {audioStatus.error}
                   </Text>
@@ -924,7 +924,7 @@ export default function HotspotStoryDetailScreen() {
               <View className="mt-2">
                 <Text
                   className="text-[14px] font-black uppercase tracking-[1.4px]"
-                  style={{ color: palette.mutedText, lineHeight: 18 }}
+                  style={{ color: palette.mutedText, lineHeight: 16 }}
                 >
                   Kịch bản audio
                 </Text>
@@ -936,7 +936,7 @@ export default function HotspotStoryDetailScreen() {
                   <Text
                     className="text-[15px] text-[#6F657A]"
                     numberOfLines={isAudioScriptExpanded ? undefined : 4}
-                    style={{ lineHeight: 20, paddingBottom: 4, textAlign: "left" }}
+                    style={{ lineHeight: 17, paddingBottom: 4, textAlign: "left" }}
                   >
                     {audioScript}
                   </Text>
@@ -953,7 +953,7 @@ export default function HotspotStoryDetailScreen() {
                     >
                       <Text
                         className="text-[12px]"
-                        style={{ color: palette.mutedText, lineHeight: 14 }}
+                        style={{ color: palette.mutedText, lineHeight: 13 }}
                       >
                         {isAudioScriptExpanded ? "Rút gọn" : "Xem thêm"}
                       </Text>
@@ -967,7 +967,7 @@ export default function HotspotStoryDetailScreen() {
               <View className="flex-row items-center justify-between gap-3">
                 <Text
                   className="text-[14px] font-black uppercase tracking-[1.4px]"
-                  style={{ color: palette.mutedText, lineHeight: 18 }}
+                  style={{ color: palette.mutedText, lineHeight: 16 }}
                 >
                   Video
                 </Text>
@@ -1016,7 +1016,7 @@ export default function HotspotStoryDetailScreen() {
               {videoStatusLabel ? (
                 <Text
                   className="mt-2 text-[15px]"
-                  style={{ color: palette.mutedText, lineHeight: 22 }}
+                  style={{ color: palette.mutedText, lineHeight: 18 }}
                 >
                   {videoStatusLabel}
                 </Text>
@@ -1025,7 +1025,7 @@ export default function HotspotStoryDetailScreen() {
               {videoErrorMessage ? (
                 <Text
                   className="mt-1 text-[14px] text-[#C2410C]"
-                  style={{ lineHeight: 18 }}
+                  style={{ lineHeight: 16 }}
                 >
                   {videoErrorMessage}
                 </Text>
