@@ -51,6 +51,7 @@ import {
   communityPosts,
   type CommunityPostTopic,
 } from "../data/community-demo";
+import { cacheCommunityExplorerProfile } from "../data/community-explorer-profile-cache";
 import {
   cacheCommunityPost,
   getCachedCommunityPosts,
@@ -575,7 +576,7 @@ function mapNewsfeedPostToCommunityFeedPost(post: NewsfeedPost): CommunityFeedPo
     avatarColors: getAvatarPalette(`${author}-${post.userNumericId}`),
     canComment: true,
     canLike: true,
-    canOpenProfile: false,
+    canOpenProfile: true,
     visibility: readMeaningfulText(post.visibility) ?? "PUBLIC",
   };
 }
@@ -617,6 +618,7 @@ export default function CommunityScreen() {
   const [composerIdentity, setComposerIdentity] = useState<ComposerIdentity>(
     fallbackComposerIdentity,
   );
+  const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const persistedLikedPostIds = useLikedPostIds(likedPostsAccountKey);
 
   useEffect(() => {
@@ -641,7 +643,9 @@ export default function CommunityScreen() {
           return;
         }
 
-        setCommunityFeedPosts(response.content.map(mapNewsfeedPostToCommunityFeedPost));
+        const mappedPosts = response.content.map(mapNewsfeedPostToCommunityFeedPost);
+        mappedPosts.forEach(cacheCommunityExplorerProfile);
+        setCommunityFeedPosts(mappedPosts);
         setCommunityFeedStatus("ready");
       } catch (error) {
         console.warn("[community] load newsfeed failed", {
@@ -668,6 +672,10 @@ export default function CommunityScreen() {
       isActive = false;
     };
   }, [authSession.isAuthenticated, authSession.tokenType]);
+
+  useEffect(() => {
+    communityFeedPosts.forEach(cacheCommunityExplorerProfile);
+  }, [communityFeedPosts]);
 
   const hotspotIdsToResolve = useMemo(() => {
     const hotspotIds = new Set<number>();
@@ -785,6 +793,12 @@ export default function CommunityScreen() {
 
       async function loadComposerIdentity() {
         if (!authSession.isAuthenticated) {
+          if (!isActive) {
+            return;
+          }
+
+          setCurrentProfileId(null);
+          setComposerIdentity(fallbackComposerIdentity);
           return;
         }
 
@@ -797,6 +811,7 @@ export default function CommunityScreen() {
             }
 
             setComposerIdentity(fallbackComposerIdentity);
+            setCurrentProfileId(null);
             return;
           }
 
@@ -809,6 +824,7 @@ export default function CommunityScreen() {
             return;
           }
 
+          setCurrentProfileId(profile.id);
           setComposerIdentity(
             buildComposerIdentityFromProfile(profile, fallbackComposerIdentity),
           );
@@ -821,6 +837,7 @@ export default function CommunityScreen() {
             return;
           }
 
+          setCurrentProfileId(null);
           setComposerIdentity(fallbackComposerIdentity);
         }
       }
@@ -903,7 +920,40 @@ export default function CommunityScreen() {
     router.push("/community/create" as Href);
   };
   const openExplorerProfile = (authorId: string) => {
-    router.push(`/community/profile/${authorId}` as Href);
+    void (async () => {
+      if (currentProfileId && authorId === currentProfileId) {
+        router.push("/profile" as Href);
+        return;
+      }
+
+      if (!currentProfileId && authSession.isAuthenticated) {
+        try {
+          const accessToken = await getValidAccessToken();
+
+          if (accessToken) {
+            const profile = await getMyProfile({
+              accessToken,
+              tokenType: authSession.tokenType,
+            });
+
+            setCurrentProfileId(profile.id);
+            router.push(
+              (authorId === profile.id
+                ? "/profile"
+                : `/community/profile/${authorId}`) as Href,
+            );
+            return;
+          }
+        } catch (error) {
+          console.warn("[community] resolve profile route failed", {
+            authorId,
+            error: error instanceof Error ? error.message : error,
+          });
+        }
+      }
+
+      router.push(`/community/profile/${authorId}` as Href);
+    })();
   };
   const openHotspotDetail = (hotspotId: number) => {
     router.push(getHotspotHref(getApiHotspotRouteSlug(hotspotId), hotspotId));
@@ -1325,11 +1375,8 @@ export default function CommunityScreen() {
                   className="rounded-[28px] border border-[#F4E0D5] bg-white px-5 py-6"
                   style={cardShadowStyle}
                 >
-                  <View className="flex-row items-center">
+                  <View className="items-center">
                     <ActivityIndicator color="#EB489B" />
-                    <Text className="ml-3 text-[15px] font-semibold text-[#2E2336]">
-                      Đang tải newsfeed cộng đồng
-                    </Text>
                   </View>
                 </View>
               ) : null}
@@ -1667,45 +1714,41 @@ function CommunityPostCard({
       ? `${primaryHotspot.hotspotName} +${remainingHotspotCount}`
       : primaryHotspot.hotspotName
     : showHotspotLoadingState
-      ? "Đang tải hotspot"
+      ? null
       : showHotspotFallbackLabel
         ? "Hotspot đang cập nhật"
         : readMeaningfulText(post.location);
+  const shouldShowHotspotLocation = showHotspotLoadingState || Boolean(locationLabel);
   const canOpenHotspotLocation = primaryHotspot !== null;
 
   return (
     <View className="overflow-hidden bg-white" style={{ marginHorizontal: -pageGutter }}>
-      <Pressable
-        onPress={() => {
-          if (post.canOpenProfile === false) {
-            return;
-          }
+      <View className="flex-row items-start px-4 pb-3 pt-3">
+        <Pressable
+          accessibilityLabel={`Mở hồ sơ của ${post.author}`}
+          accessibilityRole={post.canOpenProfile === false ? undefined : "button"}
+          className="rounded-full"
+          disabled={post.canOpenProfile === false}
+          hitSlop={8}
+          onPress={() => {
+            if (post.canOpenProfile === false) {
+              return;
+            }
 
-          onOpenProfile(post.authorId);
-        }}
-        className="flex-row items-start px-4 pb-3 pt-3"
-      >
-        <AvatarMonogram colors={post.avatarColors} initials={post.initials} size={46} />
+            onOpenProfile(post.authorId);
+          }}
+        >
+          <AvatarMonogram colors={post.avatarColors} initials={post.initials} size={46} />
+        </Pressable>
 
         <View className="ml-3 flex-1 pr-3">
-          <View className="flex-row items-center">
-            <Text
-              className="text-[16px] font-black text-[#111827]"
-              numberOfLines={1}
-              style={{ includeFontPadding: false, lineHeight: 17 }}
-            >
-              {post.author}
-            </Text>
-            <SymbolView
-              name={{
-                ios: "checkmark.seal.fill",
-                android: "verified",
-                web: "verified",
-              }}
-              size={14}
-              tintColor="#2563EB"
-            />
-          </View>
+          <Text
+            className="text-[16px] font-black text-[#111827]"
+            numberOfLines={1}
+            style={{ includeFontPadding: false, lineHeight: 17 }}
+          >
+            {post.author}
+          </Text>
 
           <View className="mt-1 flex-row items-center">
             <Text
@@ -1738,12 +1781,12 @@ function CommunityPostCard({
             tintColor="#4B5563"
           />
         </View>
-      </Pressable>
+      </View>
 
       <View className="px-4 pb-3">
         <ExpandablePostCaption text={post.caption} />
 
-        {locationLabel ? (
+        {shouldShowHotspotLocation ? (
           <Pressable
             className="mt-2 flex-row items-center"
             disabled={!canOpenHotspotLocation}
@@ -1771,13 +1814,15 @@ function CommunityPostCard({
                 tintColor={canOpenHotspotLocation ? "#2563EB" : "#9CA3AF"}
               />
             )}
-            <Text
-              className="ml-2 flex-1 text-[14px] font-semibold text-[#4B5563]"
-              numberOfLines={1}
-              style={{ includeFontPadding: false, lineHeight: 15 }}
-            >
-              {locationLabel}
-            </Text>
+            {locationLabel ? (
+              <Text
+                className="ml-2 flex-1 text-[14px] font-semibold text-[#4B5563]"
+                numberOfLines={1}
+                style={{ includeFontPadding: false, lineHeight: 15 }}
+              >
+                {locationLabel}
+              </Text>
+            ) : null}
           </Pressable>
         ) : null}
 
@@ -2224,11 +2269,8 @@ function CommunityCommentComposerModal({
                       className="mt-3 rounded-[22px] border border-[#F1E4EC] bg-white px-4 py-4"
                       style={cardShadowStyle}
                     >
-                      <View className="flex-row items-center">
+                      <View className="items-center">
                         <ActivityIndicator color="#EB489B" size="small" />
-                        <Text className="ml-3 text-[14px] font-semibold text-[#43354C]">
-                          Đang tải bình luận
-                        </Text>
                       </View>
                     </View>
                   ) : null}

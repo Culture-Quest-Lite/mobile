@@ -84,11 +84,14 @@ function CoordinateMapPickerModal({
 
     const nextLatitude = parseCoordinate(latitude, "latitude");
     const nextLongitude = parseCoordinate(longitude, "longitude");
+    const timeoutId = setTimeout(() => {
+      setPickedCoordinate({
+        latitude: nextLatitude ?? DEFAULT_SHOP_REGION.latitude,
+        longitude: nextLongitude ?? DEFAULT_SHOP_REGION.longitude,
+      });
+    }, 0);
 
-    setPickedCoordinate({
-      latitude: nextLatitude ?? DEFAULT_SHOP_REGION.latitude,
-      longitude: nextLongitude ?? DEFAULT_SHOP_REGION.longitude,
-    });
+    return () => clearTimeout(timeoutId);
   }, [latitude, longitude, visible]);
 
   const region: Region = {
@@ -312,9 +315,12 @@ export default function SubscriptionScreen() {
       isSelectingSuggestion ||
       address.trim().length < 2
     ) {
-      setAddressSuggestions([]);
-      setAddressSearchError(null);
-      return;
+      const timeoutId = setTimeout(() => {
+        setAddressSuggestions([]);
+        setAddressSearchError(null);
+      }, 0);
+
+      return () => clearTimeout(timeoutId);
     }
 
     const controller = new AbortController();
@@ -731,9 +737,6 @@ export default function SubscriptionScreen() {
         {isLoading ? (
           <View className="rounded-2xl bg-[#FFF8FC] p-6">
             <ActivityIndicator color="#EB489B" />
-            <Text className="mt-3 text-center text-[13px] text-[#8E869A]">
-              Đang tải gói đăng ký...
-            </Text>
           </View>
         ) : null}
 

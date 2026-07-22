@@ -229,6 +229,7 @@ function parsePost(value: unknown): NewsfeedPost | null {
     commentCount: readNullableNumber(value.commentCount),
     replyCount: readNullableNumber(value.replyCount),
     shareCount: readNullableNumber(value.shareCount),
+    sharedPost: isNullableString(value.sharedPost) ? value.sharedPost : null,
   };
 }
 

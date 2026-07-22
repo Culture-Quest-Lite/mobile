@@ -20,7 +20,9 @@ export type CommunityFeedPost = Omit<CommunityPost, "image"> & {
   postNumericId?: number | null;
   replies?: string;
   replyCountValue?: number | null;
+  routeIds?: number[];
   shareCountValue?: number | null;
+  sharedText?: string | null;
   visibility?: string;
 };
 

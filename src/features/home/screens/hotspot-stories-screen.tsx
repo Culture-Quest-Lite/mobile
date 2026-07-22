@@ -3,7 +3,7 @@ import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState, type ComponentProps } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -693,9 +693,9 @@ export default function HotspotStoriesScreen() {
               </ScrollView>
 
               {isStoriesLoading ? (
-                <Text className="pb-3 pt-2 text-[13px] font-medium text-[#A897B2]">
-                  Đang tải story của hotspot...
-                </Text>
+                <View className="items-center pb-3 pt-2">
+                  <ActivityIndicator color="#EB489B" size="small" />
+                </View>
               ) : null}
 
               {storiesError ? (

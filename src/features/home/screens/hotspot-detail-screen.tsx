@@ -1604,13 +1604,9 @@ function HiddenStoryCheckinSection({
       className="rounded-[30px] bg-[#F8FBFF] px-5 py-5"
       style={cardShadowStyle}
     >
-      <Text className="text-[16px] font-black text-[#2F242C]">
-        Đang tải story hotspot
-      </Text>
-      <Text className="mt-2 text-[14px] leading-5 text-[#5E7486]">
-        App đang gọi API story cho hotspot này để hiển thị đúng nội dung theo
-        từng tag.
-      </Text>
+      <View className="items-center">
+        <ActivityIndicator color="#EB489B" size="small" />
+      </View>
     </View>
   ) : isStoryAvailable ? (
     <HiddenStoryUnlockedContent
@@ -2318,9 +2314,6 @@ function PersonalExperienceLoadingCard() {
     >
       <View className="flex-row items-center">
         <ActivityIndicator color="#EB489B" />
-        <Text className="ml-3 text-[15px] font-semibold text-[#2B2233]">
-          Đang tải bài đánh giá từ hotspot
-        </Text>
       </View>
     </View>
   );
@@ -2558,9 +2551,6 @@ function LoadingState() {
         <View className="flex-1 items-center justify-center px-6">
           <View className="items-center">
             <ActivityIndicator color="#F58752" size="large" />
-            <Text className="mt-4 text-center text-[22px] font-bold text-[#6D6278]">
-              Đang tải dữ liệu...
-            </Text>
           </View>
         </View>
       </SafeAreaView>
@@ -3620,13 +3610,9 @@ export default function HotspotDetailScreen() {
 
               {isRelatedRoutesLoading ? (
                 <View className="rounded-[16px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-                  <Text className="text-[15px] font-semibold text-[#2B2233]" style={{ lineHeight: 19 }}>
-                    Đang tải tuyến phù hợp
-                  </Text>
-                  <Text className="mt-1 text-[15px]" style={sectionBodyTextStyle}>
-                    App đang gọi API route theo hotspotId hiện tại để hiển thị
-                    danh sách published.
-                  </Text>
+                  <View className="items-center">
+                    <ActivityIndicator color="#EB489B" size="small" />
+                  </View>
                 </View>
               ) : null}
 

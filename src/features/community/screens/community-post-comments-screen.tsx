@@ -998,12 +998,6 @@ export default function CommunityPostCommentsScreen() {
               {commentsStatus === "loading" ? (
                 <View className="mt-3 items-center px-4 py-3">
                   <ActivityIndicator color="#2563EB" size="small" />
-                  <Text
-                    className="mt-2 text-[14px] font-semibold text-[#374151]"
-                    style={{ includeFontPadding: false, lineHeight: 16 }}
-                  >
-                    Đang tải bình luận
-                  </Text>
                 </View>
               ) : null}
 

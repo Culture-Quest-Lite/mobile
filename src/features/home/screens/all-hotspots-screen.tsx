@@ -913,9 +913,6 @@ export default function AllHotspotsScreen() {
           {nearbyHotspotsStatus === "loading" ? (
             <View className="min-h-[520px] items-center justify-center bg-white px-6 py-10">
               <ActivityIndicator color="#E56A2C" size="large" />
-              <Text className="mt-4 text-[15px] font-medium text-[#6F657A]">
-                Đang tải dữ liệu...
-              </Text>
             </View>
           ) : (
             <View className="gap-4">

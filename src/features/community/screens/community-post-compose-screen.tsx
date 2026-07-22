@@ -39,6 +39,7 @@ import {
 } from "react-native-safe-area-context";
 
 import { getPostVisibilityLabel } from "@/lib/post-visibility";
+import { cacheCommunityExplorerProfile } from "../data/community-explorer-profile-cache";
 import { getCommunityPostVisibility } from "../data/community-post-visibility-store";
 import {
   cacheCommunityPost,
@@ -290,7 +291,7 @@ function mapCreatedPostToCommunityFeedPost(
     avatarColors: getAvatarPalette(`${author}-${createdPost.userId}`),
     canComment: true,
     canLike: true,
-    canOpenProfile: false,
+    canOpenProfile: true,
     visibility: visibilityValue,
   };
 }
@@ -591,7 +592,9 @@ export default function CommunityPostComposeScreen() {
       cacheProfilePost(mapCreatedPostToProfilePost(createdPost));
 
       if (shouldAppearInCommunityFeed) {
-        cacheCommunityPost(mapCreatedPostToCommunityFeedPost(createdPost));
+        const communityFeedPost = mapCreatedPostToCommunityFeedPost(createdPost);
+        cacheCommunityPost(communityFeedPost);
+        cacheCommunityExplorerProfile(communityFeedPost);
       }
 
       const rewardMessage = getCreatedPostRewardMessage(createdPost);
