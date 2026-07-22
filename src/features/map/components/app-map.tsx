@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Text, View } from 'react-native';
+import { Image, Platform, Text, View } from 'react-native';
 import MapView, {
   Marker,
   Polyline,
@@ -13,6 +13,8 @@ export type AppMapPoint = {
   description?: string;
   latitude: number;
   longitude: number;
+  isCurrentUser?: boolean;
+  avatarUri?: string | null;
 };
 
 export type AppMapProps = {
@@ -185,19 +187,87 @@ export function AppMap({
           />
         ) : null}
 
-        {validPoints.map((point) => (
-          <Marker
-            key={String(point.id)}
-            coordinate={{
-              latitude: point.latitude,
-              longitude: point.longitude,
-            }}
-            title={point.title}
-            description={point.description}
-            pinColor="#EB489B"
-            onPress={() => onPointPress?.(point)}
-          />
-        ))}
+        {validPoints.map((point) => {
+          const coordinate = {
+            latitude: point.latitude,
+            longitude: point.longitude,
+          };
+
+          if (!point.isCurrentUser) {
+            return (
+              <Marker
+                key={String(point.id)}
+                coordinate={coordinate}
+                title={point.title}
+                description={point.description}
+                pinColor="#EB489B"
+                onPress={() => onPointPress?.(point)}
+              />
+            );
+          }
+
+          return (
+            <Marker
+              key={String(point.id)}
+              coordinate={coordinate}
+              title={point.title}
+              description={point.description}
+              anchor={{ x: 0.5, y: 1 }}
+              onPress={() => onPointPress?.(point)}
+            >
+              <View
+                style={{
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 52,
+                  height: 58,
+                }}
+              >
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    borderWidth: 3,
+                    borderColor: "#FFFFFF",
+                    backgroundColor: "#EB489B",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                    shadowColor: "#000000",
+                    shadowOpacity: 0.22,
+                    shadowRadius: 5,
+                    shadowOffset: { width: 0, height: 3 },
+                    elevation: 7,
+                  }}
+                >
+                  {point.avatarUri ? (
+                    <Image
+                      source={{ uri: point.avatarUri }}
+                      style={{ width: "100%", height: "100%" }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text style={{ color: "#FFFFFF", fontSize: 20 }}>👤</Text>
+                  )}
+                </View>
+                <View
+                  style={{
+                    marginTop: -2,
+                    width: 0,
+                    height: 0,
+                    borderLeftWidth: 7,
+                    borderRightWidth: 7,
+                    borderTopWidth: 10,
+                    borderLeftColor: "transparent",
+                    borderRightColor: "transparent",
+                    borderTopColor: "#FFFFFF",
+                  }}
+                />
+              </View>
+            </Marker>
+          );
+        })}
       </MapView>
     </View>
   );

@@ -4,7 +4,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { type Href, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ActivityIndicator,
-  Alert,
   type GestureResponderEvent,
   Pressable,
   ScrollView,
@@ -14,6 +13,8 @@ import {
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { routeSystemAlert } from "@/features/route/components/route-system-alert";
 
 import {
   type ReactNode,
@@ -662,7 +663,7 @@ export default function RouteDetailScreen() {
         });
         setIsSavedRoute(false);
         setSavedRouteId(null);
-        Alert.alert('Đã bỏ lưu', 'Tuyến đã được xóa khỏi danh sách đã lưu.');
+        routeSystemAlert.alert('Đã bỏ lưu', 'Tuyến đã được xóa khỏi danh sách đã lưu.');
         return;
       }
 
@@ -683,9 +684,9 @@ export default function RouteDetailScreen() {
           ? nextSavedRouteId
           : null,
       );
-      Alert.alert('Đã lưu tuyến', 'Tuyến này đã được thêm vào danh sách đã lưu.');
+      routeSystemAlert.alert('Đã lưu tuyến', 'Tuyến này đã được thêm vào danh sách đã lưu.');
     } catch (saveError) {
-      Alert.alert(
+      routeSystemAlert.alert(
         isSavedRoute ? 'Không thể bỏ lưu tuyến' : 'Không thể lưu tuyến',
         saveError instanceof Error ? saveError.message : 'Vui lòng thử lại sau.',
       );
@@ -705,7 +706,7 @@ export default function RouteDetailScreen() {
       }
       router.push(continueHref);
     } catch (startError) {
-      Alert.alert(
+      routeSystemAlert.alert(
         'Không thể bắt đầu tuyến',
         startError instanceof Error ? startError.message : 'Vui lòng thử lại sau.',
       );
@@ -879,7 +880,7 @@ export default function RouteDetailScreen() {
                     travelMode: 'driving',
                     useCurrentLocationAsOrigin: true,
                   }).catch((error) => {
-                    Alert.alert(
+                    routeSystemAlert.alert(
                       'Không thể mở Google Maps',
                       error instanceof Error ? error.message : 'Vui lòng thử lại.',
                     );

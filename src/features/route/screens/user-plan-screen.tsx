@@ -4,7 +4,6 @@ import { SymbolView } from "expo-symbols";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   Text,
@@ -12,6 +11,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { routeSystemAlert } from "@/features/route/components/route-system-alert";
 
 import {
   getValidAccessToken,
@@ -23,6 +24,7 @@ import {
 } from "@/features/home/api/get-nearby-hotspots";
 import { searchHotspots } from "@/features/home/api/search-hotspots";
 import { AppMap, type AppMapPoint } from "@/features/map/components/app-map";
+import { getMyProfile } from "@/features/profile/api/get-me";
 import {
   createUserPlan,
   optimizeUserPlan,
@@ -127,7 +129,12 @@ export default function UserPlanScreen() {
   const [isLocating, setIsLocating] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isAiConfirmed, setIsAiConfirmed] = useState(false);
-  const [userPoint, setUserPoint] = useState<AppMapPoint>(defaultUserPoint);
+  const [userAvatarUri, setUserAvatarUri] = useState<string | null>(null);
+  const [userPoint, setUserPoint] = useState<AppMapPoint>({
+    ...defaultUserPoint,
+    isCurrentUser: true,
+    avatarUri: null,
+  });
   const [stops, setStops] = useState<PlannedStop[]>([]);
   const [optimizeMode, setOptimizeMode] = useState<OptimizeMode>("DISTANCE");
   const [aiOptimizeExplanation, setAiOptimizeExplanation] = useState("");
@@ -173,7 +180,7 @@ export default function UserPlanScreen() {
 
   function addStop(stop: PlannedStop) {
     if (stops.some((item) => String(item.id) === String(stop.id))) {
-      Alert.alert("Địa điểm đã có", "Điểm này đã nằm trong kế hoạch.");
+      routeSystemAlert.alert("Địa điểm đã có", "Điểm này đã nằm trong kế hoạch.");
       return;
     }
     setStops((current) => [...current, stop]);
@@ -237,16 +244,18 @@ export default function UserPlanScreen() {
         coordinate ??= getDevelopmentLocationOverride();
         if (!coordinate) throw new Error("Không lấy được vị trí hiện tại.");
 
-        const nextPoint = {
+        const nextPoint: AppMapPoint = {
           ...defaultUserPoint,
           latitude: coordinate.latitude,
           longitude: coordinate.longitude,
+          isCurrentUser: true,
+          avatarUri: userAvatarUri,
         };
         setUserPoint(nextPoint);
         await loadNearbyHotspots(coordinate.latitude, coordinate.longitude);
       } catch (error) {
         if (showError) {
-          Alert.alert(
+          routeSystemAlert.alert(
             "Không thể lấy vị trí",
             error instanceof Error ? error.message : "Vui lòng thử lại.",
           );
@@ -255,7 +264,7 @@ export default function UserPlanScreen() {
         setIsLocating(false);
       }
     },
-    [loadNearbyHotspots],
+    [loadNearbyHotspots, userAvatarUri],
   );
 
   const loadNearbyAroundSearchHotspot = useCallback(
@@ -358,6 +367,41 @@ export default function UserPlanScreen() {
     ],
   );
 
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCurrentUserAvatar() {
+      if (!session.isAuthenticated) {
+        setUserAvatarUri(null);
+        return;
+      }
+
+      try {
+        const accessToken = await getValidAccessToken();
+        if (!accessToken) return;
+        const profile = await getMyProfile({
+          accessToken,
+          tokenType: session.tokenType,
+        });
+        if (cancelled) return;
+        setUserAvatarUri(profile.avatar);
+        setUserPoint((current) => ({
+          ...current,
+          isCurrentUser: true,
+          avatarUri: profile.avatar,
+        }));
+      } catch (error) {
+        console.warn("[user-plan] load current user avatar failed", error);
+      }
+    }
+
+    void loadCurrentUserAvatar();
+    return () => {
+      cancelled = true;
+    };
+  }, [session.isAuthenticated, session.tokenType]);
+
   useEffect(() => {
     void locateUser(false);
   }, [locateUser]);
@@ -384,7 +428,7 @@ export default function UserPlanScreen() {
   async function generateAiTextSuggestion() {
     const prompt = aiPrompt.trim();
     if (!prompt) {
-      Alert.alert(
+      routeSystemAlert.alert(
         "Nhập mô tả chuyến đi",
         "Ví dụ: Tôi muốn tham quan các địa điểm lịch sử trong một buổi sáng.",
       );
@@ -414,7 +458,7 @@ export default function UserPlanScreen() {
           : "Không tìm thấy hotspot phù hợp với mô tả hiện tại. Hãy thử mô tả rộng hơn.",
       );
     } catch (error) {
-      Alert.alert(
+      routeSystemAlert.alert(
         "Không thể nhận gợi ý",
         error instanceof Error ? error.message : "Vui lòng thử lại.",
       );
@@ -445,9 +489,8 @@ export default function UserPlanScreen() {
     );
     if (stops.length < 2) return;
     if (hotspotIds.length !== stops.length) {
-      Alert.alert(
+      routeSystemAlert.alert(
         "Chưa thể tối ưu",
-        "Một số hotspot mẫu chưa có ID backend. Hãy chọn hotspot từ phần AI gợi ý để lưu và tối ưu bằng API.",
       );
       return;
     }
@@ -467,12 +510,12 @@ export default function UserPlanScreen() {
           .filter(Boolean) as PlannedStop[],
       );
       setAiOptimizeExplanation(
-        `${result.totalEstimatedTimeText || "Đã tối ưu"} • ${Math.round(result.totalDistance || 0)} m${result.usedFallback ? " • backend dùng phương án dự phòng" : ""}`,
+        `${result.totalEstimatedTimeText || "Đã tối ưu"} • ${Math.round(result.totalDistance || 0)} m${result.usedFallback ? " " : ""}`,
       );
       setIsReviewed(false);
       setCurrentPlan(null);
     } catch (error) {
-      Alert.alert(
+      routeSystemAlert.alert(
         "Không thể tối ưu",
         error instanceof Error ? error.message : "Vui lòng thử lại.",
       );
@@ -489,7 +532,7 @@ export default function UserPlanScreen() {
         useCurrentLocationAsOrigin: true,
       });
     } catch (error) {
-      Alert.alert(
+      routeSystemAlert.alert(
         "Không thể mở Google Maps",
         error instanceof Error ? error.message : "Vui lòng thử lại.",
       );
@@ -501,9 +544,9 @@ export default function UserPlanScreen() {
       item.hotspotId ? [item.hotspotId] : [],
     );
     if (hotspotIds.length !== stops.length) {
-      Alert.alert(
+      routeSystemAlert.alert(
         "Không thể lưu kế hoạch",
-        "Hotspot mẫu trong giao diện cũ chưa có ID backend. Hãy dùng các hotspot do API AI gợi ý.",
+        
       );
       return;
     }
@@ -519,12 +562,12 @@ export default function UserPlanScreen() {
       });
       setCurrentPlan(plan);
       setIsReviewed(true);
-      Alert.alert(
+      routeSystemAlert.alert(
         "Đã tạo kế hoạch",
         `Kế hoạch #${plan.userPlanId} đã được lưu ở trạng thái ${plan.status}.`,
       );
     } catch (error) {
-      Alert.alert(
+      routeSystemAlert.alert(
         "Không thể tạo kế hoạch",
         error instanceof Error ? error.message : "Vui lòng thử lại.",
       );
@@ -542,12 +585,12 @@ export default function UserPlanScreen() {
         currentPlan.userPlanId,
       );
       setCurrentPlan(started);
-      Alert.alert(
+      routeSystemAlert.alert(
         "Đã bắt đầu hành trình",
         "Kế hoạch đã chuyển sang trạng thái STARTED.",
       );
     } catch (error) {
-      Alert.alert(
+      routeSystemAlert.alert(
         "Không thể bắt đầu",
         error instanceof Error ? error.message : "Vui lòng thử lại.",
       );
@@ -595,6 +638,7 @@ export default function UserPlanScreen() {
             points={mapPoints}
             routeCoordinates={routeCoordinates}
             height={320}
+            showsUserLocation={false}
           />
           <Pressable
             onPress={() => locateUser()}

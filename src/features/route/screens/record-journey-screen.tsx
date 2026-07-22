@@ -5,7 +5,6 @@ import { SymbolView } from "expo-symbols";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -15,6 +14,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { routeSystemAlert } from "@/features/route/components/route-system-alert";
+
 import { getValidAccessToken, useAuthSession } from "@/features/auth/hooks/use-auth-session";
 import { createCheckIn } from "@/features/home/api/post-checkin";
 import {
@@ -23,6 +24,7 @@ import {
 } from "@/features/home/api/get-nearby-hotspots";
 import { searchHotspots } from "@/features/home/api/search-hotspots";
 import { AppMap, type AppMapPoint } from "@/features/map/components/app-map";
+import { getMyProfile } from "@/features/profile/api/get-me";
 import {
   finalizeRecordRoute,
   finishRecordRoute,
@@ -77,6 +79,7 @@ export default function RecordJourneyScreen() {
   const [myJourneys, setMyJourneys] = useState<RecordRouteDto[]>([]);
   const [isLoadingJourneys, setIsLoadingJourneys] = useState(false);
   const [currentCoordinate, setCurrentCoordinate] = useState<Coordinate>(DEFAULT_COORDINATE);
+  const [userAvatarUri, setUserAvatarUri] = useState<string | null>(null);
   const [nearbyHotspots, setNearbyHotspots] = useState<NearbyHotspotDto[]>([]);
   const [searchResults, setSearchResults] = useState<NearbyHotspotDto[]>([]);
   const [checkedInHotspots, setCheckedInHotspots] = useState<NearbyHotspotDto[]>([]);
@@ -141,7 +144,7 @@ export default function RecordJourneyScreen() {
       applyRouteRecord(recording);
       return journeys;
     } catch (error) {
-      Alert.alert("Không thể tải hành trình", error instanceof Error ? error.message : "Vui lòng thử lại.");
+      routeSystemAlert.alert("Không thể tải hành trình", error instanceof Error ? error.message : "Vui lòng thử lại.");
       return [];
     } finally {
       setIsLoadingJourneys(false);
@@ -189,6 +192,35 @@ export default function RecordJourneyScreen() {
     }
   }, [getAuth, resolveCurrentCoordinate, session.isAuthenticated]);
 
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCurrentUserAvatar() {
+      if (!session.isAuthenticated) {
+        setUserAvatarUri(null);
+        return;
+      }
+
+      try {
+        const accessToken = await getValidAccessToken();
+        if (!accessToken) return;
+        const profile = await getMyProfile({
+          accessToken,
+          tokenType: session.tokenType,
+        });
+        if (!cancelled) setUserAvatarUri(profile.avatar);
+      } catch (error) {
+        console.warn("[record-journey] load current user avatar failed", error);
+      }
+    }
+
+    void loadCurrentUserAvatar();
+    return () => {
+      cancelled = true;
+    };
+  }, [session.isAuthenticated, session.tokenType]);
+
   useEffect(() => {
     void loadNearby();
   }, [loadNearby]);
@@ -225,7 +257,7 @@ export default function RecordJourneyScreen() {
         setSearchResults(result.content);
       } catch (error) {
         if (!controller.signal.aborted) {
-          Alert.alert("Không thể tìm hotspot", error instanceof Error ? error.message : "Vui lòng thử lại.");
+          routeSystemAlert.alert("Không thể tìm hotspot", error instanceof Error ? error.message : "Vui lòng thử lại.");
         }
       } finally {
         if (!controller.signal.aborted) setIsSearching(false);
@@ -245,10 +277,12 @@ export default function RecordJourneyScreen() {
       title: "Vị trí hiện tại",
       latitude: currentCoordinate.latitude,
       longitude: currentCoordinate.longitude,
+      isCurrentUser: true,
+      avatarUri: userAvatarUri,
     };
     const candidatePoints = displayedHotspots.slice(0, 12).map(hotspotToMapPoint);
     return [userPoint, ...checkedInHotspots.map(hotspotToMapPoint), ...candidatePoints];
-  }, [checkedInHotspots, currentCoordinate, displayedHotspots]);
+  }, [checkedInHotspots, currentCoordinate, displayedHotspots, userAvatarUri]);
 
   const routeCoordinates = useMemo(
     () => checkedInHotspots.map(({ latitude, longitude }) => ({ latitude, longitude })),
@@ -262,9 +296,9 @@ export default function RecordJourneyScreen() {
       const route = await startRecordRoute(auth);
       applyRouteRecord(route);
       setMyJourneys((current) => [route, ...current.filter((item) => item.routeId !== route.routeId)]);
-      Alert.alert("Đã bắt đầu ghi", `Route #${route.routeId} đang ở trạng thái RECORDING.`);
+      routeSystemAlert.alert("Đã bắt đầu ghi", `Route #${route.routeId} đang ở trạng thái RECORDING.`);
     } catch (error) {
-      Alert.alert("Không thể bắt đầu", error instanceof Error ? error.message : "Vui lòng thử lại.");
+      routeSystemAlert.alert("Không thể bắt đầu", error instanceof Error ? error.message : "Vui lòng thử lại.");
     } finally {
       setIsStarting(false);
     }
@@ -272,11 +306,11 @@ export default function RecordJourneyScreen() {
 
   async function handleCheckIn(hotspot: NearbyHotspotDto) {
     if (status !== "RECORDING") {
-      Alert.alert("Chưa ghi hành trình", "Hãy bấm Bắt đầu ghi hành trình trước khi check-in.");
+      routeSystemAlert.alert("Chưa ghi hành trình", "Hãy bấm Bắt đầu ghi hành trình trước khi check-in.");
       return;
     }
     if (checkedInHotspots.some((item) => item.hotspotId === hotspot.hotspotId)) {
-      Alert.alert("Đã check-in", "Hotspot này đã nằm trong hành trình đang ghi.");
+      routeSystemAlert.alert("Đã check-in", "Hotspot này đã nằm trong hành trình đang ghi.");
       return;
     }
 
@@ -292,13 +326,13 @@ export default function RecordJourneyScreen() {
       });
       setCheckedInHotspots((current) => [...current, hotspot]);
       await loadMyJourneys();
-      Alert.alert(
+      routeSystemAlert.alert(
         "Check-in thành công",
-        `${hotspot.hotspotName} đã được thêm vào route record. Backend sẽ tạo story mặc định gắn tagDefault, route và hotspot này.`,
+        `${hotspot.hotspotName} đã được thêm vào route record.`,
       );
       void loadNearby();
     } catch (error) {
-      Alert.alert("Check-in thất bại", error instanceof Error ? error.message : "Vui lòng thử lại.");
+      routeSystemAlert.alert("Check-in thất bại", error instanceof Error ? error.message : "Vui lòng thử lại.");
     } finally {
       setCheckingInId(null);
     }
@@ -312,13 +346,13 @@ export default function RecordJourneyScreen() {
         useCurrentLocationAsOrigin: true,
       });
     } catch (error) {
-      Alert.alert("Không thể mở bản đồ", error instanceof Error ? error.message : "Vui lòng thử lại.");
+      routeSystemAlert.alert("Không thể mở bản đồ", error instanceof Error ? error.message : "Vui lòng thử lại.");
     }
   }
 
   async function handleFinish() {
     if (!checkedInHotspots.length) {
-      Alert.alert("Chưa có check-in", "Hãy check-in ít nhất một hotspot trước khi kết thúc.");
+      routeSystemAlert.alert("Chưa có check-in", "Hãy check-in ít nhất một hotspot trước khi kết thúc.");
       return;
     }
     setIsFinishing(true);
@@ -328,9 +362,9 @@ export default function RecordJourneyScreen() {
       setRouteRecord(route);
       setStatus("DRAFT");
       setMyJourneys((current) => [route, ...current.filter((item) => item.routeId !== route.routeId)]);
-      Alert.alert("Đã tạo bản nháp", "Route đã chuyển từ RECORDING sang DRAFT. Bạn có thể chỉnh sửa route và các story trước khi submit.");
+      routeSystemAlert.alert("Đã tạo bản nháp", "Route đã chuyển từ RECORDING sang DRAFT. Bạn có thể chỉnh sửa route và các story trước khi submit.");
     } catch (error) {
-      Alert.alert("Không thể kết thúc", error instanceof Error ? error.message : "Vui lòng thử lại.");
+      routeSystemAlert.alert("Không thể kết thúc", error instanceof Error ? error.message : "Vui lòng thử lại.");
     } finally {
       setIsFinishing(false);
     }
@@ -345,9 +379,9 @@ export default function RecordJourneyScreen() {
       setRouteRecord(route);
       setStatus("TRIAL");
       setMyJourneys((current) => [route, ...current.filter((item) => item.routeId !== route.routeId)]);
-      Alert.alert("Đã submit hành trình", "Custom Route đã chuyển sang trạng thái TRIAL.");
+      routeSystemAlert.alert("Đã submit hành trình", "Custom Route đã chuyển sang trạng thái TRIAL.");
     } catch (error) {
-      Alert.alert("Không thể submit", error instanceof Error ? error.message : "Vui lòng thử lại.");
+      routeSystemAlert.alert("Không thể submit", error instanceof Error ? error.message : "Vui lòng thử lại.");
     } finally {
       setIsFinalizing(false);
     }
@@ -365,7 +399,7 @@ export default function RecordJourneyScreen() {
         </View>
         <Pressable
           className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
-          onPress={() => Alert.alert("Luồng sử dụng", "B1 bắt đầu record → B2 tìm hotspot gần bạn hoặc search toàn hệ thống và check-in → B3 finish thành DRAFT → chỉnh sửa route/story → B4 finalize routeId thành TRIAL.")}
+          onPress={() => routeSystemAlert.alert("Luồng sử dụng", "B1 bắt đầu record → B2 tìm hotspot gần bạn hoặc search toàn hệ thống và check-in → B3 finish thành DRAFT → chỉnh sửa route/story → B4 finalize routeId thành TRIAL.")}
         >
           <Text className="text-[16px] font-extrabold text-[#F15B45]">?</Text>
         </Pressable>
@@ -379,7 +413,12 @@ export default function RecordJourneyScreen() {
       >
         <View className="px-4">
           <View className="overflow-hidden rounded-[30px] bg-white">
-            <AppMap points={mapPoints} routeCoordinates={routeCoordinates} height={330} />
+            <AppMap
+              points={mapPoints}
+              routeCoordinates={routeCoordinates}
+              height={330}
+              showsUserLocation={false}
+            />
             <View className="absolute left-4 top-4 flex-row items-center gap-2 rounded-full bg-white/95 px-3 py-2">
               <View className={`h-2.5 w-2.5 rounded-full ${status === "RECORDING" ? "bg-[#F15B45]" : status === "DRAFT" ? "bg-[#F5A623]" : status === "TRIAL" ? "bg-[#36A269]" : "bg-[#9AA0AA]"}`} />
               <Text className="text-[10px] font-extrabold text-[#2B2233]">{status === "READY" ? "CHƯA BẮT ĐẦU" : status}</Text>
@@ -400,7 +439,7 @@ export default function RecordJourneyScreen() {
               {status === "READY"
                 ? "Mỗi Explorer chỉ có thể ghi một hành trình tại một thời điểm."
                 : status === "RECORDING"
-                  ? `${checkedInHotspots.length} hotspot đã check-in · Route ID ${routeRecord?.routeId ?? "-"}`
+                  ? `${checkedInHotspots.length} địa điểm đã check-in · Route ID ${routeRecord?.routeId ?? "-"}`
                   : status === "DRAFT"
                     ? "Bản nháp đã sẵn sàng để cập nhật route và các story mặc định."
                     : "Route đã được gửi lên hệ thống với trạng thái TRIAL."}
@@ -421,7 +460,6 @@ export default function RecordJourneyScreen() {
             <View className="flex-row items-center justify-between">
               <View className="flex-1 pr-3">
                 <Text className="text-[14px] font-extrabold text-[#2B2233]">Hành trình của tôi</Text>
-                <Text className="mt-1 text-[10px] text-[#8E869A]">Dữ liệu từ GET /api/v1/routes/my-journey</Text>
               </View>
               <Pressable onPress={() => void loadMyJourneys()} className="rounded-full bg-[#F1F3F7] px-3 py-2">
                 {isLoadingJourneys ? <ActivityIndicator size="small" color="#EB489B" /> : <Text className="text-[10px] font-extrabold text-[#2B2233]">Làm mới</Text>}
@@ -548,7 +586,7 @@ export default function RecordJourneyScreen() {
 
           {status === "DRAFT" ? (
             <>
-              <Pressable onPress={() => Alert.alert("Chỉnh sửa bản nháp", "Kết nối tiếp API update route và update story tại đây. Route ID hiện tại: " + routeRecord?.routeId)} className="rounded-2xl border border-[#E8EDF4] bg-white py-4"><Text className="text-center text-[13px] font-extrabold text-[#2B2233]">Xem và chỉnh sửa route/story</Text></Pressable>
+              <Pressable onPress={() => routeSystemAlert.alert("Chỉnh sửa bản nháp", "Kết nối tiếp API update route và update story tại đây. Route ID hiện tại: " + routeRecord?.routeId)} className="rounded-2xl border border-[#E8EDF4] bg-white py-4"><Text className="text-center text-[13px] font-extrabold text-[#2B2233]">Xem và chỉnh sửa route/story</Text></Pressable>
               <Pressable disabled={isFinalizing} onPress={() => void handleFinalize()} className="rounded-2xl bg-[#EB489B] py-4">
                 {isFinalizing ? <ActivityIndicator color="#fff" /> : <Text className="text-center text-[13px] font-extrabold text-white">Submit route lên hệ thống</Text>}
               </Pressable>

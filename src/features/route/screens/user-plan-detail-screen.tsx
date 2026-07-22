@@ -4,13 +4,14 @@ import { type Href, useFocusEffect, useLocalSearchParams, useRouter } from "expo
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { routeSystemAlert } from "@/features/route/components/route-system-alert";
 
 import { SymbolView } from "@/components/ui/symbol-view";
 import {
@@ -237,7 +238,7 @@ export default function UserPlanDetailScreen() {
 
       router.push(continueHref);
     } catch (caught) {
-      Alert.alert(
+      routeSystemAlert.alert(
         "Không thể tiếp tục hành trình",
         caught instanceof Error ? caught.message : "Vui lòng thử lại.",
       );
