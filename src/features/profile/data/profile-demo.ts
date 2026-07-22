@@ -13,7 +13,14 @@ const profiles: Profile[] = [
     totalXp: 2840,
     level: 12,
     levelName: "Level 12",
+    currentLevelRequiredXp: 2600,
     currentLevelXp: 240,
+    nextLevelNumber: 13,
+    nextLevelName: "Level 13",
+    nextLevelRequiredXp: 3200,
+    remainingXpToNextLevel: 360,
+    levelProgressPercent: 40,
+    hasExactLevelProgress: true,
     xpToNext: 600,
     avatar:
       "https://i.pinimg.com/736x/4a/c2/3c/4ac23cc90bf76e56e8f38d1c57756957.jpg",
@@ -67,6 +74,7 @@ const profilePosts: ProfilePost[] = [
     likeCount: 128,
     pointRemaining: 778,
     shareCount: 2,
+    sharedPost: null,
   },
   {
     commentCount: 7,
@@ -102,6 +110,7 @@ const profilePosts: ProfilePost[] = [
     likeCount: 64,
     pointRemaining: 678,
     shareCount: 1,
+    sharedPost: null,
   },
 ];
 

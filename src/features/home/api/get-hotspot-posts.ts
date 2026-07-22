@@ -240,6 +240,7 @@ function parsePost(value: unknown): HotspotPost | null {
     likeCount: readNullableNumber(value.likeCount),
     commentCount: readNullableNumber(value.commentCount),
     shareCount: readNullableNumber(value.shareCount),
+    sharedPost: isNullableString(value.sharedPost) ? value.sharedPost : null,
   };
 }
 

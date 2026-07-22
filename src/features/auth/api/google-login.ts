@@ -3,6 +3,10 @@ import { Platform } from "react-native";
 
 import { PublicEnv } from "@/constants/env";
 import type { LoginResponse } from "@/features/auth/api/login";
+import { readExpoScheme } from "@/lib/expo-scheme";
+
+const GOOGLE_AUTH_CALLBACK_PATH = "auth/callback/google";
+const DEFAULT_EXPO_SCHEME = "culturequestlitemobile";
 
 export type GoogleLoginResult = LoginResponse & {
   displayName: string | null;
@@ -47,8 +51,8 @@ function resolveRedirectUri() {
   }
 
   return makeRedirectUri({
-    path: "auth/callback/google",
-    scheme: "culturequestlitemobile",
+    path: GOOGLE_AUTH_CALLBACK_PATH,
+    scheme: readExpoScheme() || DEFAULT_EXPO_SCHEME,
   });
 }
 

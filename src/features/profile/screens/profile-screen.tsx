@@ -23,22 +23,16 @@ import {
   type CommunityFeedPost,
 } from "@/features/community/data/community-post-cache";
 import { getCachedHotspotDetail } from "@/features/home/data/hotspot-detail-cache";
-import {
-  getHotspotHref,
-  type HotspotDetail,
-} from "@/features/home/data/hotspots";
+import { getHotspotHref, type HotspotDetail } from "@/features/home/data/hotspots";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import type { RouteItem } from "@/lib/demo-data";
 import {
   getPostVisibilityIcon,
   getPostVisibilityLabel,
 } from "@/lib/post-visibility";
-import { buildLevelProgressBarState } from "../lib/level-progress-bar";
+import { LevelProgressCard } from "../components/level-progress-card";
 import { useProfile } from "../hooks/use-profile";
-import type {
-  ProfilePost,
-  ProfilePostStatus,
-} from "../types";
+import type { ProfilePost, ProfilePostStatus } from "../types";
 
 type Tab = "posts" | "pending-posts" | "routes" | "liked-hotspots";
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
@@ -54,6 +48,7 @@ const cardShadow = {
 const heroGradientColors = ["#20476B", "#4F87B2", "#F7F8FC"] as const;
 const avatarFallbackColors = ["#EB489B", "#F58752"] as const;
 const guestHeroBannerImage = require("../../../../assets/images/tachnen5.png");
+const levelBadgeLogo = require("../../../../assets/images/logo3.png");
 const guestScreenGradientColors = ["#FFF1F8", "#FFE8F3", "#FFF9FC"] as const;
 const guestHeroGradientColors = ["#F8B5CF", "#F49ABD", "#EB78A4"] as const;
 const guestHeroShadow = {
@@ -248,62 +243,6 @@ const GUEST_MENU_ITEMS: {
   },
 ];
 
-function XPBar({
-  markerLabel,
-  value,
-  max,
-  trackColor = "rgba(255,255,255,0.65)",
-  height = 8,
-}: {
-  markerLabel?: string;
-  value: number;
-  max: number;
-  trackColor?: string;
-  height?: number;
-}) {
-  const percent = Math.min(Math.max((value / max) * 100, 0), 100);
-  const markerLeftPercent = Math.min(Math.max(percent, 6), 94);
-
-  return (
-    <View style={{ paddingTop: markerLabel ? 30 : 0 }}>
-      {markerLabel ? (
-        <View
-          pointerEvents="none"
-          style={{
-            left: `${markerLeftPercent}%`,
-            position: "absolute",
-            top: 0,
-            transform: [{ translateX: -26 }],
-          }}
-        >
-          <View className="rounded-full bg-[#2B2233] px-2.5 py-1">
-            <Text className="text-[10px] font-extrabold text-white">{markerLabel}</Text>
-          </View>
-          <View className="items-center">
-            <View className="h-2 w-[1.5px] bg-[#2B2233]" />
-          </View>
-        </View>
-      ) : null}
-
-      <View
-        style={{
-          backgroundColor: trackColor,
-          borderRadius: 999,
-          height,
-          overflow: "hidden",
-        }}
-      >
-        <LinearGradient
-          colors={["#F58752", "#FF6B2C", "#EB489B"]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={{ borderRadius: 999, height: "100%", width: `${percent}%` }}
-        />
-      </View>
-    </View>
-  );
-}
-
 function getProfileInitials(name: string, username: string) {
   const source = name.trim() || username.replace(/^@+/, "").trim();
 
@@ -342,10 +281,6 @@ function formatPostTimestamp(value: string | null) {
   return dateText;
 }
 
-function formatNumber(value: number) {
-  return new Intl.NumberFormat("vi-VN").format(value);
-}
-
 function formatCompactCount(value?: number | null) {
   const resolvedValue =
     typeof value === "number" && Number.isFinite(value)
@@ -369,8 +304,11 @@ function getProfileAvatarPalette(seed: string) {
   return profilePostAvatarPalettes[paletteIndex] as readonly [string, string];
 }
 
-function normalizeProfilePostStatus(value?: string | null): ProfilePostStatus | null {
-  const normalizedValue = typeof value === "string" ? value.trim().toUpperCase() : "";
+function normalizeProfilePostStatus(
+  value?: string | null,
+): ProfilePostStatus | null {
+  const normalizedValue =
+    typeof value === "string" ? value.trim().toUpperCase() : "";
 
   switch (normalizedValue) {
     case "APPROVED":
@@ -394,7 +332,9 @@ function getProfilePostStatusLabel(value?: string | null) {
     case "DELETED":
       return "Đã xóa";
     default:
-      return typeof value === "string" && value.trim() ? value.trim() : "Chưa rõ";
+      return typeof value === "string" && value.trim()
+        ? value.trim()
+        : "Chưa rõ";
   }
 }
 
@@ -458,7 +398,9 @@ function resolvePostMediaUris(post: ProfilePost) {
   return [fallbackPostImageUri];
 }
 
-function buildProfileCommunityMediaItems(post: ProfilePost): CommunityFeedMediaItem[] {
+function buildProfileCommunityMediaItems(
+  post: ProfilePost,
+): CommunityFeedMediaItem[] {
   return post.medias
     .filter((media) => {
       const trimmedUrl = media.url.trim();
@@ -511,10 +453,15 @@ function mapProfilePostToCommunityFeedPost(
     location: "",
     mood: `${statusLabel} · ${visibilityLabel}`,
     topic: "culture",
-    role: normalizedUsername ? `@${normalizedUsername.replace(/^@/, "")}` : "Explorer profile",
+    role: normalizedUsername
+      ? `@${normalizedUsername.replace(/^@/, "")}`
+      : "Explorer profile",
     shares: formatCompactCount(post.shareCount),
     isFollowing: false,
-    tags: post.tags.map((tag) => tag.name.trim()).filter(Boolean).slice(0, 4),
+    tags: post.tags
+      .map((tag) => tag.name.trim())
+      .filter(Boolean)
+      .slice(0, 4),
     time: formatPostTimestamp(post.createdAt),
     views: formatCompactCount(post.pointRemaining),
     canComment: true,
@@ -558,6 +505,10 @@ export default function ProfileScreen() {
   const handleBackToHome = () => {
     router.replace("/home");
   };
+  const handleOpenLikedHotspot = (slug: string) => {
+    const cachedHotspotId = getCachedHotspotDetail({ slug })?.hotspotId ?? null;
+    router.push(getHotspotHref(slug, cachedHotspotId));
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -590,9 +541,6 @@ export default function ProfileScreen() {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-[#F7F8FC]">
         <ActivityIndicator color="#F58752" size="large" />
-        <Text className="mt-3 text-[15px] text-[#8E869A]">
-          Đang tải hồ sơ...
-        </Text>
       </SafeAreaView>
     );
   }
@@ -620,44 +568,34 @@ export default function ProfileScreen() {
 
   const levelNumber = typeof profile.level === "number" ? profile.level : null;
   const levelDisplayName = profile.levelName?.trim() ?? "";
-  const isMaxLevel = profile.isMaxLevel === true;
+  const resolvedDisplayName =
+    profile.name.trim() ||
+    authSession.displayName.trim() ||
+    "Explorer";
+  const resolvedProfileUsername =
+    profile.username.trim() ||
+    authSession.username?.trim() ||
+    resolvedDisplayName;
   const currentTotalXp = Math.max(profile.totalXp, 0);
-  const currentLevelXp =
-    typeof profile.currentLevelXp === "number" ? profile.currentLevelXp : null;
-  const xpToNext =
-    typeof profile.xpToNext === "number" ? profile.xpToNext : null;
-  const canShowLevelSection = levelNumber !== null || levelDisplayName.length > 0;
-  const levelBadgeLabel =
-    levelNumber !== null ? `Cấp ${levelNumber}` : levelDisplayName || "Level";
-  const levelProgressBarState = buildLevelProgressBarState({
-    currentLevelLabel: levelBadgeLabel,
-    currentLevelXp,
-    currentXp: currentTotalXp,
-    isMaxLevel,
-    xpToNext,
-  });
-  const canShowExactLevelProgress =
-    levelNumber !== null && (isMaxLevel || levelProgressBarState.targetXp !== null);
-  const levelProgressPercent = canShowExactLevelProgress
-    ? isMaxLevel
-      ? 100
-      : levelProgressBarState.fillPercent
-    : 0;
-  const remainingXp = canShowExactLevelProgress
-    ? isMaxLevel
-      ? 0
-      : levelProgressBarState.remainingXp
-    : 0;
-  const levelFallbackMessage = `Tổng ${formatNumber(profile.totalXp)} XP`;
-  const levelProgressSummary =
-    canShowExactLevelProgress && !isMaxLevel && levelProgressBarState.targetXp !== null
-      ? `${formatNumber(currentTotalXp)} / ${formatNumber(levelProgressBarState.targetXp)} XP`
-      : `${formatNumber(currentTotalXp)} XP`;
+  const nextLevelRequiredXp =
+    typeof profile.nextLevelRequiredXp === "number"
+      ? profile.nextLevelRequiredXp
+      : null;
+  const levelProgressPercent =
+    typeof profile.levelProgressPercent === "number"
+      ? profile.levelProgressPercent
+      : null;
+  const canShowLevelCard =
+    currentTotalXp > 0 || levelNumber !== null || levelDisplayName.length > 0;
+  const hasExactLevelProgress =
+    profile.hasExactLevelProgress === true &&
+    nextLevelRequiredXp !== null &&
+    levelProgressPercent !== null;
   const postCount =
     typeof profile.totalPosts === "number" ? profile.totalPosts : posts.length;
   const statItems = [
-    { label: "Người theo dõi", value: profile.followers },
     { label: "Đang theo dõi", value: profile.following },
+    { label: "Người theo dõi", value: profile.followers },
     { label: "Bài viết", value: postCount },
   ];
   const badgeLabel =
@@ -754,82 +692,28 @@ export default function ProfileScreen() {
             <AccountAvatar
               avatar={profile.avatar}
               badgeLabel={badgeLabel}
-              name={profile.name}
+              name={resolvedDisplayName}
               size={avatarSize}
-              username={profile.username}
+              username={resolvedProfileUsername}
             />
 
-            <View className="min-w-0 flex-1 pt-10">
-              <View className="flex-row items-center">
+            <View className="min-w-0 flex-1 pt-8">
+              <View className="mt-0 flex-row items-center">
                 <Text
-                  className="text-[18px] font-extrabold leading-tight text-[#2B2233]"
+                  className="text-[16px] font-extrabold leading-tight text-[#2B2233]"
                   numberOfLines={1}
                 >
-                  {profile.name}
+                  {resolvedDisplayName}
                 </Text>
               </View>
-
-              {canShowLevelSection ? (
-                <View className="mt-1.5">
-                  <View className="mb-1 flex-row items-center justify-between gap-2">
-                    <Text className="text-[13px] font-bold text-[#2B2233]">
-                      Level
-                    </Text>
-                    <View className="flex-row items-center gap-1 rounded-full bg-[#FFF4EF] px-2 py-0.5">
-                      <SymbolView
-                        name={{
-                          ios: "sparkles",
-                          android: "auto_awesome",
-                          web: "auto_awesome",
-                        }}
-                        size={12}
-                        tintColor="#F58752"
-                      />
-                      <Text className="text-[11px] font-extrabold text-[#F58752]">
-                        {levelBadgeLabel}
-                      </Text>
-                    </View>
-                  </View>
-                  {canShowExactLevelProgress ? (
-                    <>
-                      <XPBar
-                        markerLabel={levelProgressBarState.markerLabel}
-                        value={isMaxLevel ? 1 : currentTotalXp}
-                        max={isMaxLevel ? 1 : (levelProgressBarState.targetXp ?? 1)}
-                        height={8}
-                        trackColor="#F4EAF0"
-                      />
-                      <View className="mt-1 flex-row items-center justify-between">
-                        <Text className="flex-1 pr-2 text-[10px] text-[#8E869A]">
-                          {levelProgressSummary}
-                        </Text>
-                      </View>
-                      <View className="mt-1 flex-row items-center justify-between">
-                        <Text className="flex-1 pr-2 text-[10px] text-[#8E869A]">
-                          {isMaxLevel
-                            ? "Đã đạt cấp tối đa"
-                            : `Còn ${formatNumber(remainingXp)} XP để đạt cấp ${levelNumber + 1}`}
-                        </Text>
-                        <Text className="text-[10px] font-extrabold text-[#F58752]">
-                          {Math.round(levelProgressPercent)}%
-                        </Text>
-                      </View>
-                    </>
-                  ) : (
-                    <>
-                      <View
-                        style={{
-                          backgroundColor: "#F4EAF0",
-                          borderRadius: 999,
-                          height: 8,
-                        }}
-                      />
-                      <Text className="mt-1 text-[10px] text-[#8E869A]">
-                        {levelFallbackMessage}
-                      </Text>
-                    </>
-                  )}
-                </View>
+              {canShowLevelCard ? (
+                <LevelProgressCard
+                  currentXp={currentTotalXp}
+                  hasExactProgress={hasExactLevelProgress}
+                  markerSource={levelBadgeLogo}
+                  nextLevelRequiredXp={nextLevelRequiredXp}
+                  progressPercent={levelProgressPercent}
+                />
               ) : null}
             </View>
           </View>
@@ -883,8 +767,8 @@ export default function ProfileScreen() {
                       pageGutter={gutter}
                       post={post}
                       profileAvatar={profile.avatar}
-                      profileName={profile.name}
-                      profileUsername={profile.username}
+                      profileName={resolvedDisplayName}
+                      profileUsername={resolvedProfileUsername}
                     />
                   ))}
                 </View>
@@ -911,15 +795,7 @@ export default function ProfileScreen() {
                   <LikedHotspotCard
                     key={hotspot.slug}
                     hotspot={hotspot}
-                    onPress={() =>
-                      router.push(
-                        getHotspotHref(
-                          hotspot.slug,
-                          getCachedHotspotDetail({ slug: hotspot.slug })
-                            ?.hotspotId,
-                        ),
-                      )
-                    }
+                    onPress={() => handleOpenLikedHotspot(hotspot.slug)}
                   />
                 ))}
               </View>
@@ -1419,7 +1295,13 @@ function PostAction({
     <ActionContainer
       className="flex-row items-center gap-1.5"
       onPress={onPress}
-      style={onPress ? ({ pressed }: { pressed: boolean }) => ({ opacity: pressed ? 0.72 : 1 }) : undefined}
+      style={
+        onPress
+          ? ({ pressed }: { pressed: boolean }) => ({
+              opacity: pressed ? 0.72 : 1,
+            })
+          : undefined
+      }
     >
       <SymbolView name={icon} size={17} tintColor={resolvedTintColor} />
       {typeof value === "number" ? (
@@ -1624,7 +1506,10 @@ function PostCard({
       profileUsername,
     });
 
-    if (typeof cachedPost.postNumericId !== "number" || cachedPost.postNumericId <= 0) {
+    if (
+      typeof cachedPost.postNumericId !== "number" ||
+      cachedPost.postNumericId <= 0
+    ) {
       return;
     }
 
@@ -1839,16 +1724,10 @@ function LikedHotspotCard({
   );
 }
 
-function ProfilePostsSectionHeader({
-  title,
-}: {
-  title: string;
-}) {
+function ProfilePostsSectionHeader({ title }: { title: string }) {
   return (
     <View className="mb-3 px-1">
-      <Text className="text-[14px] font-semibold text-[#2B2233]">
-        {title}
-      </Text>
+      <Text className="text-[14px] font-semibold text-[#2B2233]">{title}</Text>
     </View>
   );
 }

@@ -1,3 +1,5 @@
+import { hasExpoScheme } from "@/lib/expo-scheme";
+
 const rawApiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim() ?? '';
 const keycloakUrl = process.env.EXPO_PUBLIC_KEYCLOAK_URL?.trim() ?? '';
 const keycloakRealm = process.env.EXPO_PUBLIC_KEYCLOAK_REALM?.trim() ?? '';
@@ -84,8 +86,10 @@ function collectEnvWarnings() {
     warnings.push('EXPO_PUBLIC_KEYCLOAK_CLIENT_ID is missing.');
   }
 
-  if (!PublicEnv.googleRedirectUri) {
-    warnings.push('EXPO_PUBLIC_GOOGLE_REDIRECT_URI is missing.');
+  if (!PublicEnv.googleRedirectUri && !hasExpoScheme()) {
+    warnings.push(
+      'EXPO_PUBLIC_GOOGLE_REDIRECT_URI is missing and no app scheme is configured for the Google auth fallback redirect.',
+    );
   }
 
   if (!PublicEnv.goongApiKey) {

@@ -585,9 +585,6 @@ export default function HotspotSearchScreen() {
               {status === "loading" ? (
                 <View className="min-h-[320px] items-center justify-center">
                   <ActivityIndicator color="#111827" size="large" />
-                  <Text className="mt-4 text-[14px] font-medium text-[#667085]">
-                    Đang tải dữ liệu hotspot...
-                  </Text>
                 </View>
               ) : status === "error" ? (
                 <View

@@ -352,7 +352,6 @@ export default function CheckinScreen() {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-[#1A1525]">
         <ActivityIndicator color="#EB489B" />
-        <Text className="mt-3 text-white/70">Đang tải địa điểm...</Text>
       </SafeAreaView>
     );
   }
