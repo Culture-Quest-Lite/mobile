@@ -13,7 +13,10 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import { SymbolView } from "@/components/ui/symbol-view";
 import {
@@ -25,6 +28,8 @@ import {
   getPostComments,
   type PostComment,
 } from "@/features/home/api/get-post-comments";
+import { useLikedPostIds } from "@/features/home/data/liked-post-store";
+import { getPostVisibilityIcon } from "@/lib/post-visibility";
 import {
   cacheCommunityPost,
   getCachedCommunityPost,
@@ -127,7 +132,9 @@ function formatCommunityTime(isoTimestamp?: string | null) {
     return `${elapsedDays} ngày`;
   }
 
-  return `${parsedDate.getDate().toString().padStart(2, "0")}/${(parsedDate.getMonth() + 1)
+  return `${parsedDate.getDate().toString().padStart(2, "0")}/${(
+    parsedDate.getMonth() + 1
+  )
     .toString()
     .padStart(2, "0")}/${parsedDate.getFullYear()}`;
 }
@@ -179,7 +186,10 @@ function getCommentDisplayName(item: PostComment) {
   );
 }
 
-function replaceCommunityPostCommentCount(post: CommunityFeedPost, commentCount: number) {
+function replaceCommunityPostCommentCount(
+  post: CommunityFeedPost,
+  commentCount: number,
+) {
   const normalizedCommentCount = Math.max(0, Math.round(commentCount));
 
   return {
@@ -290,9 +300,11 @@ function AvatarMonogram({
 }
 
 function SocialCountChip({
+  active = false,
   icon,
   value,
 }: {
+  active?: boolean;
   icon: {
     android: string;
     ios: string;
@@ -302,10 +314,18 @@ function SocialCountChip({
 }) {
   return (
     <View className="flex-row items-center">
-      <SymbolView name={icon} size={16} tintColor="#6B7280" />
+      <SymbolView
+        name={icon}
+        size={15}
+        tintColor={active ? "#2563EB" : "#6B7280"}
+      />
       <Text
-        className="ml-1 text-[13px] font-semibold text-[#4B5563]"
-        style={{ includeFontPadding: false, lineHeight: 14 }}
+        className="ml-1 text-[13px] font-semibold"
+        style={{
+          color: active ? "#2563EB" : "#4B5563",
+          includeFontPadding: false,
+          lineHeight: 13,
+        }}
       >
         {value}
       </Text>
@@ -313,7 +333,11 @@ function SocialCountChip({
   );
 }
 
-function SocialPostMediaGallery({ items }: { items: CommunityFeedMediaItem[] }) {
+function SocialPostMediaGallery({
+  items,
+}: {
+  items: CommunityFeedMediaItem[];
+}) {
   if (items.length === 0) {
     return null;
   }
@@ -336,8 +360,7 @@ function SocialPostMediaGallery({ items }: { items: CommunityFeedMediaItem[] }) 
   return (
     <View className="flex-row flex-wrap bg-[#EEF2F7]" style={{ gap: 2 }}>
       {previewItems.map((item, index) => {
-        const isWideSingle =
-          previewItems.length === 3 && index === 0;
+        const isWideSingle = previewItems.length === 3 && index === 0;
         const shouldShowOverlay =
           index === previewItems.length - 1 && hiddenCount > 0;
         const itemWidth =
@@ -351,7 +374,8 @@ function SocialPostMediaGallery({ items }: { items: CommunityFeedMediaItem[] }) 
               height: itemHeight,
               overflow: "hidden",
               position: "relative",
-              width: previewItems.length === 3 && index === 0 ? "100%" : itemWidth,
+              width:
+                previewItems.length === 3 && index === 0 ? "100%" : itemWidth,
             }}
           >
             <Image
@@ -386,7 +410,7 @@ function CommunityCommentItem({
   const palette = getAvatarPalette(`${displayName}-${item.userId}`);
 
   return (
-    <View className="flex-row items-start gap-2.5">
+    <View className="flex-row items-start gap-2">
       <AvatarMonogram
         colors={palette}
         initials={getNameInitials(displayName)}
@@ -394,22 +418,22 @@ function CommunityCommentItem({
       />
 
       <View className="flex-1">
-        <View className="self-start rounded-[18px] bg-[#F3F4F6] px-3.5 py-2.5">
+        <View className="self-start rounded-[16px] bg-[#F3F4F6] px-3 py-2">
           <Text
             className="text-[14px] font-bold text-[#111827]"
-            style={{ includeFontPadding: false, lineHeight: 15 }}
+            style={{ includeFontPadding: false, lineHeight: 14 }}
           >
             {displayName}
           </Text>
           <Text
-            className="mt-0.5 text-[15px] text-[#374151]"
-            style={{ includeFontPadding: false, lineHeight: 19 }}
+            className="mt-0.5 text-[14px] text-[#374151]"
+            style={{ includeFontPadding: false, lineHeight: 16 }}
           >
             {readMeaningfulText(item.comment) ?? "Đã gửi một bình luận."}
           </Text>
         </View>
 
-        <View className="mt-1.5 flex-row flex-wrap items-center">
+        <View className="mt-1 flex-row flex-wrap items-center">
           <Text className="text-[12px] font-medium text-[#6B7280]">
             {formatCommunityTime(item.createdAt)}
           </Text>
@@ -479,7 +503,7 @@ function CommunityCommentThread({
       />
 
       {childComments.length > 0 ? (
-        <View className="mt-2 gap-3">
+        <View className="mt-1.5 gap-2">
           {childComments.map((reply) => (
             <CommunityCommentThread
               key={`${reply.postActionId}-${reply.userId}`}
@@ -500,7 +524,10 @@ function NotFoundState() {
   const router = useRouter();
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right", "bottom"]}>
+    <SafeAreaView
+      className="flex-1 bg-white"
+      edges={["top", "left", "right", "bottom"]}
+    >
       <View className="flex-1 items-center justify-center px-6">
         <View
           className="w-full max-w-[360px] rounded-[32px] bg-[#F9FAFB] px-6 py-7"
@@ -531,22 +558,37 @@ export default function CommunityPostCommentsScreen() {
   const insets = useSafeAreaInsets();
   const commentInputRef = useRef<TextInput>(null);
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const resolvedPostId = Number.parseInt(Array.isArray(id) ? (id[0] ?? "") : (id ?? ""), 10);
+  const resolvedPostId = Number.parseInt(
+    Array.isArray(id) ? (id[0] ?? "") : (id ?? ""),
+    10,
+  );
+  const likedPostsAccountKey = authSession.isAuthenticated
+    ? authSession.username?.trim() || authSession.displayName.trim() || null
+    : null;
   const [post, setPost] = useState<CommunityFeedPost | null>(() =>
-      Number.isInteger(resolvedPostId) && resolvedPostId > 0
-        ? getCachedCommunityPost(resolvedPostId)?.post ?? null
-        : null,
+    Number.isInteger(resolvedPostId) && resolvedPostId > 0
+      ? (getCachedCommunityPost(resolvedPostId)?.post ?? null)
+      : null,
   );
   const [commentDraft, setCommentDraft] = useState("");
   const [comments, setComments] = useState<PostComment[]>([]);
   const [commentsError, setCommentsError] = useState<string | null>(null);
-  const [commentsStatus, setCommentsStatus] = useState<CommunityCommentsStatus>("idle");
+  const [commentsStatus, setCommentsStatus] =
+    useState<CommunityCommentsStatus>("idle");
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [replyTarget, setReplyTarget] = useState<PostComment | null>(null);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const persistedLikedPostIds = useLikedPostIds(likedPostsAccountKey);
+  const likedPostIdsSet = useMemo(
+    () => new Set(persistedLikedPostIds),
+    [persistedLikedPostIds],
+  );
 
-  const postMediaItems = useMemo(() => (post ? buildPostMediaItems(post) : []), [post]);
+  const postMediaItems = useMemo(
+    () => (post ? buildPostMediaItems(post) : []),
+    [post],
+  );
   const { repliesByParentId, topLevelComments } = useMemo(() => {
     const commentIds = new Set(comments.map((item) => item.postActionId));
     const nextRepliesByParentId: Record<number, PostComment[]> = {};
@@ -610,9 +652,12 @@ export default function CommunityPostCommentsScreen() {
   }, [authSession.isAuthenticated, authSession.tokenType, resolvedPostId]);
 
   useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const changeFrameEvent = Platform.OS === "ios" ? "keyboardWillChangeFrame" : null;
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const changeFrameEvent =
+      Platform.OS === "ios" ? "keyboardWillChangeFrame" : null;
     const handleKeyboardShow = (event: {
       endCoordinates?: {
         height?: number;
@@ -635,7 +680,9 @@ export default function CommunityPostCommentsScreen() {
     ];
 
     if (changeFrameEvent) {
-      subscriptions.push(Keyboard.addListener(changeFrameEvent, handleKeyboardShow));
+      subscriptions.push(
+        Keyboard.addListener(changeFrameEvent, handleKeyboardShow),
+      );
     }
 
     return () => {
@@ -743,10 +790,16 @@ export default function CommunityPostCommentsScreen() {
   }
 
   const palette = getAvatarPalette(`${post.author}-${post.authorId}`);
+  const postNumericId = post.postNumericId ?? null;
+  const isPostLiked =
+    (typeof postNumericId === "number" && likedPostIdsSet.has(postNumericId)) ||
+    post.isLiked === true;
   const trimmedCommentDraft = commentDraft.trim();
   const composerBottomInset = Math.max(insets.bottom, 6);
   const composerLift = Math.max(0, keyboardHeight);
-  const replyTargetDisplayName = replyTarget ? getCommentDisplayName(replyTarget) : null;
+  const replyTargetDisplayName = replyTarget
+    ? getCommentDisplayName(replyTarget)
+    : null;
   const shouldShowComposerQuickActions =
     trimmedCommentDraft.length === 0 &&
     !isSubmittingComment &&
@@ -772,7 +825,9 @@ export default function CommunityPostCommentsScreen() {
               />
             </Pressable>
 
-            <Text className="text-[17px] font-black text-[#111827]">Bình luận</Text>
+            <Text className="text-[17px] font-black text-[#111827]">
+              Bình luận
+            </Text>
 
             <Pressable className="h-10 w-10 items-center justify-center rounded-full bg-[#F3F4F6]">
               <SymbolView
@@ -796,7 +851,7 @@ export default function CommunityPostCommentsScreen() {
             contentContainerStyle={{ paddingBottom: 16 }}
           >
             <View className="bg-white">
-              <View className="px-4 pb-2.5 pt-2.5">
+              <View className="px-4 pb-2 pt-2">
                 <View className="flex-row items-start">
                   <AvatarMonogram
                     colors={palette}
@@ -832,11 +887,7 @@ export default function CommunityPostCommentsScreen() {
                       </Text>
                       <Text className="mx-1 text-[12px] text-[#9CA3AF]">·</Text>
                       <SymbolView
-                        name={{
-                          ios: "globe.asia.australia.fill",
-                          android: "public",
-                          web: "public",
-                        }}
+                        name={getPostVisibilityIcon(post.visibility)}
                         size={13}
                         tintColor="#9CA3AF"
                       />
@@ -845,8 +896,8 @@ export default function CommunityPostCommentsScreen() {
                 </View>
 
                 <Text
-                  className="mt-2 text-[14px] text-[#111827]"
-                  style={{ includeFontPadding: false, lineHeight: 18 }}
+                  className="mt-1.5 text-[14px] text-[#111827]"
+                  style={{ includeFontPadding: false, lineHeight: 16 }}
                 >
                   {post.caption}
                 </Text>
@@ -854,15 +905,24 @@ export default function CommunityPostCommentsScreen() {
 
               <SocialPostMediaGallery items={postMediaItems} />
 
-              <View className="border-t border-[#E5E7EB] px-4 py-2.5">
+              <View className="border-t border-[#E5E7EB] px-4 py-2">
                 <View className="flex-row items-center justify-between gap-3">
-                  <View className="flex-row items-center gap-5">
+                  <View className="flex-row items-center gap-4">
                     <SocialCountChip
-                      icon={{
-                        ios: "hand.thumbsup",
-                        android: "thumb_up_off_alt",
-                        web: "thumb_up_off_alt",
-                      }}
+                      active={isPostLiked}
+                      icon={
+                        isPostLiked
+                          ? {
+                              ios: "hand.thumbsup.fill",
+                              android: "thumb_up",
+                              web: "thumb_up",
+                            }
+                          : {
+                              ios: "hand.thumbsup",
+                              android: "thumb_up_off_alt",
+                              web: "thumb_up_off_alt",
+                            }
+                      }
                       value={post.likes}
                     />
                     <SocialCountChip
@@ -880,7 +940,10 @@ export default function CommunityPostCommentsScreen() {
                           android: "reply",
                           web: "reply",
                         }}
-                        value={post.replies ?? formatCompactCount(post.replyCountValue)}
+                        value={
+                          post.replies ??
+                          formatCompactCount(post.replyCountValue)
+                        }
                       />
                     ) : null}
                     <SocialCountChip
@@ -893,46 +956,30 @@ export default function CommunityPostCommentsScreen() {
                     />
                   </View>
 
-                  <View className="flex-row items-center">
-                    <View className="h-5 w-5 items-center justify-center rounded-full bg-[#2563EB]">
+                  {/* {isPostLiked ? (
+                    <View className="flex-row items-center rounded-full bg-[#EFF6FF] px-2.5 py-1">
                       <SymbolView
                         name={{
                           ios: "hand.thumbsup.fill",
                           android: "thumb_up",
                           web: "thumb_up",
                         }}
-                        size={10}
-                        tintColor="#FFFFFF"
+                        size={12}
+                        tintColor="#2563EB"
                       />
+                      <Text
+                        className="ml-1 text-[12px] font-semibold text-[#2563EB]"
+                        style={{ includeFontPadding: false, lineHeight: 13 }}
+                      >
+                        Đã thích
+                      </Text>
                     </View>
-                    <View className="-ml-1.5 h-5 w-5 items-center justify-center rounded-full bg-[#F43F5E]">
-                      <SymbolView
-                        name={{
-                          ios: "heart.fill",
-                          android: "favorite",
-                          web: "favorite",
-                        }}
-                        size={10}
-                        tintColor="#FFFFFF"
-                      />
-                    </View>
-                    <View className="-ml-1.5 h-5 w-5 items-center justify-center rounded-full bg-[#F59E0B]">
-                      <SymbolView
-                        name={{
-                          ios: "face.smiling.fill",
-                          android: "sentiment_very_satisfied",
-                          web: "sentiment_very_satisfied",
-                        }}
-                        size={10}
-                        tintColor="#FFFFFF"
-                      />
-                    </View>
-                  </View>
+                  ) : null} */}
                 </View>
               </View>
             </View>
 
-            <View className="px-4 pb-5 pt-3">
+            <View className="px-4 pb-4 pt-2.5">
               <View className="flex-row items-center">
                 <Text className="text-[16px] font-black text-[#111827]">
                   Phù hợp nhất
@@ -949,9 +996,12 @@ export default function CommunityPostCommentsScreen() {
               </View>
 
               {commentsStatus === "loading" ? (
-                <View className="mt-4 items-center px-4 py-4">
+                <View className="mt-3 items-center px-4 py-3">
                   <ActivityIndicator color="#2563EB" size="small" />
-                  <Text className="mt-3 text-[14px] font-semibold text-[#374151]">
+                  <Text
+                    className="mt-2 text-[14px] font-semibold text-[#374151]"
+                    style={{ includeFontPadding: false, lineHeight: 16 }}
+                  >
                     Đang tải bình luận
                   </Text>
                 </View>
@@ -990,11 +1040,14 @@ export default function CommunityPostCommentsScreen() {
               ) : null}
 
               {commentsStatus === "ready" && topLevelComments.length === 0 ? (
-                <View className="mt-4 px-1 py-1">
+                <View className="mt-3 px-1 py-1">
                   <Text className="text-[15px] font-semibold text-[#111827]">
                     Chưa có bình luận
                   </Text>
-                  <Text className="mt-2 text-[14px] leading-5 text-[#6B7280]">
+                  <Text
+                    className="mt-1.5 text-[14px] text-[#6B7280]"
+                    style={{ includeFontPadding: false, lineHeight: 17 }}
+                  >
                     Hãy là người đầu tiên để lại cảm nhận cho bài viết này.
                   </Text>
                 </View>
@@ -1037,7 +1090,7 @@ export default function CommunityPostCommentsScreen() {
                 </View>
               ) : null}
 
-              <View className="flex-row items-center gap-3">
+              <View className="flex-row items-center gap-2.5">
                 {!isComposerFocused ? (
                   <AvatarMonogram
                     colors={getAvatarPalette(authSession.displayName || "me")}
@@ -1049,7 +1102,7 @@ export default function CommunityPostCommentsScreen() {
                 <View className="flex-1 flex-row items-center rounded-full bg-[#F3F4F6] px-3">
                   <TextInput
                     blurOnSubmit={false}
-                    className="flex-1 py-2.5 text-[14px] text-[#111827]"
+                    className="flex-1 py-2 text-[14px] text-[#111827]"
                     editable={!isSubmittingComment}
                     maxLength={communityCommentMaxLength}
                     ref={commentInputRef}
@@ -1069,8 +1122,8 @@ export default function CommunityPostCommentsScreen() {
                       replyTargetDisplayName
                         ? `Trả lời ${replyTargetDisplayName}...`
                         : isComposerFocused
-                        ? "Viết bình luận công khai..."
-                        : "Viết bình luận..."
+                          ? "Viết bình luận công khai..."
+                          : "Viết bình luận..."
                     }
                     placeholderTextColor="#9CA3AF"
                     returnKeyType="send"
@@ -1078,41 +1131,19 @@ export default function CommunityPostCommentsScreen() {
                     value={commentDraft}
                   />
 
-                  {shouldShowComposerQuickActions ? (
-                    <View className="flex-row items-center">
-                      <Pressable className="h-8 w-8 items-center justify-center rounded-full">
-                        <SymbolView
-                          name={{
-                            ios: "camera",
-                            android: "photo_camera",
-                            web: "photo_camera",
-                          }}
-                          size={18}
-                          tintColor="#6B7280"
-                        />
-                      </Pressable>
-                      <Pressable className="h-8 w-8 items-center justify-center rounded-full">
-                        <SymbolView
-                          name={{
-                            ios: "plus.circle",
-                            android: "add_circle_outline",
-                            web: "add_circle_outline",
-                          }}
-                          size={20}
-                          tintColor="#6B7280"
-                        />
-                      </Pressable>
-                    </View>
-                  ) : (
+                  {!shouldShowComposerQuickActions ? (
                     <Pressable
                       className="h-8 w-8 items-center justify-center rounded-full"
-                      disabled={isSubmittingComment || trimmedCommentDraft.length === 0}
+                      disabled={
+                        isSubmittingComment || trimmedCommentDraft.length === 0
+                      }
                       onPress={() => {
                         void handleSubmitComment();
                       }}
                       style={{
                         opacity:
-                          isSubmittingComment || trimmedCommentDraft.length === 0
+                          isSubmittingComment ||
+                          trimmedCommentDraft.length === 0
                             ? 0.45
                             : 1,
                       }}
@@ -1131,7 +1162,7 @@ export default function CommunityPostCommentsScreen() {
                         />
                       )}
                     </Pressable>
-                  )}
+                  ) : null}
                 </View>
               </View>
             </View>

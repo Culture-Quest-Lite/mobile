@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuthSession, getValidAccessToken } from "@/features/auth/hooks/use-auth-session";
 import { getHotspotBySlug, type HotspotDetail } from "@/features/home/data/hotspots";
@@ -7,9 +7,10 @@ import { routes, type RouteItem } from "@/lib/demo-data";
 import { getGamificationLevels } from "../api/get-levels";
 import { getMyProfile } from "../api/get-me";
 import { getMyProfilePosts } from "../api/get-profile-posts";
+import { useCachedProfilePosts } from "../data/profile-post-cache";
 import { CURRENT_USER_ID, getProfileById, getProfilePosts } from "../data/profile-demo";
 import { applyLevelProgressToProfile } from "../lib/level-progress";
-import type { Profile, ProfilePost } from "../types";
+import type { Profile, ProfilePost, ProfilePostStatus } from "../types";
 
 type UseProfileResult = {
   likedHotspots: HotspotDetail[];
@@ -18,6 +19,11 @@ type UseProfileResult = {
   userRoutes: RouteItem[];
   isLoading: boolean;
   error: Error | null;
+  reloadProfile: () => Promise<void>;
+};
+
+type UseProfileOptions = {
+  postStatus?: ProfilePostStatus | null;
 };
 
 function mergeProfileWithFallback(
@@ -35,8 +41,46 @@ function mergeProfileWithFallback(
   };
 }
 
-export function useProfile(userId?: string): UseProfileResult {
+function filterPostsForOwner(posts: ProfilePost[], profile: Profile) {
+  const normalizedProfileId = profile.id.trim();
+  const normalizedUsername = profile.username.trim().toLowerCase();
+
+  return posts.filter((post) => {
+    const normalizedPostUserId = post.userId.trim();
+    const normalizedPostUsername = post.username.trim().toLowerCase();
+
+    return (
+      (normalizedProfileId.length > 0 && normalizedPostUserId === normalizedProfileId) ||
+      (normalizedUsername.length > 0 && normalizedPostUsername === normalizedUsername)
+    );
+  });
+}
+
+function resolveProfilePostTimestamp(post: ProfilePost) {
+  const resolvedTimestamp = Date.parse(post.createdAt ?? "");
+
+  return Number.isFinite(resolvedTimestamp) ? resolvedTimestamp : 0;
+}
+
+function mergeProfilePosts(remotePosts: ProfilePost[], cachedPosts: ProfilePost[]) {
+  const mergedPostsById = new Map(remotePosts.map((post) => [post.id, post] as const));
+
+  for (const cachedPost of cachedPosts) {
+    if (!mergedPostsById.has(cachedPost.id)) {
+      mergedPostsById.set(cachedPost.id, cachedPost);
+    }
+  }
+
+  return Array.from(mergedPostsById.values()).sort(
+    (left, right) => resolveProfilePostTimestamp(right) - resolveProfilePostTimestamp(left),
+  );
+}
+
+export function useProfile(userId?: string, options?: UseProfileOptions): UseProfileResult {
   const authSession = useAuthSession();
+  const postStatus = options?.postStatus ?? null;
+  const isMountedRef = useRef(true);
+  const loadRequestIdRef = useRef(0);
   const fallbackProfile = useMemo(
     () => getProfileById(userId ?? CURRENT_USER_ID),
     [userId],
@@ -47,115 +91,130 @@ export function useProfile(userId?: string): UseProfileResult {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    let isActive = true;
-
-    if (!authSession.isAuthenticated) {
-      return () => {
-        isActive = false;
-      };
-    }
-
-    const loadProfile = async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const accessToken = await getValidAccessToken();
-
-        if (!accessToken) {
-          throw new Error("Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.");
-        }
-
-        const [profileResult, levelsResult, postsResult] = await Promise.allSettled([
-          getMyProfile({
-            accessToken,
-            tokenType: authSession.tokenType,
-          }),
-          getGamificationLevels({
-            accessToken,
-            tokenType: authSession.tokenType,
-          }),
-          getMyProfilePosts({
-            accessToken,
-            size: 10,
-            tokenType: authSession.tokenType,
-          }),
-        ]);
-
-        if (profileResult.status !== "fulfilled") {
-          throw profileResult.reason;
-        }
-
-        let resolvedProfile = profileResult.value;
-
-        if (levelsResult.status === "fulfilled") {
-          resolvedProfile = applyLevelProgressToProfile(
-            profileResult.value,
-            levelsResult.value,
-          );
-        } else {
-          const levelError = levelsResult.reason;
-          console.warn("[profile] level progress unavailable", {
-            error:
-              levelError instanceof Error
-                ? {
-                    message: levelError.message,
-                    name: levelError.name,
-                    stack: levelError.stack,
-                  }
-                : levelError,
-          });
-        }
-
-        if (!isActive) {
-          return;
-        }
-
-        setProfile(mergeProfileWithFallback(resolvedProfile, fallbackProfile));
-
-        if (postsResult.status === "fulfilled") {
-          setPosts(postsResult.value);
-        } else {
-          const postsError =
-            postsResult.reason instanceof Error
-              ? postsResult.reason
-              : new Error("Không thể tải bài viết.");
-
-          console.warn("[profile] posts unavailable", {
-            error: {
-              message: postsError.message,
-              name: postsError.name,
-              stack: postsError.stack,
-            },
-          });
-          setPosts([]);
-          setError(postsError);
-        }
-      } catch (nextError) {
-        if (!isActive) {
-          return;
-        }
-
-        setError(
-          nextError instanceof Error
-            ? nextError
-            : new Error("Không thể tải hồ sơ."),
-        );
-        setProfile(fallbackProfile);
-        setPosts([]);
-      } finally {
-        if (isActive) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void loadProfile();
+    isMountedRef.current = true;
 
     return () => {
-      isActive = false;
+      isMountedRef.current = false;
     };
-  }, [authSession.isAuthenticated, authSession.tokenType, fallbackProfile]);
+  }, []);
+
+  const loadProfile = useCallback(async () => {
+    if (!authSession.isAuthenticated) {
+      return;
+    }
+
+    const requestId = loadRequestIdRef.current + 1;
+    loadRequestIdRef.current = requestId;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const accessToken = await getValidAccessToken();
+
+      if (!accessToken) {
+        throw new Error("Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.");
+      }
+
+      const [profileResult, levelsResult, postsResult] = await Promise.allSettled([
+        getMyProfile({
+          accessToken,
+          tokenType: authSession.tokenType,
+        }),
+        getGamificationLevels({
+          accessToken,
+          tokenType: authSession.tokenType,
+        }),
+        getMyProfilePosts({
+          accessToken,
+          size: 10,
+          sort: [],
+          status: postStatus,
+          tokenType: authSession.tokenType,
+        }),
+      ]);
+
+      if (profileResult.status !== "fulfilled") {
+        throw profileResult.reason;
+      }
+
+      let resolvedProfile = profileResult.value;
+
+      if (levelsResult.status === "fulfilled") {
+        resolvedProfile = applyLevelProgressToProfile(
+          profileResult.value,
+          levelsResult.value,
+        );
+      } else {
+        const levelError = levelsResult.reason;
+        console.warn("[profile] level progress unavailable", {
+          error:
+            levelError instanceof Error
+              ? {
+                  message: levelError.message,
+                  name: levelError.name,
+                  stack: levelError.stack,
+                }
+              : levelError,
+          });
+      }
+
+      if (!isMountedRef.current || requestId !== loadRequestIdRef.current) {
+        return;
+      }
+
+      const mergedProfile = mergeProfileWithFallback(resolvedProfile, fallbackProfile);
+      setProfile(mergedProfile);
+
+      if (postsResult.status === "fulfilled") {
+        setPosts(filterPostsForOwner(postsResult.value, mergedProfile));
+      } else {
+        const postsError =
+          postsResult.reason instanceof Error
+            ? postsResult.reason
+            : new Error("Không thể tải bài viết.");
+
+        console.warn("[profile] posts unavailable", {
+          error: {
+            message: postsError.message,
+            name: postsError.name,
+            stack: postsError.stack,
+          },
+        });
+        setPosts([]);
+        setError(postsError);
+      }
+    } catch (nextError) {
+      if (!isMountedRef.current || requestId !== loadRequestIdRef.current) {
+        return;
+      }
+
+      setError(
+        nextError instanceof Error
+          ? nextError
+          : new Error("Không thể tải hồ sơ."),
+      );
+      setProfile(fallbackProfile);
+      setPosts([]);
+    } finally {
+      if (isMountedRef.current && requestId === loadRequestIdRef.current) {
+        setIsLoading(false);
+      }
+    }
+  }, [authSession.isAuthenticated, authSession.tokenType, fallbackProfile, postStatus]);
+
+  useEffect(() => {
+    if (!authSession.isAuthenticated) {
+      return;
+    }
+
+    const loadTimer = setTimeout(() => {
+      void loadProfile();
+    }, 0);
+
+    return () => {
+      clearTimeout(loadTimer);
+    };
+  }, [authSession.isAuthenticated, loadProfile]);
 
   const resolvedProfile = authSession.isAuthenticated ? profile : fallbackProfile;
   const resolvedError = authSession.isAuthenticated ? error : null;
@@ -165,7 +224,18 @@ export function useProfile(userId?: string): UseProfileResult {
     () => (resolvedProfile ? getProfilePosts(resolvedProfile.id) : []),
     [resolvedProfile],
   );
-  const resolvedPosts = authSession.isAuthenticated ? posts : fallbackPosts;
+  const cachedProfilePosts = useCachedProfilePosts({
+    ownerId: resolvedProfile?.id ?? fallbackProfile?.id,
+    status: postStatus,
+    username:
+      resolvedProfile?.username ??
+      fallbackProfile?.username ??
+      authSession.username ??
+      null,
+  });
+  const resolvedPosts = authSession.isAuthenticated
+    ? mergeProfilePosts(posts, cachedProfilePosts)
+    : fallbackPosts;
 
   const userRoutes = useMemo(() => {
     if (!resolvedProfile) return [];
@@ -188,5 +258,6 @@ export function useProfile(userId?: string): UseProfileResult {
     userRoutes,
     isLoading: resolvedIsLoading,
     error: resolvedError,
+    reloadProfile: loadProfile,
   };
 }

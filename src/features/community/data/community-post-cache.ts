@@ -21,6 +21,7 @@ export type CommunityFeedPost = Omit<CommunityPost, "image"> & {
   replies?: string;
   replyCountValue?: number | null;
   shareCountValue?: number | null;
+  visibility?: string;
 };
 
 export type CachedCommunityPostEntry = {

@@ -46,6 +46,7 @@ import {
   getHotspotHref,
 } from "@/features/home/data/hotspots";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
+import { getPostVisibilityLabel } from "@/lib/post-visibility";
 import {
   communityPosts,
   type CommunityPostTopic,
@@ -455,10 +456,10 @@ function buildNewsfeedMood(post: NewsfeedPost) {
     readMeaningfulText(post.status)?.toUpperCase() === "APPROVED"
       ? "Đã duyệt"
       : readMeaningfulText(post.status);
-  const visibilityLabel =
-    readMeaningfulText(post.visibility)?.toUpperCase() === "PUBLIC"
-      ? "Công khai"
-      : readMeaningfulText(post.visibility);
+  const visibilityValue = readMeaningfulText(post.visibility);
+  const visibilityLabel = visibilityValue
+    ? getPostVisibilityLabel(visibilityValue)
+    : null;
   const segments = [statusLabel, visibilityLabel].filter(
     (value): value is string => Boolean(value),
   );
@@ -575,6 +576,7 @@ function mapNewsfeedPostToCommunityFeedPost(post: NewsfeedPost): CommunityFeedPo
     canComment: true,
     canLike: true,
     canOpenProfile: false,
+    visibility: readMeaningfulText(post.visibility) ?? "PUBLIC",
   };
 }
 

@@ -5,6 +5,18 @@ function normalizeName(value: string | null) {
   return value?.trim().toLowerCase() ?? "";
 }
 
+function isLevelUnlocked(level: GamificationLevel, totalXp: number) {
+  if (level.unlockedAt) {
+    return true;
+  }
+
+  if (typeof level.xpAtUnlock === "number") {
+    return level.xpAtUnlock <= totalXp;
+  }
+
+  return totalXp >= level.requiredXp;
+}
+
 function findLevelIndexByMetadata(
   profile: Profile,
   levels: readonly GamificationLevel[],
@@ -41,7 +53,7 @@ function findLevelIndexByTotalXp(
   let matchedIndex = -1;
 
   for (let index = 0; index < levels.length; index += 1) {
-    if (profile.totalXp >= levels[index].requiredXp) {
+    if (isLevelUnlocked(levels[index], profile.totalXp)) {
       matchedIndex = index;
       continue;
     }
@@ -68,12 +80,15 @@ export function applyLevelProgressToProfile(
   const resolvedLevelNumber = currentLevel.levelNumber;
   const currentTotalXp = Math.max(profile.totalXp, 0);
   const currentLevelRequiredXp = Math.max(currentLevel.requiredXp, 0);
+  const currentLevelXp = Math.max(currentTotalXp - currentLevelRequiredXp, 0);
 
-  if (!nextLevel) {
+  // The progress/me payload may omit future levels, so missing nextLevel does
+  // not reliably mean the user is already at the maximum level.
+  if (!nextLevel || nextLevel.requiredXp <= currentLevelRequiredXp) {
     return {
       ...profile,
-      isMaxLevel: true,
-      currentLevelXp: null,
+      isMaxLevel: false,
+      currentLevelXp,
       level: resolvedLevelNumber,
       levelName: currentLevel.name,
       xpToNext: null,
@@ -83,7 +98,7 @@ export function applyLevelProgressToProfile(
   return {
     ...profile,
     isMaxLevel: false,
-    currentLevelXp: Math.max(currentTotalXp - currentLevelRequiredXp, 0),
+    currentLevelXp,
     level: resolvedLevelNumber,
     levelName: currentLevel.name,
     xpToNext: Math.max(nextLevel.requiredXp - currentLevelRequiredXp, 0),
