@@ -9,6 +9,13 @@ export type Profile = {
   levelName: string | null;
   isMaxLevel: boolean;
   currentLevelXp: number | null;
+  currentLevelRequiredXp: number | null;
+  nextLevelNumber: number | null;
+  nextLevelName: string | null;
+  nextLevelRequiredXp: number | null;
+  remainingXpToNextLevel: number | null;
+  levelProgressPercent: number | null;
+  hasExactLevelProgress: boolean;
   xpToNext: number | null;
   avatar: string | null;
   cover: string | null;
@@ -67,4 +74,5 @@ export type ProfilePost = {
   pointRemaining: number | null;
   replyCount?: number | null;
   shareCount: number | null;
+  sharedPost: string | null;
 };

@@ -3,12 +3,7 @@ import '../global.css';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import {
-  AppState,
-  InteractionManager,
-  Text,
-  TextInput,
-} from 'react-native';
+import { AppState, Text, TextInput } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { warnForInvalidPublicEnv } from '@/constants/env';
@@ -39,6 +34,34 @@ AppTextInput.defaultProps = AppTextInput.defaultProps ?? {};
 AppTextInput.defaultProps.allowFontScaling = true;
 AppTextInput.defaultProps.maxFontSizeMultiplier = 1.15;
 
+type DeferredTask = {
+  cancel: () => void;
+};
+
+function scheduleDeferredTask(callback: () => void): DeferredTask {
+  if (typeof globalThis.requestIdleCallback === 'function') {
+    const idleCallbackId = globalThis.requestIdleCallback(() => {
+      callback();
+    });
+
+    return {
+      cancel: () => {
+        if (typeof globalThis.cancelIdleCallback === 'function') {
+          globalThis.cancelIdleCallback(idleCallbackId);
+        }
+      },
+    };
+  }
+
+  const timeoutId = setTimeout(callback, 0);
+
+  return {
+    cancel: () => {
+      clearTimeout(timeoutId);
+    },
+  };
+}
+
 export default function RootLayout() {
   warnForInvalidPublicEnv();
 
@@ -46,12 +69,11 @@ export default function RootLayout() {
 
   useEffect(() => {
     let isCancelled = false;
-    let interactionTask: ReturnType<typeof InteractionManager.runAfterInteractions> | null =
-      null;
+    let deferredTask: DeferredTask | null = null;
 
     const scheduleLocationPermissionRequest = () => {
-      interactionTask?.cancel();
-      interactionTask = InteractionManager.runAfterInteractions(() => {
+      deferredTask?.cancel();
+      deferredTask = scheduleDeferredTask(() => {
         if (isCancelled || AppState.currentState !== 'active') {
           return;
         }
@@ -72,7 +94,7 @@ export default function RootLayout() {
 
     return () => {
       isCancelled = true;
-      interactionTask?.cancel();
+      deferredTask?.cancel();
       appStateSubscription.remove();
     };
   }, []);

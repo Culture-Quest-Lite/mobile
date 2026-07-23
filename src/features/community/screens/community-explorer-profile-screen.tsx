@@ -1,12 +1,30 @@
 import { SymbolView } from "@/components/ui/symbol-view";
+import {
+  getValidAccessToken,
+  useAuthSession,
+} from "@/features/auth/hooks/use-auth-session";
+import {
+  followUser,
+  unfollowUser,
+} from "@/features/community/api/toggle-user-follow";
+import { getUserProfilePosts } from "@/features/profile/api/get-profile-posts";
+import { getUserProfileById } from "@/features/profile/api/get-user-by-id";
+import type { Profile, ProfilePost } from "@/features/profile/types";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import { routes, type RouteItem } from "@/lib/demo-data";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { type Href, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useMemo, useState, type ComponentProps } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -16,11 +34,22 @@ import {
   getCommunityExplorerProfileById,
   getCommunityPostsByAuthorId,
   type CommunityExplorerProfile,
-  type CommunityPost,
 } from "../data/community-demo";
+import { getCachedCommunityExplorerProfile } from "../data/community-explorer-profile-cache";
+import type { CommunityFeedPost } from "../data/community-post-cache";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
-type ProfileTabKey = "posts" | "routes" | "badges";
+type ProfileTabKey = "posts" | "routes" | "shared";
+type PersonalInfoItem = {
+  accentColor: string;
+  icon: SymbolName;
+  text: string;
+};
+type ApiRouteReference = {
+  postCount: number;
+  routeId: number;
+  sharedPostCount: number;
+};
 
 const PROFILE_TABS: readonly {
   key: ProfileTabKey;
@@ -42,9 +71,9 @@ const PROFILE_TABS: readonly {
     icon: { ios: "map", android: "route", web: "route" },
   },
   {
-    key: "badges",
-    label: "Thành tựu",
-    icon: { ios: "rosette", android: "military_tech", web: "military_tech" },
+    key: "shared",
+    label: "Chia sẻ",
+    icon: { ios: "arrowshape.turn.up.right", android: "reply", web: "reply" },
   },
 ] as const;
 
@@ -57,27 +86,547 @@ const cardShadow = {
 } as const;
 
 const heroGradientColors = ["#20476B", "#4F87B2", "#F7F8FC"] as const;
-const badgeGradients = [
+const avatarPalettes = [
   ["#EB489B", "#F58752"],
-  ["#4F7AF0", "#6D96FF"],
-  ["#F3BE3A", "#D89A08"],
+  ["#F58752", "#FFC93C"],
+  ["#4F46E5", "#38BDF8"],
+  ["#10B981", "#2DD4BF"],
+  ["#9333EA", "#EC4899"],
 ] as const;
+const meaninglessTextValues = new Set(["", "string", "null", "undefined"]);
+
+function readMeaningfulText(value?: string | null) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return null;
+  }
+
+  return meaninglessTextValues.has(trimmedValue.toLowerCase())
+    ? null
+    : trimmedValue;
+}
+
+function isNonNull<T>(value: T | null): value is T {
+  return value !== null;
+}
+
+function getAvatarPalette(seed: string) {
+  const paletteIndex =
+    Array.from(seed).reduce((total, char) => total + char.charCodeAt(0), 0) %
+    avatarPalettes.length;
+
+  return avatarPalettes[paletteIndex] as readonly [string, string];
+}
+
+function formatCommunityUsername(username: string) {
+  const normalizedUsername = readMeaningfulText(username)?.replace(/^@+/, "");
+
+  if (!normalizedUsername) {
+    return "@explorer";
+  }
+
+  return `@${normalizedUsername}`;
+}
+
+function formatRoleLabel(role: string | null) {
+  const normalizedRole = readMeaningfulText(role);
+
+  if (!normalizedRole) {
+    return "Explorer";
+  }
+
+  return normalizedRole
+    .replace(/[_-]+/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function buildCommunityExplorerProfileFromApiProfile(
+  profile: Profile,
+  fallbackProfile?: CommunityExplorerProfile | null,
+): CommunityExplorerProfile {
+  const normalizedName =
+    readMeaningfulText(profile.name) ??
+    readMeaningfulText(profile.username) ??
+    fallbackProfile?.name ??
+    "Explorer";
+  const formattedUsername = readMeaningfulText(profile.username)
+    ? formatCommunityUsername(profile.username)
+    : (fallbackProfile?.username ?? "@explorer");
+  const formattedRole = formatRoleLabel(profile.role);
+  const levelLabel =
+    readMeaningfulText(profile.levelName) ??
+    (profile.level ? `Level ${profile.level}` : null);
+  const fallbackHeadline = readMeaningfulText(fallbackProfile?.headline);
+  const coverSource = readMeaningfulText(profile.cover) ?? "";
+
+  return {
+    id: profile.id,
+    name: normalizedName,
+    username: formattedUsername,
+    role: formattedRole,
+    headline:
+      fallbackHeadline ??
+      ([levelLabel, formattedRole].filter(Boolean).join(" • ") ||
+        "Explorer đang hoạt động trên cộng đồng Culture Quest."),
+    bio: "",
+    birthDate: "",
+    city: "",
+    level: profile.level ?? fallbackProfile?.level ?? 1,
+    checkIns: 0,
+    followers: profile.followers,
+    following: profile.following,
+    routesCompleted: 0,
+    streakDays: 0,
+    badgeCount: 0,
+    responseTime: "",
+    isPremium: profile.isPremium,
+    avatar: profile.avatar ?? undefined,
+    cover: coverSource,
+    initials: getProfileInitials(normalizedName, formattedUsername),
+    avatarColors:
+      fallbackProfile?.avatarColors ??
+      getAvatarPalette(`${normalizedName}-${profile.id}`),
+    interests: [],
+    badges: [],
+    routeIds: [],
+    favoriteRouteIds: [],
+  };
+}
+
+function formatProfileDate(value?: string | null) {
+  const normalizedValue = readMeaningfulText(value);
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const parsedDate = new Date(normalizedValue);
+  const parsedTime = parsedDate.getTime();
+
+  if (Number.isNaN(parsedTime)) {
+    return normalizedValue;
+  }
+
+  return `${parsedDate.getDate().toString().padStart(2, "0")}/${(
+    parsedDate.getMonth() + 1
+  )
+    .toString()
+    .padStart(2, "0")}/${parsedDate.getFullYear()}`;
+}
+
+function formatCommunityTime(value?: string | null) {
+  const normalizedValue = readMeaningfulText(value);
+
+  if (!normalizedValue) {
+    return "Vừa xong";
+  }
+
+  const parsedDate = new Date(normalizedValue);
+  const parsedTime = parsedDate.getTime();
+
+  if (Number.isNaN(parsedTime)) {
+    return normalizedValue;
+  }
+
+  const elapsedMilliseconds = Date.now() - parsedTime;
+
+  if (elapsedMilliseconds < 60 * 1000) {
+    return "Vừa xong";
+  }
+
+  const elapsedMinutes = Math.floor(elapsedMilliseconds / (60 * 1000));
+
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes} phút trước`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+
+  if (elapsedHours < 24) {
+    return `${elapsedHours} giờ trước`;
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+
+  if (elapsedDays < 7) {
+    return `${elapsedDays} ngày trước`;
+  }
+
+  return formatProfileDate(normalizedValue) ?? normalizedValue;
+}
+
+function formatCountLabel(value?: number | null) {
+  const resolvedValue =
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.max(0, Math.round(value))
+      : 0;
+
+  return formatCompactValue(resolvedValue);
+}
+
+function hasSharedProfilePost(post: ProfilePost) {
+  return Boolean(readMeaningfulText(post.sharedPost));
+}
+
+function mapProfilePostToCommunityFeedPost(
+  post: ProfilePost,
+): CommunityFeedPost {
+  const author =
+    readMeaningfulText(post.displayName) ??
+    readMeaningfulText(post.username) ??
+    "Người dùng";
+  const normalizedUsername =
+    readMeaningfulText(post.username)?.replace(/^@+/, "") ?? null;
+  const tags = post.tags
+    .map((tag) => readMeaningfulText(tag.name))
+    .filter((tag): tag is string => Boolean(tag));
+  const firstMedia =
+    post.medias.find((media) => readMeaningfulText(media.url)) ?? null;
+  const sharedText = readMeaningfulText(post.sharedPost);
+  const caption =
+    readMeaningfulText(post.text) ?? sharedText ?? "Bài viết mới từ cộng đồng.";
+
+  return {
+    id: `profile-post-${post.id}`,
+    authorId: post.userId,
+    author,
+    initials: getProfileInitials(author, normalizedUsername ?? author),
+    role: normalizedUsername ? `@${normalizedUsername}` : "Explorer community",
+    time: formatCommunityTime(post.createdAt),
+    caption,
+    location: "",
+    mood: "",
+    badge: sharedText ? "Chia sẻ" : "",
+    hotScore: "",
+    views: "",
+    likes: formatCountLabel(post.likeCount),
+    comments: formatCountLabel(post.commentCount),
+    shares: formatCountLabel(post.shareCount),
+    topic: "culture",
+    isFollowing: false,
+    tags,
+    image: firstMedia?.url ? { uri: firstMedia.url } : null,
+    hotspotIds: post.hotspotIds,
+    routeIds: post.routeIds,
+    commentCountValue: post.commentCount,
+    isLiked: post.isLiked === true,
+    likeCountValue: post.likeCount,
+    mediaItems: post.medias
+      .filter((media) => Boolean(readMeaningfulText(media.url)))
+      .map((media) => ({
+        key: `${post.id}-media-${media.id}`,
+        source: { uri: media.url },
+      })),
+    postNumericId: Number.isFinite(Number(post.id)) ? Number(post.id) : null,
+    shareCountValue: post.shareCount,
+    avatarColors: getAvatarPalette(`${author}-${post.userId}`),
+    canComment: true,
+    canLike: true,
+    canOpenProfile: false,
+    sharedText,
+    visibility: readMeaningfulText(post.visibility) ?? "PUBLIC",
+  };
+}
+
+function buildApiRouteReferences(
+  posts: readonly ProfilePost[],
+): ApiRouteReference[] {
+  const routeReferenceMap = new Map<number, ApiRouteReference>();
+
+  for (const post of posts) {
+    const sharedPost = hasSharedProfilePost(post);
+    const uniqueRouteIds = Array.from(
+      new Set(
+        post.routeIds.filter(
+          (routeId) => Number.isInteger(routeId) && routeId > 0,
+        ),
+      ),
+    );
+
+    for (const routeId of uniqueRouteIds) {
+      const currentReference = routeReferenceMap.get(routeId);
+
+      if (currentReference) {
+        currentReference.postCount += 1;
+        currentReference.sharedPostCount += sharedPost ? 1 : 0;
+        continue;
+      }
+
+      routeReferenceMap.set(routeId, {
+        postCount: 1,
+        routeId,
+        sharedPostCount: sharedPost ? 1 : 0,
+      });
+    }
+  }
+
+  return Array.from(routeReferenceMap.values()).sort((left, right) => {
+    if (left.postCount !== right.postCount) {
+      return right.postCount - left.postCount;
+    }
+
+    return left.routeId - right.routeId;
+  });
+}
 
 export default function CommunityExplorerProfileScreen() {
   const router = useRouter();
+  const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
   const { gutter, safeWidth } = useScreenLayout({ maxContentWidth: 640 });
   const { id } = useLocalSearchParams<{ id?: string | string[] }>();
 
   const explorerId = Array.isArray(id) ? id[0] : id;
-  const profile = useMemo(
+  const demoProfile = useMemo(
     () =>
       explorerId ? getCommunityExplorerProfileById(explorerId) : undefined,
     [explorerId],
   );
-  const posts = useMemo(
-    () => (explorerId ? getCommunityPostsByAuthorId(explorerId) : []),
+  const cachedExplorerProfileEntry = useMemo(
+    () => (explorerId ? getCachedCommunityExplorerProfile(explorerId) : null),
     [explorerId],
+  );
+  const numericExplorerId = explorerId ? Number(explorerId) : Number.NaN;
+  const [remoteProfileEntry, setRemoteProfileEntry] = useState<{
+    explorerId: string;
+    profile: Profile;
+  } | null>(null);
+  const [remoteProfileErrorEntry, setRemoteProfileErrorEntry] = useState<{
+    explorerId: string;
+    message: string;
+  } | null>(null);
+  const [remotePostsEntry, setRemotePostsEntry] = useState<{
+    explorerId: string;
+    posts: ProfilePost[];
+  } | null>(null);
+  const [remotePostsErrorEntry, setRemotePostsErrorEntry] = useState<{
+    explorerId: string;
+    message: string;
+  } | null>(null);
+  const shouldLoadRemoteProfile = Boolean(
+    explorerId && !demoProfile && Number.isFinite(numericExplorerId),
+  );
+
+  useEffect(() => {
+    if (!shouldLoadRemoteProfile || !explorerId) {
+      return;
+    }
+
+    let isActive = true;
+
+    void (async () => {
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const [nextProfileResult, nextPostsResult] = await Promise.allSettled([
+          getUserProfileById({
+            accessToken,
+            tokenType: authSession.tokenType,
+            userId: explorerId,
+          }),
+          getUserProfilePosts({
+            accessToken,
+            page: 0,
+            size: 10,
+            sort: ["createdAt,DESC"],
+            tokenType: authSession.tokenType,
+            userId: numericExplorerId,
+          }),
+        ]);
+
+        if (!isActive) {
+          return;
+        }
+
+        if (nextProfileResult.status === "fulfilled") {
+          setRemoteProfileEntry({
+            explorerId,
+            profile: nextProfileResult.value,
+          });
+          setRemoteProfileErrorEntry((current) =>
+            current?.explorerId === explorerId ? null : current,
+          );
+        } else {
+          console.warn("[community] failed to load explorer profile", {
+            error:
+              nextProfileResult.reason instanceof Error
+                ? {
+                    message: nextProfileResult.reason.message,
+                    name: nextProfileResult.reason.name,
+                    stack: nextProfileResult.reason.stack,
+                  }
+                : nextProfileResult.reason,
+            explorerId,
+          });
+          setRemoteProfileErrorEntry({
+            explorerId,
+            message:
+              nextProfileResult.reason instanceof Error
+                ? nextProfileResult.reason.message
+                : "Không thể tải hồ sơ explorer.",
+          });
+        }
+
+        if (nextPostsResult.status === "fulfilled") {
+          setRemotePostsEntry({
+            explorerId,
+            posts: nextPostsResult.value,
+          });
+          setRemotePostsErrorEntry((current) =>
+            current?.explorerId === explorerId ? null : current,
+          );
+          return;
+        }
+
+        console.warn("[community] failed to load explorer posts", {
+          error:
+            nextPostsResult.reason instanceof Error
+              ? {
+                  message: nextPostsResult.reason.message,
+                  name: nextPostsResult.reason.name,
+                  stack: nextPostsResult.reason.stack,
+                }
+              : nextPostsResult.reason,
+          explorerId,
+        });
+        setRemotePostsErrorEntry({
+          explorerId,
+          message:
+            nextPostsResult.reason instanceof Error
+              ? nextPostsResult.reason.message
+              : "Không thể tải bài viết của explorer.",
+        });
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        console.warn("[community] failed to load explorer community data", {
+          error:
+            error instanceof Error
+              ? { message: error.message, name: error.name, stack: error.stack }
+              : error,
+          explorerId,
+        });
+        setRemoteProfileErrorEntry({
+          explorerId,
+          message:
+            error instanceof Error
+              ? error.message
+              : "Không thể tải hồ sơ explorer.",
+        });
+        setRemotePostsErrorEntry({
+          explorerId,
+          message:
+            error instanceof Error
+              ? error.message
+              : "Không thể tải bài viết của explorer.",
+        });
+      }
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    explorerId,
+    numericExplorerId,
+    shouldLoadRemoteProfile,
+  ]);
+  const remoteProfile =
+    shouldLoadRemoteProfile &&
+    explorerId &&
+    remoteProfileEntry?.explorerId === explorerId
+      ? remoteProfileEntry.profile
+      : null;
+  const remoteProfileError =
+    shouldLoadRemoteProfile &&
+    explorerId &&
+    remoteProfileErrorEntry?.explorerId === explorerId
+      ? remoteProfileErrorEntry.message
+      : null;
+  const remotePosts =
+    shouldLoadRemoteProfile &&
+    explorerId &&
+    remotePostsEntry?.explorerId === explorerId
+      ? remotePostsEntry.posts
+      : null;
+  const remotePostsError =
+    shouldLoadRemoteProfile &&
+    explorerId &&
+    remotePostsErrorEntry?.explorerId === explorerId
+      ? remotePostsErrorEntry.message
+      : null;
+  const usesApiProfileLayout = shouldLoadRemoteProfile;
+  const isRemoteProfileLoading =
+    shouldLoadRemoteProfile &&
+    remoteProfile === null &&
+    remoteProfileError === null;
+  const apiBackedProfile = useMemo(
+    () =>
+      remoteProfile
+        ? buildCommunityExplorerProfileFromApiProfile(
+            remoteProfile,
+            cachedExplorerProfileEntry?.profile,
+          )
+        : null,
+    [cachedExplorerProfileEntry?.profile, remoteProfile],
+  );
+  const profile = useMemo(
+    () =>
+      demoProfile ??
+      apiBackedProfile ??
+      (usesApiProfileLayout
+        ? null
+        : (cachedExplorerProfileEntry?.profile ?? null)),
+    [
+      apiBackedProfile,
+      cachedExplorerProfileEntry,
+      demoProfile,
+      usesApiProfileLayout,
+    ],
+  );
+  const posts = useMemo(
+    () =>
+      explorerId
+        ? demoProfile
+          ? getCommunityPostsByAuthorId(explorerId)
+          : usesApiProfileLayout
+            ? (remotePosts ?? [])
+                .filter((post) => !hasSharedProfilePost(post))
+                .map(mapProfilePostToCommunityFeedPost)
+            : (cachedExplorerProfileEntry?.posts ?? [])
+        : [],
+    [
+      cachedExplorerProfileEntry?.posts,
+      demoProfile,
+      explorerId,
+      remotePosts,
+      usesApiProfileLayout,
+    ],
+  );
+  const sharedPosts = useMemo(
+    () =>
+      usesApiProfileLayout
+        ? (remotePosts ?? [])
+            .filter(hasSharedProfilePost)
+            .map(mapProfilePostToCommunityFeedPost)
+        : [],
+    [remotePosts, usesApiProfileLayout],
+  );
+  const apiRouteReferences = useMemo(
+    () =>
+      usesApiProfileLayout ? buildApiRouteReferences(remotePosts ?? []) : [],
+    [remotePosts, usesApiProfileLayout],
   );
   const completedRoutes = useMemo<RouteItem[]>(
     () =>
@@ -105,6 +654,16 @@ export default function CommunityExplorerProfileScreen() {
   const [followOverrides, setFollowOverrides] = useState<
     Record<string, boolean>
   >({});
+  const [isFollowRequestPending, setIsFollowRequestPending] = useState(false);
+
+  if (!profile && isRemoteProfileLoading) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-[#F7F8FC] px-6">
+        <StatusBar style="dark" />
+        <ActivityIndicator color="#F58752" size="large" />
+      </SafeAreaView>
+    );
+  }
 
   if (!profile) {
     return (
@@ -114,7 +673,8 @@ export default function CommunityExplorerProfileScreen() {
           Không tìm thấy explorer
         </Text>
         <Text className="mt-2 text-center text-[14px] leading-5 text-[#8E869A]">
-          Hồ sơ cộng đồng này không còn khả dụng hoặc dữ liệu demo chưa được tạo.
+          {remoteProfileError ??
+            "Hồ sơ cộng đồng này không còn khả dụng hoặc dữ liệu demo chưa được tạo."}
         </Text>
         <Pressable
           onPress={() => router.replace("/bookings")}
@@ -132,14 +692,85 @@ export default function CommunityExplorerProfileScreen() {
   const heroHeight = Math.max(Math.min(safeWidth * 0.82, 296), 252);
   const avatarSize = 124;
   const profileOverlap = avatarSize * 0.5;
+  const canCallFollowApi = Number.isFinite(numericExplorerId);
   const isFollowingProfile = explorerId
     ? (followOverrides[explorerId] ?? initialIsFollowing)
     : initialIsFollowing;
+  const followerCount =
+    isFollowingProfile === initialIsFollowing
+      ? profile.followers
+      : Math.max(0, profile.followers + (isFollowingProfile ? 1 : -1));
+  const postCount = remoteProfile?.totalPosts ?? posts.length;
   const socialStats = [
     { label: "Đang theo dõi", value: profile.following },
-    { label: "Follower", value: profile.followers },
-    { label: "Check-ins", value: profile.checkIns },
+    { label: "Follower", value: followerCount },
+    { label: "Bài viết", value: postCount },
   ];
+  const visibleTabs = PROFILE_TABS;
+  const resolvedActiveTab = visibleTabs.some((tab) => tab.key === activeTab)
+    ? activeTab
+    : "posts";
+
+  async function handleFollowPress() {
+    if (!explorerId) {
+      return;
+    }
+
+    if (!canCallFollowApi) {
+      setFollowOverrides((current) => ({
+        ...current,
+        [explorerId]: !(current[explorerId] ?? initialIsFollowing),
+      }));
+      return;
+    }
+
+    if (!authSession.isAuthenticated) {
+      Alert.alert("Cần đăng nhập", "Vui lòng đăng nhập để theo dõi explorer.");
+      return;
+    }
+
+    const accessToken = await getValidAccessToken();
+
+    if (!accessToken) {
+      Alert.alert(
+        "Phiên đăng nhập đã hết hạn",
+        "Vui lòng đăng nhập lại để tiếp tục.",
+      );
+      return;
+    }
+
+    setIsFollowRequestPending(true);
+
+    try {
+      if (isFollowingProfile) {
+        await unfollowUser({
+          accessToken,
+          tokenType: authSession.tokenType,
+          userId: numericExplorerId,
+        });
+      } else {
+        await followUser({
+          accessToken,
+          tokenType: authSession.tokenType,
+          userId: numericExplorerId,
+        });
+      }
+
+      setFollowOverrides((current) => ({
+        ...current,
+        [explorerId]: !isFollowingProfile,
+      }));
+    } catch (error) {
+      Alert.alert(
+        "Không thể cập nhật theo dõi",
+        error instanceof Error
+          ? error.message
+          : "Đã có lỗi xảy ra khi cập nhật theo dõi.",
+      );
+    } finally {
+      setIsFollowRequestPending(false);
+    }
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-[#F7F8FC]" edges={["left", "right"]}>
@@ -216,7 +847,7 @@ export default function CommunityExplorerProfileScreen() {
           </View>
         </View>
 
-          <View style={{ marginTop: -profileOverlap, paddingHorizontal: gutter }}>
+        <View style={{ marginTop: -profileOverlap, paddingHorizontal: gutter }}>
           <View className="items-center">
             <ExplorerAvatar
               avatar={profile.avatar}
@@ -252,32 +883,32 @@ export default function CommunityExplorerProfileScreen() {
             <View className="mt-2.5 flex-row items-center justify-center gap-2">
               <Pressable
                 accessibilityLabel={
-                  isFollowingProfile ? "Bỏ theo dõi explorer" : "Theo dõi explorer"
+                  isFollowingProfile
+                    ? "Bỏ theo dõi explorer"
+                    : "Theo dõi explorer"
                 }
                 className={`min-w-[128px] rounded-full px-5 py-2.5 ${
-                  isFollowingProfile
-                    ? "bg-[#EDEFF4]"
-                    : "bg-[#FF4D73]"
+                  isFollowingProfile ? "bg-[#EDEFF4]" : "bg-[#FF4D73]"
                 }`}
+                disabled={isFollowRequestPending}
                 onPress={() => {
-                  if (!explorerId) {
-                    return;
-                  }
-
-                  setFollowOverrides((current) => ({
-                    ...current,
-                    [explorerId]:
-                      !(current[explorerId] ?? initialIsFollowing),
-                  }));
+                  void handleFollowPress();
                 }}
-                style={cardShadow}
+                style={[
+                  cardShadow,
+                  isFollowRequestPending ? { opacity: 0.7 } : null,
+                ]}
               >
                 <Text
                   className={`text-center text-[14px] font-extrabold ${
                     isFollowingProfile ? "text-[#2B2233]" : "text-white"
                   }`}
                 >
-                  {isFollowingProfile ? "Đang theo dõi" : "Follow"}
+                  {isFollowRequestPending
+                    ? "Đang xử lý..."
+                    : isFollowingProfile
+                      ? "Đã follow"
+                      : "Follow"}
                 </Text>
               </Pressable>
 
@@ -290,17 +921,16 @@ export default function CommunityExplorerProfileScreen() {
                 </Text>
               </Pressable>
             </View>
-
           </View>
 
-          <View className="mt-2.5 gap-2.5">
-            <PersonalInfoCard profile={profile} />
-            <AchievementCard profile={profile} />
+          <View className="mt-2.5">
+            <PersonalInfoCard profile={profile} apiProfile={remoteProfile} />
           </View>
 
-          <View className="mt-3 flex-row border-y border-[#E9EAF0] bg-white">
-            {PROFILE_TABS.map((tab) => {
-              const selected = activeTab === tab.key;
+          <View className="mt-3 flex-row border-y border-[#E9EAF0]">
+            {visibleTabs.map((tab) => {
+              const selected = resolvedActiveTab === tab.key;
+              const shouldShowLabel = tab.key !== "shared";
 
               return (
                 <Pressable
@@ -318,36 +948,54 @@ export default function CommunityExplorerProfileScreen() {
                     size={16}
                     tintColor={selected ? "#F58752" : "#AA9FB0"}
                   />
-                  <Text
-                    className={`text-[11px] font-bold ${
-                      selected ? "text-[#F58752]" : "text-[#AA9FB0]"
-                    }`}
-                  >
-                    {tab.label}
-                  </Text>
+                  {shouldShowLabel ? (
+                    <Text
+                      className={`text-[11px] font-bold ${
+                        selected ? "text-[#F58752]" : "text-[#AA9FB0]"
+                      }`}
+                    >
+                      {tab.label}
+                    </Text>
+                  ) : null}
                 </Pressable>
               );
             })}
           </View>
 
           <View className="mt-4">
-            {activeTab === "posts" ? (
+            {resolvedActiveTab === "posts" ? (
               <PostsTabContent
+                emptyMessage="Explorer này chưa có bài viết công khai nào."
+                errorMessage={usesApiProfileLayout ? remotePostsError : null}
                 pageGutter={gutter}
                 posts={posts}
                 profile={profile}
               />
-            ) : activeTab === "routes" ? (
-              <RoutesTabContent
-                completedRoutes={completedRoutes}
-                favoriteRoutes={favoriteRoutes}
-                onOpenRoute={(routeId) => router.push(`/route/${routeId}` as Href)}
-              />
+            ) : resolvedActiveTab === "routes" ? (
+              usesApiProfileLayout ? (
+                <ApiRoutesTabContent
+                  errorMessage={remotePostsError}
+                  onOpenRoute={(routeId) =>
+                    router.push(`/route/${routeId}` as Href)
+                  }
+                  routes={apiRouteReferences}
+                />
+              ) : (
+                <RoutesTabContent
+                  completedRoutes={completedRoutes}
+                  favoriteRoutes={favoriteRoutes}
+                  onOpenRoute={(routeId) =>
+                    router.push(`/route/${routeId}` as Href)
+                  }
+                />
+              )
             ) : (
-              <BadgesTabContent
-                badgeCount={profile.badgeCount}
-                badges={profile.badges}
-                isPremium={profile.isPremium}
+              <PostsTabContent
+                emptyMessage="Explorer này chưa có bài viết chia sẻ nào."
+                errorMessage={usesApiProfileLayout ? remotePostsError : null}
+                pageGutter={gutter}
+                posts={sharedPosts}
+                profile={profile}
               />
             )}
           </View>
@@ -455,134 +1103,131 @@ function ProfileCountMetric({
 }
 
 function PersonalInfoCard({
+  apiProfile,
   profile,
 }: {
+  apiProfile: Profile | null;
   profile: CommunityExplorerProfile;
 }) {
-  const introText = profile.bio.trim() || profile.headline.trim();
+  const levelLabel =
+    typeof apiProfile?.level === "number"
+      ? `${apiProfile.level}`
+      : (() => {
+          const normalizedLevelName = readMeaningfulText(apiProfile?.levelName);
+          const matchedLevelNumber =
+            normalizedLevelName?.match(/(\d+)/)?.[1] ?? null;
+          return matchedLevelNumber ?? normalizedLevelName;
+        })();
+  const emailLabel = readMeaningfulText(apiProfile?.email);
+  const createdAtLabel = formatProfileDate(apiProfile?.createdAt);
+  const infoRows: PersonalInfoItem[] = apiProfile
+    ? [
+        levelLabel
+          ? {
+              accentColor: "#F59E0B",
+              icon: {
+                ios: "sparkles",
+                android: "auto_awesome",
+                web: "auto_awesome",
+              } satisfies SymbolName,
+              text: `Level: ${levelLabel}`,
+            }
+          : null,
+        emailLabel
+          ? {
+              accentColor: "#4F87B2",
+              icon: {
+                ios: "envelope",
+                android: "mail",
+                web: "mail",
+              } satisfies SymbolName,
+              text: `Email: ${emailLabel}`,
+            }
+          : null,
+        createdAtLabel
+          ? {
+              accentColor: "#4F87B2",
+              icon: {
+                ios: "calendar",
+                android: "calendar_month",
+                web: "calendar_month",
+              } satisfies SymbolName,
+              text: `Ngày tham gia: ${createdAtLabel}`,
+            }
+          : null,
+      ].filter(isNonNull)
+    : [];
 
-  return (
-    <View className="rounded-[24px] bg-white px-4 py-4" style={cardShadow}>
-      <View className="flex-row items-center justify-between">
+  if (apiProfile && infoRows.length === 0) {
+    return null;
+  }
+
+  if (!apiProfile) {
+    const introText = profile.bio.trim() || profile.headline.trim();
+    const fallbackLevelLabel = `Level ${profile.level}`;
+
+    return (
+      <View className="px-1 py-1">
         <Text className="text-[17px] font-extrabold text-[#202124]">
           Thông tin cá nhân
         </Text>
-        <Pressable
-          accessibilityLabel="Chỉnh sửa thông tin cá nhân"
-          className="h-7 w-7 items-center justify-center rounded-full bg-[#F8F8FA]"
-        >
-          <SymbolView
-            name={{ ios: "pencil", android: "edit", web: "edit" }}
-            size={13}
-            tintColor="#7D7382"
+
+        <View className="mt-3 gap-3">
+          <ExpandablePersonalInfoRow
+            icon={{
+              ios: "text.alignleft",
+              android: "subject",
+              web: "subject",
+            }}
+            accentColor="#F58752"
+            text={introText}
           />
-        </Pressable>
+          <PersonalInfoRow
+            icon={{
+              ios: "sparkles",
+              android: "auto_awesome",
+              web: "auto_awesome",
+            }}
+            accentColor="#F59E0B"
+            text={fallbackLevelLabel}
+          />
+          <PersonalInfoRow
+            icon={{
+              ios: "mappin.and.ellipse",
+              android: "location_on",
+              web: "location_on",
+            }}
+            accentColor="#EB489B"
+            text={profile.city}
+          />
+          <PersonalInfoRow
+            icon={{
+              ios: "calendar",
+              android: "calendar_month",
+              web: "calendar_month",
+            }}
+            accentColor="#4F87B2"
+            text={profile.birthDate}
+          />
+        </View>
       </View>
-
-      <View className="mt-3 gap-3">
-        <ExpandablePersonalInfoRow
-          icon={{
-            ios: "text.alignleft",
-            android: "subject",
-            web: "subject",
-          }}
-          accentColor="#F58752"
-          text={introText}
-        />
-        <PersonalInfoRow
-          icon={{
-            ios: "mappin.and.ellipse",
-            android: "location_on",
-            web: "location_on",
-          }}
-          accentColor="#EB489B"
-          text={profile.city}
-        />
-        <PersonalInfoRow
-          icon={{
-            ios: "calendar",
-            android: "calendar_month",
-            web: "calendar_month",
-          }}
-          accentColor="#4F87B2"
-          text={profile.birthDate}
-        />
-      </View>
-    </View>
-  );
-}
-
-function AchievementCard({
-  profile,
-}: {
-  profile: CommunityExplorerProfile;
-}) {
-  const achievementItems = [
-    {
-      label: "Level",
-      value: profile.level.toString(),
-      iconTintColor: "#F58752",
-      icon: {
-        ios: "sparkles",
-        android: "auto_awesome",
-        web: "auto_awesome",
-      } satisfies SymbolName,
-    },
-    {
-      label: "Huy hiệu",
-      value: profile.badgeCount.toString(),
-      iconTintColor: "#EB489B",
-      icon: {
-        ios: "rosette",
-        android: "military_tech",
-        web: "military_tech",
-      } satisfies SymbolName,
-    },
-    {
-      label: "Tuyến",
-      value: profile.routesCompleted.toString(),
-      iconTintColor: "#4F87B2",
-      icon: { ios: "map", android: "route", web: "route" } satisfies SymbolName,
-    },
-    {
-      label: "Streak",
-      value: profile.streakDays.toString(),
-      iconTintColor: "#D69228",
-      icon: {
-        ios: "flame.fill",
-        android: "local_fire_department",
-        web: "local_fire_department",
-      } satisfies SymbolName,
-    },
-  ];
+    );
+  }
 
   return (
-    <View>
-      <View className="flex-row items-center justify-between gap-2">
-        <Text className="text-[11px] font-semibold uppercase tracking-[3px] text-[#8E869A]">
-          Thành tựu
-        </Text>
-        {profile.isPremium ? (
-          <View className="flex-row items-center gap-1">
-            <SymbolView
-              name={{
-                ios: "trophy",
-                android: "workspace_premium",
-                web: "workspace_premium",
-              }}
-              size={11}
-              tintColor="#B57B4B"
-            />
-            <Text className="text-[11px] font-semibold text-[#B57B4B]">
-              Premium
-            </Text>
-          </View>
-        ) : null}
-      </View>
+    <View className="px-1 py-1">
+      <Text className="text-[17px] font-extrabold text-[#202124]">
+        Thông tin cá nhân
+      </Text>
 
-      <View className="mt-2.5 flex-row gap-1.5">
-        {achievementItems.map((item) => (
-          <AchievementMetric key={item.label} item={item} />
+      <View className="mt-3 gap-3">
+        {infoRows.map((item) => (
+          <PersonalInfoRow
+            key={`${item.text}-${item.accentColor}`}
+            icon={item.icon}
+            accentColor={item.accentColor}
+            text={item.text}
+          />
         ))}
       </View>
     </View>
@@ -606,9 +1251,7 @@ function PersonalInfoRow({
       >
         <SymbolView name={icon} size={15} tintColor={accentColor} />
       </View>
-      <Text
-        className="min-w-0 flex-1 text-[13px] font-normal leading-[18px] text-[#202124]"
-      >
+      <Text className="min-w-0 flex-1 text-[13px] font-normal leading-[18px] text-[#202124]">
         {text}
       </Text>
     </View>
@@ -654,48 +1297,37 @@ function ExpandablePersonalInfoRow({
   );
 }
 
-function AchievementMetric({
-  item,
-}: {
-  item: {
-    icon: SymbolName;
-    iconTintColor: string;
-    label: string;
-    value: string;
-  };
-}) {
-  return (
-    <View className="min-w-0 flex-1 items-center rounded-[15px] border border-[#F5EFEA] bg-white px-1.5 py-2">
-      <View
-        className="h-5 w-5 items-center justify-center rounded-full"
-        style={{ backgroundColor: `${item.iconTintColor}12` }}
-      >
-        <SymbolView name={item.icon} size={10} tintColor={item.iconTintColor} />
-      </View>
-      <Text className="mt-1 text-[16px] font-medium text-[#2B2233]">
-        {item.value}
-      </Text>
-      <Text className="mt-0.5 text-[8px] font-semibold uppercase tracking-[0.8px] text-[#8E869A]">
-        {item.label}
-      </Text>
-    </View>
-  );
-}
-
 function PostsTabContent({
+  emptyMessage,
+  errorMessage,
   pageGutter,
   posts,
   profile,
 }: {
+  emptyMessage: string;
+  errorMessage?: string | null;
   pageGutter: number;
-  posts: CommunityPost[];
+  posts: CommunityFeedPost[];
   profile: CommunityExplorerProfile;
 }) {
+  if (errorMessage) {
+    return (
+      <EmptyState
+        icon={{
+          ios: "exclamationmark.triangle",
+          android: "error_outline",
+          web: "error_outline",
+        }}
+        message={errorMessage}
+      />
+    );
+  }
+
   if (!posts.length) {
     return (
       <EmptyState
         icon={{ ios: "photo", android: "image", web: "image" }}
-        message="Explorer này chưa có bài viết công khai nào."
+        message={emptyMessage}
       />
     );
   }
@@ -723,9 +1355,15 @@ function CommunityPostCard({
 }: {
   isLast: boolean;
   pageGutter: number;
-  post: CommunityPost;
+  post: CommunityFeedPost;
   profile: CommunityExplorerProfile;
 }) {
+  const mediaSource = post.image ?? null;
+  const badgeLabel = readMeaningfulText(post.badge);
+  const locationLabel = readMeaningfulText(post.location);
+  const moodLabel = readMeaningfulText(post.mood);
+  const sharedText = readMeaningfulText(post.sharedText);
+
   return (
     <View className={`px-3 py-3 ${isLast ? "" : "border-b border-[#DEE3EA]"}`}>
       <View className="flex-row items-start justify-between gap-2">
@@ -748,50 +1386,73 @@ function CommunityPostCard({
               <Text className="text-[12px] leading-[14px] text-[#6B7280]">
                 {post.time}
               </Text>
-              <Text className="text-[12px] text-[#6B7280]">·</Text>
-              <Text
-                className="min-w-0 flex-1 text-[12px] leading-[14px] text-[#6B7280]"
-                numberOfLines={1}
-              >
-                {post.location}
-              </Text>
+              {locationLabel ? (
+                <>
+                  <Text className="text-[12px] text-[#6B7280]">·</Text>
+                  <Text
+                    className="min-w-0 flex-1 text-[12px] leading-[14px] text-[#6B7280]"
+                    numberOfLines={1}
+                  >
+                    {locationLabel}
+                  </Text>
+                </>
+              ) : null}
             </View>
           </View>
         </View>
 
-        <View className="rounded-full bg-[#FFF3F8] px-2.5 py-1">
-          <Text className="text-[11px] font-extrabold text-[#D55E8E]">
-            {post.badge}
-          </Text>
-        </View>
+        {badgeLabel ? (
+          <View className="rounded-full bg-[#FFF3F8] px-2.5 py-1">
+            <Text className="text-[11px] font-extrabold text-[#D55E8E]">
+              {badgeLabel}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <Text className="mt-3 text-[15px] leading-[22px] text-[#202124]">
         {post.caption}
       </Text>
 
-      <Text className="mt-2 text-[12px] font-semibold text-[#F58752]">
-        Gợi ý: {post.mood}
-      </Text>
+      {sharedText && sharedText !== post.caption ? (
+        <View className="mt-3 rounded-[18px] border border-[#E5E7EB] bg-[#FCFCFD] px-3 py-3">
+          <Text className="text-[11px] font-extrabold uppercase tracking-[0.6px] text-[#8E869A]">
+            Bài viết chia sẻ
+          </Text>
+          <Text className="mt-1 text-[13px] leading-[19px] text-[#4B5563]">
+            {sharedText}
+          </Text>
+        </View>
+      ) : null}
 
-      <View className="mt-2 flex-row flex-wrap gap-2">
-        {post.tags.map((tag) => (
-          <PostTag key={`${post.id}-${tag}`} label={tag} />
-        ))}
-      </View>
+      {moodLabel ? (
+        <Text className="mt-2 text-[12px] font-semibold text-[#F58752]">
+          {moodLabel}
+        </Text>
+      ) : null}
 
-      <View className="mt-3" style={{ marginHorizontal: -(pageGutter + 12) }}>
-        <Image
-          source={post.image}
-          contentFit="cover"
-          transition={180}
-          cachePolicy="memory-disk"
-          style={{
-            aspectRatio: 1.08,
-            width: "100%",
-          }}
-        />
-      </View>
+      {post.tags.length ? (
+        <View className="mt-2 flex-row flex-wrap gap-2">
+          {post.tags.map((tag) => (
+            <PostTag key={`${post.id}-${tag}`} label={tag} />
+          ))}
+        </View>
+      ) : null}
+
+      {mediaSource ? (
+        <View className="mt-3" style={{ marginHorizontal: -(pageGutter + 12) }}>
+          <Image
+            source={mediaSource}
+            contentFit="cover"
+            transition={180}
+            cachePolicy="memory-disk"
+            style={{
+              aspectRatio: 1.08,
+              width: "100%",
+            }}
+          />
+        </View>
+      ) : null}
 
       <View className="mt-3 flex-row items-center gap-5">
         <PostAction
@@ -814,21 +1475,6 @@ function CommunityPostCard({
             web: "reply",
           }}
           value={post.shares}
-        />
-      </View>
-
-      <View className="mt-3 flex-row flex-wrap items-center gap-3">
-        <PostSupplementalMeta
-          icon={{
-            ios: "flame.fill",
-            android: "local_fire_department",
-            web: "local_fire_department",
-          }}
-          value={post.hotScore}
-        />
-        <PostSupplementalMeta
-          icon={{ ios: "eye.fill", android: "visibility", web: "visibility" }}
-          value={post.views}
         />
       </View>
     </View>
@@ -903,21 +1549,6 @@ function PostAction({
   );
 }
 
-function PostSupplementalMeta({
-  icon,
-  value,
-}: {
-  icon: SymbolName;
-  value: string;
-}) {
-  return (
-    <View className="flex-row items-center gap-1.5">
-      <SymbolView name={icon} size={13} tintColor="#F58752" />
-      <Text className="text-[12px] font-semibold text-[#6B6173]">{value}</Text>
-    </View>
-  );
-}
-
 function RoutesTabContent({
   completedRoutes,
   favoriteRoutes,
@@ -968,6 +1599,70 @@ function RoutesTabContent({
   );
 }
 
+function ApiRoutesTabContent({
+  errorMessage,
+  onOpenRoute,
+  routes,
+}: {
+  errorMessage?: string | null;
+  onOpenRoute: (routeId: string) => void;
+  routes: ApiRouteReference[];
+}) {
+  if (errorMessage) {
+    return (
+      <EmptyState
+        icon={{
+          ios: "exclamationmark.triangle",
+          android: "error_outline",
+          web: "error_outline",
+        }}
+        message={errorMessage}
+      />
+    );
+  }
+
+  if (!routes.length) {
+    return (
+      <EmptyState
+        icon={{ ios: "map", android: "map", web: "map" }}
+        message="Explorer này chưa gắn route nào trong các bài viết."
+      />
+    );
+  }
+
+  return (
+    <View className="gap-2.5">
+      {routes.map((route) => (
+        <Pressable
+          key={`route-reference-${route.routeId}`}
+          onPress={() => onOpenRoute(`${route.routeId}`)}
+          className="rounded-[22px] bg-white px-4 py-4"
+          style={cardShadow}
+        >
+          <View className="flex-row items-start justify-between gap-3">
+            <View className="min-w-0 flex-1">
+              <Text className="text-[15px] font-extrabold text-[#202124]">
+                {`Route #${route.routeId}`}
+              </Text>
+              <Text className="mt-1 text-[12px] leading-[18px] text-[#6B7280]">
+                {`${route.postCount} bài viết có gắn route này`}
+              </Text>
+            </View>
+
+            <View className="rounded-full bg-[#FFF4EF] px-3 py-1.5">
+              <Text className="text-[11px] font-extrabold text-[#F58752]">
+                {route.sharedPostCount > 0
+                  ? `${route.sharedPostCount} chia sẻ`
+                  : "Chi tiết"}
+              </Text>
+            </View>
+          </View>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 function RouteSection({
   actionLabel,
   emptyMessage,
@@ -988,7 +1683,9 @@ function RouteSection({
   return (
     <View>
       <View className="mb-3 flex-row items-center justify-between">
-        <Text className="text-[15px] font-extrabold text-[#2B2233]">{title}</Text>
+        <Text className="text-[15px] font-extrabold text-[#2B2233]">
+          {title}
+        </Text>
         <Text className="text-[12px] font-semibold text-[#8E869A]">
           {actionLabel}
         </Text>
@@ -1098,105 +1795,12 @@ function RouteMeta({ icon, value }: { icon: SymbolName; value: string }) {
   );
 }
 
-function BadgesTabContent({
-  badgeCount,
-  badges,
-  isPremium = false,
-}: {
-  badgeCount: number;
-  badges: readonly string[];
-  isPremium?: boolean;
-}) {
-  if (!badges.length) {
-    return (
-      <EmptyState
-        icon={{ ios: "rosette", android: "military_tech", web: "military_tech" }}
-        message="Explorer này chưa công khai badge nào."
-      />
-    );
-  }
-
+function EmptyState({ icon, message }: { icon: SymbolName; message: string }) {
   return (
-    <View>
-      <LinearGradient
-        colors={["#F58752", "#EB489B"]}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        className="rounded-[28px] px-4 py-4"
-        style={cardShadow}
-      >
-        <Text className="text-[24px] font-black text-white">
-          {badgeCount} huy hiệu
-        </Text>
-        <Text className="mt-1 text-[13px] leading-5 text-white/88">
-          Mở khoá từ check-in, route hoàn thành và hoạt động chia sẻ công khai
-          {isPremium ? " trong gói Premium." : "."}
-        </Text>
-      </LinearGradient>
-
-      <View className="mt-4 flex-row flex-wrap justify-between gap-y-3">
-        {badges.map((badge, index) => (
-          <BadgeCard
-            key={`${badge}-${index}`}
-            badge={badge}
-            colors={badgeGradients[index % badgeGradients.length]}
-            index={index}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function BadgeCard({
-  badge,
-  colors,
-  index,
-}: {
-  badge: string;
-  colors: readonly [string, string];
-  index: number;
-}) {
-  return (
-    <View className="overflow-hidden rounded-[24px]" style={{ width: "48%" }}>
-      <LinearGradient
-        colors={colors}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        className="rounded-[24px] p-4"
-        style={cardShadow}
-      >
-        <View className="h-10 w-10 items-center justify-center rounded-full bg-white/20">
-          <SymbolView
-            name={{
-              ios: "rosette",
-              android: "military_tech",
-              web: "military_tech",
-            }}
-            size={16}
-            tintColor="#FFFFFF"
-          />
-        </View>
-        <Text className="mt-3 text-[12px] font-bold uppercase tracking-[0.4px] text-white/80">
-          Badge #{index + 1}
-        </Text>
-        <Text className="mt-1 text-[16px] font-black leading-6 text-white">
-          {badge}
-        </Text>
-      </LinearGradient>
-    </View>
-  );
-}
-
-function EmptyState({
-  icon,
-  message,
-}: {
-  icon: SymbolName;
-  message: string;
-}) {
-  return (
-    <View className="items-center rounded-2xl bg-white py-12" style={cardShadow}>
+    <View
+      className="items-center rounded-2xl bg-white py-12"
+      style={cardShadow}
+    >
       <SymbolView name={icon} size={30} tintColor="#AA9FB0" />
       <Text className="mt-2 px-6 text-center text-[13px] text-[#8E869A]">
         {message}

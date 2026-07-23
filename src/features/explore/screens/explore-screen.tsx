@@ -760,15 +760,16 @@ export default function ExploreScreen() {
           <View className="gap-4">
             <View className="flex-row items-center justify-between">
               <Text className="text-[22px] font-bold text-[#2B2233]">Tuyến gợi ý</Text>
-              <Text className="text-[12px] font-semibold text-[#8A7D6D]">
-                {isRoutesLoading ? 'Đang tải' : `${apiRoutes.length} tuyến`}
-              </Text>
+              {!isRoutesLoading ? (
+                <Text className="text-[12px] font-semibold text-[#8A7D6D]">
+                  {`${apiRoutes.length} tuyến`}
+                </Text>
+              ) : null}
             </View>
 
             {isRoutesLoading ? (
               <View className="h-[260px] items-center justify-center rounded-[30px] bg-[#F7F3EA]">
                 <ActivityIndicator color="#EB489B" />
-                <Text className="mt-2 text-[12px] text-[#8E869A]">Đang tải tuyến từ API...</Text>
               </View>
             ) : apiRoutes.length === 0 ? (
               <View className="rounded-[28px] border border-[#E6DDD1] bg-[#FCFAF5] p-5">
@@ -888,7 +889,6 @@ export default function ExploreScreen() {
             {isPlacesLoading ? (
               <View className="items-center py-8">
                 <ActivityIndicator color="#EB489B" />
-                <Text className="mt-2 text-[12px] text-[#8E869A]">Đang tải hotspot gần bạn...</Text>
               </View>
             ) : filteredPlaces.length === 0 ? (
               <View className="items-center py-8">

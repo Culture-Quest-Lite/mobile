@@ -11,6 +11,7 @@ import { StatusBar } from "expo-status-bar";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useEffect, useState, type ComponentProps } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   Text as RNText,
   ScrollView,
@@ -170,15 +171,9 @@ function LoadingState() {
             className="w-full rounded-[32px] border border-[#F4DCE6] bg-white px-6 py-8"
             style={[screenShadowStyle, { maxWidth: 360 }]}
           >
-            <Text className="text-center text-[24px] font-black text-[#2B2233]">
-              Đang tải story
-            </Text>
-            <Text
-              className="mt-2 text-center text-[15px] text-[#6F657A]"
-              style={{ lineHeight: 18 }}
-            >
-              Hệ thống đang lấy nội dung story thật của hotspot này.
-            </Text>
+            <View className="items-center">
+              <ActivityIndicator color="#EB489B" size="large" />
+            </View>
           </View>
         </View>
       </SafeAreaView>
@@ -552,7 +547,7 @@ export default function HotspotStoryDetailScreen() {
   const audioStatusLabel = !hasAudioUrl
     ? "Story này chưa có file audio."
     : audioStatus.isBuffering
-      ? "Đang tải audio..."
+      ? null
       : audioStatus.playing
         ? "Audio đang phát"
         : audioStatus.didJustFinish
@@ -767,12 +762,14 @@ export default function HotspotStoryDetailScreen() {
                   >
                     {story.title}
                   </Text>
-                  <Text
-                    className="mt-1 text-center text-[13px]"
-                    style={{ color: palette.mutedText, lineHeight: 16 }}
-                  >
-                    {audioStatusLabel}
-                  </Text>
+                  {audioStatusLabel ? (
+                    <Text
+                      className="mt-1 text-center text-[13px]"
+                      style={{ color: palette.mutedText, lineHeight: 16 }}
+                    >
+                      {audioStatusLabel}
+                    </Text>
+                  ) : null}
                 </View>
 
                 <View className="mt-2">
@@ -866,23 +863,27 @@ export default function HotspotStoryDetailScreen() {
                       elevation: 8,
                     }}
                   >
-                    <SymbolView
-                      name={
-                        audioStatus.playing
-                          ? ({
-                              ios: "pause.fill",
-                              android: "pause",
-                              web: "pause",
-                            } as SymbolName)
-                          : ({
-                              ios: "play.fill",
-                              android: "play_arrow",
-                              web: "play_arrow",
-                            } as SymbolName)
-                      }
-                      size={24}
-                      tintColor="#FFFFFF"
-                    />
+                    {audioStatus.isBuffering ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <SymbolView
+                        name={
+                          audioStatus.playing
+                            ? ({
+                                ios: "pause.fill",
+                                android: "pause",
+                                web: "pause",
+                              } as SymbolName)
+                            : ({
+                                ios: "play.fill",
+                                android: "play_arrow",
+                                web: "play_arrow",
+                              } as SymbolName)
+                        }
+                        size={24}
+                        tintColor="#FFFFFF"
+                      />
+                    )}
                   </Pressable>
 
                   <Pressable

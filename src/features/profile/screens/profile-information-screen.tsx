@@ -373,10 +373,7 @@ export default function ProfileInformationScreen() {
         <View className="">
           {isLoading && !profile ? (
             <View className="px-4">
-              <StateCard
-                description="Đang tải dữ liệu từ tài khoản của bạn."
-                title="Đang tải thông tin cá nhân"
-              >
+              <StateCard>
                 <ActivityIndicator color="#F58752" size="large" />
               </StateCard>
             </View>
@@ -510,20 +507,24 @@ function StateCard({
 }: {
   actionLabel?: string;
   children?: ReactNode;
-  description: string;
+  description?: string;
   onPress?: () => void;
-  title: string;
+  title?: string;
 }) {
   return (
     <View className="rounded-[28px] bg-white px-5 py-6">
       <View className="items-center">
         {children}
-        <Text className="mt-3 text-center text-[19px] font-black text-[#27233A]">
-          {title}
-        </Text>
-        <Text className="mt-2 text-center text-[14px] leading-5 text-[#8E869A]">
-          {description}
-        </Text>
+        {title ? (
+          <Text className="mt-3 text-center text-[19px] font-black text-[#27233A]">
+            {title}
+          </Text>
+        ) : null}
+        {description ? (
+          <Text className="mt-2 text-center text-[14px] leading-5 text-[#8E869A]">
+            {description}
+          </Text>
+        ) : null}
       </View>
 
       {actionLabel && onPress ? (

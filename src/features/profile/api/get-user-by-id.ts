@@ -4,15 +4,13 @@ import { PublicEnv, buildApiUrl } from "@/constants/env";
 
 import type { Profile } from "../types";
 
-type UpdateMyProfileRequest = {
-  accessToken: string;
-  avatarUrl: string | null;
-  displayName: string;
-  autoPlayAudio: boolean;
+type GetUserProfileByIdRequest = {
+  accessToken?: string | null;
   tokenType?: string | null;
+  userId: number | string;
 };
 
-type GetMeResponse = {
+type GetUserProfileByIdResponse = {
   userId: number;
   username: string;
   email: string;
@@ -32,12 +30,16 @@ type GetMeResponse = {
   totalPosts: number;
 };
 
-function resolveUpdateMeUrl() {
+const meaninglessTextValues = new Set(["", "string", "null", "undefined"]);
+
+function resolveGetUserProfileByIdUrl(userId: number | string) {
+  const normalizedPath = `/api/users/${encodeURIComponent(`${userId}`)}`;
+
   if (PublicEnv.apiBaseUrl.trim()) {
-    return buildApiUrl("/api/users/me");
+    return buildApiUrl(normalizedPath);
   }
 
-  return "http://13.158.40.56:8080/api/users/me";
+  return `https://api.culturequestlite.com${normalizedPath}`;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -48,7 +50,25 @@ function isNullableString(value: unknown): value is string | null {
   return typeof value === "string" || value === null;
 }
 
-function isGetMeResponse(value: unknown): value is GetMeResponse {
+function readMeaningfulText(value: string | null) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return null;
+  }
+
+  return meaninglessTextValues.has(trimmedValue.toLowerCase())
+    ? null
+    : trimmedValue;
+}
+
+function isGetUserProfileByIdResponse(
+  value: unknown,
+): value is GetUserProfileByIdResponse {
   if (!isObject(value)) {
     return false;
   }
@@ -129,11 +149,15 @@ function getErrorMessage(body: unknown, status: number) {
     return body.trim();
   }
 
+  if (status === 404) {
+    return "Không tìm thấy hồ sơ explorer.";
+  }
+
   if (status === 401 || status === 403) {
     return "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.";
   }
 
-  return `Không thể cập nhật hồ sơ (${status}).`;
+  return `Không thể tải hồ sơ (${status}).`;
 }
 
 function getConnectionErrorMessage(url: string) {
@@ -145,7 +169,8 @@ function getConnectionErrorMessage(url: string) {
 }
 
 function extractLevel(levelName: string | null) {
-  const match = levelName?.match(/(\d+)/);
+  const meaningfulLevelName = readMeaningfulText(levelName);
+  const match = meaningfulLevelName?.match(/(\d+)/);
 
   if (!match) {
     return null;
@@ -155,37 +180,42 @@ function extractLevel(levelName: string | null) {
   return Number.isFinite(parsedLevel) ? parsedLevel : null;
 }
 
-function mapGetMeResponseToProfile(response: GetMeResponse): Profile {
-  const normalizedDisplayName = response.displayName.trim();
-  const normalizedUsername = response.username.trim();
+function mapGetUserProfileByIdResponseToProfile(
+  response: GetUserProfileByIdResponse,
+  requestedUserId: number | string,
+): Profile {
+  const normalizedUsername =
+    readMeaningfulText(response.username)?.replace(/^@+/, "") ?? "explorer";
+  const normalizedDisplayName =
+    readMeaningfulText(response.displayName) ?? normalizedUsername;
 
   return {
     autoPlayAudio: response.autoPlayAudio,
-    avatar: response.avatarUrl,
-    cover: response.backgroundUrl,
-    createdAt: response.createdAt,
+    avatar: readMeaningfulText(response.avatarUrl),
+    cover: readMeaningfulText(response.backgroundUrl),
+    createdAt: readMeaningfulText(response.createdAt),
     currentLevelRequiredXp: null,
     currentLevelXp: null,
-    email: response.email,
+    email: readMeaningfulText(response.email),
     followers: response.totalFollowers,
     following: response.totalFollowing,
     hasExactLevelProgress: false,
-    id: response.userId.toString(),
+    id: `${requestedUserId}`,
     isPremium: response.isPremium,
     isMaxLevel: false,
     level: extractLevel(response.levelName),
-    levelName: response.levelName,
+    levelName: readMeaningfulText(response.levelName),
     levelProgressPercent: null,
-    name: normalizedDisplayName || normalizedUsername,
+    name: normalizedDisplayName,
     nextLevelName: null,
     nextLevelNumber: null,
     nextLevelRequiredXp: null,
     points: response.totalPoints,
     remainingXpToNextLevel: null,
-    role: response.role,
+    role: readMeaningfulText(response.role),
     routeIds: [],
     savedHotspotSlugs: [],
-    status: response.status,
+    status: readMeaningfulText(response.status),
     totalXp: response.totalXp,
     totalPosts: response.totalPosts,
     username: normalizedUsername,
@@ -193,62 +223,56 @@ function mapGetMeResponseToProfile(response: GetMeResponse): Profile {
   };
 }
 
-export async function updateMyProfile({
+export async function getUserProfileById({
   accessToken,
-  avatarUrl,
-  displayName,
-  autoPlayAudio,
   tokenType,
-}: UpdateMyProfileRequest): Promise<Profile | null> {
-  const updateMeUrl = resolveUpdateMeUrl();
+  userId,
+}: GetUserProfileByIdRequest): Promise<Profile> {
+  const getUserProfileByIdUrl = resolveGetUserProfileByIdUrl(userId);
   let response: Response;
 
   try {
-    response = await fetch(updateMeUrl, {
-      body: JSON.stringify({
-        avatarUrl,
-        autoPlayAudio,
-        displayName,
-      }),
+    response = await fetch(getUserProfileByIdUrl, {
       headers: {
         Accept: "application/json",
-        Authorization: `${tokenType ?? "Bearer"} ${accessToken}`,
+        ...(accessToken
+          ? { Authorization: `${tokenType ?? "Bearer"} ${accessToken}` }
+          : {}),
         "Content-Type": "application/json",
         "X-Client-Type": "mobile",
       },
-      method: "PUT",
+      method: "GET",
     });
   } catch (error) {
-    console.warn("[profile] update me network failure", {
+    console.warn("[profile] get user by id network failure", {
       error: serializeError(error),
       platform: Platform.OS,
-      url: updateMeUrl,
+      url: getUserProfileByIdUrl,
+      userId,
     });
-    throw new Error(getConnectionErrorMessage(updateMeUrl));
+    throw new Error(getConnectionErrorMessage(getUserProfileByIdUrl));
   }
 
   const responseBody = await parseResponseBody(response);
 
   if (!response.ok) {
-    console.warn("[profile] update me rejected", {
+    console.warn("[profile] get user by id rejected", {
       body: summarizeBody(responseBody),
       status: response.status,
-      url: updateMeUrl,
+      url: getUserProfileByIdUrl,
+      userId,
     });
     throw new Error(getErrorMessage(responseBody, response.status));
   }
 
-  if (responseBody === null) {
-    return null;
-  }
-
-  if (!isGetMeResponse(responseBody)) {
-    console.warn("[profile] update me unexpected payload", {
+  if (!isGetUserProfileByIdResponse(responseBody)) {
+    console.warn("[profile] get user by id invalid payload", {
       body: summarizeBody(responseBody),
-      url: updateMeUrl,
+      url: getUserProfileByIdUrl,
+      userId,
     });
-    return null;
+    throw new Error("API hồ sơ trả về dữ liệu không đúng định dạng.");
   }
 
-  return mapGetMeResponseToProfile(responseBody);
+  return mapGetUserProfileByIdResponseToProfile(responseBody, userId);
 }

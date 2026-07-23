@@ -385,7 +385,7 @@ type SuggestedRouteCard = RouteItem;
 
 const defaultNearbySearchDistanceMeters = 20;
 const nearbyDistanceSliderMinimumMeters = 20;
-const nearbyDistanceSliderMaximumMeters = 1000;
+const nearbyDistanceSliderMaximumMeters = 10000;
 const nearbyDistanceSliderStepMeters = 20;
 const suggestedRouteCardImageHeight = 136;
 const suggestedRouteCardHeight = 248;
@@ -452,7 +452,10 @@ function formatDistanceMeters(distanceMeters: number) {
     return `${Math.max(1, Math.round(distanceMeters))}m`;
   }
 
-  return `${(distanceMeters / 1000).toFixed(1)}km`;
+  const distanceKilometers = distanceMeters / 1000;
+  return Number.isInteger(distanceKilometers)
+    ? `${distanceKilometers}km`
+    : `${distanceKilometers.toFixed(1)}km`;
 }
 
 function formatRewardLabel(value: number | null | undefined, fallback = "+0") {
@@ -853,17 +856,27 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
 
 function SectionEmptyState({
   description = "Không có dữ liệu phù hợp.",
+  isLoading = false,
   title = "Không có dữ liệu phù hợp",
 }: {
   description?: string;
+  isLoading?: boolean;
   title?: string;
 }) {
   return (
     <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-      <Text className="text-[15px] font-bold text-[#3B4454]">{title}</Text>
-      <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
-        {description}
-      </Text>
+      {isLoading ? (
+        <View className="items-center py-1">
+          <ActivityIndicator color="#EB489B" size="small" />
+        </View>
+      ) : (
+        <>
+          <Text className="text-[15px] font-bold text-[#3B4454]">{title}</Text>
+          <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+            {description}
+          </Text>
+        </>
+      )}
     </View>
   );
 }
@@ -973,7 +986,7 @@ function NearbyDistanceDropdown({
 }) {
   return (
     <View
-      className="overflow-hidden rounded-[24px] border border-[#F6DDD0] bg-white px-3.5 py-2.5"
+      className="overflow-hidden rounded-[24px] border border-[#F6DDD0] bg-white px-3 py-2.5"
       style={cardShadowStyle}
     >
       <LinearGradient
@@ -983,7 +996,7 @@ function NearbyDistanceDropdown({
         className="absolute inset-0"
       />
 
-      <View className="flex-row items-start gap-2">
+      <View className="flex-row items-start gap-1.5">
         <LinearGradient
           colors={["#FF8A50", "#FF5F87"]}
           end={{ x: 1, y: 1 }}
@@ -1005,7 +1018,7 @@ function NearbyDistanceDropdown({
           <Text className="text-[16px] font-extrabold tracking-[-0.2px] text-[#2B2233]">
             Địa điểm gần bạn
           </Text>
-          <Text className="mt-0.5 text-[11px] font-medium text-[#9C94A5]">
+          <Text className="mt-0.5 text-[11px] font-medium leading-4 text-[#9C94A5]">
             Bán kính tìm kiếm
           </Text>
         </View>
@@ -1023,7 +1036,7 @@ function NearbyDistanceDropdown({
         </LinearGradient>
       </View>
 
-      <View className="mt-3">
+      <View className="mt-2.5">
         <NearbyDistanceSlider
           max={nearbyDistanceSliderMaximumMeters}
           min={nearbyDistanceSliderMinimumMeters}
@@ -1032,9 +1045,9 @@ function NearbyDistanceDropdown({
         />
       </View>
 
-      <View className="mt-3 flex-row gap-2">
+      <View className="mt-2.5 flex-row gap-2">
         <Pressable
-          className="flex-1 flex-row items-center justify-center rounded-[14px] border border-[#E3E7EF] bg-white px-3 py-2.5"
+          className="flex-1 flex-row items-center justify-center rounded-[14px] border border-[#E3E7EF] bg-white px-3 py-2"
           onPress={onOpenMap}
         >
           <SymbolView
@@ -1059,7 +1072,7 @@ function NearbyDistanceDropdown({
             end={{ x: 1, y: 0.5 }}
             start={{ x: 0, y: 0.5 }}
             locations={[0, 0.58, 1]}
-            className="flex-row items-center justify-center rounded-[14px] px-3 py-2.5"
+            className="flex-row items-center justify-center rounded-[14px] px-3 py-2"
           >
             {isLoading ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
@@ -1083,7 +1096,7 @@ function NearbyDistanceDropdown({
         </Pressable>
       </View>
 
-      <View className="mt-2 flex-row items-center justify-end">
+      <View className="mt-1.5 flex-row items-center justify-end">
         <Text className="text-[10px] font-medium text-[#B3A6AF]">
           Đang áp dụng:{" "}
         </Text>
@@ -1493,12 +1506,6 @@ function LocationMapModal({
               <View className="items-center">
                 <ActivityIndicator color="#EB489B" size="small" />
               </View>
-              <Text className="mt-4 text-center text-[18px] font-extrabold text-[#2B2233]">
-                Đang lấy vị trí GPS
-              </Text>
-              <Text className="mt-2 text-center text-[13px] leading-5 text-[#8E869A]">
-                Bản đồ sẽ tự mở đúng vị trí bạn đang đứng ngay khi định vị xong.
-              </Text>
             </View>
           </View>
         ) : errorMessage ? (
@@ -1644,7 +1651,10 @@ export default function HomeScreen() {
       return () => {
         isActive = false;
       };
-    }, [authSession.isAuthenticated, authSession.tokenType]),
+    }, [
+      authSession.isAuthenticated,
+      authSession.tokenType,
+    ]),
   );
   const [activeCommunityTab, setActiveCommunityTab] =
     useState<CommunityBoardTab>("community");
@@ -1675,7 +1685,6 @@ export default function HomeScreen() {
   const explorerName =
     explorerSummary?.name.trim() ||
     authSession.displayName.trim() ||
-    authSession.username?.trim() ||
     "Ngọc";
   const explorerAvatar = explorerSummary?.avatar ?? null;
   const explorerLevel = explorerSummary?.level ?? null;
@@ -2058,13 +2067,18 @@ export default function HomeScreen() {
             });
           }
 
-          const resolvedName = profile.name.trim() || profile.username.trim();
+          const resolvedName =
+            profile.name.trim() ||
+            authSession.displayName.trim();
 
           setExplorerSummary({
             avatar: profile.avatar?.trim() || null,
             level: profile.level,
             name: resolvedName || "Ngọc",
-            username: profile.username.trim(),
+            username:
+              profile.username.trim() ||
+              authSession.displayName.trim() ||
+              resolvedName,
           });
         } catch (error) {
           if (!isActive) {
@@ -2083,7 +2097,11 @@ export default function HomeScreen() {
       return () => {
         isActive = false;
       };
-    }, [authSession.isAuthenticated, authSession.tokenType]),
+    }, [
+      authSession.displayName,
+      authSession.isAuthenticated,
+      authSession.tokenType,
+    ]),
   );
 
   return (
@@ -2493,7 +2511,7 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          <View className="gap-4">
+          <View className="gap-3">
             <View className="flex-row items-center justify-between">
               <Pressable hitSlop={8} onPress={handleOpenHotspots}>
                 <Text className="text-[16px] font-extrabold text-[#2B2233]">
@@ -2501,7 +2519,7 @@ export default function HomeScreen() {
                 </Text>
               </Pressable>
               <Pressable
-                className="rounded-full bg-[#FFF4EF] px-3.5 py-2"
+                className="rounded-full bg-[#FFF4EF] px-3 py-1.5"
                 onPress={handleOpenHotspots}
               >
                 <Text className="text-[12px] font-bold text-[#F58752]">
@@ -2511,16 +2529,13 @@ export default function HomeScreen() {
             </View>
 
             {nearbyPlacesStatus !== "empty" && nearbyPlacesNote ? (
-              <Text className="text-[13px] leading-5 text-[#8E869A]">
+              <Text className="text-[12px] leading-[18px] text-[#8E869A]">
                 {nearbyPlacesNote}
               </Text>
             ) : null}
 
             {nearbyPlacesStatus === "loading" ? (
-              <SectionEmptyState
-                description={`Đang lấy vị trí hiện tại trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)}.`}
-                title="Đang tải địa điểm gần bạn..."
-              />
+              <SectionEmptyState isLoading />
             ) : nearbyPlacesStatus === "empty" ? (
               <SectionEmptyState
                 description={nearbyPlacesNote ?? "Không có dữ liệu phù hợp."}
@@ -2549,11 +2564,11 @@ export default function HomeScreen() {
                   return (
                     <Pressable
                       key={place.key}
-                      className={
-                        index === resolvedNearbyPlaces.length - 1
-                          ? ""
-                          : "mr-3.5"
-                      }
+                        className={
+                          index === resolvedNearbyPlaces.length - 1
+                            ? ""
+                            : "mr-3"
+                        }
                       disabled={!place.slug && place.hotspotId === null}
                       onPress={() => {
                         const hotspotId = place.hotspotId;
@@ -2812,10 +2827,7 @@ export default function HomeScreen() {
             ) : null}
 
             {suggestedRoutesStatus === "loading" ? (
-              <SectionEmptyState
-                description="Đang tải dữ liệu tuyến đường theo địa điểm phù hợp."
-                title="Đang tải tuyến gợi ý..."
-              />
+              <SectionEmptyState isLoading />
             ) : suggestedRoutesStatus === "empty" ? (
               <SectionEmptyState
                 description={suggestedRoutesNote ?? "Không có dữ liệu phù hợp."}

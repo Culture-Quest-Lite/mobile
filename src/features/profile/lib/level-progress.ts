@@ -5,15 +5,11 @@ function normalizeName(value: string | null) {
   return value?.trim().toLowerCase() ?? "";
 }
 
+function clampPercent(value: number) {
+  return Math.min(Math.max(value, 0), 100);
+}
+
 function isLevelUnlocked(level: GamificationLevel, totalXp: number) {
-  if (level.unlockedAt) {
-    return true;
-  }
-
-  if (typeof level.xpAtUnlock === "number") {
-    return level.xpAtUnlock <= totalXp;
-  }
-
   return totalXp >= level.requiredXp;
 }
 
@@ -81,26 +77,60 @@ export function applyLevelProgressToProfile(
   const currentTotalXp = Math.max(profile.totalXp, 0);
   const currentLevelRequiredXp = Math.max(currentLevel.requiredXp, 0);
   const currentLevelXp = Math.max(currentTotalXp - currentLevelRequiredXp, 0);
+  const hasNextLevel =
+    Boolean(nextLevel) &&
+    typeof nextLevel?.requiredXp === "number" &&
+    nextLevel.requiredXp > currentLevelRequiredXp;
+  const nextLevelRequiredXp = hasNextLevel ? Math.max(nextLevel!.requiredXp, 0) : null;
+  const remainingXpToNextLevel =
+    nextLevelRequiredXp !== null
+      ? Math.max(nextLevelRequiredXp - currentTotalXp, 0)
+      : null;
+  const levelProgressPercent =
+    nextLevelRequiredXp !== null
+      ? clampPercent(
+          ((currentTotalXp - currentLevelRequiredXp) /
+            Math.max(nextLevelRequiredXp - currentLevelRequiredXp, 1)) *
+            100,
+        )
+      : null;
 
-  // The progress/me payload may omit future levels, so missing nextLevel does
-  // not reliably mean the user is already at the maximum level.
-  if (!nextLevel || nextLevel.requiredXp <= currentLevelRequiredXp) {
+  // A missing next level usually means the user is already at the highest
+  // configured XP threshold from the level catalog.
+  if (!hasNextLevel) {
     return {
       ...profile,
+      currentLevelRequiredXp,
       isMaxLevel: false,
       currentLevelXp,
+      hasExactLevelProgress: false,
       level: resolvedLevelNumber,
       levelName: currentLevel.name,
+      levelProgressPercent: null,
+      nextLevelName: null,
+      nextLevelNumber: null,
+      nextLevelRequiredXp: null,
+      remainingXpToNextLevel: null,
       xpToNext: null,
     };
   }
 
   return {
     ...profile,
+    currentLevelRequiredXp,
     isMaxLevel: false,
     currentLevelXp,
+    hasExactLevelProgress: true,
     level: resolvedLevelNumber,
     levelName: currentLevel.name,
-    xpToNext: Math.max(nextLevel.requiredXp - currentLevelRequiredXp, 0),
+    levelProgressPercent,
+    nextLevelName: nextLevel!.name,
+    nextLevelNumber: nextLevel!.levelNumber,
+    nextLevelRequiredXp,
+    remainingXpToNextLevel,
+    xpToNext: Math.max(
+      (nextLevelRequiredXp ?? currentLevelRequiredXp) - currentLevelRequiredXp,
+      0,
+    ),
   };
 }

@@ -403,9 +403,9 @@ export default function VerifyOtpScreen() {
               <Text className="mt-4 text-center text-[15px] leading-6 text-[#8E869A]">
                 {successMessage}
               </Text>
-              <Text className="mt-5 text-center text-[14px] font-bold text-[#F58752]">
-                Đang chuyển đến trang đăng nhập...
-              </Text>
+              <View className="mt-5 items-center">
+                <ActivityIndicator color="#F58752" size="small" />
+              </View>
 
               <View className="mt-7 h-1.5 w-44 overflow-hidden rounded-full bg-[#F7E5EF]">
                 <LinearGradient

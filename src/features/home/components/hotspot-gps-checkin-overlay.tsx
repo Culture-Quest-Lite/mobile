@@ -12,6 +12,7 @@ import {
   type ComponentProps,
 } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Easing,
   Modal,
@@ -1497,9 +1498,9 @@ export function HotspotGpsCheckinOverlay({
               ) : null}
 
               {isStoryAvailable && isStoryPrefetching ? (
-                <Text className="mt-4 text-center text-[13px] text-[#A897B2]">
-                  Đang tải story từ API cho hotspot này...
-                </Text>
+                <View className="mt-4 items-center">
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                </View>
               ) : null}
 
               {isStoryAvailable && storyPrefetchError ? (

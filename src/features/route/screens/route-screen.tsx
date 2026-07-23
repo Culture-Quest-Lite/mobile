@@ -675,7 +675,7 @@ export default function RouteScreen() {
         <View key={tab} className="gap-3 px-4 pt-4">
           {tab === "official" &&
             (isLoadingRoutes ? (
-              <EmptyState text="Đang tải tuyến từ API..." />
+              <EmptyState loading />
             ) : (
               <>
                 {routeError ? (
@@ -1740,15 +1740,27 @@ function Badge({ text }: { text: string }) {
   );
 }
 
-function EmptyState({ text }: { text: string }) {
+function EmptyState({
+  loading = false,
+  text,
+}: {
+  loading?: boolean;
+  text?: string;
+}) {
   return (
     <View className="items-center py-16">
-      <SymbolView
-        name={{ ios: "sparkles", android: "auto_awesome", web: "auto_awesome" }}
-        size={32}
-        tintColor="#C9C3CF"
-      />
-      <Text className="mt-2 text-[13px] text-[#8E869A]">{text}</Text>
+      {loading ? (
+        <ActivityIndicator color="#EB489B" />
+      ) : (
+        <>
+          <SymbolView
+            name={{ ios: "sparkles", android: "auto_awesome", web: "auto_awesome" }}
+            size={32}
+            tintColor="#C9C3CF"
+          />
+          <Text className="mt-2 text-[13px] text-[#8E869A]">{text}</Text>
+        </>
+      )}
     </View>
   );
 }

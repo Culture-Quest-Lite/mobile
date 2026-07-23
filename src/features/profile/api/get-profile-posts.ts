@@ -195,6 +195,7 @@ function parsePost(value: unknown): ProfilePost | null {
     likeCount: readNullableNumber(value.likeCount),
     pointRemaining: readNumber(value.pointRemaining),
     shareCount: readNullableNumber(value.shareCount),
+    sharedPost: isNullableString(value.sharedPost) ? value.sharedPost : null,
   };
 }
 

@@ -606,7 +606,6 @@ export default function RouteDetailScreen() {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-white">
         <ActivityIndicator color="#EB489B" />
-        <Text className="mt-3 text-[14px] text-[#8E869A]">Đang tải chi tiết tuyến...</Text>
       </SafeAreaView>
     );
   }
