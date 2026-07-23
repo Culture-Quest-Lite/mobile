@@ -1591,17 +1591,17 @@ function PostCard({
           icon={
             isLiked
               ? {
-                  ios: "hand.thumbsup.fill",
-                  android: "thumb_up",
-                  web: "thumb_up",
+                  ios: "heart.fill",
+                  android: "favorite",
+                  web: "favorite",
                 }
               : {
-                  ios: "hand.thumbsup",
-                  android: "thumb_up_off_alt",
-                  web: "thumb_up_off_alt",
+                  ios: "heart",
+                  android: "favorite_border",
+                  web: "favorite_border",
                 }
           }
-          tintColor="#2563EB"
+          tintColor="#F43F5E"
           value={likeCount}
         />
         <PostAction
