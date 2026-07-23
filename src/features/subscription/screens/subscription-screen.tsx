@@ -717,9 +717,12 @@ export default function SubscriptionScreen() {
         }
       >
         <View className="mb-4 flex-row items-center justify-between">
-          <View>
-            <Text className="text-[20px] font-extrabold text-[#2B2233]">
-              Đăng ký Partner
+          <View className="flex-1 pr-3">
+            <Text className="text-[22px] font-extrabold text-[#2B2233]">
+              Gói Đăng ký & Nâng cấp
+            </Text>
+            <Text className="mt-1 text-[13px] text-[#8E869A]">
+              Phân loại rõ giữa Gói Premium (Cho Người Dùng) & Gói Partner (Cho Cửa Hàng)
             </Text>
           </View>
           <Pressable
@@ -748,11 +751,11 @@ export default function SubscriptionScreen() {
           </View>
         ) : null}
 
-        <Text className="mb-3 text-[16px] font-extrabold text-[#2B2233]">
-          1. Chọn loại gói
+        <Text className="mb-2 text-[15px] font-extrabold text-[#2B2233]">
+          1. Chọn loại đối tượng đăng ký
         </Text>
 
-        <View className="mb-4 flex-row rounded-2xl bg-[#F4EFF8] p-1">
+        <View className="mb-5 flex-row rounded-2xl bg-[#F4EFF8] p-1.5">
           {(["EXPLORER", "PARTNER"] as SubscriptionAudience[]).map(
             (audience) => {
               const isActive = activeAudience === audience;
@@ -761,14 +764,35 @@ export default function SubscriptionScreen() {
                 <Pressable
                   key={audience}
                   onPress={() => setActiveAudience(audience)}
-                  className={`flex-1 rounded-xl px-3 py-3 ${isActive ? "bg-white" : ""}`}
+                  className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl px-3 py-3.5 ${
+                    isActive ? "bg-white shadow-sm" : ""
+                  }`}
                 >
+                  <SymbolView
+                    name={{
+                      ios: audience === "EXPLORER" ? "crown.fill" : "storefront.fill",
+                      android: audience === "EXPLORER" ? "workspace_premium" : "store",
+                      web: audience === "EXPLORER" ? "workspace_premium" : "store",
+                    }}
+                    size={16}
+                    tintColor={
+                      isActive
+                        ? audience === "EXPLORER"
+                          ? "#7C3AED"
+                          : "#EB489B"
+                        : "#8E869A"
+                    }
+                  />
                   <Text
-                    className={`text-center text-[13px] font-extrabold ${
-                      isActive ? "text-[#EB489B]" : "text-[#8E869A]"
+                    className={`text-[13px] font-extrabold ${
+                      isActive
+                        ? audience === "EXPLORER"
+                          ? "text-[#7C3AED]"
+                          : "text-[#EB489B]"
+                        : "text-[#8E869A]"
                     }`}
                   >
-                    {audience === "PARTNER" ? "Partner" : "Explorer"}
+                    {audience === "EXPLORER" ? "👑 Gói Premium (User)" : "🏪 Gói Partner (Shop)"}
                   </Text>
                 </Pressable>
               );
@@ -777,16 +801,91 @@ export default function SubscriptionScreen() {
         </View>
 
         {activeAudience === "EXPLORER" ? (
-          <View className="gap-3">
-            {(explorerPlans.length > 0
-              ? explorerPlans
-              : explorerPlaceholderPlans
-            ).map((plan) => {
-              const isApiPlan = "subscriptionPlanId" in plan;
+          <View className="gap-4">
+            {/* Main Explorer Premium Hero Card */}
+            <View className="overflow-hidden rounded-[24px] border border-[#E9D5FF] bg-[#FAF5FF] p-5 shadow-sm">
+              <View className="flex-row items-start justify-between">
+                <View className="flex-1 pr-3">
+                  <View className="mb-2 self-start rounded-full bg-[#7C3AED] px-3 py-1">
+                    <Text className="text-[10px] font-extrabold uppercase text-white">
+                      👑 Gói Đăng Ký Người Dùng (Explorer)
+                    </Text>
+                  </View>
+                  <Text className="text-[20px] font-extrabold text-[#2B2233]">
+                    CultureQuest Explorer Premium
+                  </Text>
+                  <Text className="mt-1 text-[13px] leading-5 text-[#6B7280]">
+                    Trọn bộ quyền lợi du lịch di sản thông minh dành cho du khách & người khám phá cá nhân.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Pricing Display */}
+              <View className="mt-4 rounded-2xl bg-white p-4 border border-[#E9D5FF]/80">
+                <Text className="text-[12px] font-bold text-[#8E869A]">Biểu phí ưu đãi</Text>
+                <View className="mt-1 flex-row items-baseline gap-2">
+                  <Text className="text-[24px] font-extrabold text-[#7C3AED]">
+                    {billingCycle === "MONTHLY" ? "59.000 VNĐ" : "499.000 VNĐ"}
+                  </Text>
+                  <Text className="text-[13px] text-[#6B7280]">
+                    / {billingCycle === "MONTHLY" ? "tháng" : "năm (tiết kiệm 30%)"}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Core Features List */}
+              <View className="mt-4 gap-2.5">
+                <Text className="text-[14px] font-extrabold text-[#2B2233]">
+                  Đặc quyền bao gồm trong Gói Premium:
+                </Text>
+                <View className="flex-row items-center gap-2.5">
+                  <SymbolView name={{ ios: "sparkles", android: "auto_awesome", web: "auto_awesome" }} size={16} tintColor="#7C3AED" />
+                  <Text className="text-[13px] font-bold text-[#374151]">
+                    🌟 User Plan: Lập kế hoạch & tối ưu lịch trình AI
+                  </Text>
+                </View>
+                <View className="flex-row items-center gap-2.5">
+                  <SymbolView name={{ ios: "record.circle.fill", android: "radio_button_checked", web: "radio_button_checked" }} size={16} tintColor="#7C3AED" />
+                  <Text className="text-[13px] font-bold text-[#374151]">
+                    📍 Record Journey: Định vị real-time & ghi nhật ký
+                  </Text>
+                </View>
+                <View className="flex-row items-center gap-2.5">
+                  <SymbolView name={{ ios: "headphones", android: "headphones", web: "headphones" }} size={16} tintColor="#7C3AED" />
+                  <Text className="text-[13px] font-bold text-[#374151]">
+                    🎧 Thuyết minh âm thanh Audio Guide di sản
+                  </Text>
+                </View>
+                <View className="flex-row items-center gap-2.5">
+                  <SymbolView name={{ ios: "ticket.fill", android: "confirmation_number", web: "confirmation_number" }} size={16} tintColor="#7C3AED" />
+                  <Text className="text-[13px] font-bold text-[#374151]">
+                    🎟️ Voucher ưu đãi đặc quyền từ Partner
+                  </Text>
+                </View>
+              </View>
+
+              <Pressable
+                onPress={() => {
+                  Alert.alert(
+                    "Đăng ký Explorer Premium",
+                    "Tính năng đăng ký Explorer Premium trực tuyến qua ví MoMo đang được cập nhật mở cổng chính thức.",
+                  );
+                }}
+                className="mt-5 rounded-xl bg-[#7C3AED] px-4 py-4"
+              >
+                <Text className="text-center text-[15px] font-extrabold text-white">
+                  Đăng ký Explorer Premium ngay
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Render any API Explorer Plans if present */}
+            {explorerPlans.map((plan) => {
+              const price = getPlanPrice(plan, billingCycle);
 
               return (
                 <View
-                  key={isApiPlan ? plan.subscriptionPlanId : plan.id}
+                  key={plan.subscriptionPlanId}
                   className="rounded-2xl border border-[#E7DDF0] bg-[#FAF7FC] p-4"
                 >
                   <View className="flex-row items-start justify-between gap-3">
@@ -797,48 +896,55 @@ export default function SubscriptionScreen() {
                         </Text>
                       </View>
                       <Text className="mt-3 text-[16px] font-extrabold text-[#2B2233]">
-                        {isApiPlan ? plan.subscriptionPlanName : plan.name}
+                        {plan.subscriptionPlanName}
                       </Text>
                       <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
-                        {isApiPlan
-                          ? plan.subscriptionPlanDescription ||
-                            "Gói dành cho người khám phá. Phần đăng ký Explorer sẽ làm sau."
-                          : plan.description}
+                        {plan.subscriptionPlanDescription || "Gói nâng cấp tài khoản Explorer."}
                       </Text>
                     </View>
                   </View>
 
                   <Text className="mt-3 text-[18px] font-extrabold text-[#2B2233]">
-                    {isApiPlan
-                      ? `${formatCurrency(getPlanPrice(plan, billingCycle))} / ${
-                          billingCycle === "MONTHLY" ? "tháng" : "năm"
-                        }`
-                      : plan.priceLabel}
+                    {formatCurrency(price)} / {billingCycle === "MONTHLY" ? "tháng" : "năm"}
                   </Text>
-
-                  <View className="mt-4 rounded-xl bg-white px-4 py-3">
-                    <Text className="text-center text-[13px] font-extrabold text-[#8E869A]">
-                      {isApiPlan
-                        ? "Explorer tạm để sau, chưa mở form đăng ký"
-                        : plan.statusLabel}
-                    </Text>
-                  </View>
                 </View>
               );
             })}
           </View>
         ) : (
-          <View className="gap-3">
-            <View className="rounded-2xl border border-[#F8D7E3] bg-[#FFF8FC] p-4">
-              <Text className="text-[15px] font-extrabold text-[#2B2233]">
-                Đăng ký dành cho Partner
+          <View className="gap-4">
+            {/* Main Partner Hero Banner */}
+            <View className="rounded-2xl border border-[#F8D7E3] bg-[#FFF8FC] p-4 shadow-sm">
+              <View className="mb-2 self-start rounded-full bg-[#EB489B] px-3 py-1">
+                <Text className="text-[10px] font-extrabold uppercase text-white">
+                  🏪 Gói Đăng Ký Đối Tác (Partner Merchant)
+                </Text>
+              </View>
+              <Text className="text-[17px] font-extrabold text-[#2B2233]">
+                Dành cho Chủ Shop & Cửa Hàng Kinh Doanh
               </Text>
               <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
-                Chọn gói Partner bên dưới để mở form nhập thông tin shop, upload
-                giấy tờ và thanh toán MoMo UAT.
+                Đăng ký gói Partner bên dưới để hiển thị địa điểm lên bản đồ CultureQuest, phát hành voucher ưu đãi và thu hút hàng ngàn khách du lịch ghé thăm.
               </Text>
+
+              {/* Partner Benefits Grid */}
+              <View className="mt-3 gap-2 border-t border-[#F8D7E3] pt-3">
+                <View className="flex-row items-center gap-2">
+                  <SymbolView name={{ ios: "mappin.and.ellipse", android: "place", web: "place" }} size={14} tintColor="#EB489B" />
+                  <Text className="text-[12px] font-bold text-[#374151]">Đưa địa điểm/shop lên bản đồ du lịch</Text>
+                </View>
+                <View className="flex-row items-center gap-2">
+                  <SymbolView name={{ ios: "ticket.fill", android: "confirmation_number", web: "confirmation_number" }} size={14} tintColor="#EB489B" />
+                  <Text className="text-[12px] font-bold text-[#374151]">Tạo & quản lý voucher ưu đãi cho du khách</Text>
+                </View>
+                <View className="flex-row items-center gap-2">
+                  <SymbolView name={{ ios: "checkmark.seal.fill", android: "verified", web: "verified" }} size={14} tintColor="#EB489B" />
+                  <Text className="text-[12px] font-bold text-[#374151]">Tích xanh Xác minh Partner chính thức</Text>
+                </View>
+              </View>
             </View>
 
+            {/* List of Available Partner Plans */}
             {visiblePartnerPlans.map((plan) => {
               const isSelected =
                 selectedPlan?.subscriptionPlanId === plan.subscriptionPlanId;
@@ -850,7 +956,7 @@ export default function SubscriptionScreen() {
                   onPress={() => handleSelectPlan(plan)}
                   className={`rounded-2xl border p-4 ${
                     isSelected
-                      ? "border-[#EB489B] bg-[#FFF0F8]"
+                      ? "border-[#EB489B] bg-[#FFF0F8] shadow-sm"
                       : "border-[#F4EFF8] bg-[#FFF8FC]"
                   }`}
                 >
@@ -858,7 +964,7 @@ export default function SubscriptionScreen() {
                     <View className="flex-1">
                       <View className="self-start rounded-full bg-[#FFE5F1] px-3 py-1">
                         <Text className="text-[10px] font-extrabold uppercase text-[#EB489B]">
-                          {getAudienceLabel(getPlanAudience(plan))}
+                          Gói Partner
                         </Text>
                       </View>
                       <Text className="mt-3 text-[16px] font-extrabold text-[#2B2233]">
@@ -892,6 +998,7 @@ export default function SubscriptionScreen() {
           </View>
         )}
 
+        {/* Billing Cycle Switcher */}
         <View className="mt-4 flex-row gap-3">
           {(["MONTHLY", "YEARLY"] as BillingCycle[]).map((cycle) => (
             <Pressable
@@ -902,10 +1009,25 @@ export default function SubscriptionScreen() {
               <Text
                 className={`text-center text-[13px] font-extrabold ${billingCycle === cycle ? "text-white" : "text-[#3D3446]"}`}
               >
-                {cycle === "MONTHLY" ? "Thanh toán tháng" : "Thanh toán năm"}
+                {cycle === "MONTHLY" ? "Thanh toán tháng" : "Thanh toán năm (Ưu đãi)"}
               </Text>
             </Pressable>
           ))}
+        </View>
+
+        {/* Comparison & Guidance Card */}
+        <View className="mt-5 rounded-2xl bg-[#FAF9FC] p-4 border border-[#EBE6F0]">
+          <Text className="text-[14px] font-extrabold text-[#2B2233]">
+            💡 Hướng dẫn chọn gói phù hợp:
+          </Text>
+          <View className="mt-2 gap-2">
+            <Text className="text-[12px] leading-5 text-[#6F657A]">
+              • <Text className="font-extrabold text-[#7C3AED]">Gói Premium (User)</Text>: Dành cho Khách du lịch muốn lập kế hoạch tự động (User Plan), ghi hành trình (Record) & nghe thuyết minh di sản.
+            </Text>
+            <Text className="text-[12px] leading-5 text-[#6F657A]">
+              • <Text className="font-extrabold text-[#EB489B]">Gói Partner (Shop)</Text>: Dành cho Chủ cửa hàng/địa điểm kinh doanh muốn đăng thông tin shop lên ứng dụng & tạo mã giảm giá thu hút khách.
+            </Text>
+          </View>
         </View>
 
         {activeAudience === "PARTNER" ? (

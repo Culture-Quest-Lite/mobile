@@ -11,10 +11,13 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { type ComponentProps, useCallback, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
+  type ComponentProps,
+  useCallback,
+  useMemo,
+  useState
+} from "react";
+import {
   Modal,
   Pressable,
   ScrollView,
@@ -24,10 +27,16 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { routeSystemAlert } from "@/features/route/components/route-system-alert";
+
 import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
+import {
+  getMyRecordJourneys,
+  type RecordRouteDto,
+} from "@/features/route/api/record-route-api";
 import {
   abandonRouteProgress,
   getRouteById,
@@ -40,10 +49,6 @@ import {
   type UserRouteProgressDto,
 } from "@/features/route/api/route-api";
 import { getMyUserPlans, type UserPlan } from "@/features/route/api/user-plan-api";
-import {
-  getMyRecordJourneys,
-  type RecordRouteDto,
-} from "@/features/route/api/record-route-api";
 
 type Tab = "official" | "active" | "completed" | "bookmarked" | "plans" | "journeys" | "community";
 type RouteVariant =
@@ -190,7 +195,7 @@ function makeFallbackRouteItemFromProgress(
     id: String(progress.routeId),
     meaning: "Tiến độ được lấy từ /api/v1/user-route-progress.",
     rating: 4.8,
-    story: "Tiếp tục check-in các hotspot còn lại để hoàn thành tuyến.",
+    story: "Tiếp tục check-in các địa điểm còn lại để hoàn thành tuyến.",
     subtitle: `${Math.round(progress.progressPercentage || 0)}% hoàn thành`,
     theme: "User Route Progress",
     title: progress.route?.routeName || `Tuyến #${progress.routeId}`,
@@ -233,7 +238,6 @@ export default function RouteScreen() {
   const [myPlans, setMyPlans] = useState<UserPlan[]>([]);
   const [planError, setPlanError] = useState<string | null>(null);
   const [myRecordJourneys, setMyRecordJourneys] = useState<RecordRouteDto[]>([]);
-  const [journeyError, setJourneyError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -391,14 +395,12 @@ export default function RouteScreen() {
             setMyRecordJourneys(
               Array.isArray(journeysResult.value) ? journeysResult.value : [],
             );
-            setJourneyError(null);
           } else {
-            setMyRecordJourneys([]);
-            setJourneyError(
-              journeysResult.reason instanceof Error
-                ? journeysResult.reason.message
-                : "Không thể tải hành trình đã ghi.",
+            console.warn(
+              "[route-screen] get record journeys failed",
+              journeysResult.reason,
             );
+            setMyRecordJourneys([]);
           }
 
           if (officialResult.status === "rejected") {
@@ -419,7 +421,6 @@ export default function RouteScreen() {
             setSavedRoutesFromApi([]);
             setMyPlans([]);
             setMyRecordJourneys([]);
-            setJourneyError(null);
             setRouteError(
               error instanceof Error
                 ? error.message
@@ -473,7 +474,7 @@ export default function RouteScreen() {
     );
     const routeName = targetProgress?.route?.routeName || "tuyến này";
 
-    Alert.alert(
+    routeSystemAlert.alert(
       "Xác nhận bỏ tuyến",
       `Bạn có chắc chắn muốn bỏ ${routeName}? Tiến độ hiện tại sẽ bị dừng lại.`,
       [
@@ -501,9 +502,9 @@ export default function RouteScreen() {
                     route.id !== String(targetProgress?.routeId ?? progressId),
                 ),
               );
-              Alert.alert("Đã bỏ tuyến", "Tiến độ tuyến này đã được dừng.");
+              routeSystemAlert.alert("Đã bỏ tuyến", "Tiến độ tuyến này đã được dừng.");
             } catch (error) {
-              Alert.alert(
+              routeSystemAlert.alert(
                 "Không thể bỏ tuyến",
                 error instanceof Error
                   ? error.message
@@ -520,7 +521,7 @@ export default function RouteScreen() {
   async function handleUnsaveRoute(savedRouteId: number, routeName: string) {
     if (removingSavedRouteId !== null) return;
 
-    Alert.alert(
+    routeSystemAlert.alert(
       "Bỏ lưu tuyến",
       `Bạn có chắc chắn muốn bỏ lưu ${routeName}?`,
       [
@@ -545,7 +546,7 @@ export default function RouteScreen() {
                 ),
               );
             } catch (error) {
-              Alert.alert(
+              routeSystemAlert.alert(
                 "Không thể bỏ lưu tuyến",
                 error instanceof Error
                   ? error.message
@@ -725,7 +726,7 @@ export default function RouteScreen() {
             <UserPlanTab plans={myPlans} error={planError} />
           )}
           {tab === "journeys" && (
-            <MyJourneyTab journeys={myRecordJourneys} error={journeyError} />
+            <MyJourneyTab journeys={myRecordJourneys} />
           )}
           {tab === "community" && <CommunityTab />}
         </View>
@@ -843,7 +844,7 @@ function UserPlanTab({ plans, error }: { plans: UserPlan[]; error: string | null
             Tạo kế hoạch hành trình mới
           </Text>
           <Text className="mt-1 text-[12px] text-white/90">
-            Chọn hotspot, tối ưu thứ tự và bắt đầu khi bạn sẵn sàng.
+            Chọn địa điểm, tối ưu thứ tự và bắt đầu khi bạn sẵn sàng.
           </Text>
         </LinearGradient>
       </Pressable>
@@ -891,10 +892,8 @@ function UserPlanTab({ plans, error }: { plans: UserPlan[]; error: string | null
 
 function MyJourneyTab({
   journeys,
-  error,
 }: {
   journeys: RecordRouteDto[];
-  error: string | null;
 }) {
   const router = useRouter();
 
@@ -983,7 +982,7 @@ function MyJourneyTab({
                 Ghi hành trình mới
               </Text>
               <Text className="mt-1 text-[12px] leading-5 text-white/90">
-                Lưu các hotspot đã check-in và hoàn thiện route của riêng bạn.
+                Lưu các địa điểm đã check-in và hoàn thiện hành trình của riêng bạn.
               </Text>
             </View>
             <View className="h-9 w-9 items-center justify-center rounded-full bg-white/20">
@@ -997,13 +996,7 @@ function MyJourneyTab({
         </LinearGradient>
       </Pressable>
 
-      {error ? (
-        <View className="rounded-2xl border border-[#FFE1E8] bg-[#FFF5F8] px-4 py-3">
-          <Text className="text-[12px] font-semibold text-[#B42345]">{error}</Text>
-        </View>
-      ) : null}
-
-      {journeys.length === 0 && !error ? (
+      {journeys.length === 0 ? (
         <EmptyState text="Bạn chưa ghi hành trình nào" />
       ) : null}
 
@@ -1056,7 +1049,7 @@ function MyJourneyTab({
                       tintColor="#EB489B"
                     />
                     <Text className="text-[11px] font-bold text-[#625A68]">
-                      {(journey.hotspots ?? []).length} hotspot
+                      {(journey.hotspots ?? []).length} địa điểm
                     </Text>
                   </View>
                   <View className="rounded-full bg-[#F7F8FC] px-3 py-2">
@@ -1066,7 +1059,17 @@ function MyJourneyTab({
 
                 <Pressable
                   className="mt-3 rounded-2xl bg-[#EB489B] py-3"
-                  onPress={() => router.push("/route/custom/record" as Href)}
+                  onPress={() => {
+                    if (
+                      section.key === "RECORDING" ||
+                      section.key === "DRAFT"
+                    ) {
+                      router.push("/route/custom/record" as Href);
+                      return;
+                    }
+
+                    router.push(`/route/${journey.routeId}` as Href);
+                  }}
                 >
                   <Text className="text-center text-[13px] font-extrabold text-white">
                     {section.key === "RECORDING"
@@ -1090,7 +1093,7 @@ function MyJourneyTab({
           {grouped.OTHER.map((journey) => (
             <View key={journey.routeId} className="rounded-3xl border border-[#ECE7F4] bg-white p-4" style={cardShadowStyle}>
               <Text className="text-[15px] font-black text-[#2B2233]">{journey.routeName || `Hành trình #${journey.routeId}`}</Text>
-              <Text className="mt-1 text-[11px] text-[#8E869A]">{journey.status} · {(journey.hotspots ?? []).length} hotspot</Text>
+              <Text className="mt-1 text-[11px] text-[#8E869A]">{journey.status} · {(journey.hotspots ?? []).length} địa điểm</Text>
             </View>
           ))}
         </View>
@@ -1229,7 +1232,7 @@ function CommunityTab() {
                     Tạo tuyến đường cá nhân
                   </Text>
                   <Text className="mt-1 text-[12px] leading-5 text-[#777181]">
-                    Chủ động tìm, chọn và sắp xếp các hotspot theo kế hoạch của bạn trước khi bắt đầu đi.
+                    Chủ động tìm, chọn và sắp xếp các địa điểm theo kế hoạch của bạn trước khi bắt đầu đi.
                   </Text>
                   <View className="mt-3 self-start rounded-full bg-[#FFF1F6] px-3 py-1.5">
                     <Text className="text-[10px] font-extrabold text-[#D93679]">
@@ -1270,7 +1273,7 @@ function CommunityTab() {
                     </View>
                   </View>
                   <Text className="mt-1 text-[12px] leading-5 text-[#777181]">
-                    Bắt đầu đi thực tế. Mỗi lần check-in, hệ thống lưu hotspot và tạo story nháp cho hành trình của bạn.
+                    Bắt đầu đi thực tế. Mỗi lần check-in, hệ thống lưu địa điểm và tạo story nháp cho hành trình của bạn.
                   </Text>
                   <View className="mt-3 rounded-2xl bg-[#FFF8F4] px-3 py-2.5">
                     <Text className="text-[11px] font-semibold leading-4 text-[#A44A35]">
@@ -1311,9 +1314,9 @@ function CommunityTab() {
               <GuideSection
                 step="A"
                 title="Tạo tuyến đường cá nhân"
-                description="Bạn tự chọn và sắp xếp các hotspot theo ý thích. Dùng khi muốn chuẩn bị lịch trình trước chuyến đi."
+                description="Bạn tự chọn và sắp xếp các địa điểm theo ý thích. Dùng khi muốn chuẩn bị lịch trình trước chuyến đi."
                 bullets={[
-                  "Tìm và thêm hotspot mong muốn.",
+                  "Tìm và thêm địa điểm mong muốn.",
                   "Sắp xếp thứ tự điểm dừng.",
                   "Chỉnh tên, mô tả và thông tin route.",
                 ]}
@@ -1321,10 +1324,10 @@ function CommunityTab() {
               <GuideSection
                 step="B"
                 title="Ghi hành trình mới"
-                description="Dùng khi đang đi thực tế và muốn lưu lại những hotspot đã check-in thành một route mới."
+                description="Dùng khi đang đi thực tế và muốn lưu lại những địa điểm đã check-in thành một hành trình mới."
                 bullets={[
                   "Bắt đầu ghi: route có trạng thái RECORDING.",
-                  "Mỗi check-in tạo một story nháp gắn với route và hotspot.",
+                  "Mỗi check-in tạo một story nháp gắn với hành trình và địa điểm.",
                   "Kết thúc ghi: route chuyển sang DRAFT để chỉnh sửa.",
                   "Finalize: route chuyển sang TRIAL để submit lên hệ thống.",
                 ]}

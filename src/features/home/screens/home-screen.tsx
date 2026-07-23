@@ -2187,6 +2187,42 @@ export default function HomeScreen() {
             />
           ) : null}
 
+          {/* Compact Premium Promo Banner */}
+          <Pressable
+            onPress={() => router.push("/explore")}
+            className="overflow-hidden rounded-2xl border border-[#FCDDEC] bg-[#FFF0F7] p-3.5 shadow-sm"
+          >
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 pr-3">
+                <View className="mb-1 flex-row items-center gap-1.5 self-start rounded-full bg-[#EB489B] px-2.5 py-0.5">
+                  <SymbolView
+                    name={{
+                      ios: "crown.fill",
+                      android: "workspace_premium",
+                      web: "workspace_premium",
+                    }}
+                    size={10}
+                    tintColor="#FFFFFF"
+                  />
+                  <Text className="text-[9px] font-extrabold uppercase tracking-wider text-white">
+                    CULTUREQUEST PREMIUM
+                  </Text>
+                </View>
+                <Text className="text-[14px] font-extrabold text-[#2B2233]">
+                  Mở khóa AI Lập kế hoạch & Ghi hành trình Live
+                </Text>
+                <Text className="mt-0.5 text-[11px] text-[#8E869A]">
+                  Trải nghiệm bộ tính năng Premium (User Plan & Record) tại trang Khám phá
+                </Text>
+              </View>
+              <View className="flex-row items-center rounded-full bg-[#EB489B] px-3 py-1.5">
+                <Text className="text-[11px] font-extrabold text-white">
+                  Khám phá ngay →
+                </Text>
+              </View>
+            </View>
+          </Pressable>
+
           <View className="gap-4">
             <Text className="text-[17px] font-extrabold text-[#2B2233]">
               Tuyến nổi bật
