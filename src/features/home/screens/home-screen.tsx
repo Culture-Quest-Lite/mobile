@@ -383,9 +383,9 @@ type NearbyPlacesSectionStatus = "empty" | "loading" | "ready";
 type SuggestedRoutesSectionStatus = "empty" | "loading" | "ready";
 type SuggestedRouteCard = RouteItem;
 
-const defaultNearbySearchDistanceMeters = 20;
-const nearbyDistanceSliderMinimumMeters = 20;
-const nearbyDistanceSliderMaximumMeters = 10000;
+const defaultNearbySearchDistanceMeters = 1000;
+const nearbyDistanceSliderMinimumMeters = 1000;
+const nearbyDistanceSliderMaximumMeters = 15000;
 const nearbyDistanceSliderStepMeters = 20;
 const suggestedRouteCardImageHeight = 136;
 const suggestedRouteCardHeight = 248;
