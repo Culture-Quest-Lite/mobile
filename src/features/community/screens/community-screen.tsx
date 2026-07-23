@@ -1239,7 +1239,7 @@ export default function CommunityScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 28 }}
         >
-          <View className="pb-8 pt-4" style={{ paddingHorizontal: gutter }}>
+          <View className="pb-7 pt-4" style={{ paddingHorizontal: gutter }}>
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center gap-3">
                 <Pressable
@@ -1280,17 +1280,17 @@ export default function CommunityScreen() {
               </View>
             </View>
 
-            <View className="mt-7 gap-3">
+            <View className="mt-5 gap-2.5">
               <View
                 className="flex-row items-center rounded-[24px] bg-white"
                 style={[
                   composerShadowStyle,
                   {
                     marginHorizontal: -6,
-                    paddingBottom: 12,
+                    paddingBottom: 10,
                     paddingLeft: 8,
                     paddingRight: 10,
-                    paddingTop: 12,
+                    paddingTop: 10,
                   },
                 ]}
               >
@@ -1312,30 +1312,29 @@ export default function CommunityScreen() {
                 </Pressable>
 
                 <Pressable
-                  className="ml-2.5 overflow-hidden rounded-full"
+                  className="ml-2.5 h-9 w-9 items-center justify-center rounded-full border"
                   onPress={openCommunityComposer}
+                  style={{
+                    backgroundColor: "#F1F3F5",
+                    borderColor: "#E5E7EB",
+                  }}
                 >
-                  <LinearGradient
-                    colors={gradientColors}
-                    end={{ x: 1, y: 0.5 }}
-                    locations={[0, 0.58, 1]}
-                    start={{ x: 0, y: 0.5 }}
-                    className="h-9 w-9 items-center justify-center rounded-full"
-                  >
-                    <SymbolView
-                      name={{
-                        ios: "photo.on.rectangle.angled",
-                        android: "image",
-                        web: "image",
-                      }}
-                      size={15}
-                      tintColor="#FFFFFF"
-                    />
-                  </LinearGradient>
+                  <SymbolView
+                    name={{
+                      ios: "photo.on.rectangle.angled",
+                      android: "image",
+                      web: "image",
+                    }}
+                    size={15}
+                    tintColor="#9CA3AF"
+                  />
                 </Pressable>
               </View>
 
-              <View className="flex-row rounded-full bg-[#FFF1F6] p-1.5">
+              <View
+                className="flex-row overflow-hidden rounded-full p-1"
+                style={{ backgroundColor: "#F7EAF4" }}
+              >
                 {communityTabs.map((tab) => {
                   const isActive = activeTab === tab.key;
 
@@ -1347,29 +1346,31 @@ export default function CommunityScreen() {
                         setActiveTab(tab.key);
                       }}
                     >
-                      {isActive ? (
-                        <LinearGradient
-                          colors={gradientColors}
-                          end={{ x: 1, y: 0.5 }}
-                          locations={[0, 0.58, 1]}
-                          start={{ x: 0, y: 0.5 }}
-                          className="rounded-full px-3.5 py-3"
-                          style={pillShadowStyle}
-                        >
-                          <CommunityTabLabel tab={tab} active />
-                        </LinearGradient>
-                      ) : (
-                        <View className="rounded-full px-3.5 py-3">
-                          <CommunityTabLabel tab={tab} />
-                        </View>
-                      )}
+                      <View
+                        className="mx-0.5 rounded-full px-3.5 py-2.5"
+                        style={
+                          isActive
+                            ? {
+                                backgroundColor: "#FFFFFF",
+                                borderRadius: 999,
+                                shadowColor: "rgba(177, 142, 168, 0.18)",
+                                shadowOpacity: 1,
+                                shadowRadius: 10,
+                                shadowOffset: { width: 0, height: 4 },
+                                elevation: 2,
+                              }
+                            : undefined
+                        }
+                      >
+                        <CommunityTabLabel tab={tab} active={isActive} />
+                      </View>
                     </Pressable>
                   );
                 })}
               </View>
             </View>
 
-            <View className="mt-4 gap-2">
+            <View className="mt-3 gap-1.5">
               {activeTab === "community" && communityFeedStatus === "loading" ? (
                 <View
                   className="rounded-[28px] border border-[#F4E0D5] bg-white px-5 py-6"
@@ -1386,7 +1387,7 @@ export default function CommunityScreen() {
                   <Text className="text-[15px] font-bold text-[#C2416C]">
                     {communityFeedError ?? "Không tải được newsfeed cộng đồng."}
                   </Text>
-                  <Text className="mt-2 text-[14px] leading-5 text-[#8E869A]">
+                  <Text className="mt-1.5 text-[14px] leading-[18px] text-[#8E869A]">
                     Đang hiển thị feed mẫu tạm thời để màn hình không bị trống.
                   </Text>
                 </View>
@@ -1426,7 +1427,7 @@ export default function CommunityScreen() {
                         <Text className="text-[18px] font-black text-[#2E2336]">
                           Chưa có cập nhật mới
                         </Text>
-                        <Text className="mt-2 text-[14px] leading-5 text-[#8E869A]">
+                        <Text className="mt-1.5 text-[14px] leading-[18px] text-[#8E869A]">
                           {activeTab === "following"
                             ? "Danh sách bạn đang theo dõi hiện chưa có cập nhật mới. Chuyển sang Cộng đồng để xem thêm hoạt động nổi bật."
                             : "Feed cộng đồng hiện chưa có bài mới. Hãy quay lại sau để xem thêm hoạt động từ các explorer."}
@@ -1478,15 +1479,10 @@ function CommunityTabLabel({
   tab: CommunityTab;
 }) {
   return (
-    <View className="flex-row items-center justify-center gap-2">
-      <SymbolView
-        name={tab.icon}
-        size={15}
-        tintColor={active ? "#FFFFFF" : "#EB489B"}
-      />
+    <View className="items-center justify-center">
       <Text
-        className={`text-[12px] font-extrabold ${
-          active ? "text-white" : "text-[#7C6F82]"
+        className={`text-[12px] font-semibold ${
+          active ? "text-[#6F586B]" : "text-[#9B8797]"
         }`}
       >
         {tab.label}
@@ -1591,13 +1587,13 @@ function CommunityPostReactionSummary({
       <View className="flex-row items-center">
         <View
           className="h-6 w-6 items-center justify-center rounded-full"
-          style={{ backgroundColor: isLiked ? "#2563EB" : "#1D4ED8" }}
+          style={{ backgroundColor: isLiked ? "#F43F5E" : "#FB7185" }}
         >
           <SymbolView
             name={{
-              ios: "hand.thumbsup.fill",
-              android: "thumb_up",
-              web: "thumb_up",
+              ios: "heart.fill",
+              android: "favorite",
+              web: "favorite",
             }}
             size={12}
             tintColor="#FFFFFF"
@@ -1637,8 +1633,8 @@ function CommunityPostActionButton({
   label: string;
   onPress?: (() => void) | undefined;
 }) {
-  const iconColor = active ? "#2563EB" : "#6B7280";
-  const textColor = active ? "#2563EB" : "#4B5563";
+  const iconColor = active ? "#F43F5E" : "#6B7280";
+  const textColor = active ? "#F43F5E" : "#4B5563";
 
   return (
     <Pressable
@@ -1647,12 +1643,12 @@ function CommunityPostActionButton({
       hitSlop={8}
       onPress={onPress}
       style={({ pressed }) => ({
-        backgroundColor: active ? "#EFF6FF" : "transparent",
+        backgroundColor: active ? "#FFF1F4" : "transparent",
         opacity: disabled ? 0.5 : pressed ? 0.72 : 1,
       })}
     >
       {isLoading ? (
-        <ActivityIndicator color="#2563EB" size="small" />
+        <ActivityIndicator color="#F43F5E" size="small" />
       ) : (
         <SymbolView name={icon} size={18} tintColor={iconColor} />
       )}
@@ -1723,7 +1719,7 @@ function CommunityPostCard({
 
   return (
     <View className="overflow-hidden bg-white" style={{ marginHorizontal: -pageGutter }}>
-      <View className="flex-row items-start px-4 pb-3 pt-3">
+      <View className="flex-row items-start px-4 pb-2.5 pt-2.5">
         <Pressable
           accessibilityLabel={`Mở hồ sơ của ${post.author}`}
           accessibilityRole={post.canOpenProfile === false ? undefined : "button"}
@@ -1741,19 +1737,19 @@ function CommunityPostCard({
           <AvatarMonogram colors={post.avatarColors} initials={post.initials} size={46} />
         </Pressable>
 
-        <View className="ml-3 flex-1 pr-3">
+        <View className="ml-2.5 flex-1 pr-3">
           <Text
             className="text-[16px] font-black text-[#111827]"
             numberOfLines={1}
-            style={{ includeFontPadding: false, lineHeight: 17 }}
+            style={{ includeFontPadding: false, lineHeight: 16 }}
           >
             {post.author}
           </Text>
 
-          <View className="mt-1 flex-row items-center">
+          <View className="mt-0.5 flex-row items-center">
             <Text
               className="text-[12px] font-medium text-[#6B7280]"
-              style={{ includeFontPadding: false, lineHeight: 13 }}
+              style={{ includeFontPadding: false, lineHeight: 12 }}
             >
               {post.time}
             </Text>
@@ -1783,12 +1779,12 @@ function CommunityPostCard({
         </View>
       </View>
 
-      <View className="px-4 pb-3">
+      <View className="px-4 pb-2.5">
         <ExpandablePostCaption text={post.caption} />
 
         {shouldShowHotspotLocation ? (
           <Pressable
-            className="mt-2 flex-row items-center"
+            className="mt-1.5 flex-row items-center"
             disabled={!canOpenHotspotLocation}
             onPress={
               canOpenHotspotLocation
@@ -1818,7 +1814,7 @@ function CommunityPostCard({
               <Text
                 className="ml-2 flex-1 text-[14px] font-semibold text-[#4B5563]"
                 numberOfLines={1}
-                style={{ includeFontPadding: false, lineHeight: 15 }}
+                style={{ includeFontPadding: false, lineHeight: 14 }}
               >
                 {locationLabel}
               </Text>
@@ -1827,7 +1823,7 @@ function CommunityPostCard({
         ) : null}
 
         {post.tags.length > 0 ? (
-          <View className="mt-2 flex-row flex-wrap gap-1.5">
+          <View className="mt-1.5 flex-row flex-wrap gap-1">
             {post.tags.slice(0, 3).map((tag) => (
               <TagPill key={`${post.id}-${tag}`} label={tag} />
             ))}
@@ -1837,7 +1833,7 @@ function CommunityPostCard({
 
       <CommunityPostMediaGallery edgeToEdgeWidth={edgeToEdgeWidth} items={mediaItems} />
 
-      <View className="px-4 pb-3 pt-3">
+      <View className="px-4 pb-2.5 pt-2.5">
         <CommunityPostReactionSummary
           comments={post.comments}
           isLiked={isLiked}
@@ -1845,23 +1841,23 @@ function CommunityPostCard({
           shares={post.shares}
         />
 
-        <View className="mt-3 h-px bg-[#E5E7EB]" />
+        <View className="mt-2.5 h-px bg-[#E5E7EB]" />
 
-        <View className="mt-1 flex-row items-center gap-1">
+        <View className="mt-0.5 flex-row items-center gap-1">
           <CommunityPostActionButton
             active={isLiked}
             disabled={!post.canLike || isLiking}
             icon={
               isLiked
                 ? {
-                    ios: "hand.thumbsup.fill",
-                    android: "thumb_up",
-                    web: "thumb_up",
+                    ios: "heart.fill",
+                    android: "favorite",
+                    web: "favorite",
                   }
                 : {
-                    ios: "hand.thumbsup",
-                    android: "thumb_up_off_alt",
-                    web: "thumb_up_off_alt",
+                    ios: "heart",
+                    android: "favorite_border",
+                    web: "favorite_border",
                   }
             }
             isLoading={isLiking}
@@ -1916,8 +1912,8 @@ function ExpandablePostCaption({ text }: { text: string }) {
 
   return (
     <Text
-      className="mt-2 text-[14px] text-[#33293A]"
-      style={{ includeFontPadding: false, lineHeight: 16 }}
+      className="mt-1.5 text-[14px] text-[#33293A]"
+      style={{ includeFontPadding: false, lineHeight: 15 }}
     >
       {expanded || !shouldTruncate ? normalizedText : collapsedText}
       {shouldTruncate ? (

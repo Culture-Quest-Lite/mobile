@@ -778,7 +778,7 @@ export default function CommunityExplorerProfileScreen() {
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 32 }}
+        contentContainerStyle={{ paddingBottom: 28 }}
         showsVerticalScrollIndicator={false}
       >
         <View className="relative" style={{ height: heroHeight }}>
@@ -923,11 +923,11 @@ export default function CommunityExplorerProfileScreen() {
             </View>
           </View>
 
-          <View className="mt-2.5">
+          <View className="mt-2">
             <PersonalInfoCard profile={profile} apiProfile={remoteProfile} />
           </View>
 
-          <View className="mt-3 flex-row border-y border-[#E9EAF0]">
+          <View className="mt-2.5 flex-row border-y border-[#E9EAF0]">
             {visibleTabs.map((tab) => {
               const selected = resolvedActiveTab === tab.key;
               const shouldShowLabel = tab.key !== "shared";
@@ -962,7 +962,7 @@ export default function CommunityExplorerProfileScreen() {
             })}
           </View>
 
-          <View className="mt-4">
+          <View className="mt-3">
             {resolvedActiveTab === "posts" ? (
               <PostsTabContent
                 emptyMessage="Explorer này chưa có bài viết công khai nào."
@@ -1172,7 +1172,7 @@ function PersonalInfoCard({
           Thông tin cá nhân
         </Text>
 
-        <View className="mt-3 gap-3">
+        <View className="mt-2.5 gap-2.5">
           <ExpandablePersonalInfoRow
             icon={{
               ios: "text.alignleft",
@@ -1220,7 +1220,7 @@ function PersonalInfoCard({
         Thông tin cá nhân
       </Text>
 
-      <View className="mt-3 gap-3">
+      <View className="mt-2.5 gap-2.5">
         {infoRows.map((item) => (
           <PersonalInfoRow
             key={`${item.text}-${item.accentColor}`}
@@ -1244,14 +1244,14 @@ function PersonalInfoRow({
   text: string;
 }) {
   return (
-    <View className="flex-row items-center gap-2.5">
+    <View className="flex-row items-center gap-2">
       <View
         className="h-8 w-8 items-center justify-center rounded-full"
         style={{ backgroundColor: `${accentColor}14` }}
       >
         <SymbolView name={icon} size={15} tintColor={accentColor} />
       </View>
-      <Text className="min-w-0 flex-1 text-[13px] font-normal leading-[18px] text-[#202124]">
+      <Text className="min-w-0 flex-1 text-[13px] font-normal leading-[17px] text-[#202124]">
         {text}
       </Text>
     </View>
@@ -1275,14 +1275,14 @@ function ExpandablePersonalInfoRow({
     : text;
 
   return (
-    <View className="flex-row items-start gap-2.5">
+    <View className="flex-row items-start gap-2">
       <View
         className="h-8 w-8 items-center justify-center rounded-full"
         style={{ backgroundColor: `${accentColor}14` }}
       >
         <SymbolView name={icon} size={15} tintColor={accentColor} />
       </View>
-      <Text className="min-w-0 flex-1 text-[13px] font-normal leading-[18px] text-[#202124]">
+      <Text className="min-w-0 flex-1 text-[13px] font-normal leading-[17px] text-[#202124]">
         {expanded || !shouldTruncate ? text : collapsedText}
         {shouldTruncate ? (
           <Text
@@ -1365,7 +1365,7 @@ function CommunityPostCard({
   const sharedText = readMeaningfulText(post.sharedText);
 
   return (
-    <View className={`px-3 py-3 ${isLast ? "" : "border-b border-[#DEE3EA]"}`}>
+    <View className={`px-3 py-2.5 ${isLast ? "" : "border-b border-[#DEE3EA]"}`}>
       <View className="flex-row items-start justify-between gap-2">
         <View className="min-w-0 flex-1 flex-row items-center gap-2.5">
           <CommunityPostAuthorAvatar
@@ -1410,29 +1410,29 @@ function CommunityPostCard({
         ) : null}
       </View>
 
-      <Text className="mt-3 text-[15px] leading-[22px] text-[#202124]">
+      <Text className="mt-2 text-[15px] leading-[20px] text-[#202124]">
         {post.caption}
       </Text>
 
       {sharedText && sharedText !== post.caption ? (
-        <View className="mt-3 rounded-[18px] border border-[#E5E7EB] bg-[#FCFCFD] px-3 py-3">
+        <View className="mt-2 rounded-[18px] border border-[#E5E7EB] bg-[#FCFCFD] px-3 py-2.5">
           <Text className="text-[11px] font-extrabold uppercase tracking-[0.6px] text-[#8E869A]">
             Bài viết chia sẻ
           </Text>
-          <Text className="mt-1 text-[13px] leading-[19px] text-[#4B5563]">
+          <Text className="mt-0.5 text-[13px] leading-[18px] text-[#4B5563]">
             {sharedText}
           </Text>
         </View>
       ) : null}
 
       {moodLabel ? (
-        <Text className="mt-2 text-[12px] font-semibold text-[#F58752]">
+        <Text className="mt-1.5 text-[12px] font-semibold text-[#F58752]">
           {moodLabel}
         </Text>
       ) : null}
 
       {post.tags.length ? (
-        <View className="mt-2 flex-row flex-wrap gap-2">
+        <View className="mt-1.5 flex-row flex-wrap gap-1.5">
           {post.tags.map((tag) => (
             <PostTag key={`${post.id}-${tag}`} label={tag} />
           ))}
@@ -1440,7 +1440,7 @@ function CommunityPostCard({
       ) : null}
 
       {mediaSource ? (
-        <View className="mt-3" style={{ marginHorizontal: -(pageGutter + 12) }}>
+        <View className="mt-2" style={{ marginHorizontal: -(pageGutter + 12) }}>
           <Image
             source={mediaSource}
             contentFit="cover"
@@ -1454,7 +1454,7 @@ function CommunityPostCard({
         </View>
       ) : null}
 
-      <View className="mt-3 flex-row items-center gap-5">
+      <View className="mt-2.5 flex-row items-center gap-4">
         <PostAction
           icon={{ ios: "heart.fill", android: "favorite", web: "favorite" }}
           tintColor="#F43F5E"
@@ -1568,7 +1568,7 @@ function RoutesTabContent({
   }
 
   return (
-    <View className="gap-4">
+    <View className="gap-3">
       <RouteSection
         title="Route đã hoàn thành"
         actionLabel={`${completedRoutes.length} route`}
@@ -1631,7 +1631,7 @@ function ApiRoutesTabContent({
   }
 
   return (
-    <View className="gap-2.5">
+    <View className="gap-2">
       {routes.map((route) => (
         <Pressable
           key={`route-reference-${route.routeId}`}
@@ -1682,7 +1682,7 @@ function RouteSection({
 }) {
   return (
     <View>
-      <View className="mb-3 flex-row items-center justify-between">
+      <View className="mb-2.5 flex-row items-center justify-between">
         <Text className="text-[15px] font-extrabold text-[#2B2233]">
           {title}
         </Text>
