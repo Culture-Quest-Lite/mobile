@@ -266,6 +266,9 @@ export default function UserPlanDetailScreen() {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-[#FAF8FC]">
         <ActivityIndicator size="large" color="#EB489B" />
+        <Text className="mt-3 text-[13px] font-semibold text-[#7A7182]">
+          Đang tải kế hoạch...
+        </Text>
       </SafeAreaView>
     );
   }

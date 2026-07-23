@@ -3,7 +3,12 @@ import '../global.css';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { AppState, Text, TextInput } from 'react-native';
+import {
+  AppState,
+  InteractionManager,
+  Text,
+  TextInput,
+} from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { warnForInvalidPublicEnv } from '@/constants/env';
@@ -34,34 +39,6 @@ AppTextInput.defaultProps = AppTextInput.defaultProps ?? {};
 AppTextInput.defaultProps.allowFontScaling = true;
 AppTextInput.defaultProps.maxFontSizeMultiplier = 1.15;
 
-type DeferredTask = {
-  cancel: () => void;
-};
-
-function scheduleDeferredTask(callback: () => void): DeferredTask {
-  if (typeof globalThis.requestIdleCallback === 'function') {
-    const idleCallbackId = globalThis.requestIdleCallback(() => {
-      callback();
-    });
-
-    return {
-      cancel: () => {
-        if (typeof globalThis.cancelIdleCallback === 'function') {
-          globalThis.cancelIdleCallback(idleCallbackId);
-        }
-      },
-    };
-  }
-
-  const timeoutId = setTimeout(callback, 0);
-
-  return {
-    cancel: () => {
-      clearTimeout(timeoutId);
-    },
-  };
-}
-
 export default function RootLayout() {
   warnForInvalidPublicEnv();
 
@@ -69,11 +46,12 @@ export default function RootLayout() {
 
   useEffect(() => {
     let isCancelled = false;
-    let deferredTask: DeferredTask | null = null;
+    let interactionTask: ReturnType<typeof InteractionManager.runAfterInteractions> | null =
+      null;
 
     const scheduleLocationPermissionRequest = () => {
-      deferredTask?.cancel();
-      deferredTask = scheduleDeferredTask(() => {
+      interactionTask?.cancel();
+      interactionTask = InteractionManager.runAfterInteractions(() => {
         if (isCancelled || AppState.currentState !== 'active') {
           return;
         }
@@ -94,7 +72,7 @@ export default function RootLayout() {
 
     return () => {
       isCancelled = true;
-      deferredTask?.cancel();
+      interactionTask?.cancel();
       appStateSubscription.remove();
     };
   }, []);
@@ -112,6 +90,9 @@ export default function RootLayout() {
           <Stack.Screen name="community/profile/[id]" />
           <Stack.Screen name="profile/information" />
           <Stack.Screen name="profile/menu" />
+          <Stack.Screen name="subscription" />
+          <Stack.Screen name="subscription/premium" />
+          <Stack.Screen name="subscription/partner" />
           <Stack.Screen name="route/[id]" />
           <Stack.Screen name="route/custom/plan" />
           <Stack.Screen name="route/custom/plan/[id]" />
