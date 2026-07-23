@@ -10,6 +10,7 @@ import { warnForInvalidPublicEnv } from '@/constants/env';
 import '@/lib/nativewind';
 import { requestForegroundLocationPermissionOnAppLaunch } from '@/lib/location';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { RouteSystemAlertHost } from '@/features/route/components/route-system-alert';
 
 const AppText = Text as typeof Text & {
   defaultProps?: {
@@ -123,6 +124,7 @@ export default function RootLayout() {
           <Stack.Screen name="hotspots/search" />
           <Stack.Screen name="+not-found" />
         </Stack>
+        <RouteSystemAlertHost />
       </ThemeProvider>
     </SafeAreaProvider>
   );

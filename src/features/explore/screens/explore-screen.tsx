@@ -416,8 +416,9 @@ export default function ExploreScreen() {
             </View>
           </View>
 
+          {/* Search & Filter Bar */}
           <View className="flex-row items-center gap-3">
-            <View className="flex-1 flex-row items-center rounded-[26px] bg-[#FAF7FC] px-4 py-3.5">
+            <View className="flex-1 flex-row items-center rounded-[26px] bg-[#FAF7FC] px-4 py-3.5 border border-[#F3EDF7]">
               <SymbolView
                 name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
                 size={16}
@@ -427,7 +428,7 @@ export default function ExploreScreen() {
                 Tìm điểm, tuyến, thử thách...
               </Text>
             </View>
-            <Pressable className="h-10 w-10 items-center justify-center rounded-[15px] bg-[#FFF4EF]">
+            <Pressable className="h-11 w-11 items-center justify-center rounded-[18px] bg-[#FFF4EF]">
               <SymbolView
                 name={{ ios: 'slider.horizontal.3', android: 'tune', web: 'tune' }}
                 size={16}
@@ -436,32 +437,303 @@ export default function ExploreScreen() {
             </Pressable>
           </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingVertical: 4 }}
-          >
-            {categories.map((category) => {
-              const selected = category === activeCategory;
-              return (
-                <Pressable
-                  key={category}
-                  onPress={() => setActiveCategory(category)}
-                  className={`mr-3 rounded-full border px-4 py-2 ${
-                    selected ? 'border-[#BB8B4D] bg-[#FBF1E5]' : 'border-[#E5DFD2] bg-white'
-                  }`}
-                >
-                  <Text
-                    className={`text-[14px] font-semibold ${
-                      selected ? 'text-[#A2672B]' : 'text-[#6E6B62]'
+          {/* Quick Actions Toolbar */}
+          <View className="flex-row items-center justify-between rounded-2xl border border-[#FCDDEC] bg-[#FFF8FC] p-3 shadow-sm">
+            <Pressable
+              onPress={() => router.push('/route/custom/plan')}
+              className="flex-1 items-center gap-1.5"
+            >
+              <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#7C3AED]">
+                <SymbolView
+                  name={{
+                    ios: 'sparkles',
+                    android: 'auto_awesome',
+                    web: 'auto_awesome',
+                  }}
+                  size={20}
+                  tintColor="#FFFFFF"
+                />
+              </View>
+              <Text className="text-center text-[11px] font-extrabold text-[#2B2233]">
+                User Plan
+              </Text>
+              <View className="rounded-full bg-[#7C3AED] px-1.5 py-0.5">
+                <Text className="text-[8px] font-extrabold text-white">PRO</Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push('/route/custom/record')}
+              className="flex-1 items-center gap-1.5"
+            >
+              <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#EB489B]">
+                <SymbolView
+                  name={{
+                    ios: 'record.circle.fill',
+                    android: 'radio_button_checked',
+                    web: 'radio_button_checked',
+                  }}
+                  size={20}
+                  tintColor="#FFFFFF"
+                />
+              </View>
+              <Text className="text-center text-[11px] font-extrabold text-[#2B2233]">
+                Record
+              </Text>
+              <View className="rounded-full bg-[#EB489B] px-1.5 py-0.5">
+                <Text className="text-[8px] font-extrabold text-white">PRO</Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push('/route')}
+              className="flex-1 items-center gap-1.5"
+            >
+              <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#F58752]">
+                <SymbolView
+                  name={{
+                    ios: 'map',
+                    android: 'map',
+                    web: 'map',
+                  }}
+                  size={20}
+                  tintColor="#FFFFFF"
+                />
+              </View>
+              <Text className="text-center text-[11px] font-bold text-[#2B2233]">
+                Tuyến đường
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push('/subscription')}
+              className="flex-1 items-center gap-1.5"
+            >
+              <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#FFC93C]">
+                <SymbolView
+                  name={{
+                    ios: 'crown.fill',
+                    android: 'workspace_premium',
+                    web: 'workspace_premium',
+                  }}
+                  size={20}
+                  tintColor="#2B2233"
+                />
+              </View>
+              <Text className="text-center text-[11px] font-bold text-[#2B2233]">
+                Gói VIP
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Premium Features Showcase Section */}
+          <View className="gap-3">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2">
+                <SymbolView
+                  name={{
+                    ios: 'crown.fill',
+                    android: 'workspace_premium',
+                    web: 'workspace_premium',
+                  }}
+                  size={18}
+                  tintColor="#7C3AED"
+                />
+                <Text className="text-[17px] font-extrabold text-[#2B2233]">
+                  Tính năng Premium Nổi bật
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => router.push('/subscription')}
+                className="rounded-full bg-[#EFE7F6] px-3 py-1"
+              >
+                <Text className="text-[11px] font-bold text-[#7C3AED]">
+                  Gói Explorer Premium
+                </Text>
+              </Pressable>
+            </View>
+            <Text className="text-[12px] text-[#8E869A]">
+              Mở khóa bộ công cụ du lịch di sản thông minh dành cho thành viên Premium
+            </Text>
+
+            {/* Card 1: User Plan */}
+            <Pressable
+              onPress={() => router.push('/route/custom/plan')}
+              className="overflow-hidden rounded-[24px] border border-[#E9D5FF] bg-[#FAF5FF] p-4 shadow-sm"
+            >
+              <View className="flex-row items-start justify-between">
+                <View className="flex-1 pr-3">
+                  <View className="mb-2 flex-row items-center gap-1.5 self-start rounded-full bg-[#7C3AED] px-2.5 py-0.5">
+                    <SymbolView
+                      name={{
+                        ios: 'sparkles',
+                        android: 'auto_awesome',
+                        web: 'auto_awesome',
+                      }}
+                      size={10}
+                      tintColor="#FFFFFF"
+                    />
+                    <Text className="text-[10px] font-extrabold uppercase tracking-wider text-white">
+                      PREMIUM FEATURE
+                    </Text>
+                  </View>
+                  <Text className="text-[17px] font-extrabold text-[#2B2233]">
+                    Lập kế hoạch hành trình (User Plan)
+                  </Text>
+                  <Text className="mt-1 text-[13px] leading-5 text-[#6B7280]">
+                    Tự động gợi ý & tối ưu hóa lịch trình du lịch cá nhân hóa bằng AI theo thời gian và sở thích.
+                  </Text>
+                </View>
+                <View className="h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#7C3AED]/12">
+                  <SymbolView
+                    name={{
+                      ios: 'calendar.badge.clock',
+                      android: 'edit_calendar',
+                      web: 'edit_calendar',
+                    }}
+                    size={24}
+                    tintColor="#7C3AED"
+                  />
+                </View>
+              </View>
+              <View className="mt-4 flex-row items-center justify-between border-t border-[#E9D5FF]/60 pt-3">
+                <View className="flex-row items-center gap-1.5">
+                  <SymbolView
+                    name={{
+                      ios: 'checkmark.seal.fill',
+                      android: 'verified',
+                      web: 'verified',
+                    }}
+                    size={14}
+                    tintColor="#7C3AED"
+                  />
+                  <Text className="text-[12px] font-bold text-[#7C3AED]">
+                    AI Tối ưu lộ trình & thời gian
+                  </Text>
+                </View>
+                <View className="flex-row items-center rounded-full bg-[#7C3AED] px-3.5 py-1.5">
+                  <Text className="text-[12px] font-extrabold text-white">
+                    Tạo kế hoạch AI →
+                  </Text>
+                </View>
+              </View>
+            </Pressable>
+
+            {/* Card 2: Record Journey */}
+            <Pressable
+              onPress={() => router.push('/route/custom/record')}
+              className="overflow-hidden rounded-[24px] border border-[#FCCEE2] bg-[#FFF5F9] p-4 shadow-sm"
+            >
+              <View className="flex-row items-start justify-between">
+                <View className="flex-1 pr-3">
+                  <View className="mb-2 flex-row items-center gap-1.5 self-start rounded-full bg-[#EB489B] px-2.5 py-0.5">
+                    <SymbolView
+                      name={{
+                        ios: 'record.circle.fill',
+                        android: 'radio_button_checked',
+                        web: 'radio_button_checked',
+                      }}
+                      size={10}
+                      tintColor="#FFFFFF"
+                    />
+                    <Text className="text-[10px] font-extrabold uppercase tracking-wider text-white">
+                      PREMIUM FEATURE
+                    </Text>
+                  </View>
+                  <Text className="text-[17px] font-extrabold text-[#2B2233]">
+                    Ghi lại hành trình (Record Journey)
+                  </Text>
+                  <Text className="mt-1 text-[13px] leading-5 text-[#6B7280]">
+                    Định vị GPS real-time, lưu lại khoảnh khắc, hình ảnh & câu chuyện di sản trên chuyến đi.
+                  </Text>
+                </View>
+                <View className="h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#EB489B]/12">
+                  <SymbolView
+                    name={{
+                      ios: 'location.fill',
+                      android: 'my_location',
+                      web: 'my_location',
+                    }}
+                    size={24}
+                    tintColor="#EB489B"
+                  />
+                </View>
+              </View>
+              <View className="mt-4 flex-row items-center justify-between border-t border-[#FCCEE2]/60 pt-3">
+                <View className="flex-row items-center gap-1.5">
+                  <SymbolView
+                    name={{
+                      ios: 'map.fill',
+                      android: 'map',
+                      web: 'map',
+                    }}
+                    size={14}
+                    tintColor="#EB489B"
+                  />
+                  <Text className="text-[12px] font-bold text-[#EB489B]">
+                    Ghi tọa độ & nhật ký Live
+                  </Text>
+                </View>
+                <View className="flex-row items-center rounded-full bg-[#EB489B] px-3.5 py-1.5">
+                  <Text className="text-[12px] font-extrabold text-white">
+                    Bắt đầu ghi lại →
+                  </Text>
+                </View>
+              </View>
+            </Pressable>
+          </View>
+
+          {/* Daily Featured Banner */}
+          <View className="rounded-[28px] bg-[#F7F3EA] p-4 border border-[#EBE3D5]">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 pr-3">
+                <Text className="text-[12px] font-semibold uppercase tracking-[1px] text-[#8A7D6D]">
+                  Nổi bật hôm nay
+                </Text>
+                <Text className="mt-1 text-[17px] font-bold text-[#2B2233]">
+                  {apiRoutes[0]?.routeName || 'Khám phá ẩm thực Sài Gòn'}
+                </Text>
+              </View>
+              <View className="rounded-full bg-white px-3 py-2 border border-[#E5DFD2]">
+                <Text className="text-[11px] font-semibold uppercase text-[#B86D2A]">
+                  XP +{apiRoutes[0]?.xp ?? 320}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Category Filter Pills */}
+          <View className="gap-2">
+            <Text className="text-[14px] font-extrabold text-[#2B2233]">
+              Lọc theo chủ đề:
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingVertical: 2 }}
+            >
+              {categories.map((category) => {
+                const selected = category === activeCategory;
+                return (
+                  <Pressable
+                    key={category}
+                    onPress={() => setActiveCategory(category)}
+                    className={`mr-2.5 rounded-full border px-4 py-2 ${
+                      selected ? 'border-[#BB8B4D] bg-[#FBF1E5]' : 'border-[#E5DFD2] bg-white'
                     }`}
                   >
-                    {category}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+                    <Text
+                      className={`text-[13px] font-bold ${
+                        selected ? 'text-[#A2672B]' : 'text-[#6E6B62]'
+                      }`}
+                    >
+                      {category}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
         </View>
 
         <View className="mb-6">
