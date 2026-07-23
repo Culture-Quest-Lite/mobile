@@ -403,11 +403,7 @@ export default function UserPlanScreen() {
   }, [session.isAuthenticated, session.tokenType]);
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      void locateUser(false);
-    }, 0);
-
-    return () => clearTimeout(timeout);
+    void locateUser(false);
   }, [locateUser]);
 
   useEffect(() => {
@@ -732,6 +728,9 @@ export default function UserPlanScreen() {
           {isBrowseLoading ? (
             <View className="items-center py-5">
               <ActivityIndicator color="#EB489B" />
+              <Text className="mt-2 text-[10px] font-bold text-[#8E869A]">
+                Đang tải hotspot...
+              </Text>
             </View>
           ) : null}
 
@@ -822,6 +821,9 @@ export default function UserPlanScreen() {
               {isNearFirstSearchLoading ? (
                 <View className="items-center py-5">
                   <ActivityIndicator color="#EB489B" />
+                  <Text className="mt-2 text-[10px] font-bold text-[#8E869A]">
+                    Đang quét hotspot lân cận...
+                  </Text>
                 </View>
               ) : null}
 

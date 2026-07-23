@@ -2,7 +2,7 @@
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 import axios from "axios";
 export type BillingCycle = "MONTHLY" | "YEARLY";
-export type PaymentGateway = "MOMO" | "PAYOS";
+export type PaymentGateway = "PAYOS";
 export type PartnerSubscriptionStatus =
   | "PAYMENT_PENDING"
   | "PAYMENT_FAILED"
@@ -179,7 +179,7 @@ export async function registerPartnerSubscription(
   formData.append("billingCycle", request.billingCycle);
 
   appendFile(formData, "documentFile", request.documentFile);
-  // request.files?.forEach((file) => appendFile(formData, "files", file));
+  request.files?.forEach((file) => appendFile(formData, "files", file));
 
   try {
     console.log("========== REGISTER PARTNER ==========");
@@ -239,7 +239,7 @@ export async function registerPartnerSubscription(
   }
 }
 
-export async function initiateMomoPayment({
+export async function initiatePayOsPayment({
   accessToken,
   redirectUrl,
   subscriptionId,
@@ -248,7 +248,7 @@ export async function initiateMomoPayment({
   redirectUrl?: string;
   subscriptionId: number;
 }) {
-  const searchParams = new URLSearchParams({ gateway: "MOMO" });
+  const searchParams = new URLSearchParams({ gateway: "PAYOS" });
 
   if (redirectUrl?.trim()) {
     searchParams.set("redirectUrl", redirectUrl.trim());
@@ -262,7 +262,7 @@ export async function initiateMomoPayment({
     },
   );
 
-  return ensureOk<PaymentInitResponse>(response, "Không khởi tạo được thanh toán MoMo");
+  return ensureOk<PaymentInitResponse>(response, "Không khởi tạo được thanh toán PayOS");
 }
 
 export async function getMyPartnerSubscriptions(accessToken: string) {
