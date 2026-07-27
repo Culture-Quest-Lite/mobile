@@ -1,7 +1,12 @@
-import '../global.css';
+import "../global.css";
 
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
+import {
+  DarkTheme,
+  DefaultTheme,
+  Stack,
+  ThemeProvider,
+} from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { useEffect } from 'react';
 import {
   AppState,
@@ -90,9 +95,8 @@ export default function RootLayout() {
           <Stack.Screen name="community/profile/[id]" />
           <Stack.Screen name="profile/information" />
           <Stack.Screen name="profile/menu" />
+          <Stack.Screen name="notifications" />
           <Stack.Screen name="subscription" />
-          <Stack.Screen name="subscription/premium" />
-          <Stack.Screen name="subscription/partner" />
           <Stack.Screen name="route/[id]" />
           <Stack.Screen name="route/custom/plan" />
           <Stack.Screen name="route/custom/plan/[id]" />

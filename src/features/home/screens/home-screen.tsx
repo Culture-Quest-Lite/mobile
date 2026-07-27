@@ -1273,11 +1273,13 @@ function ExplorerHeaderActions({
   isLocationLoading,
   onLocationPress,
   onSearchPress,
+  onNotificationPress,
 }: {
   isDistanceDropdownVisible: boolean;
   isLocationLoading: boolean;
   onLocationPress: () => void;
   onSearchPress: () => void;
+  onNotificationPress: () => void;
 }) {
   return (
     <View className="flex-row items-center gap-2.5">
@@ -1318,7 +1320,12 @@ function ExplorerHeaderActions({
         />
       </Pressable>
 
-      <Pressable className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]">
+      <Pressable
+        accessibilityLabel="Mở thông báo"
+        className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
+        hitSlop={8}
+        onPress={onNotificationPress}
+      >
         <SymbolView
           name={{
             ios: "bell",
@@ -1691,6 +1698,9 @@ export default function HomeScreen() {
   };
   const handleOpenSubscription = () => {
     router.push("/subscription");
+  };
+  const handleOpenNotifications = () => {
+    router.push("/notifications");
   };
   const handleOpenRegister = () => {
     router.push("/login?entry=home");
@@ -2151,6 +2161,7 @@ export default function HomeScreen() {
                   isLocationLoading={isLocationMapLoading}
                   onLocationPress={handleToggleNearbyDistanceDropdown}
                   onSearchPress={handleOpenHotspots}
+                  onNotificationPress={handleOpenNotifications}
                 />
               </View>
             </View>

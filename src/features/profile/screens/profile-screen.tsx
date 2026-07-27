@@ -669,6 +669,21 @@ export default function ProfileScreen() {
                 </Text>
               </View>
               <Pressable
+                accessibilityLabel="Mở thông báo"
+                className="h-10 w-10 items-center justify-center rounded-full bg-black/30"
+                onPress={() => router.push("/notifications" as Href)}
+              >
+                <SymbolView
+                  name={{
+                    ios: "bell",
+                    android: "notifications",
+                    web: "notifications",
+                  }}
+                  size={16}
+                  tintColor="#FFFFFF"
+                />
+              </Pressable>
+              <Pressable
                 accessibilityLabel="Mở menu hồ sơ"
                 className="h-10 w-10 items-center justify-center rounded-full bg-black/30"
                 onPress={() => router.push("/profile/menu" as Href)}
