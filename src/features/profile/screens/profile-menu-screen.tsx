@@ -82,6 +82,18 @@ export default function ProfileMenuScreen() {
 
   const settingsRows: MenuRowConfig[] = [
     {
+      label: "Thông báo",
+      onPress: () => {
+        router.push("/notifications" as Href);
+      },
+    },
+    {
+      label: "Gói đăng ký",
+      onPress: () => {
+        router.push("/subscription" as Href);
+      },
+    },
+    {
       label: "Mã QR của tôi",
       onPress: () => {},
     },

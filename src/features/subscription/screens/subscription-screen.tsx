@@ -20,6 +20,15 @@ const PARTNER_FEATURES = [
 export default function SubscriptionScreen() {
   const router = useRouter();
 
+  const handleClose = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/home");
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-[#F7F8FC]" edges={["top", "bottom"]}>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
@@ -34,7 +43,7 @@ export default function SubscriptionScreen() {
             </Text>
           </View>
           <Pressable
-            onPress={() => router.back()}
+            onPress={handleClose}
             className="h-10 w-10 items-center justify-center rounded-full bg-white"
           >
             <SymbolView
@@ -128,13 +137,9 @@ export default function SubscriptionScreen() {
 
             <View className="flex-row items-center justify-between">
               <View>
-                <Text className="text-[12px] text-white/60">Từ</Text>
+                <Text className="text-[12px] text-white/60">Nhiều lựa chọn</Text>
                 <Text className="text-[22px] font-extrabold text-white">
-                  59.000 ₫
-                  <Text className="text-[13px] font-bold text-white/70">
-                    {" "}
-                    /tháng
-                  </Text>
+                  Giá gói linh hoạt
                 </Text>
               </View>
               <View className="flex-row items-center gap-2 rounded-2xl bg-white px-4 py-3">
@@ -213,9 +218,9 @@ export default function SubscriptionScreen() {
 
             <View className="flex-row items-center justify-between">
               <View>
-                <Text className="text-[12px] text-white/60">Gói linh hoạt</Text>
+                <Text className="text-[12px] text-white/60">Nhiều lựa chọn</Text>
                 <Text className="text-[22px] font-extrabold text-white">
-                  Xem giá gói
+                  Giá gói linh hoạt
                 </Text>
               </View>
               <View className="flex-row items-center gap-2 rounded-2xl bg-white px-4 py-3">

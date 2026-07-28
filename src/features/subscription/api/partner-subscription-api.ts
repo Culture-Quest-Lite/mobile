@@ -23,6 +23,7 @@ export type SubscriptionPlan = {
   createdAt?: string | null;
   priceMonthly?: number | null;
   priceYearly?: number | null;
+  planType?: string | null;
   status?: string | null;
   subscriptionPlanDescription?: string | null;
   subscriptionPlanId: number;
@@ -59,13 +60,15 @@ export type PartnerSubscription = {
 export type PaymentInitResponse = {
   amount?: number | null;
   checkoutUrl?: string | null;
+  paymentUrl?: string | null;
   deeplink?: string | null;
   gateway: PaymentGateway;
   orderInfo?: string | null;
   payUrl?: string | null;
   qrCode?: string | null;
   qrCodeUrl?: string | null;
-  subscriptionId: number;
+  subscriptionId?: number | null;
+  invoiceId?: number | null;
 };
 
 export type RegisterPartnerSubscriptionRequest = {
@@ -179,7 +182,7 @@ export async function registerPartnerSubscription(
   formData.append("billingCycle", request.billingCycle);
 
   appendFile(formData, "documentFile", request.documentFile);
-  request.files?.forEach((file) => appendFile(formData, "files", file));
+  request.files?.forEach((file) => appendFile(formData, "shopFiles", file));
 
   try {
     console.log("========== REGISTER PARTNER ==========");
@@ -246,7 +249,8 @@ export async function initiatePayOsPayment({
 }: {
   accessToken: string;
   redirectUrl?: string;
-  subscriptionId: number;
+  subscriptionId?: number | null;
+  invoiceId?: number | null;
 }) {
   const searchParams = new URLSearchParams({ gateway: "PAYOS" });
 

@@ -106,7 +106,14 @@ function CoordinateMapPickerModal({
           </View>
           <Pressable
             onPress={onClose}
-            className="h-10 w-10 items-center justify-center rounded-full bg-[#F4EFF8]"
+            style={{
+              alignItems: "center",
+              backgroundColor: "#F4EFF8",
+              borderRadius: 999,
+              height: 40,
+              justifyContent: "center",
+              width: 40,
+            }}
           >
             <SymbolView
               name={{ ios: "xmark", android: "close", web: "close" }}
@@ -139,7 +146,12 @@ function CoordinateMapPickerModal({
 
           <Pressable
             onPress={() => onApply(pickedCoordinate)}
-            className="rounded-xl bg-[#EB489B] px-4 py-4"
+            style={{
+              backgroundColor: "#EB489B",
+              borderRadius: 12,
+              paddingHorizontal: 16,
+              paddingVertical: 16,
+            }}
           >
             <Text className="text-center text-[15px] font-extrabold text-white">
               Lưu vị trí này
@@ -328,9 +340,20 @@ export default function PartnerSubscriptionScreen() {
     }
 
     const response = await getSubscriptionPlans(accessToken);
-    const activePlans = response.content.filter(
-      (plan) => plan.status !== "DELETED" && plan.status !== "INACTIVE",
-    );
+    const activePlans = response.content.filter((plan) => {
+      const planType =
+        typeof plan.planType === "string"
+          ? plan.planType.toUpperCase()
+          : typeof plan.configLimit?.planType === "string"
+            ? plan.configLimit.planType.toUpperCase()
+            : "";
+
+      return (
+        plan.status !== "DELETED" &&
+        plan.status !== "INACTIVE" &&
+        (planType === "" || planType === "PARTNER")
+      );
+    });
     setPlans(activePlans);
     setSelectedPlan((currentPlan) => {
       if (currentPlan && activePlans.some((p) => p.subscriptionPlanId === currentPlan.subscriptionPlanId)) {
@@ -436,6 +459,18 @@ export default function PartnerSubscriptionScreen() {
     return null;
   }
 
+
+  useEffect(() => {
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      if (url.startsWith(PAYOS_REDIRECT_URL)) {
+        setPayment(null);
+        setRegisteredStatus("PENDING");
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
   async function handleRegisterAndPay() {
     const validationMessage = validateForm();
     if (validationMessage) {
@@ -486,7 +521,11 @@ export default function PartnerSubscriptionScreen() {
 
   async function openPayOs(paymentResponse = payment) {
     if (!paymentResponse) return;
-    const targetUrl = paymentResponse.checkoutUrl;
+    const targetUrl =
+      paymentResponse.checkoutUrl ||
+      paymentResponse.paymentUrl ||
+      paymentResponse.payUrl ||
+      paymentResponse.deeplink;
     if (targetUrl) {
       try {
         const canOpen = await Linking.canOpenURL(targetUrl);
@@ -515,8 +554,21 @@ export default function PartnerSubscriptionScreen() {
         <View className="bg-[#EB489B] px-5 pb-8 pt-5">
           <View className="mb-4 flex-row items-center justify-between">
             <Pressable
-              onPress={() => router.back()}
-              className="h-10 w-10 items-center justify-center rounded-full bg-white/20"
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace("/subscription");
+                }
+              }}
+              style={{
+                alignItems: "center",
+                backgroundColor: "rgba(255,255,255,0.2)",
+                borderRadius: 999,
+                height: 40,
+                justifyContent: "center",
+                width: 40,
+              }}
             >
               <SymbolView
                 name={{ ios: "chevron.left", android: "arrow_back", web: "arrow_back" }}
@@ -602,7 +654,14 @@ export default function PartnerSubscriptionScreen() {
                     <Pressable
                       key={plan.subscriptionPlanId}
                       onPress={() => handleSelectPlan(plan)}
-                      className={`rounded-2xl border p-4 ${isSelected ? "border-[#EB489B] bg-[#FFF0F8] shadow-sm" : "border-[#F4EFF8] bg-[#FFF8FC]"}`}
+                      style={{
+                        backgroundColor: isSelected ? "#FFF0F8" : "#FFF8FC",
+                        borderColor: isSelected ? "#EB489B" : "#F4EFF8",
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        elevation: isSelected ? 2 : 0,
+                        padding: 16,
+                      }}
                     >
                       <View className="flex-row items-start justify-between gap-3">
                         <View className="flex-1">
@@ -646,14 +705,22 @@ export default function PartnerSubscriptionScreen() {
                 <Pressable
                   key={cycle}
                   onPress={() => setBillingCycle(cycle)}
-                  className={`flex-1 rounded-xl px-4 py-3 ${billingCycle === cycle ? "bg-white shadow-sm" : ""}`}
+                  style={{
+                    backgroundColor:
+                      billingCycle === cycle ? "#FFFFFF" : "transparent",
+                    borderRadius: 12,
+                    elevation: billingCycle === cycle ? 2 : 0,
+                    flex: 1,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                  }}
                 >
                   <Text className={`text-center text-[13px] font-extrabold ${billingCycle === cycle ? "text-[#EB489B]" : "text-[#8E869A]"}`}>
                     {cycle === "MONTHLY" ? "Theo tháng" : "Theo năm"}
                   </Text>
                   {cycle === "YEARLY" ? (
                     <Text className="mt-0.5 text-center text-[10px] font-bold text-green-600">
-                      Tiết kiệm ~30%
+                      Giá theo từng gói
                     </Text>
                   ) : null}
                 </Pressable>
@@ -718,7 +785,15 @@ export default function PartnerSubscriptionScreen() {
                 <Pressable
                   accessibilityLabel="Chọn vị trí shop trên bản đồ"
                   onPress={() => setIsCoordinateMapVisible(true)}
-                  className="mx-2 h-10 w-10 items-center justify-center rounded-full bg-[#FFF0F8]"
+                  style={{
+                    alignItems: "center",
+                    backgroundColor: "#FFF0F8",
+                    borderRadius: 999,
+                    height: 40,
+                    justifyContent: "center",
+                    marginHorizontal: 8,
+                    width: 40,
+                  }}
                 >
                   <SymbolView
                     name={{ ios: "mappin.and.ellipse", android: "location_on", web: "location_on" }}
@@ -734,7 +809,16 @@ export default function PartnerSubscriptionScreen() {
                     <Pressable
                       key={suggestion.placeId}
                       onPress={() => handleSelectAddressSuggestion(suggestion)}
-                      className={`flex-row items-start gap-3 px-3 py-3 ${index < addressSuggestions.length - 1 ? "border-b border-[#F4EFF8]" : ""}`}
+                      style={{
+                        alignItems: "flex-start",
+                        borderBottomColor: "#F4EFF8",
+                        borderBottomWidth:
+                          index < addressSuggestions.length - 1 ? 1 : 0,
+                        flexDirection: "row",
+                        gap: 12,
+                        paddingHorizontal: 12,
+                        paddingVertical: 12,
+                      }}
                     >
                       <View className="mt-0.5 h-8 w-8 items-center justify-center rounded-full bg-[#FFF0F8]">
                         <SymbolView
@@ -761,7 +845,10 @@ export default function PartnerSubscriptionScreen() {
 
             {/* Map Preview */}
             <View className="overflow-hidden rounded-2xl border border-[#F4DDEB] bg-white">
-              <Pressable onPress={() => setIsCoordinateMapVisible(true)}>
+              <Pressable
+                onPress={() => setIsCoordinateMapVisible(true)}
+                style={{}}
+              >
                 <View pointerEvents="none" style={{ height: 190 }}>
                   <MapView
                     provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
@@ -787,7 +874,13 @@ export default function PartnerSubscriptionScreen() {
                 </Text>
                 <Pressable
                   onPress={() => setIsCoordinateMapVisible(true)}
-                  className="mt-3 rounded-xl bg-[#EB489B] px-3 py-3"
+                  style={{
+                    backgroundColor: "#EB489B",
+                    borderRadius: 12,
+                    marginTop: 12,
+                    paddingHorizontal: 12,
+                    paddingVertical: 12,
+                  }}
                 >
                   <Text className="text-center text-[12px] font-extrabold text-white">
                     {hasSavedShopCoordinate ? "Chọn lại vị trí" : "Chọn vị trí trên bản đồ"}
@@ -804,7 +897,15 @@ export default function PartnerSubscriptionScreen() {
           <View className="mb-5 gap-3 rounded-2xl bg-[#FFF8FC] p-4">
             <Pressable
               onPress={pickDocumentFile}
-              className="rounded-xl border border-dashed border-[#EB489B] bg-white px-4 py-4"
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderColor: "#EB489B",
+                borderRadius: 12,
+                borderStyle: "dashed",
+                borderWidth: 1,
+                paddingHorizontal: 16,
+                paddingVertical: 16,
+              }}
             >
               <Text className="text-center text-[13px] font-extrabold text-[#EB489B]">
                 {documentFile ? `✅ Đã chọn: ${documentFile.name}` : "📄 Chọn ảnh giấy tờ xác minh *"}
@@ -813,7 +914,15 @@ export default function PartnerSubscriptionScreen() {
 
             <Pressable
               onPress={pickShopImages}
-              className="rounded-xl border border-dashed border-[#F0B7D6] bg-white px-4 py-4"
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderColor: "#F0B7D6",
+                borderRadius: 12,
+                borderStyle: "dashed",
+                borderWidth: 1,
+                paddingHorizontal: 16,
+                paddingVertical: 16,
+              }}
             >
               <Text className="text-center text-[13px] font-extrabold text-[#EB489B]">
                 {shopFiles.length > 0
@@ -848,7 +957,13 @@ export default function PartnerSubscriptionScreen() {
           <Pressable
             disabled={isSubmitting || plans.length === 0}
             onPress={handleRegisterAndPay}
-            className={`rounded-2xl px-4 py-4 ${isSubmitting || plans.length === 0 ? "bg-[#D8CADF]" : "bg-[#EB489B]"}`}
+            style={{
+              backgroundColor:
+                isSubmitting || plans.length === 0 ? "#D8CADF" : "#EB489B",
+              borderRadius: 16,
+              paddingHorizontal: 16,
+              paddingVertical: 16,
+            }}
           >
             {isSubmitting ? (
               <ActivityIndicator color="white" />
@@ -868,7 +983,16 @@ export default function PartnerSubscriptionScreen() {
               <Text className="mt-2 text-[13px] text-[#8E869A]">
                 Mở trang thanh toán PayOS an toàn. Nếu trình duyệt không mở được, hãy quét mã QR bên dưới.
               </Text>
-              <Pressable onPress={() => openPayOs()} className="mt-4 rounded-xl bg-[#A50064] px-4 py-3">
+              <Pressable
+                onPress={() => openPayOs()}
+                style={{
+                  backgroundColor: "#A50064",
+                  borderRadius: 12,
+                  marginTop: 16,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                }}
+              >
                 <Text className="text-center text-[13px] font-extrabold text-white">
                   Mở trang thanh toán PayOS
                 </Text>

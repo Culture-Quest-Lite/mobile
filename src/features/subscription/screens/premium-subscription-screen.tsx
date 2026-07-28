@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   Image,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -17,11 +17,11 @@ import { SymbolView } from "@/components/ui/symbol-view";
 import { getValidAccessToken } from "@/features/auth/hooks/use-auth-session";
 import {
   type BillingCycle,
-  type PremiumPlan,
   type PremiumPaymentInitResponse,
+  type PremiumPlan,
   type PremiumSubscriptionRecord,
-  getPremiumPlans,
   getMyPremiumSubscriptions,
+  getPremiumPlans,
   subscribePremium,
 } from "../api/premium-subscription-api";
 
@@ -194,9 +194,24 @@ export default function PremiumSubscriptionScreen() {
     }
   }
 
+
+  useEffect(() => {
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      if (url.startsWith(PAYOS_REDIRECT_URL)) {
+        void handleRefresh();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [loadData]);
+
   async function openPayOs(paymentResponse = payment) {
     if (!paymentResponse) return;
-    const targetUrl = paymentResponse.checkoutUrl;
+    const targetUrl =
+      paymentResponse.checkoutUrl ||
+      paymentResponse.paymentUrl ||
+      paymentResponse.payUrl ||
+      paymentResponse.deeplink;
     if (targetUrl) {
       try {
         const canOpen = await Linking.canOpenURL(targetUrl);
@@ -266,7 +281,13 @@ export default function PremiumSubscriptionScreen() {
         <View className="bg-[#7C3AED] px-5 pb-8 pt-5">
           <View className="mb-4 flex-row items-center justify-between">
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace("/subscription");
+                }
+              }}
               className="h-10 w-10 items-center justify-center rounded-full bg-white/20"
             >
               <SymbolView
@@ -315,7 +336,7 @@ export default function PremiumSubscriptionScreen() {
             {billingCycle === "YEARLY" && (
               <View className="mt-2 self-start rounded-full bg-yellow-400 px-3 py-1">
                 <Text className="text-[11px] font-extrabold text-[#7C3AED]">
-                  🎉 Tiết kiệm ~30% so với tháng
+                  Giá được áp dụng theo từng gói
                 </Text>
               </View>
             )}
@@ -356,11 +377,10 @@ export default function PremiumSubscriptionScreen() {
                     <Pressable
                       key={plan.subscriptionPlanId}
                       onPress={() => setSelectedPlan(plan)}
-                      className={`rounded-2xl border p-4 ${
-                        isSelected
+                      className={`rounded-2xl border p-4 ${isSelected
                           ? "border-[#7C3AED] bg-[#F5F0FF] shadow-sm"
                           : "border-[#EDE8F5] bg-[#FAFAFA]"
-                      }`}
+                        }`}
                     >
                       <View className="flex-row items-start justify-between gap-3">
                         <View className="flex-1">
@@ -406,35 +426,56 @@ export default function PremiumSubscriptionScreen() {
           ) : null}
 
           {/* Billing Cycle */}
+          {/* Billing Cycle */}
           <View className="mb-5">
             <Text className="mb-3 text-[15px] font-extrabold text-[#2B2233]">
               Chu kỳ thanh toán
             </Text>
-            <View className="flex-row rounded-2xl bg-[#F4EFF8] p-1.5 gap-2">
-              {(["MONTHLY", "YEARLY"] as BillingCycle[]).map((cycle) => (
-                <Pressable
-                  key={cycle}
-                  onPress={() => setBillingCycle(cycle)}
-                  className={`flex-1 rounded-xl px-4 py-3 ${
-                    billingCycle === cycle ? "bg-white shadow-sm" : ""
-                  }`}
-                >
-                  <Text
-                    className={`text-center text-[13px] font-extrabold ${
-                      billingCycle === cycle
-                        ? "text-[#7C3AED]"
-                        : "text-[#8E869A]"
-                    }`}
+
+            <View className="flex-row gap-2 rounded-2xl bg-[#F4EFF8] p-1.5">
+              {(["MONTHLY", "YEARLY"] as BillingCycle[]).map((cycle) => {
+                const isActive = billingCycle === cycle;
+
+                return (
+                  <Pressable
+                    key={cycle}
+                    onPress={() => setBillingCycle(cycle)}
+                    style={{
+                      flex: 1,
+                      borderRadius: 12,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      backgroundColor: isActive ? "#FFFFFF" : "transparent",
+                      elevation: isActive ? 2 : 0,
+                    }}
                   >
-                    {cycle === "MONTHLY" ? "Theo tháng" : "Theo năm"}
-                  </Text>
-                  {cycle === "YEARLY" ? (
-                    <Text className="mt-0.5 text-center text-[10px] font-bold text-green-600">
-                      Tiết kiệm ~30%
+                    <Text
+                      style={{
+                        textAlign: "center",
+                        fontSize: 13,
+                        fontWeight: "800",
+                        color: isActive ? "#7C3AED" : "#8E869A",
+                      }}
+                    >
+                      {cycle === "MONTHLY" ? "Theo tháng" : "Theo năm"}
                     </Text>
-                  ) : null}
-                </Pressable>
-              ))}
+
+                    {cycle === "YEARLY" ? (
+                      <Text
+                        style={{
+                          marginTop: 2,
+                          textAlign: "center",
+                          fontSize: 10,
+                          fontWeight: "700",
+                          color: "#16A34A",
+                        }}
+                      >
+                        Giá theo từng gói
+                      </Text>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
 
@@ -483,11 +524,10 @@ export default function PremiumSubscriptionScreen() {
           <Pressable
             disabled={isSubmitting || plans.length === 0}
             onPress={handleSubscribe}
-            className={`rounded-2xl px-4 py-4 ${
-              isSubmitting || plans.length === 0
+            className={`rounded-2xl px-4 py-4 ${isSubmitting || plans.length === 0
                 ? "bg-[#C4B5D9]"
                 : "bg-[#7C3AED]"
-            }`}
+              }`}
           >
             {isSubmitting ? (
               <ActivityIndicator color="white" />
@@ -548,18 +588,16 @@ export default function PremiumSubscriptionScreen() {
                         {record.planName}
                       </Text>
                       <View
-                        className={`rounded-full px-3 py-1 ${
-                          record.status === "ACTIVE"
+                        className={`rounded-full px-3 py-1 ${record.status === "ACTIVE"
                             ? "bg-green-100"
                             : "bg-[#F4EFF8]"
-                        }`}
+                          }`}
                       >
                         <Text
-                          className={`text-[10px] font-extrabold ${
-                            record.status === "ACTIVE"
+                          className={`text-[10px] font-extrabold ${record.status === "ACTIVE"
                               ? "text-green-700"
                               : "text-[#8E869A]"
-                          }`}
+                            }`}
                         >
                           {getInvoiceStatusLabel(record.status)}
                         </Text>
