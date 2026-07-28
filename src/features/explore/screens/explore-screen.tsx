@@ -1,9 +1,9 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
-import { type Href, useRouter } from 'expo-router';
+import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import { SymbolView } from '@/components/ui/symbol-view';
-import { type ComponentProps, useEffect, useMemo, useRef, useState } from 'react';
+import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   type NativeScrollEvent,
@@ -18,6 +18,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getValidAccessToken, useAuthSession } from '@/features/auth/hooks/use-auth-session';
 import { AppMap } from '@/features/map/components/app-map';
+import { getGamificationLevels } from '@/features/profile/api/get-levels';
+import { getMyProfile } from '@/features/profile/api/get-me';
+import { applyLevelProgressToProfile } from '@/features/profile/lib/level-progress';
 import {
   type NearbyHotspotDto,
   getNearbyHotspots,
@@ -36,8 +39,6 @@ import {
 } from '@/lib/location';
 
 const gradientColors = ['#EB489B', '#F58752', '#FFC93C'] as const;
-const avatarImageUri =
-  'https://i.pinimg.com/736x/25/c7/c1/25c7c1671263058c274374435c142b4f.jpg';
 const fallbackRouteImage =
   'https://i.pinimg.com/1200x/80/69/f9/8069f9581583a196f9f39bda000b9312.jpg';
 const fallbackPlaceImage =
@@ -49,6 +50,65 @@ const defaultCoordinate: AppCoordinate = {
 };
 
 type SymbolName = ComponentProps<typeof SymbolView>['name'];
+
+
+type ExplorerSummary = {
+  avatar: string | null;
+  level: number | null;
+  name: string;
+  username: string;
+};
+
+function getProfileInitials(name: string, username: string) {
+  const source = name.trim() || username.replace(/^@+/, '').trim();
+
+  if (!source) return 'ME';
+
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+
+  return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase();
+}
+
+function ExplorerHeaderAvatar({ avatar, level, name, username }: ExplorerSummary) {
+  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
+  const initials = getProfileInitials(name, username);
+  const shouldShowFallback = !avatar || failedAvatar === avatar;
+
+  return (
+    <View className="relative">
+      <LinearGradient
+        colors={gradientColors}
+        end={{ x: 1, y: 0.9 }}
+        start={{ x: 0, y: 0.1 }}
+        className="h-16 w-16 rounded-full p-[2px]"
+      >
+        <View className="flex-1 rounded-full bg-white p-[3px]">
+          {shouldShowFallback ? (
+            <View className="flex-1 items-center justify-center rounded-full bg-[#FFF1F6]">
+              <Text className="text-[18px] font-black text-[#D9587F]">{initials}</Text>
+            </View>
+          ) : (
+            <Image
+              source={avatar}
+              contentFit="cover"
+              transition={180}
+              cachePolicy="memory-disk"
+              onError={() => setFailedAvatar(avatar)}
+              style={{ flex: 1, borderRadius: 999 }}
+            />
+          )}
+        </View>
+      </LinearGradient>
+
+      {typeof level === 'number' ? (
+        <View className="absolute -bottom-1 -right-2 rounded-full border-2 border-white bg-[#b1741e] px-2.5 py-1">
+          <Text className="text-[11px] font-extrabold text-white">{`Lv.${level}`}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
 
 type ApiPlaceCard = {
   id: string;
@@ -220,6 +280,7 @@ export default function ExploreScreen() {
   const [isPlacesLoading, setIsPlacesLoading] = useState(true);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [placeError, setPlaceError] = useState<string | null>(null);
+  const [explorerSummary, setExplorerSummary] = useState<ExplorerSummary | null>(null);
   const carouselRef = useRef<ScrollView>(null);
   const activeRouteIndexRef = useRef(0);
 
@@ -240,6 +301,62 @@ export default function ExploreScreen() {
     activeRouteIndexRef.current = bounded;
     setActiveRouteIndex(bounded);
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      async function loadExplorerSummary() {
+        if (!session.isAuthenticated) {
+          if (isActive) setExplorerSummary(null);
+          return;
+        }
+
+        try {
+          const accessToken = await getValidAccessToken();
+          if (!isActive) return;
+
+          if (!accessToken) {
+            setExplorerSummary(null);
+            return;
+          }
+
+          const [profileResult, levelsResult] = await Promise.allSettled([
+            getMyProfile({ accessToken, tokenType: session.tokenType }),
+            getGamificationLevels({ accessToken, tokenType: session.tokenType }),
+          ]);
+
+          if (profileResult.status !== 'fulfilled') throw profileResult.reason;
+
+          const profile =
+            levelsResult.status === 'fulfilled'
+              ? applyLevelProgressToProfile(profileResult.value, levelsResult.value)
+              : profileResult.value;
+
+          if (!isActive) return;
+
+          const resolvedName = profile.name.trim() || profile.username.trim();
+          setExplorerSummary({
+            avatar: profile.avatar?.trim() || null,
+            level: profile.level,
+            name: resolvedName || 'Ngọc',
+            username: profile.username.trim(),
+          });
+        } catch (error) {
+          if (!isActive) return;
+          setExplorerSummary(null);
+          console.warn('[explore] load explorer summary failed', {
+            error: error instanceof Error ? error.message : error,
+          });
+        }
+      }
+
+      void loadExplorerSummary();
+      return () => {
+        isActive = false;
+      };
+    }, [session.isAuthenticated, session.tokenType]),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -352,6 +469,16 @@ export default function ExploreScreen() {
     router.push(`/route/${routeId}` as Href);
   }
 
+  const explorerName =
+    explorerSummary?.name.trim() ||
+    session.displayName.trim() ||
+    session.username?.trim() ||
+    'Ngọc';
+  const explorerUsername =
+    explorerSummary?.username.trim() || session.username?.trim() || explorerName;
+  const explorerAvatar = explorerSummary?.avatar ?? null;
+  const explorerLevel = explorerSummary?.level ?? null;
+
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top', 'left', 'right']}>
       <ScrollView
@@ -360,42 +487,68 @@ export default function ExploreScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-6 px-5 pb-2 pt-4">
-          <View className="flex-row items-center justify-between gap-4">
-            <View className="flex-row items-center gap-3.5">
-              <LinearGradient
-                colors={gradientColors}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                className="h-16 w-16 rounded-full p-[2px]"
-              >
-                <View className="flex-1 rounded-full bg-white p-[3px]">
-                  <Image
-                    source={avatarImageUri}
-                    contentFit="cover"
-                    transition={180}
-                    cachePolicy="memory-disk"
-                    style={{ flex: 1, borderRadius: 999 }}
-                  />
-                </View>
-              </LinearGradient>
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1 flex-row items-center gap-3.5 pr-3">
+              <ExplorerHeaderAvatar
+                avatar={explorerAvatar}
+                level={explorerLevel}
+                name={explorerName}
+                username={explorerUsername}
+              />
 
-              <View className="gap-1">
-                <Text className="text-[15px] font-semibold text-[#2B2233]">
-                  Chào {session.displayName || 'Ngọc'}
+              <View className="flex-1 gap-0.5">
+                <Text
+                  className="text-[15px] font-extrabold tracking-[-0.3px] text-[#2B2233]"
+                  numberOfLines={1}
+                >
+                  Chào {explorerName}
                 </Text>
-                <Text className="text-[12px] text-[#8E869A]">
-                  Khám phá hành trình di sản quanh bạn
+                <Text className="text-[11px] leading-4 text-[#8E869A]">
+                  Sẵn sàng khám phá
                 </Text>
               </View>
             </View>
 
-            <Pressable className="h-10 w-10 items-center justify-center rounded-3xl bg-[#FFF4EF]">
-              <SymbolView
-                name={{ ios: 'bell', android: 'notifications', web: 'notifications' }}
-                size={16}
-                tintColor="#EB489B"
-              />
-            </Pressable>
+            <View className="flex-row items-center gap-2.5">
+              <Pressable
+                accessibilityLabel="Mở địa điểm gần bạn"
+                className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
+                hitSlop={8}
+                onPress={() => router.push('/hotspots')}
+              >
+                <SymbolView
+                  name={{ ios: 'location', android: 'my_location', web: 'my_location' }}
+                  size={16}
+                  tintColor="#F58752"
+                />
+              </Pressable>
+
+              <Pressable
+                accessibilityLabel="Mở danh sách địa danh"
+                className="h-10 w-10 items-center justify-center rounded-full bg-[#FAF7FC]"
+                hitSlop={8}
+                onPress={() => router.push('/hotspots')}
+              >
+                <SymbolView
+                  name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
+                  size={16}
+                  tintColor="#8E869A"
+                />
+              </Pressable>
+
+              <Pressable
+                accessibilityLabel="Mở thông báo"
+                className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
+                hitSlop={8}
+                onPress={() => router.push('/notifications')}
+              >
+                <SymbolView
+                  name={{ ios: 'bell', android: 'notifications', web: 'notifications' }}
+                  size={16}
+                  tintColor="#EB489B"
+                />
+              </Pressable>
+            </View>
           </View>
 
           <View className="rounded-[28px] bg-[#F7F3EA] p-4">
@@ -505,183 +658,66 @@ export default function ExploreScreen() {
               </Text>
             </Pressable>
 
-            <Pressable
-              onPress={() => router.push('/subscription')}
-              className="flex-1 items-center gap-1.5"
-            >
-              <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#FFC93C]">
-                <SymbolView
-                  name={{
-                    ios: 'crown.fill',
-                    android: 'workspace_premium',
-                    web: 'workspace_premium',
-                  }}
-                  size={20}
-                  tintColor="#2B2233"
-                />
-              </View>
-              <Text className="text-center text-[11px] font-bold text-[#2B2233]">
-                Gói VIP
-              </Text>
-            </Pressable>
           </View>
 
-          {/* Premium Features Showcase Section */}
-          <View className="gap-3">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2">
+          {/* Compact Premium introduction */}
+          <Pressable
+            onPress={() => router.push('/subscription')}
+            className="overflow-hidden rounded-[28px] border border-[#E9D5FF] bg-[#FAF5FF] p-5"
+            style={heroShadowStyle}
+          >
+            <View className="absolute -right-5 -top-6 h-24 w-24 rounded-full bg-[#E9D5FF]/70" />
+            <View className="absolute -bottom-8 right-14 h-20 w-20 rounded-full bg-[#FBCFE8]/60" />
+
+            <View className="flex-row items-start justify-between gap-4">
+              <View className="flex-1">
+                <View className="mb-3 flex-row items-center gap-2 self-start rounded-full bg-white px-3 py-1.5">
+                  <SymbolView
+                    name={{
+                      ios: 'sparkles',
+                      android: 'auto_awesome',
+                      web: 'auto_awesome',
+                    }}
+                    size={13}
+                    tintColor="#7C3AED"
+                  />
+                  <Text className="text-[10px] font-extrabold uppercase tracking-[1px] text-[#7C3AED]">
+                    CultureQuest Premium
+                  </Text>
+                </View>
+
+                <Text className="text-[22px] font-black leading-7 text-[#2B2233]">
+                  Khám phá nhiều hơn
+                </Text>
+                <Text className="mt-2 text-[13px] leading-5 text-[#6F6678]">
+                  Mở khóa hành trình độc quyền, nhận thêm XP và tận hưởng trải nghiệm không quảng cáo.
+                </Text>
+
+                <View className="mt-4 flex-row items-center gap-2 self-start rounded-full bg-[#7C3AED] px-4 py-2.5">
+                  <Text className="text-[12px] font-extrabold text-white">
+                    Xem quyền lợi Premium
+                  </Text>
+                  <SymbolView
+                    name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                    size={14}
+                    tintColor="#FFFFFF"
+                  />
+                </View>
+              </View>
+
+              <View className="mt-2 h-16 w-16 items-center justify-center rounded-[22px] bg-white">
                 <SymbolView
                   name={{
                     ios: 'crown.fill',
                     android: 'workspace_premium',
                     web: 'workspace_premium',
                   }}
-                  size={18}
+                  size={30}
                   tintColor="#7C3AED"
                 />
-                <Text className="text-[17px] font-extrabold text-[#2B2233]">
-                  Tính năng Premium Nổi bật
-                </Text>
               </View>
-              <Pressable
-                onPress={() => router.push('/subscription')}
-                className="rounded-full bg-[#EFE7F6] px-3 py-1"
-              >
-                <Text className="text-[11px] font-bold text-[#7C3AED]">
-                  Gói Explorer Premium
-                </Text>
-              </Pressable>
             </View>
-            <Text className="text-[12px] text-[#8E869A]">
-              Mở khóa bộ công cụ du lịch di sản thông minh dành cho thành viên Premium
-            </Text>
-
-            {/* Card 1: User Plan */}
-            <Pressable
-              onPress={() => router.push('/route/custom/plan')}
-              className="overflow-hidden rounded-[24px] border border-[#E9D5FF] bg-[#FAF5FF] p-4 shadow-sm"
-            >
-              <View className="flex-row items-start justify-between">
-                <View className="flex-1 pr-3">
-                  <View className="mb-2 flex-row items-center gap-1.5 self-start rounded-full bg-[#7C3AED] px-2.5 py-0.5">
-                    <SymbolView
-                      name={{
-                        ios: 'sparkles',
-                        android: 'auto_awesome',
-                        web: 'auto_awesome',
-                      }}
-                      size={10}
-                      tintColor="#FFFFFF"
-                    />
-                    <Text className="text-[10px] font-extrabold uppercase tracking-wider text-white">
-                      PREMIUM FEATURE
-                    </Text>
-                  </View>
-                  <Text className="text-[17px] font-extrabold text-[#2B2233]">
-                    Lập kế hoạch hành trình (User Plan)
-                  </Text>
-                  <Text className="mt-1 text-[13px] leading-5 text-[#6B7280]">
-                    Tự động gợi ý & tối ưu hóa lịch trình du lịch cá nhân hóa bằng AI theo thời gian và sở thích.
-                  </Text>
-                </View>
-                <View className="h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#7C3AED]/12">
-                  <SymbolView
-                    name={{
-                      ios: 'calendar.badge.clock',
-                      android: 'edit_calendar',
-                      web: 'edit_calendar',
-                    }}
-                    size={24}
-                    tintColor="#7C3AED"
-                  />
-                </View>
-              </View>
-              <View className="mt-4 flex-row items-center justify-between border-t border-[#E9D5FF]/60 pt-3">
-                <View className="flex-row items-center gap-1.5">
-                  <SymbolView
-                    name={{
-                      ios: 'checkmark.seal.fill',
-                      android: 'verified',
-                      web: 'verified',
-                    }}
-                    size={14}
-                    tintColor="#7C3AED"
-                  />
-                  <Text className="text-[12px] font-bold text-[#7C3AED]">
-                    AI Tối ưu lộ trình & thời gian
-                  </Text>
-                </View>
-                <View className="flex-row items-center rounded-full bg-[#7C3AED] px-3.5 py-1.5">
-                  <Text className="text-[12px] font-extrabold text-white">
-                    Tạo kế hoạch AI →
-                  </Text>
-                </View>
-              </View>
-            </Pressable>
-
-            {/* Card 2: Record Journey */}
-            <Pressable
-              onPress={() => router.push('/route/custom/record')}
-              className="overflow-hidden rounded-[24px] border border-[#FCCEE2] bg-[#FFF5F9] p-4 shadow-sm"
-            >
-              <View className="flex-row items-start justify-between">
-                <View className="flex-1 pr-3">
-                  <View className="mb-2 flex-row items-center gap-1.5 self-start rounded-full bg-[#EB489B] px-2.5 py-0.5">
-                    <SymbolView
-                      name={{
-                        ios: 'record.circle.fill',
-                        android: 'radio_button_checked',
-                        web: 'radio_button_checked',
-                      }}
-                      size={10}
-                      tintColor="#FFFFFF"
-                    />
-                    <Text className="text-[10px] font-extrabold uppercase tracking-wider text-white">
-                      PREMIUM FEATURE
-                    </Text>
-                  </View>
-                  <Text className="text-[17px] font-extrabold text-[#2B2233]">
-                    Ghi lại hành trình (Record Journey)
-                  </Text>
-                  <Text className="mt-1 text-[13px] leading-5 text-[#6B7280]">
-                    Định vị GPS real-time, lưu lại khoảnh khắc, hình ảnh & câu chuyện di sản trên chuyến đi.
-                  </Text>
-                </View>
-                <View className="h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#EB489B]/12">
-                  <SymbolView
-                    name={{
-                      ios: 'location.fill',
-                      android: 'my_location',
-                      web: 'my_location',
-                    }}
-                    size={24}
-                    tintColor="#EB489B"
-                  />
-                </View>
-              </View>
-              <View className="mt-4 flex-row items-center justify-between border-t border-[#FCCEE2]/60 pt-3">
-                <View className="flex-row items-center gap-1.5">
-                  <SymbolView
-                    name={{
-                      ios: 'map.fill',
-                      android: 'map',
-                      web: 'map',
-                    }}
-                    size={14}
-                    tintColor="#EB489B"
-                  />
-                  <Text className="text-[12px] font-bold text-[#EB489B]">
-                    Ghi tọa độ & nhật ký Live
-                  </Text>
-                </View>
-                <View className="flex-row items-center rounded-full bg-[#EB489B] px-3.5 py-1.5">
-                  <Text className="text-[12px] font-extrabold text-white">
-                    Bắt đầu ghi lại →
-                  </Text>
-                </View>
-              </View>
-            </Pressable>
-          </View>
+          </Pressable>
 
           {/* Daily Featured Banner */}
           <View className="rounded-[28px] bg-[#F7F3EA] p-4 border border-[#EBE3D5]">
