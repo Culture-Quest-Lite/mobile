@@ -2,7 +2,7 @@
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 import axios from "axios";
 export type BillingCycle = "MONTHLY" | "YEARLY";
-export type PaymentGateway = "MOMO" | "PAYOS";
+export type PaymentGateway = "PAYOS";
 export type PartnerSubscriptionStatus =
   | "PAYMENT_PENDING"
   | "PAYMENT_FAILED"
@@ -23,6 +23,7 @@ export type SubscriptionPlan = {
   createdAt?: string | null;
   priceMonthly?: number | null;
   priceYearly?: number | null;
+  planType?: string | null;
   status?: string | null;
   subscriptionPlanDescription?: string | null;
   subscriptionPlanId: number;
@@ -59,13 +60,15 @@ export type PartnerSubscription = {
 export type PaymentInitResponse = {
   amount?: number | null;
   checkoutUrl?: string | null;
+  paymentUrl?: string | null;
   deeplink?: string | null;
   gateway: PaymentGateway;
   orderInfo?: string | null;
   payUrl?: string | null;
   qrCode?: string | null;
   qrCodeUrl?: string | null;
-  subscriptionId: number;
+  subscriptionId?: number | null;
+  invoiceId?: number | null;
 };
 
 export type RegisterPartnerSubscriptionRequest = {
@@ -179,7 +182,7 @@ export async function registerPartnerSubscription(
   formData.append("billingCycle", request.billingCycle);
 
   appendFile(formData, "documentFile", request.documentFile);
-  // request.files?.forEach((file) => appendFile(formData, "files", file));
+  request.files?.forEach((file) => appendFile(formData, "shopFiles", file));
 
   try {
     console.log("========== REGISTER PARTNER ==========");
@@ -239,16 +242,17 @@ export async function registerPartnerSubscription(
   }
 }
 
-export async function initiateMomoPayment({
+export async function initiatePayOsPayment({
   accessToken,
   redirectUrl,
   subscriptionId,
 }: {
   accessToken: string;
   redirectUrl?: string;
-  subscriptionId: number;
+  subscriptionId?: number | null;
+  invoiceId?: number | null;
 }) {
-  const searchParams = new URLSearchParams({ gateway: "MOMO" });
+  const searchParams = new URLSearchParams({ gateway: "PAYOS" });
 
   if (redirectUrl?.trim()) {
     searchParams.set("redirectUrl", redirectUrl.trim());
@@ -262,7 +266,7 @@ export async function initiateMomoPayment({
     },
   );
 
-  return ensureOk<PaymentInitResponse>(response, "Không khởi tạo được thanh toán MoMo");
+  return ensureOk<PaymentInitResponse>(response, "Không khởi tạo được thanh toán PayOS");
 }
 
 export async function getMyPartnerSubscriptions(accessToken: string) {
