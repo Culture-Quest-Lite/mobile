@@ -1,7 +1,7 @@
-import { type Href, useFocusEffect, useRouter } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
-import { StatusBar } from "expo-status-bar";
 import { SymbolView } from "@/components/ui/symbol-view";
+import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import {
   useCallback,
   useEffect,
@@ -18,39 +18,51 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Text,
+  Text as RNText,
   TextInput,
   View,
+  type TextProps,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
-  type AuthSession,
   getValidAccessToken,
   useAuthSession,
+  type AuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 import { commentPost } from "@/features/home/api/comment-post";
+import { getHotspotById } from "@/features/home/api/get-hotspot-by-id";
 import {
   getPostComments,
   type PostComment,
 } from "@/features/home/api/get-post-comments";
 import { likePost } from "@/features/home/api/like-post";
-import { getHotspotById } from "@/features/home/api/get-hotspot-by-id";
+import {
+  getApiHotspotRouteSlug,
+  getHotspotHref,
+} from "@/features/home/data/hotspots";
 import {
   addLikedPostId,
   removeLikedPostId,
   useLikedPostIds,
 } from "@/features/home/data/liked-post-store";
-import {
-  getApiHotspotRouteSlug,
-  getHotspotHref,
-} from "@/features/home/data/hotspots";
+import { getMyProfile } from "@/features/profile/api/get-me";
+import type { Profile } from "@/features/profile/types";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import { getPostVisibilityLabel } from "@/lib/post-visibility";
+import { getNewsfeedPosts, type NewsfeedPost } from "../api/get-newsfeed-posts";
+import type { CommunityGroupPayload } from "../api/group-api";
+import {
+  CommunityCreateGroupCard,
+  CommunityGroupCompactStateCard,
+  CommunityGroupListCard,
+  CommunityGroupPlaceholderCard,
+} from "../components/community-group-list-ui";
 import {
   communityPosts,
   type CommunityPostTopic,
 } from "../data/community-demo";
+import { cacheCommunityGroupSession } from "../data/community-group-session-store";
 import { cacheCommunityExplorerProfile } from "../data/community-explorer-profile-cache";
 import {
   cacheCommunityPost,
@@ -59,13 +71,12 @@ import {
   type CommunityFeedPost,
 } from "../data/community-post-cache";
 import {
-  getNewsfeedPosts,
-  type NewsfeedPost,
-} from "../api/get-newsfeed-posts";
-import { getMyProfile } from "@/features/profile/api/get-me";
-import type { Profile } from "@/features/profile/types";
+  useCommunityGroups,
+  type CommunityGroupsStatus,
+} from "../hooks/use-community-groups";
 
 const PROJECT_WORDMARK = "Culture Quest Lite";
+const detailTextMaxFontSizeMultiplier = 1.05;
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 
@@ -102,9 +113,22 @@ const pillShadowStyle = {
   elevation: 6,
 } as const;
 
+const screenShadowStyle = {
+  shadowColor: "rgba(15, 23, 42, 0.12)",
+  shadowOpacity: 1,
+  shadowRadius: 28,
+  shadowOffset: {
+    width: 0,
+    height: 18,
+  },
+  elevation: 10,
+} as const;
+
+const subtleBorderColor = "#E5E7EB";
+const subtleBorderWidth = 0.8;
+
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type CommunityCommentsStatus = "idle" | "loading" | "ready" | "error";
-type CommunityTabKey = "community" | "following";
 type CommunityFeedStatus = "idle" | "loading" | "ready" | "error";
 type ResolvedHotspotPreview = {
   hotspotId: number;
@@ -117,125 +141,19 @@ type ComposerIdentity = {
   username: string | null;
 };
 
-type CommunityTab = {
-  key: CommunityTabKey;
-  label: string;
-  description: string;
-  eyebrow: string;
-  icon: SymbolName;
-  stat: string;
-  statLabel: string;
-  title: string;
-};
-
-type TagPalette = {
-  backgroundColor: string;
-  borderColor: string;
-  textColor: string;
-};
-
-const communityTabs: readonly CommunityTab[] = [
-  {
-    key: "community",
-    label: "Cộng đồng",
-    eyebrow: "Toàn bộ hoạt động",
-    title: "Nhịp cộng đồng đang diễn ra",
-    description:
-      "Bài chia sẻ, meetup và lời mời tham gia route được gom trong một feed để bạn theo dõi nhanh mọi chuyển động.",
-    stat: "143",
-    statLabel: "hoạt động mới",
-    icon: {
-      ios: "person.3.fill",
-      android: "groups",
-      web: "groups",
-    },
-  },
-  {
-    key: "following",
-    label: "Đang theo dõi",
-    eyebrow: "Mạng lưới của bạn",
-    title: "Cập nhật từ những người bạn đang theo dõi",
-    description:
-      "Xem nhanh bài đăng và lời mời mới nhất từ host, culture guide và explorer mà bạn đã chọn theo dõi.",
-    stat: "24",
-    statLabel: "nguồn tin",
-    icon: {
-      ios: "bell",
-      android: "notifications",
-      web: "notifications",
-    },
-  },
-] as const;
-
-const topicTagPalettes: Record<CommunityPostTopic, TagPalette> = {
-  culture: {
-    backgroundColor: "#FFF1F6",
-    borderColor: "#F6C9DA",
-    textColor: "#D24C89",
-  },
-  art: {
-    backgroundColor: "#EEF5FF",
-    borderColor: "#C8DBFF",
-    textColor: "#3E73DD",
-  },
-  cuisine: {
-    backgroundColor: "#FFF4E8",
-    borderColor: "#FFD9B0",
-    textColor: "#D9781E",
-  },
-  history: {
-    backgroundColor: "#F3EEE6",
-    borderColor: "#DCC9A9",
-    textColor: "#8A5B2E",
-  },
-};
-
-const tagPalettes: Record<string, TagPalette> = {
-  "Văn hóa": topicTagPalettes.culture,
-  "Nghệ thuật": topicTagPalettes.art,
-  "Ẩm thực": topicTagPalettes.cuisine,
-  "Lịch sử": topicTagPalettes.history,
-  "Check-in": {
-    backgroundColor: "#F6F0FF",
-    borderColor: "#DDCCFF",
-    textColor: "#8557D3",
-  },
-  "Góc đẹp": {
-    backgroundColor: "#EDFDF5",
-    borderColor: "#BCECCF",
-    textColor: "#238A57",
-  },
-  "Triển lãm": {
-    backgroundColor: "#EFF8FF",
-    borderColor: "#BFE1FF",
-    textColor: "#2D7CD6",
-  },
-  "Sinh viên": {
-    backgroundColor: "#F4F3FF",
-    borderColor: "#D6D3FF",
-    textColor: "#6D5BD0",
-  },
-  Meetup: {
-    backgroundColor: "#FFF0F3",
-    borderColor: "#F7C7D1",
-    textColor: "#D65377",
-  },
-  "Đi bộ nhẹ": {
-    backgroundColor: "#ECFDF5",
-    borderColor: "#BBF7D0",
-    textColor: "#1C9A5F",
-  },
-  "Kiến trúc": {
-    backgroundColor: "#F4F0EA",
-    borderColor: "#D9C8B1",
-    textColor: "#8C6943",
-  },
-  "Hoàng hôn": {
-    backgroundColor: "#FFF7E8",
-    borderColor: "#FFE0A6",
-    textColor: "#C78418",
-  },
-};
+function Text({
+  maxFontSizeMultiplier = detailTextMaxFontSizeMultiplier,
+  style,
+  ...props
+}: TextProps) {
+  return (
+    <RNText
+      maxFontSizeMultiplier={maxFontSizeMultiplier}
+      style={[{ includeFontPadding: false }, style]}
+      {...props}
+    />
+  );
+}
 
 const meaninglessTextValues = new Set(["", "string", "null", "undefined"]);
 const communityFeedPageSize = 10;
@@ -325,9 +243,22 @@ function formatCommunityTime(isoTimestamp?: string | null) {
     return `${elapsedDays} ngày trước`;
   }
 
-  return `${parsedDate.getDate().toString().padStart(2, "0")}/${(parsedDate.getMonth() + 1)
+  return `${parsedDate.getDate().toString().padStart(2, "0")}/${(
+    parsedDate.getMonth() + 1
+  )
     .toString()
     .padStart(2, "0")}/${parsedDate.getFullYear()}`;
+}
+
+function isCommunityGroupLeader(
+  group: CommunityGroupPayload,
+  currentProfileId?: string | null,
+) {
+  if (!currentProfileId) {
+    return false;
+  }
+
+  return readMeaningfulText(group.leaderId) === currentProfileId;
 }
 
 function getNameInitials(name: string) {
@@ -352,9 +283,12 @@ function getAvatarPalette(seed: string) {
   return avatarPalettes[paletteIndex] as readonly [string, string];
 }
 
-function buildComposerIdentityFromSession(authSession: AuthSession): ComposerIdentity {
+function buildComposerIdentityFromSession(
+  authSession: AuthSession,
+): ComposerIdentity {
   const normalizedDisplayName = readMeaningfulText(authSession.displayName);
-  const normalizedUsername = readMeaningfulText(authSession.username)?.replace(/^@/, "") ?? null;
+  const normalizedUsername =
+    readMeaningfulText(authSession.username)?.replace(/^@/, "") ?? null;
   const accountKey =
     normalizedUsername ??
     normalizedDisplayName ??
@@ -364,7 +298,7 @@ function buildComposerIdentityFromSession(authSession: AuthSession): ComposerIde
     accountKey,
     avatarUri: null,
     displayName: authSession.isAuthenticated
-      ? normalizedDisplayName ?? normalizedUsername ?? "Bạn"
+      ? (normalizedDisplayName ?? normalizedUsername ?? "Bạn")
       : "Khách",
     username: normalizedUsername,
   };
@@ -375,7 +309,8 @@ function buildComposerIdentityFromProfile(
   fallbackIdentity: ComposerIdentity,
 ): ComposerIdentity {
   const normalizedDisplayName = readMeaningfulText(profile.name);
-  const normalizedUsername = readMeaningfulText(profile.username)?.replace(/^@/, "") ?? null;
+  const normalizedUsername =
+    readMeaningfulText(profile.username)?.replace(/^@/, "") ?? null;
 
   return {
     accountKey: fallbackIdentity.accountKey,
@@ -400,7 +335,10 @@ function buildNewsfeedTags(post: NewsfeedPost) {
   return Array.from(new Set(tags)).slice(0, 4);
 }
 
-function resolveTopicFromNewsfeed(post: NewsfeedPost, tags: string[]): CommunityPostTopic {
+function resolveTopicFromNewsfeed(
+  post: NewsfeedPost,
+  tags: string[],
+): CommunityPostTopic {
   const classificationSource = normalizeLookupText(
     `${tags.join(" ")} ${post.text} ${post.displayName} ${post.username}`,
   );
@@ -516,7 +454,9 @@ function replaceCommunityFeedPostCommentCount(
   );
 }
 
-function mapNewsfeedPostToCommunityFeedPost(post: NewsfeedPost): CommunityFeedPost {
+function mapNewsfeedPostToCommunityFeedPost(
+  post: NewsfeedPost,
+): CommunityFeedPost {
   const author =
     readMeaningfulText(post.displayName) ??
     readMeaningfulText(post.username) ??
@@ -581,6 +521,38 @@ function mapNewsfeedPostToCommunityFeedPost(post: NewsfeedPost): CommunityFeedPo
   };
 }
 
+function buildCommunityPostMetaLabel(post: CommunityFeedPost) {
+  const values = [
+    readMeaningfulText(post.tags[0]),
+    readMeaningfulText(post.badge),
+    readMeaningfulText(post.mood),
+  ];
+
+  return values.find((value): value is string => Boolean(value)) ?? null;
+}
+
+function CommunityLoadingState() {
+  return (
+    <View className="flex-1 bg-[#FFF9FD]">
+      <SafeAreaView
+        className="flex-1"
+        edges={["top", "left", "right", "bottom"]}
+      >
+        <View className="flex-1 items-center justify-center px-6">
+          <View
+            className="w-full rounded-[32px] bg-white px-6 py-8"
+            style={[screenShadowStyle, { maxWidth: 360 }]}
+          >
+            <View className="items-center">
+              <ActivityIndicator color="#EB489B" size="large" />
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
 export default function CommunityScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
@@ -588,38 +560,45 @@ export default function CommunityScreen() {
   const likedPostsAccountKey = authSession.isAuthenticated
     ? authSession.username?.trim() || authSession.displayName.trim() || null
     : null;
-  const fallbackComposerIdentity = buildComposerIdentityFromSession(authSession);
-  const [activeTab, setActiveTab] = useState<CommunityTabKey>("community");
-  const [communityFeedPosts, setCommunityFeedPosts] = useState<CommunityFeedPost[]>(
-    [],
-  );
+  const fallbackComposerIdentity =
+    buildComposerIdentityFromSession(authSession);
+  const [communityFeedPosts, setCommunityFeedPosts] = useState<
+    CommunityFeedPost[]
+  >([]);
   const [communityFeedError, setCommunityFeedError] = useState<string | null>(
     null,
   );
-  const [requestedHotspotIds, setRequestedHotspotIds] = useState<Record<number, true>>({});
+  const [requestedHotspotIds, setRequestedHotspotIds] = useState<
+    Record<number, true>
+  >({});
   const [resolvedHotspots, setResolvedHotspots] = useState<
     Record<number, ResolvedHotspotPreview>
   >({});
   const [commentDraft, setCommentDraft] = useState("");
-  const [commentTargetPost, setCommentTargetPost] = useState<CommunityFeedPost | null>(
-    null,
-  );
-  const [communityPostComments, setCommunityPostComments] = useState<PostComment[]>(
-    [],
-  );
-  const [communityPostCommentsError, setCommunityPostCommentsError] =
-    useState<string | null>(null);
+  const [commentTargetPost, setCommentTargetPost] =
+    useState<CommunityFeedPost | null>(null);
+  const [communityPostComments, setCommunityPostComments] = useState<
+    PostComment[]
+  >([]);
+  const [communityPostCommentsError, setCommunityPostCommentsError] = useState<
+    string | null
+  >(null);
   const [communityPostCommentsStatus, setCommunityPostCommentsStatus] =
     useState<CommunityCommentsStatus>("idle");
   const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
   const [likingPostIds, setLikingPostIds] = useState<number[]>([]);
   const [communityFeedStatus, setCommunityFeedStatus] =
-    useState<CommunityFeedStatus>("idle");
+    useState<CommunityFeedStatus>("loading");
   const [composerIdentity, setComposerIdentity] = useState<ComposerIdentity>(
     fallbackComposerIdentity,
   );
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const persistedLikedPostIds = useLikedPostIds(likedPostsAccountKey);
+  const {
+    errorMessage: communityGroupsError,
+    groups: communityGroups,
+    status: communityGroupsStatus,
+  } = useCommunityGroups();
 
   useEffect(() => {
     let isActive = true;
@@ -643,7 +622,9 @@ export default function CommunityScreen() {
           return;
         }
 
-        const mappedPosts = response.content.map(mapNewsfeedPostToCommunityFeedPost);
+        const mappedPosts = response.content.map(
+          mapNewsfeedPostToCommunityFeedPost,
+        );
         mappedPosts.forEach(cacheCommunityExplorerProfile);
         setCommunityFeedPosts(mappedPosts);
         setCommunityFeedStatus("ready");
@@ -762,23 +743,23 @@ export default function CommunityScreen() {
     };
   }, [authSession.isAuthenticated, authSession.tokenType, hotspotIdsToResolve]);
 
-  const filteredPosts = useMemo<CommunityFeedPost[]>(() =>
-      activeTab === "community"
-        ? (
-            communityFeedStatus === "ready"
-              ? communityFeedPosts
-              : communityFeedStatus === "error"
-                ? communityPosts.slice()
-                : []
-          )
-        : communityPosts.filter((post) => post.isFollowing),
-    [activeTab, communityFeedPosts, communityFeedStatus],
+  const displayedPosts = useMemo<CommunityFeedPost[]>(
+    () =>
+      communityFeedStatus === "ready"
+        ? communityFeedPosts
+        : communityFeedStatus === "error"
+          ? communityPosts.slice()
+          : [],
+    [communityFeedPosts, communityFeedStatus],
   );
   const likedPostIdsSet = useMemo(
     () => new Set(persistedLikedPostIds),
     [persistedLikedPostIds],
   );
-  const likingPostIdsSet = useMemo(() => new Set(likingPostIds), [likingPostIds]);
+  const likingPostIdsSet = useMemo(
+    () => new Set(likingPostIds),
+    [likingPostIds],
+  );
   const resolvedComposerIdentity =
     composerIdentity.accountKey === fallbackComposerIdentity.accountKey
       ? composerIdentity
@@ -786,6 +767,12 @@ export default function CommunityScreen() {
   const composerPlaceholderText = authSession.isAuthenticated
     ? "Chia sẻ trải nghiệm của bạn..."
     : "Đăng nhập để chia sẻ trải nghiệm của bạn...";
+  const previewCommunityGroups = useMemo(
+    () => communityGroups.slice(0, 3),
+    [communityGroups],
+  );
+  const showInitialCommunityLoading =
+    communityFeedStatus === "loading" && communityFeedPosts.length === 0;
 
   useFocusEffect(
     useCallback(() => {
@@ -919,6 +906,29 @@ export default function CommunityScreen() {
   const openCommunityComposer = () => {
     router.push("/community/create" as Href);
   };
+  const openCommunityGroupCreate = () => {
+    router.push("/community/group-create" as Href);
+  };
+  const openCommunityGroupsList = () => {
+    router.push("/community/groups" as Href);
+  };
+  const handleOpenDiscoverGroup = (group: CommunityGroupPayload) => {
+    const cachedGroup = cacheCommunityGroupSession({
+      ...group,
+      source: "listed",
+    });
+
+    if (!cachedGroup) {
+      Alert.alert("Không mở được nhóm", "Dữ liệu nhóm này chưa hợp lệ.");
+      return;
+    }
+
+    const detailRouteKey = cachedGroup.groupId ?? cachedGroup.shareToken;
+
+    router.push(
+      `/community/group/${encodeURIComponent(detailRouteKey)}` as Href,
+    );
+  };
   const openExplorerProfile = (authorId: string) => {
     void (async () => {
       if (currentProfileId && authorId === currentProfileId) {
@@ -1040,12 +1050,20 @@ export default function CommunityScreen() {
     return () => {
       isActive = false;
     };
-  }, [authSession.isAuthenticated, authSession.tokenType, commentTargetPost?.postNumericId]);
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    commentTargetPost?.postNumericId,
+  ]);
 
   function handleOpenCommentComposer(post: CommunityFeedPost) {
     const postNumericId = post.postNumericId;
 
-    if (!post.canComment || typeof postNumericId !== "number" || postNumericId <= 0) {
+    if (
+      !post.canComment ||
+      typeof postNumericId !== "number" ||
+      postNumericId <= 0
+    ) {
       return;
     }
 
@@ -1084,7 +1102,10 @@ export default function CommunityScreen() {
     }
 
     if (!trimmedComment) {
-      Alert.alert("Thiếu nội dung", "Hãy nhập nội dung trước khi gửi bình luận.");
+      Alert.alert(
+        "Thiếu nội dung",
+        "Hãy nhập nội dung trước khi gửi bình luận.",
+      );
       return;
     }
 
@@ -1109,7 +1130,9 @@ export default function CommunityScreen() {
       });
 
       setCommunityFeedPosts((current) => {
-        const currentPost = current.find((post) => post.postNumericId === postNumericId);
+        const currentPost = current.find(
+          (post) => post.postNumericId === postNumericId,
+        );
         const nextCommentCount =
           result.commentCount !== null
             ? result.commentCount
@@ -1138,11 +1161,18 @@ export default function CommunityScreen() {
   async function handleLikePost(post: CommunityFeedPost) {
     const postNumericId = post.postNumericId;
 
-    if (!post.canLike || typeof postNumericId !== "number" || postNumericId <= 0) {
+    if (
+      !post.canLike ||
+      typeof postNumericId !== "number" ||
+      postNumericId <= 0
+    ) {
       return;
     }
 
-    if (persistedLikedPostIds.includes(postNumericId) || likingPostIds.includes(postNumericId)) {
+    if (
+      persistedLikedPostIds.includes(postNumericId) ||
+      likingPostIds.includes(postNumericId)
+    ) {
       return;
     }
 
@@ -1186,7 +1216,11 @@ export default function CommunityScreen() {
 
       if (resolvedLikeCount !== null) {
         setCommunityFeedPosts((current) =>
-          replaceCommunityFeedPostLikeCount(current, postNumericId, resolvedLikeCount),
+          replaceCommunityFeedPostLikeCount(
+            current,
+            postNumericId,
+            resolvedLikeCount,
+          ),
         );
       }
 
@@ -1226,8 +1260,14 @@ export default function CommunityScreen() {
           : "Đã có lỗi xảy ra khi thả tim bài viết cộng đồng.",
       );
     } finally {
-      setLikingPostIds((current) => current.filter((id) => id !== postNumericId));
+      setLikingPostIds((current) =>
+        current.filter((id) => id !== postNumericId),
+      );
     }
+  }
+
+  if (showInitialCommunityLoading) {
+    return <CommunityLoadingState />;
   }
 
   return (
@@ -1237,14 +1277,20 @@ export default function CommunityScreen() {
       <View className="flex-1 bg-white">
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 28 }}
+          contentContainerStyle={{ paddingBottom: 20 }}
         >
-          <View className="pb-7 pt-4" style={{ paddingHorizontal: gutter }}>
+          <View className="pb-5 pt-3" style={{ paddingHorizontal: gutter }}>
             <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center gap-3">
+              <View className="flex-row items-center gap-2.5">
                 <Pressable
-                  className="h-10 w-10 items-center justify-center rounded-[16px] border border-[#F6DFE8] bg-white"
-                  style={pillShadowStyle}
+                  className="h-10 w-10 items-center justify-center rounded-[16px] border bg-white"
+                  style={[
+                    pillShadowStyle,
+                    {
+                      borderColor: subtleBorderColor,
+                      borderWidth: subtleBorderWidth,
+                    },
+                  ]}
                 >
                   <SymbolView
                     name={{
@@ -1262,7 +1308,7 @@ export default function CommunityScreen() {
                 </Text>
               </View>
 
-              <View className="flex-row items-center gap-2">
+              <View className="flex-row items-center gap-1.5">
                 <CircleIconButton
                   icon={{
                     ios: "magnifyingglass",
@@ -1280,17 +1326,17 @@ export default function CommunityScreen() {
               </View>
             </View>
 
-            <View className="mt-5 gap-2.5">
+            <View className="mt-4 gap-2">
               <View
                 className="flex-row items-center rounded-[24px] bg-white"
                 style={[
                   composerShadowStyle,
                   {
-                    marginHorizontal: -6,
-                    paddingBottom: 10,
-                    paddingLeft: 8,
-                    paddingRight: 10,
-                    paddingTop: 10,
+                    marginHorizontal: -4,
+                    paddingBottom: 8,
+                    paddingLeft: 6,
+                    paddingRight: 8,
+                    paddingTop: 8,
                   },
                 ]}
               >
@@ -1300,23 +1346,24 @@ export default function CommunityScreen() {
                 />
 
                 <Pressable
-                  className="ml-2.5 flex-1 px-0.5 py-1.5"
+                  className="ml-2 flex-1 px-0 py-1"
                   onPress={openCommunityComposer}
                 >
                   <Text
                     className="text-[12px] font-medium text-[#B1A2AB]"
-                    style={{ includeFontPadding: false, lineHeight: 13 }}
+                    style={{ includeFontPadding: false, lineHeight: 12 }}
                   >
                     {composerPlaceholderText}
                   </Text>
                 </Pressable>
 
                 <Pressable
-                  className="ml-2.5 h-9 w-9 items-center justify-center rounded-full border"
+                  className="ml-2 h-9 w-9 items-center justify-center rounded-full border"
                   onPress={openCommunityComposer}
                   style={{
                     backgroundColor: "#F1F3F5",
-                    borderColor: "#E5E7EB",
+                    borderColor: subtleBorderColor,
+                    borderWidth: subtleBorderWidth,
                   }}
                 >
                   <SymbolView
@@ -1330,51 +1377,31 @@ export default function CommunityScreen() {
                   />
                 </Pressable>
               </View>
-
-              <View
-                className="flex-row overflow-hidden rounded-full p-1"
-                style={{ backgroundColor: "#F7EAF4" }}
-              >
-                {communityTabs.map((tab) => {
-                  const isActive = activeTab === tab.key;
-
-                  return (
-                    <Pressable
-                      key={tab.key}
-                      className="flex-1"
-                      onPress={() => {
-                        setActiveTab(tab.key);
-                      }}
-                    >
-                      <View
-                        className="mx-0.5 rounded-full px-3.5 py-2.5"
-                        style={
-                          isActive
-                            ? {
-                                backgroundColor: "#FFFFFF",
-                                borderRadius: 999,
-                                shadowColor: "rgba(177, 142, 168, 0.18)",
-                                shadowOpacity: 1,
-                                shadowRadius: 10,
-                                shadowOffset: { width: 0, height: 4 },
-                                elevation: 2,
-                              }
-                            : undefined
-                        }
-                      >
-                        <CommunityTabLabel tab={tab} active={isActive} />
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
             </View>
 
-            <View className="mt-3 gap-1.5">
-              {activeTab === "community" && communityFeedStatus === "loading" ? (
+            <View className="mt-4">
+              <CommunityDiscoverGroupsSection
+                currentProfileId={currentProfileId}
+                errorMessage={communityGroupsError}
+                groups={previewCommunityGroups}
+                onCreateGroup={openCommunityGroupCreate}
+                onOpenAll={openCommunityGroupsList}
+                onOpenGroup={handleOpenDiscoverGroup}
+                status={communityGroupsStatus}
+              />
+            </View>
+
+            <View className="mt-4 gap-3">
+              {communityFeedStatus === "loading" ? (
                 <View
-                  className="rounded-[28px] border border-[#F4E0D5] bg-white px-5 py-6"
-                  style={cardShadowStyle}
+                  className="rounded-[28px] border bg-white px-4 py-5"
+                  style={[
+                    cardShadowStyle,
+                    {
+                      borderColor: subtleBorderColor,
+                      borderWidth: subtleBorderWidth,
+                    },
+                  ]}
                 >
                   <View className="items-center">
                     <ActivityIndicator color="#EB489B" />
@@ -1382,59 +1409,70 @@ export default function CommunityScreen() {
                 </View>
               ) : null}
 
-              {activeTab === "community" && communityFeedStatus === "error" ? (
-                <View className="rounded-[28px] border border-[#F9E2EA] bg-[#FFF8FC] px-5 py-5">
+              {communityFeedStatus === "error" ? (
+                <View
+                  className="rounded-[28px] border bg-[#FFF8FC] px-4 py-4"
+                  style={{
+                    borderColor: subtleBorderColor,
+                    borderWidth: subtleBorderWidth,
+                  }}
+                >
                   <Text className="text-[15px] font-bold text-[#C2416C]">
                     {communityFeedError ?? "Không tải được newsfeed cộng đồng."}
                   </Text>
-                  <Text className="mt-1.5 text-[14px] leading-[18px] text-[#8E869A]">
+                  <Text className="mt-1 text-[14px] leading-[17px] text-[#8E869A]">
                     Đang hiển thị feed mẫu tạm thời để màn hình không bị trống.
                   </Text>
                 </View>
               ) : null}
 
-              {communityFeedStatus !== "loading"
-                ? filteredPosts.length
-                  ? filteredPosts.map((post) => {
-                      const postNumericId = post.postNumericId ?? null;
-                      const isLiking =
-                        postNumericId !== null && likingPostIdsSet.has(postNumericId);
-                      const isLiked =
-                        postNumericId !== null &&
-                        (isLiking ||
-                          likedPostIdsSet.has(postNumericId) ||
-                          post.isLiked === true);
+              {communityFeedStatus !== "loading" ? (
+                displayedPosts.length ? (
+                  displayedPosts.map((post) => {
+                    const postNumericId = post.postNumericId ?? null;
+                    const isLiking =
+                      postNumericId !== null &&
+                      likingPostIdsSet.has(postNumericId);
+                    const isLiked =
+                      postNumericId !== null &&
+                      (isLiking ||
+                        likedPostIdsSet.has(postNumericId) ||
+                        post.isLiked === true);
 
-                      return (
-                        <CommunityPostCard
-                          key={post.id}
-                          edgeToEdgeWidth={safeWidth}
-                          isLiked={isLiked}
-                          isLiking={isLiking}
-                          pageGutter={gutter}
-                          requestedHotspotIds={requestedHotspotIds}
-                          post={post}
-                          resolvedHotspots={resolvedHotspots}
-                          onCommentPost={handleOpenCommentComposer}
-                          onLikePost={handleLikePost}
-                          onOpenProfile={openExplorerProfile}
-                          onOpenHotspot={openHotspotDetail}
-                        />
-                      );
-                    })
-                  : (
-                      <View className="rounded-[28px] border border-[#F4E0D5] bg-white px-5 py-6">
-                        <Text className="text-[18px] font-black text-[#2E2336]">
-                          Chưa có cập nhật mới
-                        </Text>
-                        <Text className="mt-1.5 text-[14px] leading-[18px] text-[#8E869A]">
-                          {activeTab === "following"
-                            ? "Danh sách bạn đang theo dõi hiện chưa có cập nhật mới. Chuyển sang Cộng đồng để xem thêm hoạt động nổi bật."
-                            : "Feed cộng đồng hiện chưa có bài mới. Hãy quay lại sau để xem thêm hoạt động từ các explorer."}
-                        </Text>
-                      </View>
-                    )
-                : null}
+                    return (
+                      <CommunityPostCard
+                        key={post.id}
+                        edgeToEdgeWidth={safeWidth}
+                        isLiked={isLiked}
+                        isLiking={isLiking}
+                        requestedHotspotIds={requestedHotspotIds}
+                        post={post}
+                        resolvedHotspots={resolvedHotspots}
+                        onCommentPost={handleOpenCommentComposer}
+                        onLikePost={handleLikePost}
+                        onOpenProfile={openExplorerProfile}
+                        onOpenHotspot={openHotspotDetail}
+                      />
+                    );
+                  })
+                ) : (
+                  <View
+                    className="rounded-[28px] border bg-white px-4 py-5"
+                    style={{
+                      borderColor: subtleBorderColor,
+                      borderWidth: subtleBorderWidth,
+                    }}
+                  >
+                    <Text className="text-[18px] font-black text-[#2E2336]">
+                      Chưa có cập nhật mới
+                    </Text>
+                    <Text className="mt-1 text-[14px] leading-[17px] text-[#8E869A]">
+                      Feed cộng đồng hiện chưa có bài mới. Hãy quay lại sau để
+                      xem thêm hoạt động từ các explorer.
+                    </Text>
+                  </View>
+                )
+              ) : null}
             </View>
           </View>
         </ScrollView>
@@ -1463,7 +1501,8 @@ function CircleIconButton({ icon }: { icon: SymbolName }) {
       className="h-9 w-9 items-center justify-center rounded-full border"
       style={{
         backgroundColor: "rgba(255,255,255,0.92)",
-        borderColor: "#F8DEE8",
+        borderColor: subtleBorderColor,
+        borderWidth: subtleBorderWidth,
       }}
     >
       <SymbolView name={icon} size={15} tintColor="#C95B89" />
@@ -1471,22 +1510,79 @@ function CircleIconButton({ icon }: { icon: SymbolName }) {
   );
 }
 
-function CommunityTabLabel({
-  active = false,
-  tab,
+function CommunityDiscoverGroupsSection({
+  currentProfileId,
+  errorMessage,
+  groups,
+  onCreateGroup,
+  onOpenAll,
+  onOpenGroup,
+  status,
 }: {
-  active?: boolean;
-  tab: CommunityTab;
+  currentProfileId: string | null;
+  errorMessage: string | null;
+  groups: readonly CommunityGroupPayload[];
+  onCreateGroup: () => void;
+  onOpenAll: () => void;
+  onOpenGroup: (group: CommunityGroupPayload) => void;
+  status: CommunityGroupsStatus;
 }) {
+  const showEmptyState = status === "ready" && groups.length === 0;
+  const showErrorState = status === "error" && groups.length === 0;
+  const showLoadingState = status === "loading" && groups.length === 0;
+
   return (
-    <View className="items-center justify-center">
-      <Text
-        className={`text-[12px] font-semibold ${
-          active ? "text-[#6F586B]" : "text-[#9B8797]"
-        }`}
+    <View>
+      <View className="flex-row items-center justify-between">
+        <Text
+          className="text-[16px] font-normal text-[#2E2336]"
+          style={{ includeFontPadding: false, lineHeight: 18 }}
+        >
+          Nhóm cộng đồng
+        </Text>
+        <Pressable hitSlop={8} onPress={onOpenAll}>
+          <Text className="text-[13px] font-semibold text-[#D97706]">
+            Xem tất cả
+          </Text>
+        </Pressable>
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingRight: 8,
+          paddingTop: 10,
+          gap: 10,
+        }}
       >
-        {tab.label}
-      </Text>
+        <CommunityCreateGroupCard onPress={onCreateGroup} />
+        {groups.map((group) => (
+          <CommunityGroupListCard
+            key={group.shareToken}
+            group={group}
+            isLeader={isCommunityGroupLeader(group, currentProfileId)}
+            onPress={() => {
+              onOpenGroup(group);
+            }}
+          />
+        ))}
+        {showLoadingState ? <CommunityGroupPlaceholderCard /> : null}
+        {showErrorState ? (
+          <CommunityGroupCompactStateCard
+            description={
+              errorMessage ?? "Không tải được danh sách nhóm cộng đồng."
+            }
+            title="Không tải được nhóm"
+          />
+        ) : null}
+        {showEmptyState ? (
+          <CommunityGroupCompactStateCard
+            description="Hiện chưa có nhóm nào để hiển thị."
+            title="Chưa có nhóm"
+          />
+        ) : null}
+      </ScrollView>
     </View>
   );
 }
@@ -1519,11 +1615,14 @@ function CommunityPostMediaGallery({
     return null;
   }
 
-  const singleMediaHeight = Math.min(Math.max(edgeToEdgeWidth * 0.82, 250), 360);
+  const singleMediaHeight = Math.min(
+    Math.max((edgeToEdgeWidth - 48) * 0.62, 180),
+    236,
+  );
 
   if (items.length === 1) {
     return (
-      <View className="overflow-hidden bg-[#EEF2F7]">
+      <View className="overflow-hidden rounded-[10px] bg-[#EEF2F7]">
         <Image
           source={items[0].source}
           resizeMode="cover"
@@ -1537,126 +1636,80 @@ function CommunityPostMediaGallery({
   const hiddenCount = Math.max(items.length - previewItems.length, 0);
 
   return (
-    <View className="flex-row flex-wrap bg-[#EEF2F7]" style={{ gap: 2 }}>
-      {previewItems.map((item, index) => {
-        const isHeroImage = previewItems.length === 3 && index === 0;
-        const shouldShowOverlay =
-          index === previewItems.length - 1 && hiddenCount > 0;
-        const itemHeight = isHeroImage ? 264 : 176;
+    <View className="overflow-hidden rounded-[10px] bg-[#EEF2F7]">
+      <View className="flex-row flex-wrap" style={{ gap: 2 }}>
+        {previewItems.map((item, index) => {
+          const isHeroImage = previewItems.length === 3 && index === 0;
+          const shouldShowOverlay =
+            index === previewItems.length - 1 && hiddenCount > 0;
+          const itemHeight = isHeroImage ? 184 : 112;
 
-        return (
-          <View
-            key={item.key}
-            style={{
-              height: itemHeight,
-              overflow: "hidden",
-              position: "relative",
-              width: isHeroImage ? "100%" : "49.7%",
-            }}
-          >
-            <Image
-              source={item.source}
-              resizeMode="cover"
-              style={{ height: "100%", width: "100%" }}
-            />
-            {shouldShowOverlay ? (
-              <View className="absolute inset-0 items-center justify-center bg-[#111827]/48">
-                <Text className="text-[30px] font-black text-white">{`+${hiddenCount}`}</Text>
-              </View>
-            ) : null}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-function CommunityPostReactionSummary({
-  comments,
-  isLiked,
-  likes,
-  shares,
-}: {
-  comments: string;
-  isLiked: boolean;
-  likes: string;
-  shares: string;
-}) {
-  return (
-    <View className="flex-row items-center justify-between gap-3">
-      <View className="flex-row items-center">
-        <View
-          className="h-6 w-6 items-center justify-center rounded-full"
-          style={{ backgroundColor: isLiked ? "#F43F5E" : "#FB7185" }}
-        >
-          <SymbolView
-            name={{
-              ios: "heart.fill",
-              android: "favorite",
-              web: "favorite",
-            }}
-            size={12}
-            tintColor="#FFFFFF"
-          />
-        </View>
-        <Text
-          className="ml-2 text-[13px] font-medium text-[#4B5563]"
-          style={{ includeFontPadding: false, lineHeight: 14 }}
-        >
-          {likes}
-        </Text>
+          return (
+            <View
+              key={item.key}
+              style={{
+                height: itemHeight,
+                overflow: "hidden",
+                position: "relative",
+                width: isHeroImage ? "100%" : "49.7%",
+              }}
+            >
+              <Image
+                source={item.source}
+                resizeMode="cover"
+                style={{ height: "100%", width: "100%" }}
+              />
+              {shouldShowOverlay ? (
+                <View className="absolute inset-0 items-center justify-center bg-[#111827]/48">
+                  <Text className="text-[30px] font-black text-white">{`+${hiddenCount}`}</Text>
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
       </View>
-
-      <Text
-        className="flex-1 text-right text-[13px] font-medium text-[#6B7280]"
-        numberOfLines={1}
-        style={{ includeFontPadding: false, lineHeight: 14 }}
-      >
-        {`${comments} bình luận · ${shares} chia sẻ`}
-      </Text>
     </View>
   );
 }
 
-function CommunityPostActionButton({
+function CommunityPostFooterStatButton({
   active = false,
   disabled = false,
+  count,
   icon,
   isLoading = false,
-  label,
   onPress,
 }: {
   active?: boolean;
   disabled?: boolean;
+  count: string;
   icon: SymbolName;
   isLoading?: boolean;
-  label: string;
   onPress?: (() => void) | undefined;
 }) {
-  const iconColor = active ? "#F43F5E" : "#6B7280";
-  const textColor = active ? "#F43F5E" : "#4B5563";
+  const iconColor = active ? "#D94679" : "#6B7280";
+  const textColor = active ? "#D94679" : "#6B7280";
 
   return (
     <Pressable
-      className="flex-1 flex-row items-center justify-center rounded-[14px] px-3 py-2.5"
+      className="flex-row items-center rounded-full pr-1"
       disabled={disabled || !onPress}
       hitSlop={8}
       onPress={onPress}
       style={({ pressed }) => ({
-        backgroundColor: active ? "#FFF1F4" : "transparent",
         opacity: disabled ? 0.5 : pressed ? 0.72 : 1,
       })}
     >
       {isLoading ? (
-        <ActivityIndicator color="#F43F5E" size="small" />
+        <ActivityIndicator color="#D94679" size="small" />
       ) : (
-        <SymbolView name={icon} size={18} tintColor={iconColor} />
+        <SymbolView name={icon} size={20} tintColor={iconColor} />
       )}
       <Text
-        className="ml-2 text-[14px] font-semibold"
-        style={{ color: textColor, includeFontPadding: false, lineHeight: 15 }}
+        className="ml-1.5 text-[14px] font-medium"
+        style={{ color: textColor, includeFontPadding: false, lineHeight: 16 }}
       >
-        {label}
+        {count}
       </Text>
     </Pressable>
   );
@@ -1666,7 +1719,6 @@ function CommunityPostCard({
   edgeToEdgeWidth,
   isLiked,
   isLiking,
-  pageGutter,
   post,
   requestedHotspotIds,
   resolvedHotspots,
@@ -1678,7 +1730,6 @@ function CommunityPostCard({
   edgeToEdgeWidth: number;
   isLiked: boolean;
   isLiking: boolean;
-  pageGutter: number;
   post: CommunityFeedPost;
   requestedHotspotIds: Record<number, true>;
   resolvedHotspots: Record<number, ResolvedHotspotPreview>;
@@ -1714,15 +1765,32 @@ function CommunityPostCard({
       : showHotspotFallbackLabel
         ? "Hotspot đang cập nhật"
         : readMeaningfulText(post.location);
-  const shouldShowHotspotLocation = showHotspotLoadingState || Boolean(locationLabel);
+  const shouldShowHotspotLocation =
+    showHotspotLoadingState || Boolean(locationLabel);
   const canOpenHotspotLocation = primaryHotspot !== null;
+  const metaLabel = buildCommunityPostMetaLabel(post);
+  const locationPillLabel =
+    locationLabel ?? (showHotspotLoadingState ? "Đang tải hotspot" : null);
 
   return (
-    <View className="overflow-hidden bg-white" style={{ marginHorizontal: -pageGutter }}>
-      <View className="flex-row items-start px-4 pb-2.5 pt-2.5">
+    <View
+      className="rounded-[28px] bg-white px-3.5 pb-3 pt-3"
+      style={{
+        borderColor: subtleBorderColor,
+        borderWidth: subtleBorderWidth,
+        shadowColor: "rgba(34, 23, 33, 0.06)",
+        shadowOpacity: 1,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 4,
+      }}
+    >
+      <View className="flex-row items-start">
         <Pressable
           accessibilityLabel={`Mở hồ sơ của ${post.author}`}
-          accessibilityRole={post.canOpenProfile === false ? undefined : "button"}
+          accessibilityRole={
+            post.canOpenProfile === false ? undefined : "button"
+          }
           className="rounded-full"
           disabled={post.canOpenProfile === false}
           hitSlop={8}
@@ -1734,57 +1802,62 @@ function CommunityPostCard({
             onOpenProfile(post.authorId);
           }}
         >
-          <AvatarMonogram colors={post.avatarColors} initials={post.initials} size={46} />
+          <AvatarMonogram
+            colors={post.avatarColors}
+            initials={post.initials}
+            size={42}
+          />
         </Pressable>
 
-        <View className="ml-2.5 flex-1 pr-3">
-          <Text
-            className="text-[16px] font-black text-[#111827]"
-            numberOfLines={1}
-            style={{ includeFontPadding: false, lineHeight: 16 }}
-          >
-            {post.author}
-          </Text>
-
-          <View className="mt-0.5 flex-row items-center">
+        <View className="ml-2.5 flex-1 pr-2">
+          <View className="flex-row flex-wrap items-center gap-1">
             <Text
-              className="text-[12px] font-medium text-[#6B7280]"
-              style={{ includeFontPadding: false, lineHeight: 12 }}
+              className="text-[15px] font-black text-[#2F2432]"
+              numberOfLines={1}
+              style={{ includeFontPadding: false, lineHeight: 15 }}
             >
-              {post.time}
+              {post.author}
             </Text>
-            <Text className="mx-1.5 text-[12px] text-[#9CA3AF]">·</Text>
-            <SymbolView
-              name={{
-                ios: "globe.asia.australia.fill",
-                android: "public",
-                web: "public",
-              }}
-              size={12}
-              tintColor="#9CA3AF"
-            />
+            {metaLabel ? (
+              <View className="rounded-full bg-[#F3F0EC] px-2 py-0.5">
+                <Text
+                  className="text-[10px] font-semibold text-[#7A6D65]"
+                  numberOfLines={1}
+                  style={{ includeFontPadding: false, lineHeight: 11 }}
+                >
+                  {metaLabel}
+                </Text>
+              </View>
+            ) : null}
           </View>
+
+          <Text
+            className="text-[12px] font-medium text-[#8A7D86]"
+            style={{ includeFontPadding: false, lineHeight: 11 }}
+          >
+            {post.time}
+          </Text>
         </View>
 
-        <View className="h-9 w-9 items-center justify-center rounded-full bg-[#F3F4F6]">
+        <View className="h-8 w-8 items-center justify-center rounded-full bg-[#F7F4F1]">
           <SymbolView
             name={{
               ios: "ellipsis",
               android: "more_horiz",
               web: "more_horiz",
             }}
-            size={16}
-            tintColor="#4B5563"
+            size={15}
+            tintColor="#7B7077"
           />
         </View>
       </View>
 
-      <View className="px-4 pb-2.5">
+      <View className="pt-1">
         <ExpandablePostCaption text={post.caption} />
 
         {shouldShowHotspotLocation ? (
           <Pressable
-            className="mt-1.5 flex-row items-center"
+            className="mt-1.5 self-start rounded-full bg-[#F7F4F1] px-2.5 py-1"
             disabled={!canOpenHotspotLocation}
             onPress={
               canOpenHotspotLocation
@@ -1797,87 +1870,79 @@ function CommunityPostCard({
               opacity: canOpenHotspotLocation && pressed ? 0.72 : 1,
             })}
           >
-            {showHotspotLoadingState ? (
-              <ActivityIndicator color="#2563EB" size="small" />
-            ) : (
-              <SymbolView
-                name={{
-                  ios: "mappin.and.ellipse",
-                  android: "location_on",
-                  web: "location_on",
-                }}
-                size={17}
-                tintColor={canOpenHotspotLocation ? "#2563EB" : "#9CA3AF"}
-              />
-            )}
-            {locationLabel ? (
-              <Text
-                className="ml-2 flex-1 text-[14px] font-semibold text-[#4B5563]"
-                numberOfLines={1}
-                style={{ includeFontPadding: false, lineHeight: 14 }}
-              >
-                {locationLabel}
-              </Text>
-            ) : null}
+            <View className="flex-row items-center">
+              {showHotspotLoadingState ? (
+                <ActivityIndicator color="#D97706" size="small" />
+              ) : (
+                <SymbolView
+                  name={{
+                    ios: "mappin.and.ellipse",
+                    android: "location_on",
+                    web: "location_on",
+                  }}
+                  size={16}
+                  tintColor={canOpenHotspotLocation ? "#D97706" : "#9CA3AF"}
+                />
+              )}
+              {locationPillLabel ? (
+                <Text
+                  className="ml-1.5 text-[11px] font-semibold text-[#6D5F59]"
+                  numberOfLines={1}
+                  style={{ includeFontPadding: false, lineHeight: 11 }}
+                >
+                  {locationPillLabel}
+                </Text>
+              ) : null}
+            </View>
           </Pressable>
-        ) : null}
-
-        {post.tags.length > 0 ? (
-          <View className="mt-1.5 flex-row flex-wrap gap-1">
-            {post.tags.slice(0, 3).map((tag) => (
-              <TagPill key={`${post.id}-${tag}`} label={tag} />
-            ))}
-          </View>
         ) : null}
       </View>
 
-      <CommunityPostMediaGallery edgeToEdgeWidth={edgeToEdgeWidth} items={mediaItems} />
-
-      <View className="px-4 pb-2.5 pt-2.5">
-        <CommunityPostReactionSummary
-          comments={post.comments}
-          isLiked={isLiked}
-          likes={post.likes}
-          shares={post.shares}
-        />
-
-        <View className="mt-2.5 h-px bg-[#E5E7EB]" />
-
-        <View className="mt-0.5 flex-row items-center gap-1">
-          <CommunityPostActionButton
-            active={isLiked}
-            disabled={!post.canLike || isLiking}
-            icon={
-              isLiked
-                ? {
-                    ios: "heart.fill",
-                    android: "favorite",
-                    web: "favorite",
-                  }
-                : {
-                    ios: "heart",
-                    android: "favorite_border",
-                    web: "favorite_border",
-                  }
-            }
-            isLoading={isLiking}
-            label="Thích"
-            onPress={
-              post.canLike
-                ? () => {
-                    onLikePost(post);
-                  }
-                : undefined
-            }
+      {mediaItems.length > 0 ? (
+        <View className="mt-2">
+          <CommunityPostMediaGallery
+            edgeToEdgeWidth={edgeToEdgeWidth}
+            items={mediaItems}
           />
-          <CommunityPostActionButton
+        </View>
+      ) : null}
+
+      <View className="mt-2.5 flex-row items-center">
+        <CommunityPostFooterStatButton
+          active={isLiked}
+          count={post.likes}
+          disabled={!post.canLike || isLiking}
+          icon={
+            isLiked
+              ? {
+                  ios: "heart.fill",
+                  android: "favorite",
+                  web: "favorite",
+                }
+              : {
+                  ios: "heart",
+                  android: "favorite_border",
+                  web: "favorite_border",
+                }
+          }
+          isLoading={isLiking}
+          onPress={
+            post.canLike
+              ? () => {
+                  onLikePost(post);
+                }
+              : undefined
+          }
+        />
+        <View className="ml-3">
+          <CommunityPostFooterStatButton
+            count={post.comments}
             disabled={!post.canComment}
             icon={{
               ios: "bubble.left",
               android: "chat_bubble_outline",
               web: "chat_bubble_outline",
             }}
-            label="Bình luận"
             onPress={
               post.canComment
                 ? () => {
@@ -1886,16 +1951,23 @@ function CommunityPostCard({
                 : undefined
             }
           />
-          <CommunityPostActionButton
-            disabled
-            icon={{
-              ios: "square.and.arrow.up",
-              android: "ios_share",
-              web: "ios_share",
-            }}
-            label="Chia sẻ"
-          />
         </View>
+        <View className="flex-1" />
+        <Pressable
+          className="h-9 w-9 items-center justify-center rounded-full"
+          disabled
+          style={{ opacity: 0.72 }}
+        >
+          <SymbolView
+            name={{
+              ios: "square.and.arrow.up",
+              android: "share",
+              web: "share",
+            }}
+            size={18}
+            tintColor="#6B7280"
+          />
+        </Pressable>
       </View>
     </View>
   );
@@ -1912,8 +1984,8 @@ function ExpandablePostCaption({ text }: { text: string }) {
 
   return (
     <Text
-      className="mt-1.5 text-[14px] text-[#33293A]"
-      style={{ includeFontPadding: false, lineHeight: 15 }}
+      className="text-[15px] text-[#33293A]"
+      style={{ includeFontPadding: false, lineHeight: 19 }}
     >
       {expanded || !shouldTruncate ? normalizedText : collapsedText}
       {shouldTruncate ? (
@@ -1927,27 +1999,6 @@ function ExpandablePostCaption({ text }: { text: string }) {
         </Text>
       ) : null}
     </Text>
-  );
-}
-
-function TagPill({ label }: { label: string }) {
-  const palette = getTagPalette(label);
-
-  return (
-    <View
-      className="rounded-full border px-2.5 py-1"
-      style={{
-        backgroundColor: palette.backgroundColor,
-        borderColor: palette.borderColor,
-      }}
-    >
-      <Text
-        className="text-[10px] font-bold uppercase tracking-[0.4px]"
-        style={{ color: palette.textColor, includeFontPadding: false, lineHeight: 11 }}
-      >
-        {label}
-      </Text>
-    </View>
   );
 }
 
@@ -1980,16 +2031,6 @@ function AvatarMonogram({
         {initials}
       </Text>
     </LinearGradient>
-  );
-}
-
-function getTagPalette(label: string): TagPalette {
-  return (
-    tagPalettes[label] ?? {
-      backgroundColor: "#F5F0FA",
-      borderColor: "#DFD4EB",
-      textColor: "#7A6197",
-    }
   );
 }
 
@@ -2034,17 +2075,25 @@ function CommunityCommentCard({ item }: { item: PostComment }) {
     readMeaningfulText(item.displayName) ??
     readMeaningfulText(item.username) ??
     "Người dùng";
-  const normalizedUsername = readMeaningfulText(item.username)?.replace(/^@/, "") ?? null;
+  const normalizedUsername =
+    readMeaningfulText(item.username)?.replace(/^@/, "") ?? null;
   const shouldShowUsername =
     normalizedUsername !== null &&
-    normalizeLookupText(normalizedUsername) !== normalizeLookupText(displayName);
+    normalizeLookupText(normalizedUsername) !==
+      normalizeLookupText(displayName);
 
   return (
     <View
-      className="rounded-[24px] border border-[#F1E4EC] bg-white px-4 py-3.5"
-      style={cardShadowStyle}
+      className="rounded-[24px] border bg-white px-3.5 py-3"
+      style={[
+        cardShadowStyle,
+        {
+          borderColor: subtleBorderColor,
+          borderWidth: subtleBorderWidth,
+        },
+      ]}
     >
-      <View className="flex-row items-start gap-3">
+      <View className="flex-row items-start gap-2.5">
         <AvatarMonogram
           colors={getAvatarPalette(`${displayName}-${item.userId}`)}
           initials={getNameInitials(displayName)}
@@ -2063,7 +2112,7 @@ function CommunityCommentCard({ item }: { item: PostComment }) {
               </Text>
               {shouldShowUsername ? (
                 <Text
-                  className="mt-0.5 text-[11px] font-medium text-[#A06A85]"
+                  className="text-[11px] font-medium text-[#A06A85]"
                   numberOfLines={1}
                   style={{ includeFontPadding: false, lineHeight: 12 }}
                 >
@@ -2081,8 +2130,8 @@ function CommunityCommentCard({ item }: { item: PostComment }) {
           </View>
 
           <Text
-            className="mt-2 text-[14px] text-[#4A3C54]"
-            style={{ includeFontPadding: false, lineHeight: 18 }}
+            className="mt-1.5 text-[14px] text-[#4A3C54]"
+            style={{ includeFontPadding: false, lineHeight: 17 }}
           >
             {readMeaningfulText(item.comment) ?? "Đã gửi một bình luận."}
           </Text>
@@ -2119,7 +2168,8 @@ function CommunityCommentComposerModal({
 }) {
   const trimmedDraftLength = draft.trim().length;
   const showCommentsLoading = commentsStatus === "loading";
-  const showCommentsEmptyState = commentsStatus === "ready" && comments.length === 0;
+  const showCommentsEmptyState =
+    commentsStatus === "ready" && comments.length === 0;
 
   return (
     <Modal
@@ -2133,11 +2183,15 @@ function CommunityCommentComposerModal({
         className="flex-1"
       >
         <View className="flex-1 justify-end bg-[#20161C]/42">
-          <Pressable className="flex-1" disabled={isSubmitting} onPress={onClose} />
+          <Pressable
+            className="flex-1"
+            disabled={isSubmitting}
+            onPress={onClose}
+          />
 
           <SafeAreaView edges={["left", "right", "bottom"]}>
             <View
-              className="rounded-t-[32px] bg-[#FFF9FD] px-5 pb-5 pt-4"
+              className="rounded-t-[32px] bg-[#FFF9FD] px-4 pb-4 pt-3"
               style={{ maxHeight: "88%" }}
             >
               <ScrollView
@@ -2149,7 +2203,7 @@ function CommunityCommentComposerModal({
                     <Text className="text-[20px] font-black text-[#2F2337]">
                       Viết bình luận
                     </Text>
-                    <Text className="mt-1 text-[13px] leading-5 text-[#8F8298]">
+                    <Text className="mt-0.5 text-[13px] leading-[18px] text-[#8F8298]">
                       {postAuthor
                         ? `Bình luận cho bài viết của ${postAuthor}.`
                         : "Bình luận cho bài viết cộng đồng."}
@@ -2175,8 +2229,14 @@ function CommunityCommentComposerModal({
                 </View>
 
                 <View
-                  className="mt-4 rounded-[24px] border border-[#F1E4EC] bg-white px-4 py-4"
-                  style={cardShadowStyle}
+                  className="mt-3 rounded-[24px] border bg-white px-3.5 py-3.5"
+                  style={[
+                    cardShadowStyle,
+                    {
+                      borderColor: subtleBorderColor,
+                      borderWidth: subtleBorderWidth,
+                    },
+                  ]}
                 >
                   <TextInput
                     editable={!isSubmitting}
@@ -2188,8 +2248,8 @@ function CommunityCommentComposerModal({
                     style={{
                       color: "#2F242C",
                       fontSize: 15,
-                      lineHeight: 22,
-                      minHeight: 136,
+                      lineHeight: 20,
+                      minHeight: 118,
                       padding: 0,
                       textAlignVertical: "top",
                     }}
@@ -2197,7 +2257,7 @@ function CommunityCommentComposerModal({
                   />
                 </View>
 
-                <View className="mt-2 flex-row items-center justify-between">
+                <View className="mt-1.5 flex-row items-center justify-between">
                   <Text className="text-[12px] font-medium text-[#A897B2]">
                     Bình luận sẽ được gửi công khai.
                   </Text>
@@ -2206,11 +2266,15 @@ function CommunityCommentComposerModal({
                   </Text>
                 </View>
 
-                <View className="mt-4 flex-row gap-3">
+                <View className="mt-3 flex-row gap-2.5">
                   <Pressable
-                    className="flex-1 items-center justify-center rounded-[20px] border border-[#F0DCE8] bg-white px-4 py-3.5"
+                    className="flex-1 items-center justify-center rounded-[20px] border bg-white px-4 py-3"
                     disabled={isSubmitting}
                     onPress={onClose}
+                    style={{
+                      borderColor: subtleBorderColor,
+                      borderWidth: subtleBorderWidth,
+                    }}
                   >
                     <Text className="text-[14px] font-bold text-[#8E869A]">
                       Hủy
@@ -2235,7 +2299,7 @@ function CommunityCommentComposerModal({
                       end={{ x: 1, y: 0.5 }}
                       locations={[0, 0.58, 1]}
                       start={{ x: 0, y: 0.5 }}
-                      className="items-center justify-center px-4 py-3.5"
+                      className="items-center justify-center px-4 py-3"
                     >
                       {isSubmitting ? (
                         <ActivityIndicator color="#FFFFFF" size="small" />
@@ -2248,7 +2312,7 @@ function CommunityCommentComposerModal({
                   </Pressable>
                 </View>
 
-                <View className="mt-5">
+                <View className="mt-4">
                   <View className="flex-row items-center justify-between">
                     <Text className="text-[16px] font-black text-[#2F2337]">
                       Bình luận gần đây
@@ -2262,8 +2326,14 @@ function CommunityCommentComposerModal({
 
                   {showCommentsLoading ? (
                     <View
-                      className="mt-3 rounded-[22px] border border-[#F1E4EC] bg-white px-4 py-4"
-                      style={cardShadowStyle}
+                      className="mt-2.5 rounded-[22px] border bg-white px-3.5 py-3.5"
+                      style={[
+                        cardShadowStyle,
+                        {
+                          borderColor: subtleBorderColor,
+                          borderWidth: subtleBorderWidth,
+                        },
+                      ]}
                     >
                       <View className="items-center">
                         <ActivityIndicator color="#EB489B" size="small" />
@@ -2273,13 +2343,17 @@ function CommunityCommentComposerModal({
 
                   {commentsErrorMessage ? (
                     <View
-                      className="mt-3 rounded-[22px] border border-[#F7D9E4] bg-[#FFF7FB] px-4 py-4"
+                      className="mt-2.5 rounded-[22px] border bg-[#FFF7FB] px-3.5 py-3.5"
+                      style={{
+                        borderColor: subtleBorderColor,
+                        borderWidth: subtleBorderWidth,
+                      }}
                     >
                       <Text className="text-[14px] font-bold text-[#C2416C]">
                         {commentsErrorMessage}
                       </Text>
                       <Pressable
-                        className="mt-3 self-start rounded-full bg-white px-4 py-2"
+                        className="mt-2.5 self-start rounded-full bg-white px-4 py-2"
                         onPress={onRetryComments}
                         style={pillShadowStyle}
                       >
@@ -2291,7 +2365,7 @@ function CommunityCommentComposerModal({
                   ) : null}
 
                   {comments.length > 0 ? (
-                    <View className="mt-3 gap-3">
+                    <View className="mt-2.5 gap-2.5">
                       {comments.map((item) => (
                         <CommunityCommentCard
                           key={`${item.postActionId}-${item.userId}`}
@@ -2303,13 +2377,19 @@ function CommunityCommentComposerModal({
 
                   {showCommentsEmptyState ? (
                     <View
-                      className="mt-3 rounded-[22px] border border-[#F1E4EC] bg-white px-4 py-4"
-                      style={cardShadowStyle}
+                      className="mt-2.5 rounded-[22px] border bg-white px-3.5 py-3.5"
+                      style={[
+                        cardShadowStyle,
+                        {
+                          borderColor: subtleBorderColor,
+                          borderWidth: subtleBorderWidth,
+                        },
+                      ]}
                     >
                       <Text className="text-[15px] font-semibold text-[#43354C]">
                         Chưa có bình luận nào
                       </Text>
-                      <Text className="mt-1.5 text-[13px] leading-5 text-[#8F8298]">
+                      <Text className="mt-1 text-[13px] leading-[18px] text-[#8F8298]">
                         Hãy là người đầu tiên để lại cảm nhận cho bài viết này.
                       </Text>
                     </View>

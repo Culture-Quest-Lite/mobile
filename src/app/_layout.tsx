@@ -20,6 +20,7 @@ import { warnForInvalidPublicEnv } from '@/constants/env';
 import '@/lib/nativewind';
 import { requestForegroundLocationPermissionOnAppLaunch } from '@/lib/location';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppToastHost } from '@/components/ui/app-toast';
 import { RouteSystemAlertHost } from '@/features/route/components/route-system-alert';
 
 const AppText = Text as typeof Text & {
@@ -90,9 +91,18 @@ export default function RootLayout() {
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="community/create" />
+          <Stack.Screen name="community/group-create" />
+          <Stack.Screen name="community/group-created/[shareToken]" />
+          <Stack.Screen name="community/groups" />
+          <Stack.Screen name="community/group/[shareToken]" />
+          <Stack.Screen name="community/group/[shareToken]/manage" />
+          <Stack.Screen name="community/group/[shareToken]/members" />
+          <Stack.Screen name="community/group/[shareToken]/settings" />
+          <Stack.Screen name="community/group/[shareToken]/invite" />
           <Stack.Screen name="community/post-visibility" />
           <Stack.Screen name="community/post/[id]" />
           <Stack.Screen name="community/profile/[id]" />
+          <Stack.Screen name="join/[shareToken]" />
           <Stack.Screen name="profile/information" />
           <Stack.Screen name="profile/menu" />
           <Stack.Screen name="notifications" />
@@ -109,6 +119,7 @@ export default function RootLayout() {
           <Stack.Screen name="hotspots/search" />
           <Stack.Screen name="+not-found" />
         </Stack>
+        <AppToastHost />
         <RouteSystemAlertHost />
       </ThemeProvider>
     </SafeAreaProvider>

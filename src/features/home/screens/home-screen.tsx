@@ -78,6 +78,7 @@ import { getApiHotspotRouteSlug, getHotspotHref } from "../data/hotspots";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const guestPreviewLogo = require("../../../../assets/images/logo3.png");
+const nearbyShowcaseMascot = require("../../../../assets/images/hotspot_nearby.png");
 
 const themeCategoryPresets: Record<
   string,
@@ -235,7 +236,10 @@ const nearbyPlaceShadowStyle = {
   elevation: 5,
 } as const;
 
-const routeDifficultyStyles: Record<string, { background: string; color: string }> = {
+const routeDifficultyStyles: Record<
+  string,
+  { background: string; color: string }
+> = {
   Dễ: {
     background: "#DCFCE7",
     color: "#15803D",
@@ -383,9 +387,9 @@ type NearbyPlacesSectionStatus = "empty" | "loading" | "ready";
 type SuggestedRoutesSectionStatus = "empty" | "loading" | "ready";
 type SuggestedRouteCard = RouteItem;
 
-const defaultNearbySearchDistanceMeters = 20;
-const nearbyDistanceSliderMinimumMeters = 20;
-const nearbyDistanceSliderMaximumMeters = 1000;
+const defaultNearbySearchDistanceMeters = 1000;
+const nearbyDistanceSliderMinimumMeters = 1000;
+const nearbyDistanceSliderMaximumMeters = 15000;
 const nearbyDistanceSliderStepMeters = 20;
 const suggestedRouteCardImageHeight = 136;
 const suggestedRouteCardHeight = 248;
@@ -528,7 +532,9 @@ function mapRouteToSuggestedRouteCard(route: RouteDto): SuggestedRouteCard {
 }
 
 function getSuggestedRouteDescription(route: SuggestedRouteCard) {
-  return route.description?.trim() || route.subtitle.trim() || route.theme.trim();
+  return (
+    route.description?.trim() || route.subtitle.trim() || route.theme.trim()
+  );
 }
 
 function getSuggestedRouteTagLabel(route: SuggestedRouteCard) {
@@ -853,17 +859,27 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
 
 function SectionEmptyState({
   description = "Không có dữ liệu phù hợp.",
+  isLoading = false,
   title = "Không có dữ liệu phù hợp",
 }: {
   description?: string;
+  isLoading?: boolean;
   title?: string;
 }) {
   return (
     <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-      <Text className="text-[15px] font-bold text-[#3B4454]">{title}</Text>
-      <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
-        {description}
-      </Text>
+      {isLoading ? (
+        <View className="items-center py-1">
+          <ActivityIndicator color="#EB489B" size="small" />
+        </View>
+      ) : (
+        <>
+          <Text className="text-[15px] font-bold text-[#3B4454]">{title}</Text>
+          <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+            {description}
+          </Text>
+        </>
+      )}
     </View>
   );
 }
@@ -902,7 +918,7 @@ function NearbyDistanceSlider({
   };
 
   return (
-    <View className="gap-1.5">
+    <View className="gap-1">
       <View
         className="relative h-7 justify-center"
         onLayout={(event) => {
@@ -945,10 +961,10 @@ function NearbyDistanceSlider({
       </View>
 
       <View className="flex-row items-center justify-between">
-        <Text className="text-[11px] font-semibold text-[#A29AA8]">
+        <Text className="text-[10px] font-medium text-[#A29AA8]">
           {formatDistanceMeters(min)}
         </Text>
-        <Text className="text-[11px] font-semibold text-[#A29AA8]">
+        <Text className="text-[10px] font-medium text-[#A29AA8]">
           {formatDistanceMeters(max)}
         </Text>
       </View>
@@ -988,7 +1004,7 @@ function NearbyDistanceDropdown({
           colors={["#FF8A50", "#FF5F87"]}
           end={{ x: 1, y: 1 }}
           start={{ x: 0, y: 0 }}
-          className="h-9 w-9 items-center justify-center rounded-full"
+          className="h-8 w-8 items-center justify-center rounded-full"
         >
           <SymbolView
             name={{
@@ -996,13 +1012,13 @@ function NearbyDistanceDropdown({
               android: "local_fire_department",
               web: "local_fire_department",
             }}
-            size={15}
+            size={14}
             tintColor="#FFFFFF"
           />
         </LinearGradient>
 
         <View className="flex-1">
-          <Text className="text-[16px] font-extrabold tracking-[-0.2px] text-[#2B2233]">
+          <Text className="text-[15px] font-medium tracking-[-0.1px] text-[#2B2233]">
             Địa điểm gần bạn
           </Text>
           <Text className="mt-0.5 text-[11px] font-medium text-[#9C94A5]">
@@ -1015,9 +1031,9 @@ function NearbyDistanceDropdown({
           end={{ x: 1, y: 0.5 }}
           locations={[0, 0.58, 1]}
           start={{ x: 0, y: 0.5 }}
-          className="rounded-full px-2.5 py-1"
+          className="rounded-full px-2 py-[5px]"
         >
-          <Text className="text-[12px] font-extrabold text-white">
+          <Text className="text-[11px] font-semibold text-white">
             {formatDistanceMeters(draftDistanceMeters)}
           </Text>
         </LinearGradient>
@@ -1042,13 +1058,13 @@ function NearbyDistanceDropdown({
             size={13}
             tintColor="#374151"
           />
-          <Text className="ml-1.5 text-[13px] font-bold text-[#2F3947]">
+          <Text className="ml-1.5 text-[12px] font-semibold text-[#2F3947]">
             Xem bản đồ
           </Text>
         </Pressable>
 
         <Pressable
-          className={`flex-1 overflow-hidden rounded-[14px] ${
+          className={`flex-1 overflow-hidden rounded-[12px] ${
             isLoading ? "opacity-70" : ""
           }`}
           disabled={isLoading}
@@ -1074,7 +1090,7 @@ function NearbyDistanceDropdown({
                   size={13}
                   tintColor="#FFFFFF"
                 />
-                <Text className="ml-1.5 text-[13px] font-extrabold text-white">
+                <Text className="ml-1.5 text-[12px] font-semibold text-white">
                   Áp dụng
                 </Text>
               </>
@@ -1090,6 +1106,46 @@ function NearbyDistanceDropdown({
         <Text className="text-[10px] font-bold text-[#8E869A]">
           {formatDistanceMeters(currentDistanceMeters)}
         </Text>
+      </View>
+    </View>
+  );
+}
+
+function NearbyPlacesShowcaseCard({
+  cardHeight,
+  cardWidth,
+  imageHeight,
+}: {
+  cardHeight: number;
+  cardWidth: number;
+  imageHeight: number;
+}) {
+  return (
+    <View
+      className="overflow-hidden"
+      style={{
+        height: cardHeight,
+        width: cardWidth,
+      }}
+    >
+      <View className="absolute -right-6 top-5 h-24 w-24 rounded-full bg-[#FFD6E4]/55" />
+      <View className="absolute -bottom-8 -left-7 h-24 w-24 rounded-full bg-[#FFF8FB]" />
+
+      <View className="flex-1 items-start justify-end px-1 pb-1 pt-1">
+        <View className="mt-auto items-start">
+          <Image
+            source={nearbyShowcaseMascot}
+            contentFit="contain"
+            transition={220}
+            cachePolicy="memory-disk"
+            style={{
+              height: imageHeight,
+              marginBottom: -18,
+              marginLeft: -48,
+              width: cardWidth + 92,
+            }}
+          />
+        </View>
       </View>
     </View>
   );
@@ -1664,6 +1720,20 @@ export default function HomeScreen() {
   const nearbyPlaceImageHeight = Math.round(nearbyPlaceCardWidth * 0.8);
   const nearbyPlaceCardHeight =
     nearbyPlaceImageHeight + nearbyPlaceContentHeight;
+  const nearbyPlacesShowcaseWidth = Math.min(
+    Math.max(safeWidth * 0.31, 130),
+    158,
+  );
+  const nearbyPlacesShowcaseHeight = nearbyPlaceCardHeight + 6;
+  const nearbyPlacesShowcaseImageHeight = Math.max(
+    nearbyPlacesShowcaseHeight - 18,
+    232,
+  );
+  const nearbyPlacesSectionTopInset = 10;
+  const nearbyPlacesSectionHeight = nearbyPlacesShowcaseHeight + 24;
+  const nearbyPlacesScrollStartInset = Math.round(
+    gutter + nearbyPlacesShowcaseWidth + 10,
+  );
   const voucherMerchantCircleSize = Math.min(
     Math.max(contentWidth * 0.22, 76),
     86,
@@ -1697,7 +1767,7 @@ export default function HomeScreen() {
     router.push("/route");
   };
   const handleOpenNotifications = () => {
-    router.push("/notifications");
+    router.push("/notifications" as Href);
   };
   const handleOpenRegister = () => {
     router.push("/login?entry=home");
@@ -2065,13 +2135,22 @@ export default function HomeScreen() {
             });
           }
 
-          const resolvedName = profile.name.trim() || profile.username.trim();
+          const resolvedName =
+            profile.name.trim() ||
+            authSession.displayName.trim() ||
+            profile.username.trim() ||
+            authSession.username?.trim() ||
+            "Ngọc";
 
           setExplorerSummary({
             avatar: profile.avatar?.trim() || null,
             level: profile.level,
-            name: resolvedName || "Ngọc",
-            username: profile.username.trim(),
+            name: resolvedName,
+            username:
+              profile.username.trim() ||
+              authSession.username?.trim() ||
+              authSession.displayName.trim() ||
+              resolvedName,
           });
         } catch (error) {
           if (!isActive) {
@@ -2090,7 +2169,12 @@ export default function HomeScreen() {
       return () => {
         isActive = false;
       };
-    }, [authSession.isAuthenticated, authSession.tokenType]),
+    }, [
+      authSession.displayName,
+      authSession.isAuthenticated,
+      authSession.tokenType,
+      authSession.username,
+    ]),
   );
 
   return (
@@ -2191,7 +2275,8 @@ export default function HomeScreen() {
                   Mở khóa AI Lập kế hoạch & Ghi hành trình Live
                 </Text>
                 <Text className="mt-0.5 text-[11px] text-[#8E869A]">
-                  Trải nghiệm bộ tính năng Premium (User Plan & Record) tại trang Khám phá
+                  Trải nghiệm bộ tính năng Premium (User Plan & Record) tại
+                  trang Khám phá
                 </Text>
               </View>
               <View className="flex-row items-center rounded-full bg-[#EB489B] px-3 py-1.5">
@@ -2491,17 +2576,21 @@ export default function HomeScreen() {
           ) : null}
 
           <View className="gap-4">
-            <View className="flex-row items-center justify-between">
-              <Pressable hitSlop={8} onPress={handleOpenHotspots}>
-                <Text className="text-[16px] font-extrabold text-[#2B2233]">
+            <View className="flex-row items-center justify-between gap-3">
+              <Pressable
+                className="flex-1"
+                hitSlop={8}
+                onPress={handleOpenHotspots}
+              >
+                <Text className="text-[18px] font-extrabold text-[#2B2233]">
                   Địa điểm gần bạn
                 </Text>
               </Pressable>
               <Pressable
-                className="rounded-full bg-[#FFF4EF] px-3.5 py-2"
+                className="rounded-full border border-[#F3D9E5] bg-white px-3 py-1.5"
                 onPress={handleOpenHotspots}
               >
-                <Text className="text-[12px] font-bold text-[#F58752]">
+                <Text className="text-[12px] font-bold text-[#D85B86]">
                   Xem tất cả
                 </Text>
               </Pressable>
@@ -2524,216 +2613,248 @@ export default function HomeScreen() {
                 title="Chưa có địa điểm phù hợp"
               />
             ) : (
-              <ScrollView
-                horizontal
-                contentContainerStyle={{
-                  paddingLeft: gutter,
-                  paddingRight: gutter,
-                }}
-                showsHorizontalScrollIndicator={false}
+              <View
                 style={{
                   marginHorizontal: -gutter,
                   width: safeWidth,
                 }}
               >
-                {resolvedNearbyPlaces.map((place, index) => {
-                  const isPlaceCheckedIn = isNearbyPlaceCheckedIn(
-                    place,
-                    checkedInApiHotspotIds,
-                    checkedInHotspotSlugs,
-                  );
+                <View
+                  className="bg-[#FFF0F6]"
+                  style={{
+                    minHeight: nearbyPlacesSectionHeight,
+                    paddingVertical: nearbyPlacesSectionTopInset,
+                  }}
+                >
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      left: gutter,
+                      position: "absolute",
+                      top: nearbyPlacesSectionTopInset,
+                    }}
+                  >
+                    <NearbyPlacesShowcaseCard
+                      cardHeight={nearbyPlacesShowcaseHeight}
+                      cardWidth={nearbyPlacesShowcaseWidth}
+                      imageHeight={nearbyPlacesShowcaseImageHeight}
+                    />
+                  </View>
 
-                  return (
-                    <Pressable
-                      key={place.key}
-                      className={
-                        index === resolvedNearbyPlaces.length - 1
-                          ? ""
-                          : "mr-3.5"
-                      }
-                      disabled={!place.slug && place.hotspotId === null}
-                      onPress={() => {
-                        const hotspotId = place.hotspotId;
-                        const routeSlug =
-                          place.slug ??
-                          (hotspotId !== null
-                            ? getApiHotspotRouteSlug(hotspotId)
-                            : null);
+                  <ScrollView
+                    horizontal
+                    contentContainerStyle={{
+                      paddingBottom: 6,
+                      paddingLeft: nearbyPlacesScrollStartInset,
+                      paddingRight: gutter,
+                      paddingTop: 6,
+                    }}
+                    showsHorizontalScrollIndicator={false}
+                    style={{
+                      width: safeWidth,
+                    }}
+                  >
+                    {resolvedNearbyPlaces.map((place, index) => {
+                      const isPlaceCheckedIn = isNearbyPlaceCheckedIn(
+                        place,
+                        checkedInApiHotspotIds,
+                        checkedInHotspotSlugs,
+                      );
 
-                        if (routeSlug) {
-                          router.push(getHotspotHref(routeSlug, hotspotId));
-                        }
-                      }}
-                      style={{ width: nearbyPlaceCardWidth }}
-                    >
-                      <View
-                        className="overflow-hidden rounded-[10px] border border-[#EEF1F4] bg-white"
-                        style={[
-                          nearbyPlaceShadowStyle,
-                          { height: nearbyPlaceCardHeight },
-                        ]}
-                      >
-                        <View className="relative">
-                          <Image
-                            source={place.imageUri}
-                            contentFit="cover"
-                            transition={220}
-                            cachePolicy="memory-disk"
-                            style={{
-                              height: nearbyPlaceImageHeight,
-                              width: "100%",
-                            }}
-                          />
+                      return (
+                        <Pressable
+                          key={place.key}
+                          disabled={!place.slug && place.hotspotId === null}
+                          onPress={() => {
+                            const hotspotId = place.hotspotId;
+                            const routeSlug =
+                              place.slug ??
+                              (hotspotId !== null
+                                ? getApiHotspotRouteSlug(hotspotId)
+                                : null);
 
-                          <View className="absolute inset-x-2.5 top-2.5 flex-row items-center justify-between">
-                            <View className="rounded-full bg-[#45414D]/92 px-2.5 py-1">
-                              <Text className="text-[11px] font-extrabold text-white">
-                                {place.distance}
-                              </Text>
-                            </View>
-
-                            <View
-                              className={`rounded-full px-2.5 py-1 ${
-                                isPlaceCheckedIn
-                                  ? "bg-[#DCFCE7]"
-                                  : "bg-[#f0af16]"
-                              }`}
-                            >
-                              <Text
-                                className={`text-[11px] font-extrabold ${
-                                  isPlaceCheckedIn
-                                    ? "text-[#15803D]"
-                                    : "text-[#2B2233]"
-                                }`}
-                              >
-                                {isPlaceCheckedIn
-                                  ? "Đã check-in"
-                                  : `${place.reward} XP`}
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-
-                        <View
-                          className="flex-1 gap-0.5 px-3.5 pb-3.5 pt-3"
-                          style={{ minHeight: nearbyPlaceContentHeight }}
+                            if (routeSlug) {
+                              router.push(getHotspotHref(routeSlug, hotspotId));
+                            }
+                          }}
+                          style={{
+                            marginRight:
+                              index === resolvedNearbyPlaces.length - 1
+                                ? 0
+                                : 12,
+                            width: nearbyPlaceCardWidth,
+                          }}
                         >
-                          <Text
-                            className="text-[13px] font-extrabold leading-[16px] text-[#3B4454]"
-                            numberOfLines={2}
-                            style={{ minHeight: nearbyPlaceTitleHeight }}
-                          >
-                            {place.title}
-                          </Text>
-
                           <View
-                            className="flex-row items-center gap-1"
-                            style={{ minHeight: nearbyPlaceCategoryHeight }}
+                            className="overflow-hidden rounded-[10px] border border-[#EEF1F4] bg-white"
+                            style={[
+                              nearbyPlaceShadowStyle,
+                              { height: nearbyPlaceCardHeight },
+                            ]}
                           >
-                            <SymbolView
-                              name={{
-                                ios: "clock.fill",
-                                android: "schedule",
-                                web: "schedule",
-                              }}
-                              size={11}
-                              tintColor="#A39AAB"
-                            />
-                            <Text
-                              className="flex-1 text-[12px] text-[#A39AAB]"
-                              numberOfLines={1}
-                            >
-                              {place.openingHours}
-                            </Text>
-                          </View>
+                            <View className="relative">
+                              <Image
+                                source={place.imageUri}
+                                contentFit="cover"
+                                transition={220}
+                                cachePolicy="memory-disk"
+                                style={{
+                                  height: nearbyPlaceImageHeight,
+                                  width: "100%",
+                                }}
+                              />
 
-                          <View
-                            className="flex-row items-center gap-1"
-                            style={{ minHeight: nearbyPlaceDetailRowHeight }}
-                          >
-                            <SymbolView
-                              name={{
-                                ios: "star.fill",
-                                android: "star",
-                                web: "star",
-                              }}
-                              size={11}
-                              tintColor="#F58752"
-                            />
-                            <Text className="text-[12px] font-bold text-[#F58752]">
-                              {place.rating}
-                            </Text>
-                          </View>
+                              <View className="absolute inset-x-2.5 top-2.5 flex-row items-center justify-between">
+                                <View className="rounded-full bg-[#45414D]/92 px-2.5 py-1">
+                                  <Text className="text-[11px] font-extrabold text-white">
+                                    {place.distance}
+                                  </Text>
+                                </View>
 
-                          {isPlaceCheckedIn ? (
-                            <View
-                              className="flex-row items-center gap-1.5"
-                              style={{ minHeight: nearbyPlaceDetailRowHeight }}
-                            >
-                              <View className="h-5 w-5 items-center justify-center rounded-full bg-[#DCFCE7]">
-                                <SymbolView
-                                  name={{
-                                    ios: "checkmark",
-                                    android: "check",
-                                    web: "check",
-                                  }}
-                                  size={11}
-                                  tintColor="#15803D"
-                                />
+                                <View
+                                  className={`rounded-full px-2.5 py-1 ${
+                                    isPlaceCheckedIn
+                                      ? "bg-[#DCFCE7]"
+                                      : "bg-[#f0af16]"
+                                  }`}
+                                >
+                                  <Text
+                                    className={`text-[11px] font-extrabold ${
+                                      isPlaceCheckedIn
+                                        ? "text-[#15803D]"
+                                        : "text-[#2B2233]"
+                                    }`}
+                                  >
+                                    {isPlaceCheckedIn
+                                      ? "Đã check-in"
+                                      : `${place.reward} XP`}
+                                  </Text>
+                                </View>
                               </View>
-                              <Text
-                                className="flex-1 text-[12px] font-bold text-[#15803D]"
-                                numberOfLines={1}
-                              >
-                                Xem câu chuyện
-                              </Text>
                             </View>
-                          ) : (
+
                             <View
-                              className="flex-row items-center gap-1"
-                              style={{ minHeight: nearbyPlaceDetailRowHeight }}
+                              className="flex-1 gap-0.5 px-3.5 pb-3.5 pt-3"
+                              style={{ minHeight: nearbyPlaceContentHeight }}
                             >
-                              {place.detailIcon === "star" ? (
-                                <Text className="text-[12px] text-[#F58752]">
-                                  ★
-                                </Text>
-                              ) : (
+                              <Text
+                                className="text-[13px] font-extrabold leading-[16px] text-[#3B4454]"
+                                numberOfLines={2}
+                                style={{ minHeight: nearbyPlaceTitleHeight }}
+                              >
+                                {place.title}
+                              </Text>
+
+                              <View
+                                className="flex-row items-center gap-1"
+                                style={{ minHeight: nearbyPlaceCategoryHeight }}
+                              >
                                 <SymbolView
                                   name={{
-                                    ios: "location.fill",
-                                    android: "place",
-                                    web: "place",
+                                    ios: "clock.fill",
+                                    android: "schedule",
+                                    web: "schedule",
                                   }}
                                   size={11}
-                                  tintColor="#8E869A"
+                                  tintColor="#A39AAB"
                                 />
-                              )}
-                              <Text
-                                className={
-                                  place.detailIcon === "star"
-                                    ? "text-[12px] font-bold text-[#F58752]"
-                                    : "flex-1 text-[12px] text-[#8E869A]"
-                                }
-                                numberOfLines={1}
-                              >
-                                {place.detailPrimaryText}
-                              </Text>
-                              {place.detailSecondaryText ? (
                                 <Text
-                                  className="text-[12px] text-[#8E869A]"
+                                  className="flex-1 text-[12px] text-[#A39AAB]"
                                   numberOfLines={1}
                                 >
-                                  {place.detailSecondaryText}
+                                  {place.openingHours}
                                 </Text>
-                              ) : null}
+                              </View>
+
+                              <View
+                                className="flex-row items-center gap-1"
+                                style={{ minHeight: nearbyPlaceDetailRowHeight }}
+                              >
+                                <SymbolView
+                                  name={{
+                                    ios: "star.fill",
+                                    android: "star",
+                                    web: "star",
+                                  }}
+                                  size={11}
+                                  tintColor="#F58752"
+                                />
+                                <Text className="text-[12px] font-bold text-[#F58752]">
+                                  {place.rating}
+                                </Text>
+                              </View>
+
+                              {isPlaceCheckedIn ? (
+                                <View
+                                  className="flex-row items-center gap-1.5"
+                                  style={{ minHeight: nearbyPlaceDetailRowHeight }}
+                                >
+                                  <View className="h-5 w-5 items-center justify-center rounded-full bg-[#DCFCE7]">
+                                    <SymbolView
+                                      name={{
+                                        ios: "checkmark",
+                                        android: "check",
+                                        web: "check",
+                                      }}
+                                      size={11}
+                                      tintColor="#15803D"
+                                    />
+                                  </View>
+                                  <Text
+                                    className="flex-1 text-[12px] font-bold text-[#15803D]"
+                                    numberOfLines={1}
+                                  >
+                                    Xem câu chuyện
+                                  </Text>
+                                </View>
+                              ) : (
+                                <View
+                                  className="flex-row items-center gap-1"
+                                  style={{ minHeight: nearbyPlaceDetailRowHeight }}
+                                >
+                                  {place.detailIcon === "star" ? (
+                                    <Text className="text-[12px] text-[#F58752]">
+                                      ★
+                                    </Text>
+                                  ) : (
+                                    <SymbolView
+                                      name={{
+                                        ios: "location.fill",
+                                        android: "place",
+                                        web: "place",
+                                      }}
+                                      size={11}
+                                      tintColor="#8E869A"
+                                    />
+                                  )}
+                                  <Text
+                                    className={
+                                      place.detailIcon === "star"
+                                        ? "text-[12px] font-bold text-[#F58752]"
+                                        : "flex-1 text-[12px] text-[#8E869A]"
+                                    }
+                                    numberOfLines={1}
+                                  >
+                                    {place.detailPrimaryText}
+                                  </Text>
+                                  {place.detailSecondaryText ? (
+                                    <Text
+                                      className="text-[12px] text-[#8E869A]"
+                                      numberOfLines={1}
+                                    >
+                                      {place.detailSecondaryText}
+                                    </Text>
+                                  ) : null}
+                                </View>
+                              )}
                             </View>
-                          )}
-                        </View>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              </View>
             )}
 
             <Text className="text-[18px] font-extrabold text-[#2B2233]">
@@ -2834,9 +2955,7 @@ export default function HomeScreen() {
                 {suggestedRoutes.map((route, index) => (
                   <Pressable
                     key={route.id || `${route.title}-${index}`}
-                    className={
-                      index === suggestedRoutes.length - 1 ? "" : "mr-4"
-                    }
+                    className={index === suggestedRoutes.length - 1 ? "" : "mr-4"}
                     onPress={() => {
                       router.push(`/route/${route.id}` as Href);
                     }}
@@ -2872,9 +2991,7 @@ export default function HomeScreen() {
                       </View>
 
                       <View className="px-3 pb-3 pt-2" style={{ gap: 1 }}>
-                        <View
-                          className="flex-row flex-wrap items-center gap-1.5"
-                        >
+                        <View className="flex-row flex-wrap items-center gap-1.5">
                           <View className="rounded-full bg-[#FFF1F6] px-2 py-[5px]">
                             <Text className="text-[10px] font-extrabold text-[#EB489B]">
                               {route.distance}
@@ -3020,7 +3137,6 @@ export default function HomeScreen() {
               </View>
             </View>
           </View>
-
           <View
             className="overflow-hidden rounded-[28px] bg-white"
             style={cardShadowStyle}

@@ -540,7 +540,7 @@ export default function ExploreScreen() {
                 accessibilityLabel="Mở thông báo"
                 className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
                 hitSlop={8}
-                onPress={() => router.push('/notifications')}
+                onPress={() => router.push('/notifications' as Href)}
               >
                 <SymbolView
                   name={{ ios: 'bell', android: 'notifications', web: 'notifications' }}
