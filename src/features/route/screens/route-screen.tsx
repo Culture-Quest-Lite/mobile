@@ -18,6 +18,7 @@ import {
   useState
 } from "react";
 import {
+  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -49,8 +50,20 @@ import {
   type UserRouteProgressDto,
 } from "@/features/route/api/route-api";
 import { getMyUserPlans, type UserPlan } from "@/features/route/api/user-plan-api";
+import {
+  myRouteGroupsDemo,
+  type RouteGroupDemo,
+} from "@/features/route/data/route-group-demo";
 
-type Tab = "official" | "active" | "completed" | "bookmarked" | "plans" | "journeys" | "community";
+type Tab =
+  | "official"
+  | "active"
+  | "groups"
+  | "completed"
+  | "bookmarked"
+  | "plans"
+  | "journeys"
+  | "community";
 type RouteVariant =
   "official" | "active" | "completed" | "bookmarked" | "community";
 
@@ -124,6 +137,7 @@ const cardShadowStyle = {
 const TAB_ITEMS: { key: Tab; label: string }[] = [
   { key: "official", label: "Chính thức" },
   { key: "active", label: "Đang đi" },
+  { key: "groups", label: "Nhóm của tôi" },
   { key: "completed", label: "Đã xong" },
   { key: "bookmarked", label: "Đã lưu" },
   { key: "plans", label: "Kế hoạch" },
@@ -217,7 +231,6 @@ export default function RouteScreen() {
   const [tab, setTab] = useState<Tab>("official");
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const session = useAuthSession();
-  const [officialRouteDtos, setOfficialRouteDtos] = useState<RouteDto[]>([]);
   const [officialRoutes, setOfficialRoutes] = useState<RouteItem[]>([]);
   const [isLoadingRoutes, setIsLoadingRoutes] = useState(true);
   const [routeError, setRouteError] = useState<string | null>(null);
@@ -306,7 +319,6 @@ export default function RouteScreen() {
           const activeProgresses = progresses.filter(isRouteProgressActive);
           const completedProgresses = progresses.filter(isRouteProgressCompleted);
 
-          setOfficialRouteDtos(routeDtos);
           setOfficialRoutes(routeDtos.map(mapRouteToRouteItem));
           setActiveRouteProgresses(activeProgresses);
           setActiveRoutesFromApi(
@@ -414,7 +426,6 @@ export default function RouteScreen() {
           console.warn("[route-screen] load routes failed", error);
 
           if (!cancelled) {
-            setOfficialRouteDtos([]);
             setOfficialRoutes(routes);
             setActiveRouteProgresses([]);
             setActiveRoutesFromApi([]);
@@ -705,6 +716,7 @@ export default function RouteScreen() {
             ) : (
               <EmptyState text="Bạn chưa tham gia tuyến nào" />
             ))}
+          {tab === "groups" && <MyGroupsTab groups={myRouteGroupsDemo} />}
           {tab === "completed" &&
             (completedList.length ? (
               <RouteList list={completedList} variant="completed" />
@@ -1098,6 +1110,229 @@ function MyJourneyTab({
           ))}
         </View>
       ) : null}
+    </View>
+  );
+}
+
+function getGroupStatusMeta(status: RouteGroupDemo["status"]) {
+  switch (status) {
+    case "LIVE":
+      return {
+        badgeClass: "bg-[#E9F8EF]",
+        badgeTextClass: "text-[#1E8A55]",
+        ctaLabel: "Xem nhóm",
+        helper: "Nhóm đang đi thực tế trên tuyến này.",
+        label: "Đang diễn ra",
+      };
+    case "SCHEDULED":
+      return {
+        badgeClass: "bg-[#EEF5FF]",
+        badgeTextClass: "text-[#2563EB]",
+        ctaLabel: "Mời thêm bạn",
+        helper: "Đã chốt lịch, có thể mời thêm người đang follow.",
+        label: "Đã lên lịch",
+      };
+    default:
+      return {
+        badgeClass: "bg-[#FFF4EF]",
+        badgeTextClass: "text-[#C65A25]",
+        ctaLabel: "Xác nhận lời mời",
+        helper: "Có lời mời mới từ mạng lưới bạn đang theo dõi.",
+        label: "Chờ phản hồi",
+      };
+  }
+}
+
+function GroupMemberAvatars({
+  members,
+}: {
+  members: RouteGroupDemo["members"];
+}) {
+  const visibleMembers = members.slice(0, 4);
+  const remainingCount = Math.max(members.length - visibleMembers.length, 0);
+
+  return (
+    <View className="flex-row items-center">
+      {visibleMembers.map((member, index) => (
+        <View
+          key={member.id}
+          className="rounded-full border-2 border-white bg-white"
+          style={{ marginLeft: index === 0 ? 0 : -10 }}
+        >
+          <Image
+            source={member.avatarUri}
+            contentFit="cover"
+            style={{ height: 30, width: 30, borderRadius: 999 }}
+          />
+        </View>
+      ))}
+      {remainingCount > 0 ? (
+        <View
+          className="ml-2 h-7 min-w-7 items-center justify-center rounded-full bg-[#F4EFF8] px-2"
+        >
+          <Text className="text-[10px] font-extrabold text-[#6B5A76]">
+            +{remainingCount}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function MyGroupsTab({
+  groups,
+}: {
+  groups: RouteGroupDemo[];
+}) {
+  if (groups.length === 0) {
+    return <EmptyState text="Bạn chưa có group route nào" />;
+  }
+
+  return (
+    <View className="gap-3">
+      <LinearGradient
+        colors={["#1F3B5D", "#35648F", "#F58752"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        className="overflow-hidden rounded-3xl p-4"
+      >
+        <Text className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+          Route Group
+        </Text>
+        <Text className="mt-1 text-[18px] font-black text-white">
+          Đi tuyến cùng những người bạn đang follow
+        </Text>
+        <Text className="mt-1 text-[12px] leading-5 text-white/90">
+          Gom lời mời, lịch hẹn và trạng thái nhóm vào một chỗ để bạn quản lý
+          trước khi bắt đầu route.
+        </Text>
+        <View className="mt-4 flex-row gap-2">
+          <View className="rounded-2xl bg-white/15 px-3 py-2">
+            <Text className="text-[10px] font-bold uppercase tracking-wider text-white/75">
+              Nhóm đang có
+            </Text>
+            <Text className="mt-1 text-[18px] font-black text-white">
+              {groups.length}
+            </Text>
+          </View>
+          <View className="rounded-2xl bg-white/15 px-3 py-2">
+            <Text className="text-[10px] font-bold uppercase tracking-wider text-white/75">
+              Mời chờ phản hồi
+            </Text>
+            <Text className="mt-1 text-[18px] font-black text-white">
+              {
+                groups.filter((group) => group.status === "INVITED").length
+              }
+            </Text>
+          </View>
+        </View>
+      </LinearGradient>
+
+      {groups.map((group) => {
+        const meta = getGroupStatusMeta(group.status);
+        const availableSeats = Math.max(group.capacity - group.members.length, 0);
+
+        return (
+          <View
+            key={group.id}
+            className="overflow-hidden rounded-3xl border border-[#E8EDF4] bg-white"
+            style={cardShadowStyle}
+          >
+            <View className="flex-row items-stretch">
+              <Image
+                source={group.coverUri}
+                contentFit="cover"
+                style={{ height: 168, width: 118 }}
+              />
+              <View className="flex-1 p-4">
+                <View className="flex-row items-start justify-between gap-3">
+                  <View className="flex-1">
+                    <Text className="text-[16px] font-black text-[#2B2233]" numberOfLines={2}>
+                      {group.routeName}
+                    </Text>
+                    <Text className="mt-1 text-[12px] text-[#7A7283]" numberOfLines={2}>
+                      Host: {group.host.name} · {group.host.role}
+                    </Text>
+                  </View>
+                  <View className={`rounded-full px-3 py-1.5 ${meta.badgeClass}`}>
+                    <Text className={`text-[10px] font-extrabold ${meta.badgeTextClass}`}>
+                      {meta.label}
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="mt-3 flex-row flex-wrap gap-2">
+                  <View className="rounded-full bg-[#F7F8FC] px-3 py-1.5">
+                    <Text className="text-[11px] font-semibold text-[#4B4452]">
+                      {group.meetupAtLabel}
+                    </Text>
+                  </View>
+                  <View className="rounded-full bg-[#F7F8FC] px-3 py-1.5">
+                    <Text className="text-[11px] font-semibold text-[#4B4452]">
+                      {group.durationLabel}
+                    </Text>
+                  </View>
+                  <View className="rounded-full bg-[#F7F8FC] px-3 py-1.5">
+                    <Text className="text-[11px] font-semibold text-[#4B4452]">
+                      {group.members.length}/{group.capacity} thành viên
+                    </Text>
+                  </View>
+                </View>
+
+                <Text className="mt-3 text-[12px] font-semibold text-[#2B2233]">
+                  {group.meetingPoint}
+                </Text>
+                <Text className="mt-1 text-[11px] leading-5 text-[#7A7283]">
+                  {group.note}
+                </Text>
+
+                <View className="mt-3 flex-row items-center justify-between gap-3">
+                  <GroupMemberAvatars members={group.members} />
+                  <View className="items-end">
+                    <Text className="text-[11px] font-extrabold text-[#EB489B]">
+                      {group.vibeLabel}
+                    </Text>
+                    <Text className="mt-0.5 text-[10px] text-[#8E869A]">
+                      {availableSeats > 0
+                        ? `Còn ${availableSeats} chỗ để mời thêm`
+                        : "Nhóm hiện đã đủ người"}
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="mt-3 flex-row gap-2">
+                  <Pressable
+                    className="flex-1 rounded-2xl bg-[#EB489B] py-3"
+                    onPress={() =>
+                      routeSystemAlert.alert(
+                        meta.label,
+                        `${meta.helper}\n\nĐây là UI demo dùng dữ liệu giả để bạn duyệt flow group route.`,
+                      )
+                    }
+                  >
+                    <Text className="text-center text-[12px] font-extrabold text-white">
+                      {meta.ctaLabel}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    className="rounded-2xl border border-[#E6DFF1] bg-[#FBF9FE] px-4 py-3"
+                    onPress={() =>
+                      routeSystemAlert.alert(
+                        "Chia sẻ nhóm",
+                        `UI demo: chia sẻ lời mời ${group.visibility === "LINK" ? "bằng link" : "cho bạn đang follow"}.`,
+                      )
+                    }
+                  >
+                    <Text className="text-[12px] font-extrabold text-[#6B5A76]">
+                      {group.visibility === "LINK" ? "Copy link" : "Mời bạn"}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 }

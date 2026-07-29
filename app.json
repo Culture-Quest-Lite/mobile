@@ -5,20 +5,46 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo2-app-icon-v2.png",
-    "scheme": "culturequestlitemobile",
+    "scheme": ["culturequestlitemobile", "culturequest"],
     "userInterfaceStyle": "automatic",
-    "android": {
-      "package": "com.anonymous.Culture_quest_lite_mobile",
-      "icon": "./assets/images/logo2-app-icon-android-smaller.png",
-      "adaptiveIcon": {
-        "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/images/logo2-adaptive-foreground-smaller.png"
+      "android": {
+        "package": "com.anonymous.Culture_quest_lite_mobile",
+        "icon": "./assets/images/logo2-app-icon-android-smaller.png",
+        "adaptiveIcon": {
+          "backgroundColor": "#FFFFFF",
+          "foregroundImage": "./assets/images/logo2-adaptive-foreground-smaller.png"
+        },
+        "intentFilters": [
+          {
+            "autoVerify": true,
+            "action": "VIEW",
+            "data": {
+              "host": "culturequest.app",
+              "pathPrefix": "/join",
+              "scheme": "https"
+            },
+            "category": ["BROWSABLE", "DEFAULT"]
+          },
+          {
+            "autoVerify": true,
+            "action": "VIEW",
+            "data": {
+              "host": "api.culturequestlite.com",
+              "pathPrefix": "/api/v1/groups/join",
+              "scheme": "https"
+            },
+            "category": ["BROWSABLE", "DEFAULT"]
+          }
+        ],
+        "predictiveBackGestureEnabled": false
       },
-      "predictiveBackGestureEnabled": false
-    },
-    "ios": {
-      "icon": "./assets/images/logo2-app-icon-v2.png"
-    },
+      "ios": {
+        "icon": "./assets/images/logo2-app-icon-v2.png",
+        "associatedDomains": [
+          "applinks:culturequest.app",
+          "applinks:api.culturequestlite.com"
+        ]
+      },
     "web": {
       "bundler": "metro",
       "output": "static",

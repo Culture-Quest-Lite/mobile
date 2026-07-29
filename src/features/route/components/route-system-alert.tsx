@@ -96,7 +96,7 @@ export function RouteSystemAlertHost() {
               className="h-14 w-14 items-center justify-center rounded-full"
               style={{ backgroundColor: `${iconColor}18` }}
             >
-              <SymbolView name={iconName as any} size={28} color={iconColor} />
+              <SymbolView name={iconName as any} size={28} tintColor={iconColor} />
             </View>
             <Text className="mt-4 text-center text-[19px] font-black text-[#2B2233]">
               {request.title}

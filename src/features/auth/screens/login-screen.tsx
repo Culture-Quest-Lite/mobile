@@ -64,7 +64,15 @@ const buttonShadowStyle = {
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { entry } = useLocalSearchParams<{ entry?: string }>();
+  const { entry, redirectTo } = useLocalSearchParams<{
+    entry?: string;
+    redirectTo?: string;
+  }>();
+  const resolvedRedirectTo =
+    typeof redirectTo === "string" ? decodeURIComponent(redirectTo) : null;
+  const isSupportedEntry =
+    entry === "home" || (entry === "invite" && Boolean(resolvedRedirectTo));
+  const postLoginRedirect = resolvedRedirectTo ?? "/home";
   const {
     backButtonTop,
     cardMaxWidth,
@@ -114,10 +122,10 @@ export default function LoginScreen() {
     isSubmitting || isGoogleSubmitting || hasAnyFieldError(loginErrors);
 
   useEffect(() => {
-    if (entry !== "home") {
+    if (!isSupportedEntry) {
       router.replace("/home");
     }
-  }, [entry, router]);
+  }, [isSupportedEntry, router]);
 
   useEffect(() => {
     void WebBrowser.warmUpAsync();
@@ -177,8 +185,10 @@ export default function LoginScreen() {
 
     try {
       await signInWithPassword(normalizedUsername, password);
-      console.info("[auth] login navigation to /home");
-      router.replace("/home");
+      console.info("[auth] login navigation after success", {
+        redirectTo: postLoginRedirect,
+      });
+      router.replace(postLoginRedirect);
     } catch (error) {
       console.warn("[auth] login screen caught error", {
         error:
@@ -202,8 +212,10 @@ export default function LoginScreen() {
 
     try {
       await signInWithGoogle();
-      console.info("[auth] google login navigation to /home");
-      router.replace("/home");
+      console.info("[auth] google login navigation after success", {
+        redirectTo: postLoginRedirect,
+      });
+      router.replace(postLoginRedirect);
     } catch (error) {
       if (error instanceof GoogleSignInCancelledError) {
         console.info("[auth] google login cancelled by user");
@@ -239,7 +251,7 @@ export default function LoginScreen() {
     });
   };
 
-  if (entry !== "home") {
+  if (!isSupportedEntry) {
     return null;
   }
 
@@ -274,7 +286,7 @@ export default function LoginScreen() {
               }}
             >
               <Pressable
-                onPress={() => router.replace("/home")}
+                onPress={() => router.replace(postLoginRedirect)}
                 className="absolute h-12 w-12 items-center justify-center rounded-full bg-white/18"
                 style={{ left: horizontalPadding, top: backButtonTop }}
               >

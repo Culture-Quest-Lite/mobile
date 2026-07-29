@@ -1,7 +1,12 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { type Href, useRouter } from "expo-router";
 import { SymbolView } from "@/components/ui/symbol-view";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import {
+  Pressable,
+  Text as RNText,
+  View,
+  type TextProps,
+} from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -14,6 +19,7 @@ import {
 import { useProfile } from "../hooks/use-profile";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
+const detailTextMaxFontSizeMultiplier = 1.05;
 
 type MenuRowConfig = {
   isDestructive?: boolean;
@@ -21,6 +27,20 @@ type MenuRowConfig = {
   onPress: () => void;
   value?: string;
 };
+
+function Text({
+  maxFontSizeMultiplier = detailTextMaxFontSizeMultiplier,
+  style,
+  ...props
+}: TextProps) {
+  return (
+    <RNText
+      maxFontSizeMultiplier={maxFontSizeMultiplier}
+      style={[{ includeFontPadding: false }, style]}
+      {...props}
+    />
+  );
+}
 
 function getProfileTitle(name: string | undefined, fallbackName: string) {
   const normalizedName = name?.trim();
@@ -104,27 +124,24 @@ export default function ProfileMenuScreen() {
       className="flex-1 bg-white"
       edges={["left", "right", "bottom"]}
     >
-      <ScrollView
+      <View
         className="flex-1 bg-white"
-        contentContainerStyle={{
-          paddingBottom: Math.max(insets.bottom, 24) + 24,
-        }}
-        showsVerticalScrollIndicator={false}
+        style={{ paddingBottom: Math.max(insets.bottom, 12) + 12 }}
       >
         <LinearGradient
           colors={gradientColors}
           end={{ x: 1, y: 0.5 }}
           start={{ x: 0, y: 0.5 }}
           style={{
-            paddingBottom: 16,
+            paddingBottom: 12,
             paddingHorizontal: 12,
-            paddingTop: insets.top + 12,
+            paddingTop: insets.top + 8,
           }}
         >
           <View className="flex-row items-center justify-between">
             <Pressable
               accessibilityLabel="Quay lại hồ sơ"
-              className="h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-white/15"
+              className="h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-white/15"
               onPress={handleBackToProfile}
             >
               <SymbolView
@@ -139,22 +156,26 @@ export default function ProfileMenuScreen() {
             </Pressable>
 
             <Text
-              className="flex-1 px-3 text-center text-[21px] font-black text-white"
+              className="flex-1 px-3 text-center text-[19px] font-semibold text-white"
               numberOfLines={1}
+              style={{ lineHeight: 22 }}
             >
               {displayName}
             </Text>
 
-            <View className="h-10 w-10" />
+            <View className="h-9 w-9" />
           </View>
         </LinearGradient>
 
         <View className="bg-white">
           <MenuList rows={informationRows} />
 
-          <View className="h-3 bg-[#F5F5F8]" />
+          <View className="h-2 bg-[#F5F5F8]" />
 
-          <Text className="px-4 py-3 text-[16px] font-black text-[#EB489B]">
+          <Text
+            className="px-4 py-2.5 text-[14px] font-semibold text-[#EB489B]"
+            style={{ lineHeight: 16 }}
+          >
             Cài đặt
           </Text>
 
@@ -162,19 +183,19 @@ export default function ProfileMenuScreen() {
 
           {authSession.isAuthenticated ? (
             <>
-              <View className="h-3 bg-[#F5F5F8]" />
+              <View className="h-2 bg-[#F5F5F8]" />
 
               <LogoutButton onPress={handleLogout} />
             </>
           ) : (
-            <View className="border-t border-[#ECE8F2] px-4 py-4">
-              <Text className="text-[13px] leading-5 text-[#9A94A8]">
+            <View className="border-t border-[#ECE8F2] px-4 py-3">
+              <Text className="text-[13px] text-[#9A94A8]" style={{ lineHeight: 18 }}>
                 Bạn đang ở chế độ khách. Một số mục sẽ cần đăng nhập để sử dụng.
               </Text>
             </View>
           )}
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -195,10 +216,10 @@ function MenuList({ rows }: { rows: MenuRowConfig[] }) {
 
 function LogoutButton({ onPress }: { onPress: () => void }) {
   return (
-    <View className="px-4 py-4">
+    <View className="px-4 py-3">
       <Pressable
         accessibilityLabel="Đăng xuất"
-        className="flex-row items-center justify-center gap-2 rounded-full bg-[#E9EEF1] px-4 py-4"
+        className="flex-row items-center justify-center gap-2 rounded-full bg-[#E9EEF1] px-4 py-3"
         onPress={onPress}
       >
         <SymbolView
@@ -210,7 +231,12 @@ function LogoutButton({ onPress }: { onPress: () => void }) {
           size={18}
           tintColor="#E54572"
         />
-        <Text className="text-[17px] font-extrabold text-[#E54572]">Đăng xuất</Text>
+        <Text
+          className="text-[15px] font-semibold text-[#E54572]"
+          style={{ lineHeight: 18 }}
+        >
+          Đăng xuất
+        </Text>
       </Pressable>
     </View>
   );
@@ -228,7 +254,7 @@ function MenuRow({
 
   return (
     <Pressable
-      className="flex-row items-center gap-3 px-4 py-4"
+      className="flex-row items-center gap-3 px-4 py-3"
       onPress={row.onPress}
       style={
         showDivider
@@ -240,8 +266,8 @@ function MenuRow({
       }
     >
       <Text
-        className="min-w-0 flex-1 text-[17px] font-semibold"
-        style={{ color: labelColor }}
+        className="min-w-0 flex-1 text-[15px] font-medium"
+        style={{ color: labelColor, lineHeight: 18 }}
       >
         {row.label}
       </Text>
@@ -249,9 +275,9 @@ function MenuRow({
       <View className="flex-row items-center gap-2" style={{ maxWidth: "56%" }}>
         {row.value ? (
           <Text
-            className="text-right text-[14px] leading-[18px]"
+            className="text-right text-[13px]"
             numberOfLines={2}
-            style={{ color: valueColor }}
+            style={{ color: valueColor, lineHeight: 17 }}
           >
             {row.value}
           </Text>

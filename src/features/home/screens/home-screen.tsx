@@ -78,6 +78,7 @@ import { getApiHotspotRouteSlug, getHotspotHref } from "../data/hotspots";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const guestPreviewLogo = require("../../../../assets/images/logo3.png");
+const nearbyShowcaseMascot = require("../../../../assets/images/hotspot_nearby.png");
 
 const themeCategoryPresets: Record<
   string,
@@ -235,7 +236,10 @@ const nearbyPlaceShadowStyle = {
   elevation: 5,
 } as const;
 
-const routeDifficultyStyles: Record<string, { background: string; color: string }> = {
+const routeDifficultyStyles: Record<
+  string,
+  { background: string; color: string }
+> = {
   Dễ: {
     background: "#DCFCE7",
     color: "#15803D",
@@ -531,7 +535,9 @@ function mapRouteToSuggestedRouteCard(route: RouteDto): SuggestedRouteCard {
 }
 
 function getSuggestedRouteDescription(route: SuggestedRouteCard) {
-  return route.description?.trim() || route.subtitle.trim() || route.theme.trim();
+  return (
+    route.description?.trim() || route.subtitle.trim() || route.theme.trim()
+  );
 }
 
 function getSuggestedRouteTagLabel(route: SuggestedRouteCard) {
@@ -915,7 +921,7 @@ function NearbyDistanceSlider({
   };
 
   return (
-    <View className="gap-1.5">
+    <View className="gap-1">
       <View
         className="relative h-7 justify-center"
         onLayout={(event) => {
@@ -958,10 +964,10 @@ function NearbyDistanceSlider({
       </View>
 
       <View className="flex-row items-center justify-between">
-        <Text className="text-[11px] font-semibold text-[#A29AA8]">
+        <Text className="text-[10px] font-medium text-[#A29AA8]">
           {formatDistanceMeters(min)}
         </Text>
-        <Text className="text-[11px] font-semibold text-[#A29AA8]">
+        <Text className="text-[10px] font-medium text-[#A29AA8]">
           {formatDistanceMeters(max)}
         </Text>
       </View>
@@ -986,7 +992,7 @@ function NearbyDistanceDropdown({
 }) {
   return (
     <View
-      className="overflow-hidden rounded-[24px] border border-[#F6DDD0] bg-white px-3 py-2.5"
+      className="overflow-hidden rounded-[20px] border border-[#F6DDD0] bg-white px-3 py-2"
       style={cardShadowStyle}
     >
       <LinearGradient
@@ -1001,7 +1007,7 @@ function NearbyDistanceDropdown({
           colors={["#FF8A50", "#FF5F87"]}
           end={{ x: 1, y: 1 }}
           start={{ x: 0, y: 0 }}
-          className="h-9 w-9 items-center justify-center rounded-full"
+          className="h-8 w-8 items-center justify-center rounded-full"
         >
           <SymbolView
             name={{
@@ -1009,16 +1015,16 @@ function NearbyDistanceDropdown({
               android: "local_fire_department",
               web: "local_fire_department",
             }}
-            size={15}
+            size={14}
             tintColor="#FFFFFF"
           />
         </LinearGradient>
 
         <View className="flex-1">
-          <Text className="text-[16px] font-extrabold tracking-[-0.2px] text-[#2B2233]">
+          <Text className="text-[15px] font-medium tracking-[-0.1px] text-[#2B2233]">
             Địa điểm gần bạn
           </Text>
-          <Text className="mt-0.5 text-[11px] font-medium leading-4 text-[#9C94A5]">
+          <Text className="mt-px text-[10px] font-medium leading-[13px] text-[#9C94A5]">
             Bán kính tìm kiếm
           </Text>
         </View>
@@ -1028,15 +1034,15 @@ function NearbyDistanceDropdown({
           end={{ x: 1, y: 0.5 }}
           locations={[0, 0.58, 1]}
           start={{ x: 0, y: 0.5 }}
-          className="rounded-full px-2.5 py-1"
+          className="rounded-full px-2 py-[5px]"
         >
-          <Text className="text-[12px] font-extrabold text-white">
+          <Text className="text-[11px] font-semibold text-white">
             {formatDistanceMeters(draftDistanceMeters)}
           </Text>
         </LinearGradient>
       </View>
 
-      <View className="mt-2.5">
+      <View className="mt-2">
         <NearbyDistanceSlider
           max={nearbyDistanceSliderMaximumMeters}
           min={nearbyDistanceSliderMinimumMeters}
@@ -1045,9 +1051,9 @@ function NearbyDistanceDropdown({
         />
       </View>
 
-      <View className="mt-2.5 flex-row gap-2">
+      <View className="mt-2 flex-row gap-2">
         <Pressable
-          className="flex-1 flex-row items-center justify-center rounded-[14px] border border-[#E3E7EF] bg-white px-3 py-2"
+          className="flex-1 flex-row items-center justify-center rounded-[12px] border border-[#E3E7EF] bg-white px-3 py-1.5"
           onPress={onOpenMap}
         >
           <SymbolView
@@ -1055,13 +1061,13 @@ function NearbyDistanceDropdown({
             size={13}
             tintColor="#374151"
           />
-          <Text className="ml-1.5 text-[13px] font-bold text-[#2F3947]">
+          <Text className="ml-1.5 text-[12px] font-semibold text-[#2F3947]">
             Xem bản đồ
           </Text>
         </Pressable>
 
         <Pressable
-          className={`flex-1 overflow-hidden rounded-[14px] ${
+          className={`flex-1 overflow-hidden rounded-[12px] ${
             isLoading ? "opacity-70" : ""
           }`}
           disabled={isLoading}
@@ -1072,7 +1078,7 @@ function NearbyDistanceDropdown({
             end={{ x: 1, y: 0.5 }}
             start={{ x: 0, y: 0.5 }}
             locations={[0, 0.58, 1]}
-            className="flex-row items-center justify-center rounded-[14px] px-3 py-2"
+            className="flex-row items-center justify-center rounded-[12px] px-3 py-1.5"
           >
             {isLoading ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
@@ -1087,7 +1093,7 @@ function NearbyDistanceDropdown({
                   size={13}
                   tintColor="#FFFFFF"
                 />
-                <Text className="ml-1.5 text-[13px] font-extrabold text-white">
+                <Text className="ml-1.5 text-[12px] font-semibold text-white">
                   Áp dụng
                 </Text>
               </>
@@ -1096,13 +1102,53 @@ function NearbyDistanceDropdown({
         </Pressable>
       </View>
 
-      <View className="mt-1.5 flex-row items-center justify-end">
+      <View className="mt-1 flex-row items-center justify-end">
         <Text className="text-[10px] font-medium text-[#B3A6AF]">
           Đang áp dụng:{" "}
         </Text>
         <Text className="text-[10px] font-bold text-[#8E869A]">
           {formatDistanceMeters(currentDistanceMeters)}
         </Text>
+      </View>
+    </View>
+  );
+}
+
+function NearbyPlacesShowcaseCard({
+  cardHeight,
+  cardWidth,
+  imageHeight,
+}: {
+  cardHeight: number;
+  cardWidth: number;
+  imageHeight: number;
+}) {
+  return (
+    <View
+      className="overflow-hidden"
+      style={{
+        height: cardHeight,
+        width: cardWidth,
+      }}
+    >
+      <View className="absolute -right-6 top-5 h-24 w-24 rounded-full bg-[#FFD6E4]/55" />
+      <View className="absolute -bottom-8 -left-7 h-24 w-24 rounded-full bg-[#FFF8FB]" />
+
+      <View className="flex-1 items-start justify-end px-1 pb-1 pt-1">
+        <View className="mt-auto items-start">
+          <Image
+            source={nearbyShowcaseMascot}
+            contentFit="contain"
+            transition={220}
+            cachePolicy="memory-disk"
+            style={{
+              height: imageHeight,
+              marginBottom: -18,
+              marginLeft: -48,
+              width: cardWidth + 92,
+            }}
+          />
+        </View>
       </View>
     </View>
   );
@@ -1651,10 +1697,7 @@ export default function HomeScreen() {
       return () => {
         isActive = false;
       };
-    }, [
-      authSession.isAuthenticated,
-      authSession.tokenType,
-    ]),
+    }, [authSession.isAuthenticated, authSession.tokenType]),
   );
   const [activeCommunityTab, setActiveCommunityTab] =
     useState<CommunityBoardTab>("community");
@@ -1667,6 +1710,20 @@ export default function HomeScreen() {
   const nearbyPlaceImageHeight = Math.round(nearbyPlaceCardWidth * 0.8);
   const nearbyPlaceCardHeight =
     nearbyPlaceImageHeight + nearbyPlaceContentHeight;
+  const nearbyPlacesShowcaseWidth = Math.min(
+    Math.max(safeWidth * 0.31, 130),
+    158,
+  );
+  const nearbyPlacesShowcaseHeight = nearbyPlaceCardHeight + 6;
+  const nearbyPlacesShowcaseImageHeight = Math.max(
+    nearbyPlacesShowcaseHeight - 18,
+    232,
+  );
+  const nearbyPlacesSectionTopInset = 10;
+  const nearbyPlacesSectionHeight = nearbyPlacesShowcaseHeight + 24;
+  const nearbyPlacesScrollStartInset = Math.round(
+    gutter + nearbyPlacesShowcaseWidth + 10,
+  );
   const voucherMerchantCircleSize = Math.min(
     Math.max(contentWidth * 0.22, 76),
     86,
@@ -1683,9 +1740,7 @@ export default function HomeScreen() {
   const activeCommunityBoard = communityBoards[activeCommunityTab];
   const activeFeaturedRoute = featuredRoutes[activeRouteIndex];
   const explorerName =
-    explorerSummary?.name.trim() ||
-    authSession.displayName.trim() ||
-    "Ngọc";
+    explorerSummary?.name.trim() || authSession.displayName.trim() || "Ngọc";
   const explorerAvatar = explorerSummary?.avatar ?? null;
   const explorerLevel = explorerSummary?.level ?? null;
   const explorerUsername =
@@ -2068,8 +2123,7 @@ export default function HomeScreen() {
           }
 
           const resolvedName =
-            profile.name.trim() ||
-            authSession.displayName.trim();
+            profile.name.trim() || authSession.displayName.trim();
 
           setExplorerSummary({
             avatar: profile.avatar?.trim() || null,
@@ -2212,7 +2266,8 @@ export default function HomeScreen() {
                   Mở khóa AI Lập kế hoạch & Ghi hành trình Live
                 </Text>
                 <Text className="mt-0.5 text-[11px] text-[#8E869A]">
-                  Trải nghiệm bộ tính năng Premium (User Plan & Record) tại trang Khám phá
+                  Trải nghiệm bộ tính năng Premium (User Plan & Record) tại
+                  trang Khám phá
                 </Text>
               </View>
               <View className="flex-row items-center rounded-full bg-[#EB489B] px-3 py-1.5">
@@ -2512,17 +2567,21 @@ export default function HomeScreen() {
           ) : null}
 
           <View className="gap-3">
-            <View className="flex-row items-center justify-between">
-              <Pressable hitSlop={8} onPress={handleOpenHotspots}>
-                <Text className="text-[16px] font-extrabold text-[#2B2233]">
+            <View className="flex-row items-center justify-between gap-3">
+              <Pressable
+                className="flex-1"
+                hitSlop={8}
+                onPress={handleOpenHotspots}
+              >
+                <Text className="text-[18px] font-extrabold text-[#2B2233]">
                   Địa điểm gần bạn
                 </Text>
               </Pressable>
               <Pressable
-                className="rounded-full bg-[#FFF4EF] px-3 py-1.5"
+                className="rounded-full border border-[#F3D9E5] bg-white px-3 py-1.5"
                 onPress={handleOpenHotspots}
               >
-                <Text className="text-[12px] font-bold text-[#F58752]">
+                <Text className="text-[12px] font-bold text-[#D85B86]">
                   Xem tất cả
                 </Text>
               </Pressable>
@@ -2542,500 +2601,529 @@ export default function HomeScreen() {
                 title="Chưa có địa điểm phù hợp"
               />
             ) : (
-              <ScrollView
-                horizontal
-                contentContainerStyle={{
-                  paddingLeft: gutter,
-                  paddingRight: gutter,
-                }}
-                showsHorizontalScrollIndicator={false}
-                style={{
-                  marginHorizontal: -gutter,
-                  width: safeWidth,
-                }}
-              >
-                {resolvedNearbyPlaces.map((place, index) => {
-                  const isPlaceCheckedIn = isNearbyPlaceCheckedIn(
-                    place,
-                    checkedInApiHotspotIds,
-                    checkedInHotspotSlugs,
-                  );
-
-                  return (
-                    <Pressable
-                      key={place.key}
-                        className={
-                          index === resolvedNearbyPlaces.length - 1
-                            ? ""
-                            : "mr-3"
-                        }
-                      disabled={!place.slug && place.hotspotId === null}
-                      onPress={() => {
-                        const hotspotId = place.hotspotId;
-                        const routeSlug =
-                          place.slug ??
-                          (hotspotId !== null
-                            ? getApiHotspotRouteSlug(hotspotId)
-                            : null);
-
-                        if (routeSlug) {
-                          router.push(getHotspotHref(routeSlug, hotspotId));
-                        }
-                      }}
-                      style={{ width: nearbyPlaceCardWidth }}
-                    >
-                      <View
-                        className="overflow-hidden rounded-[10px] border border-[#EEF1F4] bg-white"
-                        style={[
-                          nearbyPlaceShadowStyle,
-                          { height: nearbyPlaceCardHeight },
-                        ]}
-                      >
-                        <View className="relative">
-                          <Image
-                            source={place.imageUri}
-                            contentFit="cover"
-                            transition={220}
-                            cachePolicy="memory-disk"
-                            style={{
-                              height: nearbyPlaceImageHeight,
-                              width: "100%",
-                            }}
-                          />
-
-                          <View className="absolute inset-x-2.5 top-2.5 flex-row items-center justify-between">
-                            <View className="rounded-full bg-[#45414D]/92 px-2.5 py-1">
-                              <Text className="text-[11px] font-extrabold text-white">
-                                {place.distance}
-                              </Text>
-                            </View>
-
-                            <View
-                              className={`rounded-full px-2.5 py-1 ${
-                                isPlaceCheckedIn
-                                  ? "bg-[#DCFCE7]"
-                                  : "bg-[#f0af16]"
-                              }`}
-                            >
-                              <Text
-                                className={`text-[11px] font-extrabold ${
-                                  isPlaceCheckedIn
-                                    ? "text-[#15803D]"
-                                    : "text-[#2B2233]"
-                                }`}
-                              >
-                                {isPlaceCheckedIn
-                                  ? "Đã check-in"
-                                  : `${place.reward} XP`}
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-
-                        <View
-                          className="flex-1 gap-0.5 px-3.5 pb-3.5 pt-3"
-                          style={{ minHeight: nearbyPlaceContentHeight }}
-                        >
-                          <Text
-                            className="text-[13px] font-extrabold leading-[16px] text-[#3B4454]"
-                            numberOfLines={2}
-                            style={{ minHeight: nearbyPlaceTitleHeight }}
-                          >
-                            {place.title}
-                          </Text>
-
-                          <View
-                            className="flex-row items-center gap-1"
-                            style={{ minHeight: nearbyPlaceCategoryHeight }}
-                          >
-                            <SymbolView
-                              name={{
-                                ios: "clock.fill",
-                                android: "schedule",
-                                web: "schedule",
-                              }}
-                              size={11}
-                              tintColor="#A39AAB"
-                            />
-                            <Text
-                              className="flex-1 text-[12px] text-[#A39AAB]"
-                              numberOfLines={1}
-                            >
-                              {place.openingHours}
-                            </Text>
-                          </View>
-
-                          <View
-                            className="flex-row items-center gap-1"
-                            style={{ minHeight: nearbyPlaceDetailRowHeight }}
-                          >
-                            <SymbolView
-                              name={{
-                                ios: "star.fill",
-                                android: "star",
-                                web: "star",
-                              }}
-                              size={11}
-                              tintColor="#F58752"
-                            />
-                            <Text className="text-[12px] font-bold text-[#F58752]">
-                              {place.rating}
-                            </Text>
-                          </View>
-
-                          {isPlaceCheckedIn ? (
-                            <View
-                              className="flex-row items-center gap-1.5"
-                              style={{ minHeight: nearbyPlaceDetailRowHeight }}
-                            >
-                              <View className="h-5 w-5 items-center justify-center rounded-full bg-[#DCFCE7]">
-                                <SymbolView
-                                  name={{
-                                    ios: "checkmark",
-                                    android: "check",
-                                    web: "check",
-                                  }}
-                                  size={11}
-                                  tintColor="#15803D"
-                                />
-                              </View>
-                              <Text
-                                className="flex-1 text-[12px] font-bold text-[#15803D]"
-                                numberOfLines={1}
-                              >
-                                Xem câu chuyện
-                              </Text>
-                            </View>
-                          ) : (
-                            <View
-                              className="flex-row items-center gap-1"
-                              style={{ minHeight: nearbyPlaceDetailRowHeight }}
-                            >
-                              {place.detailIcon === "star" ? (
-                                <Text className="text-[12px] text-[#F58752]">
-                                  ★
-                                </Text>
-                              ) : (
-                                <SymbolView
-                                  name={{
-                                    ios: "location.fill",
-                                    android: "place",
-                                    web: "place",
-                                  }}
-                                  size={11}
-                                  tintColor="#8E869A"
-                                />
-                              )}
-                              <Text
-                                className={
-                                  place.detailIcon === "star"
-                                    ? "text-[12px] font-bold text-[#F58752]"
-                                    : "flex-1 text-[12px] text-[#8E869A]"
-                                }
-                                numberOfLines={1}
-                              >
-                                {place.detailPrimaryText}
-                              </Text>
-                              {place.detailSecondaryText ? (
-                                <Text
-                                  className="text-[12px] text-[#8E869A]"
-                                  numberOfLines={1}
-                                >
-                                  {place.detailSecondaryText}
-                                </Text>
-                              ) : null}
-                            </View>
-                          )}
-                        </View>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            )}
-
-            <Text className="text-[18px] font-extrabold text-[#2B2233]">
-              Chủ đề
-            </Text>
-
-            {themeCategories.length === 0 ? (
-              <SectionEmptyState description="Chưa có dữ liệu chủ đề phù hợp từ API." />
-            ) : (
-              <ScrollView
-                horizontal
-                contentContainerStyle={{
-                  paddingLeft: gutter,
-                  paddingRight: gutter,
-                }}
-                showsHorizontalScrollIndicator={false}
-                style={{
-                  marginHorizontal: -gutter,
-                  width: safeWidth,
-                }}
-              >
-                {themeCategories.map((item, index) => (
-                  <Pressable
-                    key={`${item.label}-${index}`}
-                    className={
-                      index === themeCategories.length - 1 ? "" : "mr-3.5"
-                    }
-                  >
-                    <View
-                      className="h-[104px] w-[104px] items-center justify-center rounded-[22px] p-4"
-                      style={{ backgroundColor: item.background }}
-                    >
-                      <View className="items-center justify-center">
-                        <SymbolView
-                          name={item.icon}
-                          size={16}
-                          tintColor={item.accent}
-                        />
-                      </View>
-
-                      <Text
-                        className="mt-3 text-center text-[13px] font-extrabold leading-4 text-[#2F2A35]"
-                        numberOfLines={2}
-                      >
-                        {item.label}
-                      </Text>
-                    </View>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
-
-            <View className="flex-row items-center justify-between">
-              <Text className="text-[18px] font-extrabold text-[#2B2233]">
-                Đề xuất tuyến đường
-              </Text>
-              {suggestedRoutes.length > 1 ? (
-                <Pressable
-                  className="rounded-full bg-[#FFF4EF] px-3.5 py-2"
-                  onPress={handleOpenRoutes}
-                >
-                  <Text className="text-[12px] font-bold text-[#F58752]">
-                    Xem tất cả
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-
-            {suggestedRoutesStatus !== "empty" && suggestedRoutesNote ? (
-              <Text className="text-[13px] leading-5 text-[#8E869A]">
-                {suggestedRoutesNote}
-              </Text>
-            ) : null}
-
-            {suggestedRoutesStatus === "loading" ? (
-              <SectionEmptyState isLoading />
-            ) : suggestedRoutesStatus === "empty" ? (
-              <SectionEmptyState
-                description={suggestedRoutesNote ?? "Không có dữ liệu phù hợp."}
-                title="Chưa có tuyến phù hợp"
-              />
-            ) : (
-              <ScrollView
-                horizontal
-                contentContainerStyle={{
-                  paddingLeft: gutter,
-                  paddingRight: gutter,
-                }}
-                showsHorizontalScrollIndicator={false}
-                style={{
-                  marginHorizontal: -gutter,
-                  width: safeWidth,
-                }}
-              >
-                {suggestedRoutes.map((route, index) => (
-                  <Pressable
-                    key={route.id || `${route.title}-${index}`}
-                    className={
-                      index === suggestedRoutes.length - 1 ? "" : "mr-4"
-                    }
-                    onPress={() => {
-                      router.push(`/route/${route.id}` as Href);
-                    }}
-                    style={{ width: nearbyRouteCardWidth }}
-                  >
-                    <View
-                      className="overflow-hidden border border-[#EEF1F4] bg-white"
-                      style={[
-                        cardShadowStyle,
-                        {
-                          borderRadius: 16,
-                          minHeight: suggestedRouteCardHeight,
-                        },
-                      ]}
-                    >
-                      <View className="relative">
-                        <Image
-                          source={route.cover}
-                          contentFit="cover"
-                          transition={220}
-                          cachePolicy="memory-disk"
-                          style={{
-                            height: suggestedRouteCardImageHeight,
-                            width: "100%",
-                          }}
-                        />
-
-                        <View className="absolute right-2 top-2 rounded-full bg-[#FFF1F6] px-2 py-[5px]">
-                          <Text className="text-[10px] font-extrabold text-[#EB489B]">
-                            +{route.xp} XP
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View className="px-3 pb-3 pt-2" style={{ gap: 1 }}>
-                        <View
-                          className="flex-row flex-wrap items-center gap-1.5"
-                        >
-                          <View className="rounded-full bg-[#FFF1F6] px-2 py-[5px]">
-                            <Text className="text-[10px] font-extrabold text-[#EB489B]">
-                              {route.distance}
-                            </Text>
-                          </View>
-                          <View className="rounded-full bg-[#FFF4EF] px-2 py-[5px]">
-                            <Text className="text-[10px] font-extrabold text-[#F58752]">
-                              {route.duration}
-                            </Text>
-                          </View>
-
-                          <View
-                            className="rounded-full px-2 py-[5px]"
-                            style={{
-                              backgroundColor:
-                                (
-                                  routeDifficultyStyles[route.difficulty] ??
-                                  routeDifficultyStyles["Trung bình"]
-                                ).background,
-                            }}
-                          >
-                            <Text
-                              className="text-[10px] font-extrabold"
-                              style={{
-                                color:
-                                  (
-                                    routeDifficultyStyles[route.difficulty] ??
-                                    routeDifficultyStyles["Trung bình"]
-                                  ).color,
-                              }}
-                            >
-                              {route.difficulty}
-                            </Text>
-                          </View>
-                        </View>
-
-                        <Text
-                          className="text-[14px] font-semibold text-[#2B2233]"
-                          numberOfLines={2}
-                          ellipsizeMode="tail"
-                          style={{ lineHeight: 16 }}
-                        >
-                          {route.title}
-                        </Text>
-
-                        <Text
-                          className="text-[12px] text-[#7A6F67]"
-                          numberOfLines={2}
-                          ellipsizeMode="tail"
-                          style={{ lineHeight: 13 }}
-                        >
-                          {getSuggestedRouteDescription(route)}
-                        </Text>
-
-                        <View className="flex-row flex-wrap items-center justify-end gap-1.5 pt-0.5">
-                          {getSuggestedRouteTagLabel(route) ? (
-                            <View className="rounded-full bg-[#F4EFF8] px-2 py-[5px]">
-                              <Text className="text-[10px] font-extrabold text-[#6F657A]">
-                                {getSuggestedRouteTagLabel(route)}
-                              </Text>
-                            </View>
-                          ) : null}
-
-                          <View className="rounded-full bg-[#FFF7E8] px-2 py-[5px]">
-                            <Text className="text-[10px] font-extrabold text-[#D97706]">
-                              {route.hotspotIds.length} điểm dừng
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                    </View>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
-
-            <View className="gap-4">
-              <View className="flex-row items-start justify-between gap-3">
-                <View className="flex-1">
-                  <Text className="text-[18px] font-extrabold text-[#2B2233]">
-                    Voucher ưu đãi
-                  </Text>
-                </View>
-
-                <Pressable className="rounded-full bg-[#FFF4EF] px-3.5 py-2">
-                  <Text className="text-[12px] font-bold text-[#F58752]">
-                    Xem tất cả
-                  </Text>
-                </Pressable>
-              </View>
-
               <View
-                className="gap-5 rounded-[28px] bg-white p-4"
-                style={cardShadowStyle}
+                style={{
+                  marginHorizontal: -gutter,
+                  width: safeWidth,
+                }}
               >
-                <View className="gap-3">
+                <View
+                  className="bg-[#FFF0F6]"
+                  style={{
+                    minHeight: nearbyPlacesSectionHeight,
+                    paddingVertical: nearbyPlacesSectionTopInset,
+                  }}
+                >
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      left: gutter,
+                      position: "absolute",
+                      top: nearbyPlacesSectionTopInset,
+                    }}
+                  >
+                    <NearbyPlacesShowcaseCard
+                      cardHeight={nearbyPlacesShowcaseHeight}
+                      cardWidth={nearbyPlacesShowcaseWidth}
+                      imageHeight={nearbyPlacesShowcaseImageHeight}
+                    />
+                  </View>
+
                   <ScrollView
                     horizontal
-                    contentContainerStyle={{ paddingRight: 10 }}
+                    contentContainerStyle={{
+                      paddingBottom: 6,
+                      paddingLeft: nearbyPlacesScrollStartInset,
+                      paddingRight: gutter,
+                      paddingTop: 6,
+                    }}
                     showsHorizontalScrollIndicator={false}
+                    style={{
+                      width: safeWidth,
+                    }}
                   >
-                    {voucherMerchants.map((merchant, index) => (
-                      <Pressable
-                        key={merchant.label}
-                        className={
-                          index === voucherMerchants.length - 1 ? "" : "mr-3.5"
-                        }
-                        style={{ width: voucherMerchantItemWidth }}
-                      >
-                        <View className="items-center">
-                          <View
-                            className="items-center justify-center"
-                            style={{
-                              height: voucherMerchantCircleSize,
-                              width: voucherMerchantCircleSize,
-                            }}
-                          >
-                            <Image
-                              source={merchant.logoUri}
-                              contentFit="contain"
-                              transition={180}
-                              cachePolicy="memory-disk"
-                              style={{
-                                height:
-                                  voucherMerchantLogoSize * merchant.logoScale,
-                                width:
-                                  voucherMerchantLogoSize * merchant.logoScale,
-                              }}
-                            />
-                          </View>
+                    {resolvedNearbyPlaces.map((place, index) => {
+                      const isPlaceCheckedIn = isNearbyPlaceCheckedIn(
+                        place,
+                        checkedInApiHotspotIds,
+                        checkedInHotspotSlugs,
+                      );
 
-                          <Text
-                            className="mt-2 text-center text-[13px] font-extrabold leading-4 text-[#2B2233]"
-                            numberOfLines={2}
+                      return (
+                        <Pressable
+                          key={place.key}
+                          disabled={!place.slug && place.hotspotId === null}
+                          onPress={() => {
+                            const hotspotId = place.hotspotId;
+                            const routeSlug =
+                              place.slug ??
+                              (hotspotId !== null
+                                ? getApiHotspotRouteSlug(hotspotId)
+                                : null);
+
+                            if (routeSlug) {
+                              router.push(getHotspotHref(routeSlug, hotspotId));
+                            }
+                          }}
+                          style={{
+                            marginRight:
+                              index === resolvedNearbyPlaces.length - 1
+                                ? 0
+                                : 12,
+                            width: nearbyPlaceCardWidth,
+                          }}
+                        >
+                          <View
+                            className="overflow-hidden rounded-[10px] border border-[#EEF1F4] bg-white"
+                            style={[
+                              nearbyPlaceShadowStyle,
+                              { height: nearbyPlaceCardHeight },
+                            ]}
                           >
-                            {merchant.label}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    ))}
+                            <View className="relative">
+                              <Image
+                                source={place.imageUri}
+                                contentFit="cover"
+                                transition={220}
+                                cachePolicy="memory-disk"
+                                style={{
+                                  height: nearbyPlaceImageHeight,
+                                  width: "100%",
+                                }}
+                              />
+
+                              <View className="absolute inset-x-2.5 top-2.5 flex-row items-center justify-between">
+                                <View className="rounded-full bg-[#45414D]/92 px-2.5 py-1">
+                                  <Text className="text-[11px] font-extrabold text-white">
+                                    {place.distance}
+                                  </Text>
+                                </View>
+
+                                <View
+                                  className={`rounded-full px-2.5 py-1 ${
+                                    isPlaceCheckedIn
+                                      ? "bg-[#DCFCE7]"
+                                      : "bg-[#f0af16]"
+                                  }`}
+                                >
+                                  <Text
+                                    className={`text-[11px] font-extrabold ${
+                                      isPlaceCheckedIn
+                                        ? "text-[#15803D]"
+                                        : "text-[#2B2233]"
+                                     }`}
+                                  >
+                                    {isPlaceCheckedIn
+                                      ? "Đã check-in"
+                                      : `${place.reward} XP`}
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+
+                            <View
+                              className="flex-1 gap-0.5 px-3.5 pb-3.5 pt-3"
+                              style={{ minHeight: nearbyPlaceContentHeight }}
+                            >
+                              <Text
+                                className="text-[13px] font-extrabold leading-[16px] text-[#3B4454]"
+                                numberOfLines={2}
+                                style={{ minHeight: nearbyPlaceTitleHeight }}
+                              >
+                                {place.title}
+                              </Text>
+
+                              <View
+                                className="flex-row items-center gap-1"
+                                style={{ minHeight: nearbyPlaceCategoryHeight }}
+                              >
+                                <SymbolView
+                                  name={{
+                                    ios: "clock.fill",
+                                    android: "schedule",
+                                    web: "schedule",
+                                  }}
+                                  size={11}
+                                  tintColor="#A39AAB"
+                                />
+                                <Text
+                                  className="flex-1 text-[12px] text-[#A39AAB]"
+                                  numberOfLines={1}
+                                >
+                                  {place.openingHours}
+                                </Text>
+                              </View>
+
+                              <View
+                                className="flex-row items-center gap-1"
+                                style={{
+                                  minHeight: nearbyPlaceDetailRowHeight,
+                                }}
+                              >
+                                <SymbolView
+                                  name={{
+                                    ios: "star.fill",
+                                    android: "star",
+                                    web: "star",
+                                  }}
+                                  size={11}
+                                  tintColor="#F58752"
+                                />
+                                <Text className="text-[12px] font-bold text-[#F58752]">
+                                  {place.rating}
+                                </Text>
+                              </View>
+
+                              {isPlaceCheckedIn ? (
+                                <View
+                                  className="flex-row items-center gap-1.5"
+                                  style={{ minHeight: nearbyPlaceDetailRowHeight }}
+                                >
+                                  <View className="h-5 w-5 items-center justify-center rounded-full bg-[#DCFCE7]">
+                                    <SymbolView
+                                      name={{
+                                        ios: "checkmark",
+                                        android: "check",
+                                        web: "check",
+                                      }}
+                                      size={11}
+                                      tintColor="#15803D"
+                                    />
+                                  </View>
+                                  <Text
+                                    className="flex-1 text-[12px] font-bold text-[#15803D]"
+                                    numberOfLines={1}
+                                  >
+                                    Xem câu chuyện
+                                  </Text>
+                                </View>
+                              ) : (
+                                <View
+                                  className="flex-row items-center gap-1"
+                                  style={{
+                                    minHeight: nearbyPlaceDetailRowHeight,
+                                  }}
+                                >
+                                  {place.detailIcon === "star" ? (
+                                    <Text className="text-[12px] text-[#F58752]">
+                                      ★
+                                    </Text>
+                                  ) : (
+                                    <SymbolView
+                                      name={{
+                                        ios: "location.fill",
+                                        android: "place",
+                                        web: "place",
+                                      }}
+                                      size={11}
+                                      tintColor="#8E869A"
+                                    />
+                                  )}
+                                  <Text
+                                    className={
+                                      place.detailIcon === "star"
+                                        ? "text-[12px] font-bold text-[#F58752]"
+                                        : "flex-1 text-[12px] text-[#8E869A]"
+                                    }
+                                    numberOfLines={1}
+                                  >
+                                    {place.detailPrimaryText}
+                                  </Text>
+                                  {place.detailSecondaryText ? (
+                                    <Text
+                                      className="text-[12px] text-[#8E869A]"
+                                      numberOfLines={1}
+                                    >
+                                      {place.detailSecondaryText}
+                                    </Text>
+                                  ) : null}
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
                   </ScrollView>
                 </View>
               </View>
-            </View>
+            )}
           </View>
 
+          <Text className="text-[18px] font-extrabold text-[#2B2233]">
+            Chủ đề
+          </Text>
+
+          {themeCategories.length === 0 ? (
+            <SectionEmptyState description="Chưa có dữ liệu chủ đề phù hợp từ API." />
+          ) : (
+            <ScrollView
+              horizontal
+              contentContainerStyle={{
+                paddingLeft: gutter,
+                paddingRight: gutter,
+              }}
+              showsHorizontalScrollIndicator={false}
+              style={{
+                marginHorizontal: -gutter,
+                width: safeWidth,
+              }}
+            >
+              {themeCategories.map((item, index) => (
+                <Pressable
+                  key={`${item.label}-${index}`}
+                  className={
+                    index === themeCategories.length - 1 ? "" : "mr-3.5"
+                  }
+                >
+                  <View
+                    className="h-[104px] w-[104px] items-center justify-center rounded-[22px] p-4"
+                    style={{ backgroundColor: item.background }}
+                  >
+                    <View className="items-center justify-center">
+                      <SymbolView
+                        name={item.icon}
+                        size={16}
+                        tintColor={item.accent}
+                      />
+                    </View>
+
+                    <Text
+                      className="mt-3 text-center text-[13px] font-extrabold leading-4 text-[#2F2A35]"
+                      numberOfLines={2}
+                    >
+                      {item.label}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+
+          <View className="flex-row items-center justify-between">
+            <Text className="text-[18px] font-extrabold text-[#2B2233]">
+              Đề xuất tuyến đường
+            </Text>
+            {suggestedRoutes.length > 1 ? (
+              <Pressable
+                className="rounded-full bg-[#FFF4EF] px-3.5 py-2"
+                onPress={handleOpenRoutes}
+              >
+                <Text className="text-[12px] font-bold text-[#F58752]">
+                  Xem tất cả
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {suggestedRoutesStatus !== "empty" && suggestedRoutesNote ? (
+            <Text className="text-[13px] leading-5 text-[#8E869A]">
+              {suggestedRoutesNote}
+            </Text>
+          ) : null}
+
+          {suggestedRoutesStatus === "loading" ? (
+            <SectionEmptyState isLoading />
+          ) : suggestedRoutesStatus === "empty" ? (
+            <SectionEmptyState
+              description={suggestedRoutesNote ?? "Không có dữ liệu phù hợp."}
+              title="Chưa có tuyến phù hợp"
+            />
+          ) : (
+            <ScrollView
+              horizontal
+              contentContainerStyle={{
+                paddingLeft: gutter,
+                paddingRight: gutter,
+              }}
+              showsHorizontalScrollIndicator={false}
+              style={{
+                marginHorizontal: -gutter,
+                width: safeWidth,
+              }}
+            >
+              {suggestedRoutes.map((route, index) => (
+                <Pressable
+                  key={route.id || `${route.title}-${index}`}
+                  className={index === suggestedRoutes.length - 1 ? "" : "mr-4"}
+                  onPress={() => {
+                    router.push(`/route/${route.id}` as Href);
+                  }}
+                  style={{ width: nearbyRouteCardWidth }}
+                >
+                  <View
+                    className="overflow-hidden border border-[#EEF1F4] bg-white"
+                    style={[
+                      cardShadowStyle,
+                      {
+                        borderRadius: 16,
+                        minHeight: suggestedRouteCardHeight,
+                      },
+                    ]}
+                  >
+                    <View className="relative">
+                      <Image
+                        source={route.cover}
+                        contentFit="cover"
+                        transition={220}
+                        cachePolicy="memory-disk"
+                        style={{
+                          height: suggestedRouteCardImageHeight,
+                          width: "100%",
+                        }}
+                      />
+
+                      <View className="absolute right-2 top-2 rounded-full bg-[#FFF1F6] px-2 py-[5px]">
+                        <Text className="text-[10px] font-extrabold text-[#EB489B]">
+                          +{route.xp} XP
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View className="px-3 pb-3 pt-2" style={{ gap: 1 }}>
+                      <View className="flex-row flex-wrap items-center gap-1.5">
+                        <View className="rounded-full bg-[#FFF1F6] px-2 py-[5px]">
+                          <Text className="text-[10px] font-extrabold text-[#EB489B]">
+                            {route.distance}
+                          </Text>
+                        </View>
+                        <View className="rounded-full bg-[#FFF4EF] px-2 py-[5px]">
+                          <Text className="text-[10px] font-extrabold text-[#F58752]">
+                            {route.duration}
+                          </Text>
+                        </View>
+
+                        <View
+                          className="rounded-full px-2 py-[5px]"
+                          style={{
+                            backgroundColor: (
+                              routeDifficultyStyles[route.difficulty] ??
+                              routeDifficultyStyles["Trung bình"]
+                            ).background,
+                          }}
+                        >
+                          <Text
+                            className="text-[10px] font-extrabold"
+                            style={{
+                              color: (
+                                routeDifficultyStyles[route.difficulty] ??
+                                routeDifficultyStyles["Trung bình"]
+                              ).color,
+                            }}
+                          >
+                            {route.difficulty}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text
+                        className="text-[14px] font-semibold text-[#2B2233]"
+                        numberOfLines={2}
+                        ellipsizeMode="tail"
+                        style={{ lineHeight: 16 }}
+                      >
+                        {route.title}
+                      </Text>
+
+                      <Text
+                        className="text-[12px] text-[#7A6F67]"
+                        numberOfLines={2}
+                        ellipsizeMode="tail"
+                        style={{ lineHeight: 13 }}
+                      >
+                        {getSuggestedRouteDescription(route)}
+                      </Text>
+
+                      <View className="flex-row flex-wrap items-center justify-end gap-1.5 pt-0.5">
+                        {getSuggestedRouteTagLabel(route) ? (
+                          <View className="rounded-full bg-[#F4EFF8] px-2 py-[5px]">
+                            <Text className="text-[10px] font-extrabold text-[#6F657A]">
+                              {getSuggestedRouteTagLabel(route)}
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        <View className="rounded-full bg-[#FFF7E8] px-2 py-[5px]">
+                          <Text className="text-[10px] font-extrabold text-[#D97706]">
+                            {route.hotspotIds.length} điểm dừng
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+
+          <View className="gap-4">
+            <View className="flex-row items-start justify-between gap-3">
+              <View className="flex-1">
+                <Text className="text-[18px] font-extrabold text-[#2B2233]">
+                  Voucher ưu đãi
+                </Text>
+              </View>
+
+              <Pressable className="rounded-full bg-[#FFF4EF] px-3.5 py-2">
+                <Text className="text-[12px] font-bold text-[#F58752]">
+                  Xem tất cả
+                </Text>
+              </Pressable>
+            </View>
+
+            <View
+              className="gap-5 rounded-[28px] bg-white p-4"
+              style={cardShadowStyle}
+            >
+              <View className="gap-3">
+                <ScrollView
+                  horizontal
+                  contentContainerStyle={{ paddingRight: 10 }}
+                  showsHorizontalScrollIndicator={false}
+                >
+                  {voucherMerchants.map((merchant, index) => (
+                    <Pressable
+                      key={merchant.label}
+                      className={
+                        index === voucherMerchants.length - 1 ? "" : "mr-3.5"
+                      }
+                      style={{ width: voucherMerchantItemWidth }}
+                    >
+                      <View className="items-center">
+                        <View
+                          className="items-center justify-center"
+                          style={{
+                            height: voucherMerchantCircleSize,
+                            width: voucherMerchantCircleSize,
+                          }}
+                        >
+                          <Image
+                            source={merchant.logoUri}
+                            contentFit="contain"
+                            transition={180}
+                            cachePolicy="memory-disk"
+                            style={{
+                              height:
+                                voucherMerchantLogoSize * merchant.logoScale,
+                              width:
+                                voucherMerchantLogoSize * merchant.logoScale,
+                            }}
+                          />
+                        </View>
+
+                        <Text
+                          className="mt-2 text-center text-[13px] font-extrabold leading-4 text-[#2B2233]"
+                          numberOfLines={2}
+                        >
+                          {merchant.label}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+          </View>
           <View
             className="overflow-hidden rounded-[28px] bg-white"
             style={cardShadowStyle}

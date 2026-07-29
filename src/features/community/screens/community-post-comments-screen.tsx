@@ -1006,16 +1006,6 @@ export default function CommunityPostCommentsScreen() {
                   <Text className="text-[14px] font-bold text-[#B91C1C]">
                     {commentsError}
                   </Text>
-                  <Pressable
-                    className="mt-3 self-start rounded-full bg-[#E5E7EB] px-4 py-2"
-                    onPress={() => {
-                      void loadComments();
-                    }}
-                  >
-                    <Text className="text-[12px] font-bold text-[#111827]">
-                      Tải lại
-                    </Text>
-                  </Pressable>
                 </View>
               ) : null}
 
