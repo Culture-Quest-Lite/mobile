@@ -75,8 +75,10 @@ export default function ProfileMenuScreen() {
       onPress: () => {},
     },
     {
-      label: "Ví của tôi",
-      onPress: () => {},
+      label: "Kho voucher",
+      onPress: () => {
+        router.push("/vouchers" as Href);
+      },
     },
   ];
 

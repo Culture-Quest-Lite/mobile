@@ -96,6 +96,8 @@ export default function RootLayout() {
           <Stack.Screen name="profile/information" />
           <Stack.Screen name="profile/menu" />
           <Stack.Screen name="notifications" />
+          <Stack.Screen name="vouchers/index" />
+          <Stack.Screen name="vouchers/[id]" />
           <Stack.Screen name="subscription" />
           <Stack.Screen name="route/[id]" />
           <Stack.Screen name="route/custom/plan" />

@@ -2959,7 +2959,7 @@ export default function HomeScreen() {
                   </Text>
                 </View>
 
-                <Pressable className="rounded-full bg-[#FFF4EF] px-3.5 py-2">
+                <Pressable className="rounded-full bg-[#FFF4EF] px-3.5 py-2" onPress={() => router.push("/vouchers")}>
                   <Text className="text-[12px] font-bold text-[#F58752]">
                     Xem tất cả
                   </Text>
