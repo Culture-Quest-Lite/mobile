@@ -25,6 +25,7 @@ import {
 import { searchHotspots } from "@/features/home/api/search-hotspots";
 import { AppMap, type AppMapPoint } from "@/features/map/components/app-map";
 import { getMyProfile } from "@/features/profile/api/get-me";
+import { usePremiumStatus, setPremiumStatusFromProfile } from "@/features/profile/hooks/use-premium-status";
 import {
   finalizeRecordRoute,
   finishRecordRoute,
@@ -39,7 +40,7 @@ import {
   getDeviceCoordinate,
 } from "@/lib/location";
 
-type RecordStatus = "READY" | "RECORDING" | "DRAFT" | "TRIAL";
+type RecordStatus = "READY" | "RECORDING" | "DRAFT" | "PUBLISHED";
 type Coordinate = { latitude: number; longitude: number };
 
 const DEFAULT_COORDINATE: Coordinate = { latitude: 10.7769, longitude: 106.7009 };
@@ -80,6 +81,8 @@ export default function RecordJourneyScreen() {
   const [isLoadingJourneys, setIsLoadingJourneys] = useState(false);
   const [currentCoordinate, setCurrentCoordinate] = useState<Coordinate>(DEFAULT_COORDINATE);
   const [userAvatarUri, setUserAvatarUri] = useState<string | null>(null);
+  const [finalizeDescription, setFinalizeDescription] = useState("");
+  const { isPremium, isLoaded: isPremiumLoaded, requirePremium: requirePremiumStatus } = usePremiumStatus();
   const [nearbyHotspots, setNearbyHotspots] = useState<NearbyHotspotDto[]>([]);
   const [searchResults, setSearchResults] = useState<NearbyHotspotDto[]>([]);
   const [checkedInHotspots, setCheckedInHotspots] = useState<NearbyHotspotDto[]>([]);
@@ -109,7 +112,7 @@ export default function RecordJourneyScreen() {
     }
 
     const normalizedStatus: RecordStatus =
-      route.status === "RECORDING" || route.status === "DRAFT" || route.status === "TRIAL"
+      route.status === "RECORDING" || route.status === "DRAFT" || route.status === "PUBLISHED"
         ? route.status
         : "READY";
     setStatus(normalizedStatus);
@@ -196,7 +199,7 @@ export default function RecordJourneyScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadCurrentUserAvatar() {
+    async function loadCurrentUserProfile() {
       if (!session.isAuthenticated) {
         setUserAvatarUri(null);
         return;
@@ -209,17 +212,33 @@ export default function RecordJourneyScreen() {
           accessToken,
           tokenType: session.tokenType,
         });
-        if (!cancelled) setUserAvatarUri(profile.avatar);
+        if (!cancelled) {
+          setUserAvatarUri(profile.avatar);
+          // Đẩy isPremium vào store dùng chung để mọi màn hình/hành động
+          // Premium khác trong app (không riêng màn record này) đọc được
+          // giá trị mới nhất mà không phải gọi lại getMyProfile().
+          setPremiumStatusFromProfile(profile.isPremium);
+        }
       } catch (error) {
-        console.warn("[record-journey] load current user avatar failed", error);
+        console.warn("[record-journey] load current user profile failed", error);
       }
     }
 
-    void loadCurrentUserAvatar();
+    void loadCurrentUserProfile();
     return () => {
       cancelled = true;
     };
   }, [session.isAuthenticated, session.tokenType]);
+
+  /**
+   * Chức năng "Ghi hành trình" (record) là tính năng Premium. Nếu user chưa
+   * nâng cấp, chặn hành động và đưa họ sang trang gói đăng ký thay vì gọi
+   * thẳng API (BE cũng cần tự chặn ở phía server, đây chỉ là lớp UX ở FE).
+   */
+  const requirePremium = useCallback(
+    () => requirePremiumStatus("Ghi hành trình cá nhân (Record Journey)"),
+    [requirePremiumStatus],
+  );
 
   useEffect(() => {
     void loadNearby();
@@ -290,6 +309,7 @@ export default function RecordJourneyScreen() {
   );
 
   async function handleStart() {
+    if (!requirePremium()) return;
     setIsStarting(true);
     try {
       const auth = await getAuth();
@@ -305,6 +325,7 @@ export default function RecordJourneyScreen() {
   }
 
   async function handleCheckIn(hotspot: NearbyHotspotDto) {
+    if (!requirePremium()) return;
     if (status !== "RECORDING") {
       routeSystemAlert.alert("Chưa ghi hành trình", "Hãy bấm Bắt đầu ghi hành trình trước khi check-in.");
       return;
@@ -351,6 +372,7 @@ export default function RecordJourneyScreen() {
   }
 
   async function handleFinish() {
+    if (!requirePremium()) return;
     if (!checkedInHotspots.length) {
       routeSystemAlert.alert("Chưa có check-in", "Hãy check-in ít nhất một hotspot trước khi kết thúc.");
       return;
@@ -371,15 +393,20 @@ export default function RecordJourneyScreen() {
   }
 
   async function handleFinalize() {
+    if (!requirePremium()) return;
     if (!routeRecord?.routeId) return;
     setIsFinalizing(true);
     try {
       const auth = await getAuth();
-      const route = await finalizeRecordRoute({ ...auth, routeId: routeRecord.routeId });
+      const route = await finalizeRecordRoute({
+        ...auth,
+        routeId: routeRecord.routeId,
+        description: finalizeDescription.trim() || routeRecord.description || "",
+      });
       setRouteRecord(route);
-      setStatus("TRIAL");
+      setStatus(route.status === "PUBLISHED" ? "PUBLISHED" : "DRAFT");
       setMyJourneys((current) => [route, ...current.filter((item) => item.routeId !== route.routeId)]);
-      routeSystemAlert.alert("Đã submit hành trình", "Custom Route đã chuyển sang trạng thái TRIAL.");
+      routeSystemAlert.alert("Đã submit hành trình", "Custom Route đã chuyển sang trạng thái PUBLISHED.");
     } catch (error) {
       routeSystemAlert.alert("Không thể submit", error instanceof Error ? error.message : "Vui lòng thử lại.");
     } finally {
@@ -399,7 +426,7 @@ export default function RecordJourneyScreen() {
         </View>
         <Pressable
           className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
-          onPress={() => routeSystemAlert.alert("Luồng sử dụng", "B1 bắt đầu record → B2 tìm hotspot gần bạn hoặc search toàn hệ thống và check-in → B3 finish thành DRAFT → chỉnh sửa route/story → B4 finalize routeId thành TRIAL.")}
+          onPress={() => routeSystemAlert.alert("Luồng sử dụng", "B1 bắt đầu record (yêu cầu Premium) → B2 tìm hotspot gần bạn hoặc search toàn hệ thống và check-in → B3 finish thành DRAFT → chỉnh sửa route/story → B4 finalize routeId thành PUBLISHED.")}
         >
           <Text className="text-[16px] font-extrabold text-[#F15B45]">?</Text>
         </Pressable>
@@ -420,7 +447,7 @@ export default function RecordJourneyScreen() {
               showsUserLocation={false}
             />
             <View className="absolute left-4 top-4 flex-row items-center gap-2 rounded-full bg-white/95 px-3 py-2">
-              <View className={`h-2.5 w-2.5 rounded-full ${status === "RECORDING" ? "bg-[#F15B45]" : status === "DRAFT" ? "bg-[#F5A623]" : status === "TRIAL" ? "bg-[#36A269]" : "bg-[#9AA0AA]"}`} />
+              <View className={`h-2.5 w-2.5 rounded-full ${status === "RECORDING" ? "bg-[#F15B45]" : status === "DRAFT" ? "bg-[#F5A623]" : status === "PUBLISHED" ? "bg-[#36A269]" : "bg-[#9AA0AA]"}`} />
               <Text className="text-[10px] font-extrabold text-[#2B2233]">{status === "READY" ? "CHƯA BẮT ĐẦU" : status}</Text>
             </View>
             <Pressable onPress={() => void loadNearby()} className="absolute bottom-4 right-4 rounded-full bg-white px-4 py-3">
@@ -442,15 +469,44 @@ export default function RecordJourneyScreen() {
                   ? `${checkedInHotspots.length} địa điểm đã check-in · Route ID ${routeRecord?.routeId ?? "-"}`
                   : status === "DRAFT"
                     ? "Bản nháp đã sẵn sàng để cập nhật route và các story mặc định."
-                    : "Route đã được gửi lên hệ thống với trạng thái TRIAL."}
+                    : "Route đã được gửi lên hệ thống với trạng thái PUBLISHED."}
             </Text>
           </LinearGradient>
         </View>
 
+        {isPremiumLoaded && !isPremium ? (
+          <View className="mt-4 px-4">
+            <Pressable
+              onPress={() => router.push("/subscription/premium" as any)}
+              className="flex-row items-center gap-3 rounded-3xl bg-[#2B2233] p-4"
+            >
+              <View className="h-9 w-9 items-center justify-center rounded-full bg-[#EB489B]">
+                <SymbolView name={{ ios: "crown.fill", android: "workspace_premium", web: "workspace_premium" }} size={16} tintColor="#fff" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-[12px] font-extrabold text-white">Ghi hành trình là tính năng Premium</Text>
+                <Text className="mt-0.5 text-[10px] text-white/70">Nâng cấp để tự tạo hành trình cá nhân từ các hotspot bạn ghé qua</Text>
+              </View>
+              <Text className="text-[11px] font-extrabold text-[#EB489B]">Nâng cấp</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         {status === "READY" ? (
           <View className="mt-4 px-4">
-            <Pressable disabled={isStarting} onPress={() => void handleStart()} className="rounded-2xl bg-[#F15B45] py-4">
-              {isStarting ? <ActivityIndicator color="#fff" /> : <Text className="text-center text-[13px] font-extrabold text-white">Bắt đầu ghi hành trình</Text>}
+            <Pressable
+              disabled={isStarting || !isPremium}
+              onPress={() => void handleStart()}
+              className={`flex-row items-center justify-center gap-2 rounded-2xl py-4 ${isPremium ? "bg-[#F15B45]" : "bg-[#D9DDE7]"}`}
+            >
+              {isStarting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  {!isPremium ? <SymbolView name={{ ios: "lock.fill", android: "lock", web: "lock" }} size={13} tintColor="#8E869A" /> : null}
+                  <Text className={`text-center text-[13px] font-extrabold ${isPremium ? "text-white" : "text-[#8E869A]"}`}>Bắt đầu ghi hành trình</Text>
+                </>
+              )}
             </Pressable>
           </View>
         ) : null}
@@ -469,7 +525,7 @@ export default function RecordJourneyScreen() {
               {myJourneys.map((journey) => (
                 <Pressable
                   key={journey.routeId}
-                  onPress={() => { if (journey.status === "DRAFT" || journey.status === "TRIAL") applyRouteRecord(journey); }}
+                  onPress={() => { if (journey.status === "DRAFT" || journey.status === "PUBLISHED") applyRouteRecord(journey); }}
                   className={`rounded-2xl border p-3 ${journey.routeId === routeRecord?.routeId ? "border-[#EB489B] bg-[#FFF5FA]" : "border-[#E8EDF4] bg-white"}`}
                 >
                   <View className="flex-row items-center justify-between gap-3">
@@ -587,6 +643,17 @@ export default function RecordJourneyScreen() {
           {status === "DRAFT" ? (
             <>
               <Pressable onPress={() => routeSystemAlert.alert("Chỉnh sửa bản nháp", "Kết nối tiếp API update route và update story tại đây. Route ID hiện tại: " + routeRecord?.routeId)} className="rounded-2xl border border-[#E8EDF4] bg-white py-4"><Text className="text-center text-[13px] font-extrabold text-[#2B2233]">Xem và chỉnh sửa route/story</Text></Pressable>
+              <View className="rounded-2xl border border-[#E8EDF4] bg-white p-3">
+                <Text className="text-[10px] font-extrabold text-[#8E869A]">Mô tả hành trình (gửi kèm khi submit)</Text>
+                <TextInput
+                  value={finalizeDescription}
+                  onChangeText={setFinalizeDescription}
+                  placeholder="Mô tả ngắn về hành trình của bạn..."
+                  placeholderTextColor="#A09AA8"
+                  multiline
+                  className="mt-1 min-h-[44px] text-[12px] text-[#2B2233]"
+                />
+              </View>
               <Pressable disabled={isFinalizing} onPress={() => void handleFinalize()} className="rounded-2xl bg-[#EB489B] py-4">
                 {isFinalizing ? <ActivityIndicator color="#fff" /> : <Text className="text-center text-[13px] font-extrabold text-white">Submit route lên hệ thống</Text>}
               </Pressable>

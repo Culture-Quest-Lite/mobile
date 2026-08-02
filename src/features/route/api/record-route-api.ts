@@ -32,6 +32,7 @@ export type AuthRequest = {
 
 type FinalizeRecordRouteRequest = AuthRequest & {
   routeId: number | string;
+  description?: string;
 };
 
 function resolveUrl(path: string) {
@@ -94,6 +95,7 @@ async function requestRecordRoute(
   path: string,
   { accessToken, tokenType }: AuthRequest,
   method: "POST" | "PUT",
+  requestBody?: Record<string, unknown>,
 ): Promise<RecordRouteDto> {
   if (!accessToken.trim()) {
     throw new Error("Bạn cần đăng nhập để sử dụng chức năng ghi hành trình.");
@@ -105,7 +107,9 @@ async function requestRecordRoute(
       Accept: "application/json",
       Authorization: `${tokenType || "Bearer"} ${accessToken}`,
       "X-Client-Type": "mobile",
+      ...(requestBody ? { "Content-Type": "application/json" } : {}),
     },
+    ...(requestBody ? { body: JSON.stringify(requestBody) } : {}),
   });
 
   const text = await response.text();
@@ -138,12 +142,21 @@ export function finishRecordRoute(auth: AuthRequest) {
   return requestRecordRoute("/api/v1/routes/record/finish", auth, "PUT");
 }
 
-/** B4: submit một route DRAFT cụ thể và chuyển sang TRIAL. */
-export function finalizeRecordRoute({ accessToken, routeId, tokenType }: FinalizeRecordRouteRequest) {
+/**
+ * B4: submit một route DRAFT cụ thể và chuyển sang PUBLISHED.
+ *
+ * LƯU Ý: Backend (RouteController#finalizeRecordJourney) mapping là
+ * `PUT /api/v1/routes/record/finalize` (KHÔNG có routeId trên path) và nhận
+ * `FinalizeCustomRouteRequest { routeId, description }` qua JSON body.
+ * Bản cũ gọi `PUT /record/finalize/{routeId}` không kèm body -> luôn 404 vì
+ * sai path, đồng thời không có cách nào set được description.
+ */
+export function finalizeRecordRoute({ accessToken, routeId, description, tokenType }: FinalizeRecordRouteRequest) {
   return requestRecordRoute(
-    `/api/v1/routes/record/finalize/${routeId}`,
+    "/api/v1/routes/record/finalize",
     { accessToken, tokenType },
     "PUT",
+    { routeId: Number(routeId), description: description ?? "" },
   );
 }
 

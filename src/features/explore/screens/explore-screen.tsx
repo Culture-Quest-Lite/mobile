@@ -20,6 +20,7 @@ import { getValidAccessToken, useAuthSession } from '@/features/auth/hooks/use-a
 import { AppMap } from '@/features/map/components/app-map';
 import { getGamificationLevels } from '@/features/profile/api/get-levels';
 import { getMyProfile } from '@/features/profile/api/get-me';
+import { setPremiumStatusFromProfile, usePremiumStatus } from '@/features/profile/hooks/use-premium-status';
 import { applyLevelProgressToProfile } from '@/features/profile/lib/level-progress';
 import {
   type NearbyHotspotDto,
@@ -277,6 +278,7 @@ function ExploreMap({
 export default function ExploreScreen() {
   const router = useRouter();
   const session = useAuthSession();
+  const { requirePremium } = usePremiumStatus();
   const { width } = useWindowDimensions();
   const [activeCategory, setActiveCategory] = useState<string>('Tất cả');
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
@@ -342,6 +344,10 @@ export default function ExploreScreen() {
           if (!isActive) return;
 
           const resolvedName = profile.name.trim() || profile.username.trim();
+          // Đẩy isPremium vào store dùng chung để các màn/hành động Premium
+          // khác trong app (VD nút "Ghi hành trình") đọc được giá trị mới
+          // nhất mà không phải tự gọi lại getMyProfile().
+          setPremiumStatusFromProfile(profile.isPremium);
           setExplorerSummary({
             avatar: profile.avatar?.trim() || null,
             isPremium: profile.isPremium,
@@ -601,7 +607,10 @@ export default function ExploreScreen() {
           {/* Quick Actions Toolbar */}
           <View className="flex-row items-center justify-between rounded-2xl border border-[#FCDDEC] bg-[#FFF8FC] p-3 shadow-sm">
             <Pressable
-              onPress={() => router.push('/route/custom/plan')}
+              onPress={() => {
+                if (!requirePremium("Tạo kế hoạch hành trình (User Plan)")) return;
+                router.push('/route/custom/plan');
+              }}
               className="flex-1 items-center gap-1.5"
             >
               <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#7C3AED]">
@@ -624,7 +633,10 @@ export default function ExploreScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => router.push('/route/custom/record')}
+              onPress={() => {
+                if (!requirePremium('Ghi hành trình cá nhân (Record Journey)')) return;
+                router.push('/route/custom/record');
+              }}
               className="flex-1 items-center gap-1.5"
             >
               <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#EB489B]">

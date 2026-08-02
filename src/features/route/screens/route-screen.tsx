@@ -49,6 +49,7 @@ import {
   type UserRouteProgressDto,
 } from "@/features/route/api/route-api";
 import { getMyUserPlans, type UserPlan } from "@/features/route/api/user-plan-api";
+import { usePremiumStatus } from "@/features/profile/hooks/use-premium-status";
 
 type Tab = "official" | "active" | "completed" | "bookmarked" | "plans" | "journeys" | "community";
 type RouteVariant =
@@ -824,12 +825,16 @@ function ActiveProgressSummary({
 
 function UserPlanTab({ plans, error }: { plans: UserPlan[]; error: string | null }) {
   const router = useRouter();
+  const { requirePremium } = usePremiumStatus();
 
   return (
     <View className="gap-3">
       <Pressable
         className="overflow-hidden rounded-3xl"
-        onPress={() => router.push("/route/custom/plan" as Href)}
+        onPress={() => {
+          if (!requirePremium("Tạo kế hoạch hành trình (User Plan)")) return;
+          router.push("/route/custom/plan" as Href);
+        }}
       >
         <LinearGradient
           colors={["#7C5CFC", "#EB489B", "#F58752"]}
@@ -896,6 +901,7 @@ function MyJourneyTab({
   journeys: RecordRouteDto[];
 }) {
   const router = useRouter();
+  const { requirePremium } = usePremiumStatus();
 
   const grouped = useMemo(() => {
     const result: Record<string, RecordRouteDto[]> = {
@@ -958,7 +964,10 @@ function MyJourneyTab({
     <View className="gap-4">
       <Pressable
         className="overflow-hidden rounded-3xl"
-        onPress={() => router.push("/route/custom/record" as Href)}
+        onPress={() => {
+          if (!requirePremium("Ghi hành trình cá nhân (Record Journey)")) return;
+          router.push("/route/custom/record" as Href);
+        }}
       >
         <LinearGradient
           colors={["#E84D6A", "#EB489B", "#F58752"]}
@@ -1064,6 +1073,7 @@ function MyJourneyTab({
                       section.key === "RECORDING" ||
                       section.key === "DRAFT"
                     ) {
+                      if (!requirePremium("Ghi hành trình cá nhân (Record Journey)")) return;
                       router.push("/route/custom/record" as Href);
                       return;
                     }
@@ -1104,6 +1114,7 @@ function MyJourneyTab({
 
 function CommunityTab() {
   const router = useRouter();
+  const { requirePremium } = usePremiumStatus();
   const [showCustomRouteMenu, setShowCustomRouteMenu] = useState(false);
   const [showCustomRouteHelp, setShowCustomRouteHelp] = useState(false);
   const popular = useMemo(
@@ -1216,6 +1227,7 @@ function CommunityTab() {
               style={cardShadowStyle}
               onPress={() => {
                 setShowCustomRouteMenu(false);
+                if (!requirePremium("Tạo kế hoạch hành trình (User Plan)")) return;
                 router.push("/route/custom/plan" as Href);
               }}
             >
@@ -1248,6 +1260,7 @@ function CommunityTab() {
               style={cardShadowStyle}
               onPress={() => {
                 setShowCustomRouteMenu(false);
+                if (!requirePremium("Ghi hành trình cá nhân (Record Journey)")) return;
                 router.push("/route/custom/record" as Href);
               }}
             >

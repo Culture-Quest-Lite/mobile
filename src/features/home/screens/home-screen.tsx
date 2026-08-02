@@ -37,6 +37,7 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 import { getGamificationLevels } from "@/features/profile/api/get-levels";
 import { getMyProfile } from "@/features/profile/api/get-me";
+import { setPremiumStatusFromProfile } from "@/features/profile/hooks/use-premium-status";
 import { applyLevelProgressToProfile } from "@/features/profile/lib/level-progress";
 import {
   type RouteDto,
@@ -2068,6 +2069,11 @@ export default function HomeScreen() {
           }
 
           const resolvedName = profile.name.trim() || profile.username.trim();
+
+          // Đẩy isPremium vào store dùng chung để mọi màn hình/hành động
+          // Premium khác trong app (record journey, user plan...) đọc được
+          // giá trị mới nhất mà không phải tự gọi lại getMyProfile().
+          setPremiumStatusFromProfile(profile.isPremium);
 
           setExplorerSummary({
             avatar: profile.avatar?.trim() || null,
