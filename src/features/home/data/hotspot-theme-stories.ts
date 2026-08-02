@@ -17,6 +17,7 @@ const foodTagImage = require("../../../../assets/images/amthuc.png");
 const educationTagImage = require("../../../../assets/images/giaoduc.png");
 
 export type StoryThemeTag = "history" | "culture" | "food" | "education";
+type StoryThemeTagImageSource = number | string;
 
 export type HotspotThemeStory = {
   audioDescription: string;
@@ -38,7 +39,7 @@ export type HotspotThemeStory = {
   summary: string;
   tagId?: number | null;
   tag: StoryThemeTag;
-  tagImageSource: number;
+  tagImageSource: StoryThemeTagImageSource;
   tagLabel: string;
   textWidth: number;
   title: string;
@@ -467,6 +468,8 @@ export function buildHotspotThemeStoriesFromApi(
     const nextParagraphs = splitApiStoryParagraphs(story.content);
     const nextTitle = story.title.trim() || fallbackStory.title;
     const nextTagLabel = story.tag?.tagName.trim() || fallbackStory.tagLabel;
+    const nextTagImageSource =
+      story.tag?.imageUrl?.trim() || fallbackStory.tagImageSource;
     const nextSummary =
       buildSummaryFromContent(story.content) ?? fallbackStory.summary;
     const nextAudioScript = story.audioScript.trim();
@@ -490,6 +493,7 @@ export function buildHotspotThemeStoriesFromApi(
       summary: nextSummary,
       tagId: story.tag?.tagId ?? null,
       tag: resolvedTag,
+      tagImageSource: nextTagImageSource,
       tagLabel: nextTagLabel,
       title: nextTitle,
       videoDescription: videoUrl

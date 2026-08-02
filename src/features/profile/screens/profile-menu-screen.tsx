@@ -3,6 +3,7 @@ import { type Href, useRouter } from "expo-router";
 import { SymbolView } from "@/components/ui/symbol-view";
 import {
   Pressable,
+  ScrollView,
   Text as RNText,
   View,
   type TextProps,
@@ -136,9 +137,12 @@ export default function ProfileMenuScreen() {
       className="flex-1 bg-white"
       edges={["left", "right", "bottom"]}
     >
-      <View
+      <ScrollView
         className="flex-1 bg-white"
-        style={{ paddingBottom: Math.max(insets.bottom, 12) + 12 }}
+        contentContainerStyle={{
+          paddingBottom: Math.max(insets.bottom, 12) + 12,
+        }}
+        showsVerticalScrollIndicator={false}
       >
         <LinearGradient
           colors={gradientColors}
@@ -207,7 +211,7 @@ export default function ProfileMenuScreen() {
             </View>
           )}
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

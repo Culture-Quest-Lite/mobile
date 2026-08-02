@@ -7,6 +7,7 @@ type LikePostRequest = {
 };
 
 export type LikePostResult = {
+  isLiked: boolean | null;
   likeCount: number | null;
 };
 
@@ -26,6 +27,10 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function readNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readBoolean(value: unknown) {
+  return typeof value === "boolean" ? value : null;
 }
 
 async function parseResponseBody(response: Response) {
@@ -72,6 +77,22 @@ function parseLikeCount(body: unknown) {
   return null;
 }
 
+function parseIsLiked(body: unknown) {
+  if (!isObject(body)) {
+    return null;
+  }
+
+  for (const key of ["isLiked", "liked"]) {
+    const value = readBoolean(body[key]);
+
+    if (value !== null) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
 export async function likePost({
   accessToken,
   postId,
@@ -98,6 +119,7 @@ export async function likePost({
   }
 
   return {
+    isLiked: parseIsLiked(body),
     likeCount: parseLikeCount(body),
   };
 }

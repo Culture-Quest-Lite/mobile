@@ -36,7 +36,6 @@ function mergeProfileWithFallback(
 
   return {
     ...profile,
-    avatar: profile.avatar ?? fallbackProfile.avatar,
     cover: profile.cover ?? fallbackProfile.cover,
   };
 }
@@ -66,9 +65,7 @@ function mergeProfilePosts(remotePosts: ProfilePost[], cachedPosts: ProfilePost[
   const mergedPostsById = new Map(remotePosts.map((post) => [post.id, post] as const));
 
   for (const cachedPost of cachedPosts) {
-    if (!mergedPostsById.has(cachedPost.id)) {
-      mergedPostsById.set(cachedPost.id, cachedPost);
-    }
+    mergedPostsById.set(cachedPost.id, cachedPost);
   }
 
   return Array.from(mergedPostsById.values()).sort(

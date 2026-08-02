@@ -7,6 +7,7 @@ import { isPublishedHotspotStatus } from "./hotspot-status";
 export type NearbyHotspotTagDto = {
   createdAt: string;
   hotspotCount: number | null;
+  imageUrl?: string | null;
   tagId: number;
   tagName: string;
   tagStatus: string;
@@ -27,6 +28,7 @@ export type NearbyHotspotMediaDto = {
 
 export type NearbyHotspotStoryTagDto = {
   createdAt: string;
+  imageUrl?: string | null;
   tagId: number;
   tagName: string;
   tagStatus: string;
@@ -107,6 +109,10 @@ function readString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+function readNullableString(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
 function readNullableBoolean(value: unknown) {
   if (typeof value === "boolean") {
     return value;
@@ -129,6 +135,7 @@ function parseTag(value: unknown): NearbyHotspotTagDto | null {
   return {
     createdAt: readString(value.createdAt),
     hotspotCount: readNumber(value.hotspotCount),
+    imageUrl: readNullableString(value.imageUrl)?.trim() || null,
     tagId,
     tagName: readString(value.tagName),
     tagStatus: readString(value.tagStatus),
@@ -173,6 +180,7 @@ function parseStoryTag(value: unknown): NearbyHotspotStoryTagDto | null {
 
   return {
     createdAt: readString(value.createdAt),
+    imageUrl: readNullableString(value.imageUrl)?.trim() || null,
     tagId,
     tagName: readString(value.tagName),
     tagStatus: readString(value.tagStatus),

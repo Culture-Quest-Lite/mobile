@@ -1,9 +1,19 @@
 import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { type ComponentProps } from "react";
 import { Pressable, Text, View } from "react-native";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
+
+const hiddenStoryUnlockedImage = require("../../../../assets/images/review_post.png");
+
+export const hiddenStoryActionGradientColors = [
+  "#F19AC5",
+  "#F4AA7F",
+  "#F6D16D",
+] as const;
+export const hiddenStoryActionForegroundColor = "#7F2E55";
 
 const cardShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.08)",
@@ -17,7 +27,7 @@ const cardShadowStyle = {
 } as const;
 
 const buttonShadowStyle = {
-  shadowColor: "rgba(235, 72, 155, 0.22)",
+  shadowColor: "rgba(215, 74, 143, 0.2)",
   shadowOpacity: 1,
   shadowRadius: 18,
   shadowOffset: {
@@ -36,95 +46,72 @@ export function HiddenStoryUnlockedContent({
 }) {
   return (
     <LinearGradient
-      colors={["#FFF3F7", "#FFF7EE"]}
+      colors={["#FFF5FA", "#FFF9F2"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      className="items-center rounded-[30px] px-5 py-8"
-      style={cardShadowStyle}
+      className="items-center rounded-[20px] px-5 py-4"
+      style={[
+        cardShadowStyle,
+        {
+          borderColor: "#F9DCE8",
+          borderWidth: 1,
+        },
+      ]}
     >
-      <LinearGradient
-        colors={["#34D399", "#16A34A"]}
-        end={{ x: 1, y: 1 }}
-        start={{ x: 0, y: 0 }}
-        className="h-16 w-16 items-center justify-center rounded-full"
+      <View
+        className="w-[224px] overflow-hidden rounded-[14px] bg-[#FFF4F8]"
+        style={{ aspectRatio: 14 / 11, maxWidth: "100%" }}
       >
-        <SymbolView
-          name={
-            {
-              ios: "checkmark",
-              android: "check",
-              web: "check",
-            } as SymbolName
-          }
-          size={22}
-          tintColor="#FFFFFF"
+        <Image
+          source={hiddenStoryUnlockedImage}
+          contentFit="cover"
+          contentPosition="center"
+          style={{ height: "100%", width: "100%" }}
         />
-      </LinearGradient>
+      </View>
 
-      <Text className="mt-5 text-center text-[19px] font-black text-[#3B2A32]">
+      <Text className="mt-1 text-center text-[17px] font-black text-[#3B2A32]">
         Câu chuyện đã mở khóa
       </Text>
 
-      <Text className="mt-3 max-w-[320px] text-center text-[14px] leading-5 text-[#6A5964]">
+      <Text
+        className="mt-0.5 max-w-[320px] text-center text-[13px] text-[#6A5964]"
+        style={{ lineHeight: 16 }}
+      >
         {`Bạn đã check-in tại hotspot này. Story hotspot ${audioStoryDurationLabel} và nội dung độc quyền đã sẵn sàng.`}
       </Text>
 
-      <View className="mt-6 w-full flex-row gap-3">
-        <View className="flex-1 overflow-hidden rounded-full" style={buttonShadowStyle}>
-          <LinearGradient
-            colors={["#34D399", "#16A34A"]}
-            end={{ x: 1, y: 0.5 }}
-            locations={[0, 1]}
-            start={{ x: 0, y: 0.5 }}
-            className="flex-row items-center justify-center px-5 py-3.5"
-            style={{ opacity: 0.9 }}
-          >
-            <SymbolView
-              name={
-                {
-                  ios: "checkmark.circle.fill",
-                  android: "check_circle",
-                  web: "check_circle",
-                } as SymbolName
-              }
-              size={15}
-              tintColor="#FFFFFF"
-            />
-            <Text className="ml-2 text-[14px] font-black text-white">
-              Đã check-in
-            </Text>
-          </LinearGradient>
-        </View>
-
-        <Pressable
-          className="flex-1 overflow-hidden rounded-full"
-          onPress={onListenStories}
-          style={buttonShadowStyle}
+      <Pressable
+        className="mt-3 w-full overflow-hidden rounded-full"
+        onPress={onListenStories}
+        style={buttonShadowStyle}
+      >
+        <LinearGradient
+          colors={hiddenStoryActionGradientColors}
+          end={{ x: 1, y: 0.5 }}
+          locations={[0, 0.58, 1]}
+          start={{ x: 0, y: 0.5 }}
+          className="flex-row items-center justify-center px-5 py-3"
         >
-          <LinearGradient
-            colors={["#EB489B", "#F58752", "#FFC93C"]}
-            end={{ x: 1, y: 0.5 }}
-            locations={[0, 0.58, 1]}
-            start={{ x: 0, y: 0.5 }}
-            className="flex-row items-center justify-center px-5 py-3.5"
+          <SymbolView
+            name={
+              {
+                ios: "speaker.wave.2.fill",
+                android: "volume_up",
+                web: "volume_up",
+              } as SymbolName
+            }
+            size={15}
+            tintColor={hiddenStoryActionForegroundColor}
+          />
+          <Text
+            className="ml-2 text-[13px] font-black"
+            style={{ color: hiddenStoryActionForegroundColor }}
           >
-            <SymbolView
-              name={
-                {
-                  ios: "speaker.wave.2.fill",
-                  android: "volume_up",
-                  web: "volume_up",
-                } as SymbolName
-              }
-              size={15}
-              tintColor="#FFFFFF"
-            />
-            <Text className="ml-2 text-[14px] font-black text-white">
-              Xem story
-            </Text>
-          </LinearGradient>
-        </Pressable>
-      </View>
+            Xem story
+          </Text>
+        </LinearGradient>
+      </Pressable>
     </LinearGradient>
   );
 }

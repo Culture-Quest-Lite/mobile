@@ -14,6 +14,7 @@ type GetUnlockedHotspotStoriesRequest = GetHotspotStoriesRequest;
 export type HotspotStoryTagDto = {
   createdAt: string;
   hotspotCount: number | null;
+  imageUrl?: string | null;
   tagId: number;
   tagName: string;
   tagStatus: string;
@@ -82,6 +83,10 @@ function readString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+function readNullableString(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
 function parseTag(value: unknown): HotspotStoryTagDto | null {
   if (!isObject(value)) {
     return null;
@@ -96,6 +101,7 @@ function parseTag(value: unknown): HotspotStoryTagDto | null {
   return {
     createdAt: readString(value.createdAt),
     hotspotCount: readNumber(value.hotspotCount),
+    imageUrl: readNullableString(value.imageUrl)?.trim() || null,
     tagId,
     tagName: readString(value.tagName),
     tagStatus: readString(value.tagStatus),

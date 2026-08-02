@@ -1,12 +1,13 @@
 import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useState, type ComponentProps } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import {
+  ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -24,56 +25,79 @@ import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
-import {
-  getCreatedPostRewardMessage,
-  isCreatedPostApproved,
-  isCreatedPostPending,
-} from "@/features/home/lib/created-post-feedback";
-import { cacheProfilePost } from "@/features/profile/data/profile-post-cache";
-import { mapCreatedPostToProfilePost } from "@/features/profile/lib/map-created-post-to-profile-post";
 
-import { createPost, type PostVisibility } from "../api/create-post";
+import {
+  createReview,
+  isDuplicateReviewError,
+  maxReviewRating,
+  minReviewRating,
+} from "../api/create-review";
+import { getHotspotById } from "../api/get-hotspot-by-id";
+import { updateReview } from "../api/review-mutations";
+import { ReviewDuplicateDialog } from "../components/review-duplicate-dialog";
+import { ReviewSuccessOverlay } from "../components/review-success-overlay";
 import { avatarImageUri } from "../data/home-screen.mock";
 import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
-import { getHotspotBySlug } from "../data/hotspots";
+import {
+  clearCachedHotspotReviewForEdit,
+  getCachedHotspotReviewForEdit,
+} from "../data/hotspot-review-edit-cache";
+import {
+  getApiHotspotRouteSlug,
+  getHotspotBySlug,
+  getHotspotHref,
+} from "../data/hotspots";
 import { resolveSelectedHotspotId } from "../utils/resolve-selected-hotspot-id";
 
 type TextProps = ComponentProps<typeof RNText>;
+type LoadedReviewHotspot = {
+  hotspotId: number;
+  name: string;
+};
 type ComposerMediaItem = {
-  durationLabel?: string;
   fileName: string;
+  mediaId?: number;
   mimeType: string;
+  sizeLabel?: string;
   type: "image" | "video";
   uri: string;
 };
+type ReviewSuccessState = {
+  isPending: boolean;
+  mode: "created" | "updated";
+};
 
 const detailTextMaxFontSizeMultiplier = 1.05;
-const loginGradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
-const detailContentHorizontalPadding = 23;
-const sectionMutedTextColor = "#7A6F67";
-const sectionBodyTextColor = "#6F657A";
-const publishVisibility: PostVisibility = "PUBLIC";
-const submitFooterInset = 118;
-const cardShadowStyle = {
-  shadowColor: "rgba(235, 72, 155, 0.08)",
-  shadowOpacity: 1,
-  shadowRadius: 14,
-  shadowOffset: {
-    width: 0,
-    height: 10,
-  },
-  elevation: 4,
-} as const;
-const buttonShadowStyle = {
-  shadowColor: "rgba(235, 72, 155, 0.22)",
-  shadowOpacity: 1,
-  shadowRadius: 18,
-  shadowOffset: {
-    width: 0,
-    height: 10,
-  },
-  elevation: 6,
-} as const;
+const pageHorizontalPadding = 16;
+const fieldBorderColor = "#E9EAEE";
+const dividerColor = "#F1F1F4";
+const accentColor = "#EB489B";
+const accentSoftBackgroundColor = "#FFF3F8";
+const accentSoftBorderColor = "#FBD3E5";
+const primaryTextColor = "#1B1B1F";
+const mutedTextColor = "#6B7280";
+const subtleTextColor = "#9CA3AF";
+const requiredMarkColor = "#E4483C";
+const starActiveColor = "#F5A524";
+const starInactiveColor = "#F3CE95";
+const mediaSoftBackgroundColor = "#FAFAFB";
+const mediaSoftBorderColor = "#DCDFE4";
+const maxCommentLength = 2000;
+const maxMediaCount = 10;
+const mediaThumbWidth = 88;
+const mediaTileHeight = 104;
+const addMediaTileWidth = 96;
+const ratingStars = Array.from(
+  { length: maxReviewRating - minReviewRating + 1 },
+  (_, index) => minReviewRating + index,
+);
+const ratingLabels: Record<number, string> = {
+  1: "Rất không hài lòng",
+  2: "Chưa hài lòng",
+  3: "Bình thường",
+  4: "Hài lòng",
+  5: "Tuyệt vời",
+};
 
 function Text({
   maxFontSizeMultiplier = detailTextMaxFontSizeMultiplier,
@@ -132,6 +156,46 @@ function buildFallbackFileName(
   return `hotspot-review-${Date.now()}-${order}.${extension}`;
 }
 
+function formatMediaFileSize(fileSize?: number | null) {
+  if (typeof fileSize !== "number" || !Number.isFinite(fileSize) || fileSize <= 0) {
+    return undefined;
+  }
+
+  if (fileSize >= 1024 * 1024) {
+    return `${(fileSize / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  return `${(fileSize / 1024).toFixed(2)} KB`;
+}
+
+function resolvePositiveIntegerParam(value?: string | string[]) {
+  const normalizedValue = Array.isArray(value) ? value[0] : value;
+  const parsedValue = Number(normalizedValue);
+
+  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
+}
+
+function RequiredFieldLabel({ label }: { label: string }) {
+  return (
+    <Text
+      className="text-[14px] font-semibold"
+      style={{ color: primaryTextColor, lineHeight: 18 }}
+    >
+      {`${label} `}
+      <Text
+        className="text-[14px] font-semibold"
+        style={{ color: requiredMarkColor }}
+      >
+        *
+      </Text>
+    </Text>
+  );
+}
+
+function SectionDivider() {
+  return <View className="mt-2 h-px" style={{ backgroundColor: dividerColor }} />;
+}
+
 function ReviewMediaPreview({
   item,
   onRemove,
@@ -140,37 +204,49 @@ function ReviewMediaPreview({
   onRemove: () => void;
 }) {
   return (
-    <View
-      className="overflow-hidden rounded-[22px]"
-      style={[cardShadowStyle, { height: 116, width: "31.5%" }]}
-    >
-      <Image
-        source={item.uri}
-        contentFit="cover"
-        transition={120}
-        cachePolicy="memory-disk"
-        style={{ height: "100%", width: "100%" }}
-      />
+    <View style={{ width: mediaThumbWidth }}>
+      <View
+        className="overflow-hidden rounded-[12px] bg-[#F2F4F7]"
+        style={{ height: mediaTileHeight, width: mediaThumbWidth }}
+      >
+        <Image
+          source={item.uri}
+          contentFit="cover"
+          transition={120}
+          cachePolicy="memory-disk"
+          style={{ height: "100%", width: "100%" }}
+        />
 
-      {item.type === "video" ? (
-        <View className="absolute inset-0 items-center justify-center bg-black/20">
-          <View className="h-10 w-10 items-center justify-center rounded-full bg-black/35">
-            <SymbolView
-              name={{
-                ios: "play.fill",
-                android: "play_arrow",
-                web: "play_arrow",
-              }}
-              size={18}
-              tintColor="#FFFFFF"
-            />
+        {item.type === "video" ? (
+          <View className="absolute inset-0 items-center justify-center bg-black/20">
+            <View className="h-8 w-8 items-center justify-center rounded-full bg-black/45">
+              <SymbolView
+                name={{
+                  ios: "play.fill",
+                  android: "play_arrow",
+                  web: "play_arrow",
+                }}
+                size={16}
+                tintColor="#FFFFFF"
+              />
+            </View>
           </View>
-        </View>
-      ) : null}
+        ) : null}
+      </View>
 
       <Pressable
-        className="absolute right-2 top-2 h-7 w-7 items-center justify-center rounded-full bg-black/60"
+        accessibilityLabel={`Xoá ${item.fileName}`}
+        accessibilityRole="button"
+        className="absolute h-6 w-6 items-center justify-center rounded-full"
+        hitSlop={8}
         onPress={onRemove}
+        style={{
+          backgroundColor: mutedTextColor,
+          borderColor: "#FFFFFF",
+          borderWidth: 1.5,
+          right: -6,
+          top: -6,
+        }}
       >
         <SymbolView
           name={{
@@ -178,10 +254,27 @@ function ReviewMediaPreview({
             android: "close",
             web: "close",
           }}
-          size={14}
+          size={11}
           tintColor="#FFFFFF"
         />
       </Pressable>
+
+      <Text
+        className="mt-1.5 text-[11px]"
+        numberOfLines={1}
+        style={{ color: mutedTextColor, lineHeight: 14 }}
+      >
+        {item.fileName}
+      </Text>
+
+      {item.sizeLabel ? (
+        <Text
+          className="mt-0.5 text-[11px]"
+          style={{ color: subtleTextColor, lineHeight: 14 }}
+        >
+          {item.sizeLabel}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -191,6 +284,7 @@ export default function HotspotReviewComposeScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     hotspotId?: string | string[];
+    reviewId?: string | string[];
     slug?: string | string[];
     title?: string | string[];
   }>();
@@ -198,10 +292,21 @@ export default function HotspotReviewComposeScreen() {
   const resolvedSlug = Array.isArray(params.slug)
     ? (params.slug[0] ?? "")
     : (params.slug ?? "");
-  const resolvedHotspotId = resolveSelectedHotspotId({
+  const routeHotspotId = resolveSelectedHotspotId({
     hotspotId: params.hotspotId,
     slug: resolvedSlug,
   });
+  const resolvedReviewId = resolvePositiveIntegerParam(params.reviewId);
+  const editingReview =
+    resolvedReviewId !== null
+      ? getCachedHotspotReviewForEdit(resolvedReviewId)
+      : null;
+  const isEditMode = resolvedReviewId !== null;
+  const resolvedHotspotId =
+    routeHotspotId ??
+    (editingReview && editingReview.targetId > 0
+      ? editingReview.targetId
+      : null);
   const routeHotspotTitle = Array.isArray(params.title)
     ? (params.title[0] ?? "")
     : (params.title ?? "");
@@ -210,30 +315,165 @@ export default function HotspotReviewComposeScreen() {
     slug: resolvedSlug,
   });
   const hotspot = cachedHotspotEntry?.hotspot ?? getHotspotBySlug(resolvedSlug);
-  const resolvedHotspotTitle =
-    hotspot?.title.trim() ||
-    routeHotspotTitle.trim() ||
-    resolvedSlug.trim() ||
-    "Bài đánh giá mới";
+  const fallbackHotspotName =
+    hotspot?.title.trim() || routeHotspotTitle.trim() || resolvedSlug.trim() || "";
   const authorDisplayName =
-    authSession.displayName.trim() || authSession.username?.trim() || "Bạn";
-  const [draftText, setDraftText] = useState("");
+    editingReview?.displayName.trim() ||
+    authSession.displayName.trim() ||
+    authSession.username?.trim() ||
+    "Bạn";
+  const composerAvatarUri =
+    editingReview?.avatarUrl.trim() || avatarImageUri;
+  const initialMediaIds = editingReview?.medias.map((media) => media.mediaId) ?? [];
+  const [draftText, setDraftText] = useState(
+    () => editingReview?.comment ?? "",
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedMedia, setSelectedMedia] = useState<ComposerMediaItem[]>([]);
-  const submitDisabledReason = !authSession.isAuthenticated
-    ? "Đăng nhập để đăng bài đánh giá."
-    : resolvedHotspotId === null
-      ? "Không xác định được hotspot để gắn bài viết."
-      : !draftText.trim()
-        ? "Nhập nội dung đánh giá để bật nút đăng bài."
-        : null;
-  const isSubmitDisabled =
-    submitDisabledReason !== null ||
-    isSubmitting;
+  const [rating, setRating] = useState(() => {
+    const initialRating = Math.round(editingReview?.rating ?? 0);
+
+    return initialRating >= minReviewRating && initialRating <= maxReviewRating
+      ? initialRating
+      : 0;
+  });
+  const [selectedMedia, setSelectedMedia] = useState<ComposerMediaItem[]>(() =>
+    editingReview?.medias.map((media, index) => {
+      const normalizedMediaType = media.mediaType.trim().toUpperCase();
+      const normalizedMimeType = media.mimeType.trim();
+      const type =
+        normalizedMediaType === "VIDEO" ||
+        normalizedMimeType.toLowerCase().startsWith("video/")
+          ? ("video" as const)
+          : ("image" as const);
+
+      return {
+        fileName:
+          media.fileName.trim() ||
+          buildFallbackFileName(type, normalizedMimeType, index + 1),
+        mediaId: media.mediaId,
+        mimeType:
+          normalizedMimeType ||
+          (type === "video" ? "video/mp4" : "image/jpeg"),
+        sizeLabel: formatMediaFileSize(media.fileSize),
+        type,
+        uri: media.url,
+      };
+    }) ?? [],
+  );
+  const [loadedHotspot, setLoadedHotspot] = useState<LoadedReviewHotspot | null>(
+    null,
+  );
+  const [reviewSuccessState, setReviewSuccessState] =
+    useState<ReviewSuccessState | null>(null);
+  const [isDuplicateDialogVisible, setIsDuplicateDialogVisible] =
+    useState(false);
+  const trimmedDraftText = draftText.trim();
+  // Tên hotspot chỉ dùng khi payload đã tải khớp với hotspot đang đánh giá.
+  const remoteHotspot =
+    loadedHotspot?.hotspotId === resolvedHotspotId ? loadedHotspot : null;
+  const isHotspotNameLoading =
+    resolvedHotspotId !== null && remoteHotspot === null;
+  const resolvedHotspotName = remoteHotspot?.name || fallbackHotspotName;
+  const hotspotDetailSlug =
+    resolvedSlug.trim() ||
+    (resolvedHotspotId !== null ? getApiHotspotRouteSlug(resolvedHotspotId) : "");
+  const locationLabel =
+    resolvedHotspotName ||
+    (isHotspotNameLoading
+      ? "Đang tải tên địa điểm..."
+      : "Chưa xác định địa điểm");
+  useEffect(() => {
+    if (resolvedHotspotId === null) {
+      return;
+    }
+
+    let isActive = true;
+
+    async function loadHotspotName(hotspotId: number) {
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const nextHotspot = await getHotspotById({
+          accessToken,
+          hotspotId,
+          tokenType: authSession.tokenType,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setLoadedHotspot({
+          hotspotId,
+          name: nextHotspot.hotspotName.trim(),
+        });
+      } catch (error) {
+        console.warn("[reviews] load review hotspot name failed", {
+          error: error instanceof Error ? error.message : error,
+          hotspotId,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        // Đánh dấu đã tải xong để hàng địa điểm rơi về tên trong cache.
+        setLoadedHotspot({ hotspotId, name: "" });
+      }
+    }
+
+    void loadHotspotName(resolvedHotspotId);
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId]);
+
+  const handleOpenHotspotDetail = () => {
+    if (!hotspotDetailSlug) {
+      Alert.alert(
+        "Địa điểm đánh giá",
+        "Không xác định được hotspot để mở trang chi tiết.",
+      );
+      return;
+    }
+
+    router.push(getHotspotHref(hotspotDetailSlug, resolvedHotspotId));
+  };
+
+  const handleLeaveComposer = () => {
+    setReviewSuccessState(null);
+
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    if (hotspotDetailSlug) {
+      router.replace(getHotspotHref(hotspotDetailSlug, resolvedHotspotId));
+      return;
+    }
+
+    router.replace("/home");
+  };
+
+  const handleContinueExplore = () => {
+    setReviewSuccessState(null);
+    router.replace("/explore");
+  };
+
+  const handleEditExistingReview = () => {
+    setIsDuplicateDialogVisible(false);
+    handleLeaveComposer();
+  };
 
   const handlePickMedia = async () => {
-    if (selectedMedia.length >= 6) {
-      Alert.alert("Đã đủ media", "Bạn có thể thêm tối đa 6 ảnh hoặc video.");
+    if (selectedMedia.length >= maxMediaCount) {
+      Alert.alert(
+        "Đã đủ media",
+        `Bạn có thể thêm tối đa ${maxMediaCount} ảnh hoặc video.`,
+      );
       return;
     }
 
@@ -266,7 +506,6 @@ export default function HotspotReviewComposeScreen() {
     setSelectedMedia((current) => [
       ...current,
       {
-        durationLabel: asset.type === "video" ? "Video" : undefined,
         fileName:
           asset.fileName?.trim() ||
           buildFallbackFileName(
@@ -277,6 +516,7 @@ export default function HotspotReviewComposeScreen() {
         mimeType:
           asset.mimeType?.trim() ||
           (asset.type === "video" ? "video/mp4" : "image/jpeg"),
+        sizeLabel: formatMediaFileSize(asset.fileSize),
         type: asset.type === "video" ? "video" : "image",
         uri: asset.uri,
       },
@@ -287,7 +527,15 @@ export default function HotspotReviewComposeScreen() {
     if (!authSession.isAuthenticated) {
       Alert.alert(
         "Cần đăng nhập",
-        "Bạn cần đăng nhập để đăng bài đánh giá lên hệ thống.",
+        `Bạn cần đăng nhập để ${isEditMode ? "chỉnh sửa" : "đăng"} bài đánh giá.`,
+      );
+      return;
+    }
+
+    if (isEditMode && (!editingReview || !editingReview.isOwner)) {
+      Alert.alert(
+        "Không thể chỉnh sửa",
+        "Không tìm thấy dữ liệu bài đánh giá của bạn. Hãy quay lại và mở lại menu chỉnh sửa.",
       );
       return;
     }
@@ -295,7 +543,23 @@ export default function HotspotReviewComposeScreen() {
     if (resolvedHotspotId === null) {
       Alert.alert(
         "Thiếu hotspot",
-        "Không xác định được hotspot hiện tại để gắn vào bài viết.",
+        "Không xác định được hotspot hiện tại để gắn vào bài đánh giá.",
+      );
+      return;
+    }
+
+    if (rating < minReviewRating) {
+      Alert.alert(
+        "Thiếu số sao",
+        "Hãy chọn số sao đánh giá trước khi gửi bài.",
+      );
+      return;
+    }
+
+    if (!trimmedDraftText) {
+      Alert.alert(
+        "Thiếu cảm nhận",
+        "Hãy chia sẻ cảm nhận của bạn trước khi gửi bài đánh giá.",
       );
       return;
     }
@@ -313,42 +577,74 @@ export default function HotspotReviewComposeScreen() {
     setIsSubmitting(true);
 
     try {
-      const createdPost = await createPost({
+      if (isEditMode && editingReview && resolvedReviewId !== null) {
+        const selectedExistingMediaIds = new Set(
+          selectedMedia
+            .map((media) => media.mediaId)
+            .filter((mediaId): mediaId is number => mediaId !== undefined),
+        );
+
+        await updateReview({
+          accessToken,
+          comment: draftText,
+          files: selectedMedia
+            .filter((media) => media.mediaId === undefined)
+            .map((media) => ({
+              fileName: media.fileName,
+              mimeType: media.mimeType,
+              uri: media.uri,
+            })),
+          rating,
+          removedMediaIds: initialMediaIds.filter(
+            (mediaId) => !selectedExistingMediaIds.has(mediaId),
+          ),
+          reviewId: resolvedReviewId,
+          tokenType: authSession.tokenType,
+        });
+
+        clearCachedHotspotReviewForEdit(resolvedReviewId);
+        Keyboard.dismiss();
+        setReviewSuccessState({
+          isPending: false,
+          mode: "updated",
+        });
+        return;
+      }
+
+      const createdReview = await createReview({
         accessToken,
-        content: draftText,
+        comment: draftText,
         files: selectedMedia.map((media) => ({
           fileName: media.fileName,
           mimeType: media.mimeType,
           uri: media.uri,
         })),
-        hotspotIds: [resolvedHotspotId],
+        rating,
+        targetId: resolvedHotspotId,
+        targetType: "HOTSPOT",
         tokenType: authSession.tokenType,
-        visibility: publishVisibility,
       });
-      cacheProfilePost(mapCreatedPostToProfilePost(createdPost));
-      const rewardMessage = getCreatedPostRewardMessage(createdPost);
-      const successMessage = isCreatedPostPending(createdPost)
-        ? "Bài viết đã được gửi lên hệ thống và hiện chỉ hiển thị trong hồ sơ của bạn để chờ duyệt."
-        : isCreatedPostApproved(createdPost)
-          ? "Bài viết đã được duyệt và có thể xuất hiện ở hotspot tương ứng."
-          : "Bài viết đã được gửi lên hệ thống và được lưu trong hồ sơ của bạn.";
+
+      Keyboard.dismiss();
+      setReviewSuccessState({
+        isPending:
+          (createdReview.status.trim() || "APPROVED").toUpperCase() ===
+          "PENDING",
+        mode: "created",
+      });
+    } catch (error) {
+      if (isDuplicateReviewError(error)) {
+        setIsDuplicateDialogVisible(true);
+        return;
+      }
 
       Alert.alert(
-        "Đăng bài thành công",
-        rewardMessage ? `${successMessage} ${rewardMessage}` : successMessage,
-        [
-          {
-            text: "OK",
-            onPress: () => router.back(),
-          },
-        ],
-      );
-    } catch (error) {
-      Alert.alert(
-        "Không thể đăng bài",
+        isEditMode ? "Không thể cập nhật" : "Không thể đăng bài",
         error instanceof Error
           ? error.message
-          : "Đã có lỗi xảy ra khi gửi bài viết.",
+          : `Đã có lỗi xảy ra khi ${
+              isEditMode ? "cập nhật" : "gửi"
+            } bài đánh giá.`,
       );
     } finally {
       setIsSubmitting(false);
@@ -365,101 +661,202 @@ export default function HotspotReviewComposeScreen() {
           className="flex-1"
           keyboardVerticalOffset={0}
         >
-        <View
-          className="flex-row items-center justify-between py-3"
-          style={{ paddingHorizontal: detailContentHorizontalPadding }}
-        >
-          <Pressable
-            className="h-11 w-11 items-center justify-center rounded-full bg-[#F7EFF6]"
-            hitSlop={8}
-            onPress={() => router.back()}
-          >
-            <SymbolView
-              name={{
-                ios: "chevron.left",
-                android: "arrow_back",
-                web: "arrow_back",
-              }}
-              size={19}
-              tintColor="#2F242C"
-            />
-          </Pressable>
-
-          <View className="flex-1 items-center px-3">
-            <Text className="text-center text-[16px] font-semibold text-[#2B2233]">
-              Chia sẻ bài đánh giá
-            </Text>
-            <Text
-              className="mt-0.5 text-center text-[12px] font-semibold"
-              style={{ color: sectionMutedTextColor, lineHeight: 14 }}
+          <View className="flex-row items-center bg-white px-3 py-2.5">
+            <Pressable
+              accessibilityLabel="Quay lại"
+              accessibilityRole="button"
+              className="h-10 w-14 items-start justify-center"
+              hitSlop={8}
+              onPress={() => router.back()}
             >
-              Công khai
+              <SymbolView
+                name={{
+                  ios: "chevron.left",
+                  android: "chevron_left",
+                  web: "chevron_left",
+                }}
+                size={24}
+                tintColor={primaryTextColor}
+              />
+            </Pressable>
+
+            <Text
+              className="flex-1 text-center text-[17px] font-bold"
+              numberOfLines={1}
+              style={{ color: primaryTextColor }}
+            >
+              {isEditMode ? "Chỉnh sửa bài đánh giá" : "Viết bài đăng"}
             </Text>
+
+            <Pressable
+              accessibilityLabel={
+                isEditMode ? "Lưu bài đánh giá" : "Đăng bài đánh giá"
+              }
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isSubmitting }}
+              className="h-10 w-14 items-end justify-center"
+              disabled={isSubmitting}
+              hitSlop={8}
+              onPress={() => {
+                void handleSubmit();
+              }}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color={accentColor} size="small" />
+              ) : (
+                <Text
+                  className="text-[16px] font-bold"
+                  style={{ color: accentColor }}
+                >
+                  {isEditMode ? "Lưu" : "Đăng"}
+                </Text>
+              )}
+            </Pressable>
           </View>
 
-          <View className="h-11 w-11" />
-        </View>
-
-        <ScrollView
-          contentContainerStyle={{
-            paddingBottom: Math.max(insets.bottom + submitFooterInset, 144),
-            paddingHorizontal: detailContentHorizontalPadding,
-            paddingTop: 2,
-          }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View>
-            <View className="mt-1 flex-row items-center">
+          <ScrollView
+            className="flex-1 bg-white"
+            contentContainerStyle={{
+              paddingBottom: Math.max(insets.bottom + 20, 28),
+              paddingHorizontal: pageHorizontalPadding,
+              paddingTop: 8,
+            }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View className="flex-row items-center">
               <Image
-                source={avatarImageUri}
+                source={composerAvatarUri}
                 contentFit="cover"
                 transition={120}
                 cachePolicy="memory-disk"
                 style={{ height: 44, width: 44, borderRadius: 22 }}
               />
-              <View className="ml-3 flex-1">
-                <Text className="text-[15px] font-semibold text-[#2B2233]">
+
+              <View className="ml-2.5 flex-1">
+                <Text
+                  className="text-[15px] font-bold"
+                  numberOfLines={1}
+                  style={{ color: primaryTextColor, lineHeight: 16 }}
+                >
                   {authorDisplayName}
                 </Text>
-                <Text
-                  className="mt-1 text-[12px] font-semibold uppercase tracking-[1px]"
-                  style={{ color: sectionMutedTextColor, lineHeight: 14 }}
+
+                <Pressable
+                  accessibilityLabel={`Mở chi tiết ${locationLabel}`}
+                  accessibilityRole="link"
+                  className="flex-row items-center"
+                  hitSlop={6}
+                  onPress={handleOpenHotspotDetail}
+                  style={{ marginTop: -4 }}
                 >
-                  Người chia sẻ
-                </Text>
+                  <SymbolView
+                    name={{
+                      ios: "mappin.and.ellipse",
+                      android: "location_on",
+                      web: "location_on",
+                    }}
+                    size={14}
+                    tintColor={accentColor}
+                  />
+                  <Text
+                    className="ml-1 flex-1 text-[13px] font-medium"
+                    numberOfLines={1}
+                    style={{ color: accentColor, lineHeight: 15 }}
+                  >
+                    {locationLabel}
+                  </Text>
+                </Pressable>
               </View>
             </View>
 
-            <Text
-              className="mt-3 text-[22px] font-semibold text-[#2B2233]"
-              style={{ lineHeight: 24 }}
-            >
-              {resolvedHotspotTitle}
-            </Text>
-            <Text
-              className="mt-0.5 text-[15px]"
-              style={{ color: sectionBodyTextColor, lineHeight: 19 }}
-            >
-              Thêm ảnh, video và ghi lại cảm nhận ngắn của bạn sau khi tham
-              quan.
-            </Text>
+            <SectionDivider />
+
+            <View className="mt-2">
+              <RequiredFieldLabel label="Đánh giá của bạn" />
+            </View>
+
+            <View className="mt-1 flex-row items-center">
+              {ratingStars.map((star) => (
+                <Pressable
+                  key={`review-rating-${star}`}
+                  accessibilityLabel={`Chấm ${star} sao`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: rating === star }}
+                  hitSlop={6}
+                  onPress={() => setRating(star)}
+                  style={{ paddingRight: 5 }}
+                >
+                  <SymbolView
+                    name={
+                      star <= rating
+                        ? {
+                            ios: "star.fill",
+                            android: "star",
+                            web: "star",
+                          }
+                        : {
+                            ios: "star",
+                            android: "star_border",
+                            web: "star_border",
+                          }
+                    }
+                    size={26}
+                    tintColor={star <= rating ? starActiveColor : starInactiveColor}
+                  />
+                </Pressable>
+              ))}
+
+              {rating >= minReviewRating ? (
+                <Text
+                  className="ml-1.5 text-[13px]"
+                  style={{ color: mutedTextColor, lineHeight: 17 }}
+                >
+                  <Text
+                    className="text-[13px] font-semibold"
+                    style={{ color: primaryTextColor }}
+                  >
+                    {rating.toFixed(1)}
+                  </Text>
+                  {` (${ratingLabels[rating] ?? ""})`}
+                </Text>
+              ) : (
+                <Text
+                  className="ml-1.5 text-[13px]"
+                  style={{ color: subtleTextColor, lineHeight: 17 }}
+                >
+                  Chạm để chấm sao
+                </Text>
+              )}
+            </View>
+
+            <SectionDivider />
+
+            <View className="mt-2 flex-row items-center justify-between">
+              <RequiredFieldLabel label="Chia sẻ cảm nhận của bạn" />
+              <Text
+                className="text-[12px]"
+                style={{ color: subtleTextColor, lineHeight: 16 }}
+              >
+                {`${draftText.length}/${maxCommentLength}`}
+              </Text>
+            </View>
 
             <View
-              className="mt-3 rounded-[24px] border border-[#F1E4EC] bg-[#FFF9FD] px-4 py-4"
-              style={cardShadowStyle}
+              className="mt-1 rounded-[12px] border bg-white px-3 py-2"
+              style={{ borderColor: fieldBorderColor }}
             >
               <TextInput
                 multiline
-                maxLength={320}
+                maxLength={maxCommentLength}
                 onChangeText={setDraftText}
                 placeholder="Điều gì làm bạn ấn tượng nhất ở hotspot này?"
-                placeholderTextColor="#AA9AAA"
+                placeholderTextColor={subtleTextColor}
                 style={{
-                  color: "#2F242C",
-                  fontSize: 15,
-                  lineHeight: 22,
-                  minHeight: 148,
+                  color: primaryTextColor,
+                  fontSize: 14,
+                  lineHeight: 20,
+                  minHeight: 108,
                   padding: 0,
                   textAlignVertical: "top",
                 }}
@@ -467,142 +864,118 @@ export default function HotspotReviewComposeScreen() {
               />
             </View>
 
-            <View className="mt-1.5 items-end">
-              <Text className="text-[12px] font-medium text-[#A897B2]">
-                {`${draftText.trim().length}/320 ký tự`}
-              </Text>
+            <Text
+              className="mt-4 text-[14px] font-semibold"
+              style={{ color: primaryTextColor, lineHeight: 18 }}
+            >
+              {`Ảnh / Video (${selectedMedia.length}/${maxMediaCount})`}
+            </Text>
+
+            <View className="mt-1 flex-row flex-wrap items-start gap-2">
+              {selectedMedia.map((media, index) => (
+                <ReviewMediaPreview
+                  key={`${media.uri}-${index}`}
+                  item={media}
+                  onRemove={() =>
+                    setSelectedMedia((current) =>
+                      current.filter(
+                        (_, currentIndex) => currentIndex !== index,
+                      ),
+                    )
+                  }
+                />
+              ))}
+
+              {selectedMedia.length < maxMediaCount ? (
+                <Pressable
+                  accessibilityLabel="Thêm ảnh hoặc video"
+                  accessibilityRole="button"
+                  className="items-center justify-center rounded-[12px] border border-dashed px-2"
+                  onPress={() => {
+                    void handlePickMedia();
+                  }}
+                  style={{
+                    backgroundColor: mediaSoftBackgroundColor,
+                    borderColor: mediaSoftBorderColor,
+                    height: mediaTileHeight,
+                    width: addMediaTileWidth,
+                  }}
+                >
+                  <SymbolView
+                    name={{
+                      ios: "photo.badge.plus",
+                      android: "add_photo_alternate",
+                      web: "add_photo_alternate",
+                    }}
+                    size={24}
+                    tintColor={mutedTextColor}
+                  />
+                  <Text
+                    className="mt-2 text-center text-[11px] font-medium"
+                    style={{ color: mutedTextColor, lineHeight: 14 }}
+                  >
+                    Thêm ảnh / video
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
 
-            <View className="mt-3 flex-row items-center justify-between">
-              <Text
-                className="text-[14px] font-black uppercase tracking-[1.4px]"
-                style={{ color: sectionMutedTextColor, lineHeight: 18 }}
-              >
-                Phương tiện
-              </Text>
-              <Text className="text-[12px] font-medium text-[#A897B2]">
-                {`${selectedMedia.length}/6 media`}
-              </Text>
-            </View>
+            <SectionDivider />
 
             <View
-              className="mt-2 rounded-[24px] border border-dashed border-[#D9D4DD] bg-[#FAF7FB] px-4 py-4"
-              style={{ minHeight: 172 }}
+              className="mt-2 flex-row items-start rounded-[14px] border px-3 py-2"
+              style={{
+                backgroundColor: accentSoftBackgroundColor,
+                borderColor: accentSoftBorderColor,
+              }}
             >
-              {selectedMedia.length > 0 ? (
-                <View className="flex-row flex-wrap gap-3">
-                  {selectedMedia.map((media, index) => (
-                    <ReviewMediaPreview
-                      key={`${media.uri}-${index}`}
-                      item={media}
-                      onRemove={() =>
-                        setSelectedMedia((current) =>
-                          current.filter(
-                            (_, currentIndex) => currentIndex !== index,
-                          ),
-                        )
-                      }
-                    />
-                  ))}
-                </View>
-              ) : (
-                <View className="flex-1 items-center justify-center px-5">
-                  <View className="h-14 w-14 items-center justify-center rounded-full bg-[#F7EFF6]">
-                    <SymbolView
-                      name={{
-                        ios: "photo.on.rectangle.angled",
-                        android: "image",
-                        web: "image",
-                      }}
-                      size={22}
-                      tintColor="#8A7B83"
-                    />
-                  </View>
-                  <Text
-                    className="mt-3 text-center text-[15px] text-[#6F657A]"
-                    style={{ lineHeight: 19 }}
-                  >
-                    Chưa có ảnh hoặc video nào được chọn.
-                  </Text>
-                </View>
-              )}
-            </View>
+              <SymbolView
+                name={{
+                  ios: "info.circle",
+                  android: "info_outline",
+                  web: "info_outline",
+                }}
+                size={17}
+                tintColor={accentColor}
+              />
 
-            <Pressable
-              className="mt-3 overflow-hidden rounded-full"
-              onPress={handlePickMedia}
-              style={buttonShadowStyle}
-            >
-              <View
-                className="flex-row items-center justify-center px-5 py-3.5"
-                style={{ backgroundColor: "#D8F2F9" }}
-              >
-                <SymbolView
-                  name={{
-                    ios: "plus",
-                    android: "add",
-                    web: "add",
-                  }}
-                  size={18}
-                  tintColor="#2A6B80"
-                />
-                <Text className="ml-2 text-[15px] font-semibold text-[#2A6B80]">
-                  Thêm ảnh và video
+              <View className="ml-2 flex-1">
+                <Text
+                  className="text-[13px] font-bold"
+                  style={{ color: primaryTextColor, lineHeight: 16 }}
+                >
+                  Mẹo viết bài:
+                </Text>
+                <Text
+                  className="text-[12px]"
+                  style={{ color: mutedTextColor, lineHeight: 16, marginTop: -4 }}
+                >
+                  Chia sẻ trải nghiệm thật chi tiết sẽ giúp ích cho cộng đồng
+                  khám phá! ❤️
                 </Text>
               </View>
-            </Pressable>
-          </View>
-        </ScrollView>
-
-        <View
-          className="absolute inset-x-0 bottom-0 bg-white px-5"
-          style={{
-            elevation: 12,
-            paddingBottom: Math.max(insets.bottom + 10, 16),
-            paddingTop: 8,
-            shadowColor: "rgba(43, 34, 51, 0.08)",
-            shadowOffset: { width: 0, height: -4 },
-            shadowOpacity: 1,
-            shadowRadius: 12,
-            zIndex: 20,
-          }}
-        >
-          {submitDisabledReason ? (
-            <Text
-              className="mb-2 text-center text-[12px]"
-              style={{ color: sectionMutedTextColor, lineHeight: 16 }}
-            >
-              {submitDisabledReason}
-            </Text>
-          ) : null}
-          <Pressable
-            className="overflow-hidden rounded-full"
-            disabled={isSubmitDisabled}
-            onPress={() => {
-              void handleSubmit();
-            }}
-            style={buttonShadowStyle}
-          >
-            <LinearGradient
-              colors={
-                isSubmitDisabled
-                  ? ["#E3DDEB", "#D9D1E4", "#CEC5DD"]
-                  : loginGradientColors
-              }
-              end={{ x: 1, y: 0.5 }}
-              locations={[0, 0.58, 1]}
-              start={{ x: 0, y: 0.5 }}
-              className="items-center px-5 py-3.5"
-              style={{ opacity: isSubmitDisabled ? 0.96 : 1 }}
-            >
-              <Text className="text-[17px] font-black text-white">
-                {isSubmitting ? "Đang gửi bài..." : "Đăng bài đánh giá"}
-              </Text>
-            </LinearGradient>
-          </Pressable>
-        </View>
+            </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {isDuplicateDialogVisible ? (
+        <ReviewDuplicateDialog
+          onClose={() => setIsDuplicateDialogVisible(false)}
+          onEditReview={handleEditExistingReview}
+        />
+      ) : null}
+
+      {reviewSuccessState !== null ? (
+        <ReviewSuccessOverlay
+          avatarUri={composerAvatarUri}
+          isPending={reviewSuccessState.isPending}
+          mode={reviewSuccessState.mode}
+          onClose={handleLeaveComposer}
+          onContinueExplore={handleContinueExplore}
+          onViewPost={handleLeaveComposer}
+        />
+      ) : null}
     </View>
   );
 }

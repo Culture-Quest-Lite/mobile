@@ -130,6 +130,14 @@ export type CheckInResponseDto = {
   userId?: number | null;
 };
 
+export type JoinRouteGroupQuestResponseDto = {
+  groupId: number | null;
+  message: string | null;
+  routeId: number | null;
+  routeParticipantId: number | null;
+  status: string | null;
+};
+
 type SearchRoutesRequest = {
   accessToken?: string | null;
   page?: number;
@@ -165,6 +173,11 @@ type RouteIdRequest = AuthenticatedRouteRequest & {
   routeId: number | string;
 };
 
+type JoinRouteGroupQuestRequest = AuthenticatedRouteRequest & {
+  groupId: number | string;
+  routeId: number | string;
+};
+
 type UserRouteProgressListRequest = AuthenticatedRouteRequest & {
   page?: number;
   size?: number;
@@ -183,6 +196,12 @@ function resolveRouteUrl(path: string) {
   return PublicEnv.apiBaseUrl.trim()
     ? buildApiUrl(path)
     : `http://13.158.40.56:8080${path}`;
+}
+
+function resolveRouteParticipantUrl(path: string) {
+  return PublicEnv.apiBaseUrl.trim()
+    ? buildApiUrl(path)
+    : `https://api.culturequestlite.com${path}`;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -465,6 +484,28 @@ function parseCheckInResponse(value: unknown): CheckInResponseDto | null {
   };
 }
 
+function parseJoinRouteGroupQuestResponse(
+  value: unknown,
+): JoinRouteGroupQuestResponseDto | null {
+  if (!isObject(value)) return null;
+
+  return {
+    groupId:
+      value.groupId == null ? null : readNumber(value.groupId, Number.NaN),
+    message: readString(value.message) || null,
+    routeId:
+      value.routeId == null ? null : readNumber(value.routeId, Number.NaN),
+    routeParticipantId:
+      value.routeParticipantId == null && value.userRouteProgressId == null
+        ? null
+        : readNumber(
+            value.routeParticipantId ?? value.userRouteProgressId,
+            Number.NaN,
+          ),
+    status: readString(value.status) || null,
+  };
+}
+
 function getImageMedia(medias?: RouteMediaDto[] | null) {
   if (!Array.isArray(medias) || medias.length === 0) {
     return null;
@@ -637,7 +678,7 @@ export async function searchRoutes({
 
   // Backend SearchRequest có thể hỗ trợ filter động. Nếu BE chưa nhận filter này,
   // mobile vẫn lọc status ở client sau khi nhận content.
-  const filters: Array<{ field: string; value: string }> = [];
+  const filters: { field: string; value: string }[] = [];
   if (status) filters.push({ field: "status", value: status });
   if (type) filters.push({ field: "type", value: type });
   if (tagName) filters.push({ field: "tag.tagName", value: tagName });
@@ -781,6 +822,39 @@ export async function startRouteProgress({
   }
 
   return progress;
+}
+
+export async function joinRouteGroupQuest({
+  accessToken,
+  groupId,
+  routeId,
+  tokenType,
+}: JoinRouteGroupQuestRequest) {
+  requireAccessToken(accessToken);
+
+  const normalizedRouteId = readNumber(routeId, -1);
+  const normalizedGroupId = readNumber(groupId, -1);
+
+  if (normalizedRouteId < 0) {
+    throw new Error("Không tìm thấy routeId hợp lệ.");
+  }
+
+  if (normalizedGroupId < 0) {
+    throw new Error("Không tìm thấy groupId hợp lệ.");
+  }
+
+  const url = resolveRouteParticipantUrl(
+    "/api/v1/route-participants/join/group-quest",
+  );
+  const body = await fetchRouteJson(url, accessToken, tokenType, {
+    body: {
+      groupId: normalizedGroupId,
+      routeId: normalizedRouteId,
+    },
+    method: "POST",
+  });
+
+  return parseJoinRouteGroupQuestResponse(unwrapApiBody(body)) ?? body;
 }
 
 export async function abandonRouteProgress({

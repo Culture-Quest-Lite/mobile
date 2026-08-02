@@ -28,6 +28,7 @@ export type CreatedPostMedia = {
 };
 
 export type CreatedPostTag = {
+  imageUrl?: string | null;
   tagId: number;
   tagName: string;
 };
@@ -61,6 +62,8 @@ type CreatePostRequest = {
   content: string;
   files: CreatePostUploadFile[];
   hotspotIds?: number[];
+  routeIds?: number[];
+  tagIds?: number[];
   tokenType?: string | null;
   visibility?: PostVisibility;
 };
@@ -113,6 +116,7 @@ function parseCreatedPostTag(value: unknown): CreatedPostTag | null {
   }
 
   return {
+    imageUrl: readNullableString(value.imageUrl),
     tagId,
     tagName: readString(value.tagName),
   };
@@ -142,7 +146,9 @@ function parseCreatedPostMedia(value: unknown): CreatedPostMedia | null {
   };
 }
 
-function parseCreatedPostResponse(value: unknown): CreatedPostResponse | null {
+export function parseCreatedPostResponse(
+  value: unknown,
+): CreatedPostResponse | null {
   if (!isObject(value)) {
     return null;
   }
@@ -288,6 +294,8 @@ export async function createPost({
   content,
   files,
   hotspotIds,
+  routeIds,
+  tagIds,
   tokenType,
   visibility = "PUBLIC",
 }: CreatePostRequest): Promise<CreatedPostResponse> {
@@ -296,6 +304,13 @@ export async function createPost({
   const normalizedHotspotIds = (hotspotIds ?? []).filter(
     (hotspotId) =>
       Number.isInteger(hotspotId) && Number.isFinite(hotspotId) && hotspotId > 0,
+  );
+  const normalizedRouteIds = (routeIds ?? []).filter(
+    (routeId) =>
+      Number.isInteger(routeId) && Number.isFinite(routeId) && routeId > 0,
+  );
+  const normalizedTagIds = (tagIds ?? []).filter(
+    (tagId) => Number.isInteger(tagId) && Number.isFinite(tagId) && tagId > 0,
   );
   const normalizedVisibility = normalizePostVisibilityValue(visibility);
   const formData = new FormData();
@@ -310,6 +325,14 @@ export async function createPost({
 
   for (const hotspotId of normalizedHotspotIds) {
     formData.append("hotspotIds", `${hotspotId}`);
+  }
+
+  for (const routeId of normalizedRouteIds) {
+    formData.append("routeIds", `${routeId}`);
+  }
+
+  for (const tagId of normalizedTagIds) {
+    formData.append("tagIds", `${tagId}`);
   }
 
   for (const file of files) {
@@ -334,6 +357,8 @@ export async function createPost({
       filesCount: files.length,
       hotspotIds: normalizedHotspotIds,
       platform: Platform.OS,
+      routeIds: normalizedRouteIds,
+      tagIds: normalizedTagIds,
       url: createPostUrl,
       visibility: normalizedVisibility,
     });
@@ -347,7 +372,9 @@ export async function createPost({
       body: summarizeBody(responseBody),
       filesCount: files.length,
       hotspotIds: normalizedHotspotIds,
+      routeIds: normalizedRouteIds,
       status: response.status,
+      tagIds: normalizedTagIds,
       url: createPostUrl,
       visibility: normalizedVisibility,
     });
@@ -361,6 +388,8 @@ export async function createPost({
       body: summarizeBody(responseBody),
       filesCount: files.length,
       hotspotIds: normalizedHotspotIds,
+      routeIds: normalizedRouteIds,
+      tagIds: normalizedTagIds,
       url: createPostUrl,
       visibility: normalizedVisibility,
     });

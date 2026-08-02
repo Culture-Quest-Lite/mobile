@@ -193,9 +193,9 @@ function parseUserHotspotProgressPage(
       .map(readUserHotspotProgressSummary)
       .filter((item): item is UserHotspotProgressSummary => item !== null);
     const totalPages = isObject(unwrappedValue)
-      ? (isObject(unwrappedValue.page)
+      ? ((isObject(unwrappedValue.page)
           ? readNumber(unwrappedValue.page.totalPages)
-          : readNumber(unwrappedValue.totalPages)) ?? 1
+          : readNumber(unwrappedValue.totalPages)) ?? 1)
       : 1;
 
     return {
@@ -239,7 +239,9 @@ function parseRouteProgressPage(value: unknown): UserRouteProgressPage | null {
     : null;
 
   return {
-    items: items.filter((item): item is UserRouteProgressSummary => item !== null),
+    items: items.filter(
+      (item): item is UserRouteProgressSummary => item !== null,
+    ),
     totalPages,
   };
 }
@@ -247,7 +249,10 @@ function parseRouteProgressPage(value: unknown): UserRouteProgressPage | null {
 function parseCheckedInHotspotIds(value: unknown) {
   const unwrappedValue = unwrapApiBody(value);
 
-  if (!isObject(unwrappedValue) || !Array.isArray(unwrappedValue.hotspotProgressList)) {
+  if (
+    !isObject(unwrappedValue) ||
+    !Array.isArray(unwrappedValue.hotspotProgressList)
+  ) {
     return null;
   }
 
@@ -289,7 +294,11 @@ async function parseResponseBody(response: Response) {
   }
 }
 
-function getErrorMessage(body: unknown, fallbackMessage: string, status: number) {
+function getErrorMessage(
+  body: unknown,
+  fallbackMessage: string,
+  status: number,
+) {
   if (isObject(body)) {
     for (const key of ["message", "error", "detail", "title"]) {
       const candidate = body[key];
@@ -460,7 +469,11 @@ async function fetchRouteProgressPage({
 
   if (!response.ok) {
     throw new Error(
-      getErrorMessage(response.body, "Không thể tải tiến độ tuyến", response.status),
+      getErrorMessage(
+        response.body,
+        "Không thể tải tiến độ tuyến",
+        response.status,
+      ),
     );
   }
 
@@ -497,7 +510,11 @@ async function resolveWorkingUserHotspotProgressQueryStyle({
     });
 
     if (!response.ok) {
-      if (response.status === 400 || response.status === 404 || response.status === 405) {
+      if (
+        response.status === 400 ||
+        response.status === 404 ||
+        response.status === 405
+      ) {
         lastQueryError = new Error(
           getErrorMessage(
             response.body,
@@ -560,13 +577,21 @@ async function resolveWorkingRouteProgressQueryStyle({
     if (!response.ok) {
       if (response.status === 400) {
         lastQueryError = new Error(
-          getErrorMessage(response.body, "Yêu cầu tiến độ tuyến không hợp lệ", response.status),
+          getErrorMessage(
+            response.body,
+            "Yêu cầu tiến độ tuyến không hợp lệ",
+            response.status,
+          ),
         );
         continue;
       }
 
       throw new Error(
-        getErrorMessage(response.body, "Không thể tải tiến độ tuyến", response.status),
+        getErrorMessage(
+          response.body,
+          "Không thể tải tiến độ tuyến",
+          response.status,
+        ),
       );
     }
 
@@ -585,7 +610,10 @@ async function resolveWorkingRouteProgressQueryStyle({
     };
   }
 
-  throw lastQueryError ?? new Error("Không xác định được cách gọi API tiến độ tuyến.");
+  throw (
+    lastQueryError ??
+    new Error("Không xác định được cách gọi API tiến độ tuyến.")
+  );
 }
 
 async function fetchCheckedInHotspotIdsByRouteProgressId({
@@ -616,7 +644,9 @@ async function fetchCheckedInHotspotIdsByRouteProgressId({
   const checkedInHotspotIds = parseCheckedInHotspotIds(response.body);
 
   if (!checkedInHotspotIds) {
-    throw new Error("API chi tiết tiến độ tuyến trả về dữ liệu không đúng định dạng.");
+    throw new Error(
+      "API chi tiết tiến độ tuyến trả về dữ liệu không đúng định dạng.",
+    );
   }
 
   return checkedInHotspotIds;
@@ -626,10 +656,11 @@ async function getCheckedInHotspotIdsFromUserHotspotProgress({
   accessToken,
   tokenType,
 }: GetCheckedInHotspotsRequest) {
-  const { firstPage, queryStyle } = await resolveWorkingUserHotspotProgressQueryStyle({
-    accessToken,
-    tokenType,
-  });
+  const { firstPage, queryStyle } =
+    await resolveWorkingUserHotspotProgressQueryStyle({
+      accessToken,
+      tokenType,
+    });
   const hotspotProgressSummaries = [...firstPage.items];
 
   if (queryStyle !== "none") {
@@ -662,10 +693,12 @@ async function getCheckedInHotspotIdsFromRouteProgress({
   accessToken,
   tokenType,
 }: GetCheckedInHotspotsRequest): Promise<number[]> {
-  const { firstPage, queryStyle } = await resolveWorkingRouteProgressQueryStyle({
-    accessToken,
-    tokenType,
-  });
+  const { firstPage, queryStyle } = await resolveWorkingRouteProgressQueryStyle(
+    {
+      accessToken,
+      tokenType,
+    },
+  );
   const routeProgressSummaries = [...firstPage.items];
 
   if (queryStyle !== "none") {
@@ -713,9 +746,12 @@ export async function getCheckedInHotspotIds({
       tokenType,
     });
   } catch (error) {
-    console.info("[checkin-sync] user-hotspot-progress sync failed, fallback route-progress", {
-      error: error instanceof Error ? error.message : error,
-    });
+    console.info(
+      "[checkin-sync] user-hotspot-progress sync failed, fallback route-progress",
+      {
+        error: error instanceof Error ? error.message : error,
+      },
+    );
   }
 
   return getCheckedInHotspotIdsFromRouteProgress({

@@ -1,4 +1,5 @@
 import { SymbolView } from "@/components/ui/symbol-view";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
@@ -539,24 +540,6 @@ function getSuggestedRouteDescription(route: SuggestedRouteCard) {
 
 function getSuggestedRouteTagLabel(route: SuggestedRouteCard) {
   return route.era.trim() || route.theme.trim();
-}
-
-function getProfileInitials(name: string, username: string) {
-  const source = name.trim() || username.replace(/^@+/, "").trim();
-
-  if (!source) {
-    return "ME";
-  }
-
-  const parts = source.split(/\s+/).filter(Boolean);
-
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-
-  const firstInitial = parts[0][0] ?? "";
-  const lastInitial = parts[parts.length - 1][0] ?? "";
-  return `${firstInitial}${lastInitial}`.toUpperCase();
 }
 
 function getNearbyOpeningHoursLabel(hotspot: NearbyHotspotDto) {
@@ -1281,10 +1264,6 @@ function ExplorerHeaderAvatar({
   name,
   username,
 }: ExplorerSummary) {
-  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
-  const initials = getProfileInitials(name, username);
-  const shouldShowFallback = !avatar || failedAvatar === avatar;
-
   return (
     <View className="relative">
       <LinearGradient
@@ -1293,23 +1272,13 @@ function ExplorerHeaderAvatar({
         start={{ x: 0, y: 0.1 }}
         className="h-16 w-16 rounded-full p-[2px]"
       >
-        <View className="flex-1 rounded-full bg-white p-[3px]">
-          {shouldShowFallback ? (
-            <View className="flex-1 items-center justify-center rounded-full bg-[#FFF1F6]">
-              <Text className="text-[18px] font-black text-[#D9587F]">
-                {initials}
-              </Text>
-            </View>
-          ) : (
-            <Image
-              source={avatar}
-              contentFit="cover"
-              transition={180}
-              cachePolicy="memory-disk"
-              onError={() => setFailedAvatar(avatar)}
-              style={{ flex: 1, borderRadius: 999 }}
-            />
-          )}
+        <View className="flex-1 items-center justify-center rounded-full bg-white p-[3px]">
+          <UserAvatar
+            displayName={name}
+            size={54}
+            uri={avatar}
+            username={username}
+          />
         </View>
       </LinearGradient>
 

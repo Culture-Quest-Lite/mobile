@@ -1,4 +1,5 @@
 import { SymbolView } from "@/components/ui/symbol-view";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import {
   getValidAccessToken,
   useAuthSession,
@@ -330,6 +331,7 @@ function mapProfilePostToCommunityFeedPost(
     canLike: true,
     canOpenProfile: false,
     sharedText,
+    status: readMeaningfulText(post.status) ?? "",
     visibility: readMeaningfulText(post.visibility) ?? "PUBLIC",
   };
 }
@@ -1007,7 +1009,6 @@ export default function CommunityExplorerProfileScreen() {
 
 function ExplorerAvatar({
   avatar,
-  avatarColors,
   initials,
   size,
 }: {
@@ -1016,53 +1017,20 @@ function ExplorerAvatar({
   initials: string;
   size: number;
 }) {
-  const [hasError, setHasError] = useState(!avatar);
-
   return (
     <View className="relative">
-      <View
-        className="overflow-hidden rounded-full"
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
+      <UserAvatar
+        containerStyle={{
+          elevation: 8,
           shadowColor: "rgba(32, 71, 107, 0.16)",
+          shadowOffset: { width: 0, height: 6 },
           shadowOpacity: 1,
           shadowRadius: 14,
-          shadowOffset: { width: 0, height: 6 },
-          elevation: 8,
         }}
-      >
-        {hasError || !avatar ? (
-          <LinearGradient
-            colors={avatarColors}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={{
-              width: "100%",
-              height: "100%",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text
-              className="font-black text-white"
-              style={{ fontSize: Math.max(22, size * 0.28) }}
-            >
-              {initials}
-            </Text>
-          </LinearGradient>
-        ) : (
-          <Image
-            source={avatar}
-            contentFit="cover"
-            transition={180}
-            cachePolicy="memory-disk"
-            onError={() => setHasError(true)}
-            style={{ width: "100%", height: "100%" }}
-          />
-        )}
-      </View>
+        displayName={initials}
+        size={size}
+        uri={avatar}
+      />
     </View>
   );
 }
@@ -1483,43 +1451,13 @@ function CommunityPostCard({
 
 function CommunityPostAuthorAvatar({
   avatar,
-  avatarColors,
   initials,
 }: {
   avatar?: string;
   avatarColors: readonly [string, string];
   initials: string;
 }) {
-  const [hasError, setHasError] = useState(!avatar);
-
-  return (
-    <View className="h-11 w-11 overflow-hidden rounded-full bg-[#F3F4F6]">
-      {hasError || !avatar ? (
-        <LinearGradient
-          colors={avatarColors}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={{
-            width: "100%",
-            height: "100%",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text className="text-[16px] font-black text-white">{initials}</Text>
-        </LinearGradient>
-      ) : (
-        <Image
-          source={avatar}
-          contentFit="cover"
-          transition={180}
-          cachePolicy="memory-disk"
-          onError={() => setHasError(true)}
-          style={{ width: "100%", height: "100%" }}
-        />
-      )}
-    </View>
-  );
+  return <UserAvatar displayName={initials} size={44} uri={avatar} />;
 }
 
 function PostTag({ label }: { label: string }) {

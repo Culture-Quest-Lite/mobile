@@ -15,6 +15,7 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 import { useCheckedInApiHotspots, useCheckins } from "@/lib/checkin-store";
 
+import { getActiveTags, type ActiveTagDto } from "../api/get-tags";
 import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
 import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
 import {
@@ -51,7 +52,7 @@ type StoryImageSource = ComponentProps<typeof Image>["source"];
 
 type StoryThemeTabItem = {
   id: string;
-  imageSource: number;
+  imageSource: StoryImageSource;
   label: string;
   tagId: number | null;
 };
@@ -75,6 +76,20 @@ function normalizeApiTagId(value?: number | null) {
     : null;
 }
 
+function normalizeLookupText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function readMeaningfulImageUrl(value?: string | null) {
+  const trimmedValue = value?.trim();
+
+  return trimmedValue ? trimmedValue : null;
+}
+
 function buildStoryThemeLookupKey({
   label,
   tagId,
@@ -95,8 +110,26 @@ function buildStoryThemeLookupKey({
     .replace(/[\u0300-\u036f]/g, "")}`;
 }
 
-function buildStoryThemeTabsFromStories(stories: HotspotThemeStory[]) {
+function buildStoryThemeTabsFromStories(
+  stories: HotspotThemeStory[],
+  activeTags: ActiveTagDto[],
+) {
   const tabsById = new Map<string, StoryThemeTabItem>();
+  const activeTagsById = new Map<number, ActiveTagDto>();
+  const activeTagsByName = new Map<string, ActiveTagDto>();
+
+  activeTags.forEach((tag) => {
+    const normalizedTagId = normalizeApiTagId(tag.tagId);
+    const normalizedTagName = normalizeLookupText(tag.tagName);
+
+    if (normalizedTagId !== null && !activeTagsById.has(normalizedTagId)) {
+      activeTagsById.set(normalizedTagId, tag);
+    }
+
+    if (normalizedTagName && !activeTagsByName.has(normalizedTagName)) {
+      activeTagsByName.set(normalizedTagName, tag);
+    }
+  });
 
   stories.forEach((story, index) => {
     const label = story.tagLabel.trim();
@@ -111,6 +144,13 @@ function buildStoryThemeTabsFromStories(stories: HotspotThemeStory[]) {
       label,
       tagId,
     });
+    const matchedTag =
+      (tagId !== null ? activeTagsById.get(tagId) : null) ??
+      activeTagsByName.get(normalizeLookupText(label));
+    const imageSource =
+      readMeaningfulImageUrl(matchedTag?.imageUrl) ??
+      story.tagImageSource ??
+      tagImageByTag[resolvedTag];
 
     if (tabsById.has(tabId)) {
       return;
@@ -118,7 +158,7 @@ function buildStoryThemeTabsFromStories(stories: HotspotThemeStory[]) {
 
     tabsById.set(tabId, {
       id: tabId,
-      imageSource: tagImageByTag[resolvedTag],
+      imageSource,
       label,
       tagId,
     });
@@ -133,7 +173,7 @@ function ThemeTagChip({
   label,
   onPress,
 }: {
-  imageSource: number;
+  imageSource: StoryImageSource;
   isActive: boolean;
   label: string;
   onPress: () => void;
@@ -482,16 +522,56 @@ export default function HotspotStoriesScreen() {
       isCheckedIn && cachedStoriesEntry === null && resolvedHotspotId !== null,
   );
   const [storiesError, setStoriesError] = useState<string | null>(null);
+  const [activeTags, setActiveTags] = useState<ActiveTagDto[]>([]);
   const fallbackStoryCards =
     hotspot && resolvedHotspotId === null
       ? buildHotspotThemeStories(hotspot)
       : [];
   const storyCards = apiStoryCards ?? fallbackStoryCards;
-  const resolvedThemeTabs = buildStoryThemeTabsFromStories(storyCards);
+  const resolvedThemeTabs = buildStoryThemeTabsFromStories(storyCards, activeTags);
   const resolvedActiveTab =
     resolvedThemeTabs.find((tab) => tab.id === activeTabId) ??
     resolvedThemeTabs[0] ??
     null;
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadActiveTags = async () => {
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const tags = await getActiveTags({
+          accessToken,
+          tokenType: authSession.tokenType,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setActiveTags(tags);
+      } catch (error) {
+        console.warn("[hotspot-stories] load active tags failed", {
+          error: error instanceof Error ? error.message : error,
+          slug: resolvedSlug,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setActiveTags([]);
+      }
+    };
+
+    void loadActiveTags();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.isAuthenticated, authSession.tokenType, resolvedSlug]);
 
   useEffect(() => {
     if (!hotspot) {
