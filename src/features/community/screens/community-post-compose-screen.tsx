@@ -1,6 +1,4 @@
-import { SuccessOverlay } from "@/components/ui/success-overlay";
 import { SymbolView } from "@/components/ui/symbol-view";
-import { UserAvatar } from "@/components/ui/user-avatar";
 import {
   getValidAccessToken,
   useAuthSession,
@@ -10,20 +8,18 @@ import {
   type CreatedPostResponse,
   type PostVisibility,
 } from "@/features/home/api/create-post";
-import { getPostById } from "@/features/home/api/get-post-by-id";
 import { type NearbyHotspotDto } from "@/features/home/api/get-nearby-hotspots";
 import { getActiveTags, type ActiveTagDto } from "@/features/home/api/get-tags";
 import {
   getHotspots,
   searchHotspots,
 } from "@/features/home/api/search-hotspots";
-import { updatePost } from "@/features/home/api/update-post";
 import {
   ReviewMediaViewer,
   type ReviewMediaViewerItem,
 } from "@/features/home/components/review-media-viewer";
 import {
-  getCreatedPostRewardText,
+  getCreatedPostRewardMessage,
   isCreatedPostApproved,
   isCreatedPostPending,
 } from "@/features/home/lib/created-post-feedback";
@@ -39,18 +35,12 @@ import {
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import {
-  useFocusEffect,
-  useLocalSearchParams,
-  useRouter,
-  type Href,
-} from "expo-router";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -65,14 +55,10 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
-import {
-  getPostVisibilityLabel,
-  normalizePostVisibilityValue,
-} from "@/lib/post-visibility";
+import { getPostVisibilityLabel } from "@/lib/post-visibility";
 import { cacheCommunityExplorerProfile } from "../data/community-explorer-profile-cache";
 import {
   cacheCommunityPost,
-  removeCachedCommunityPost,
   type CommunityFeedMediaItem,
   type CommunityFeedPost,
 } from "../data/community-post-cache";
@@ -88,7 +74,6 @@ type ComposerIdentity = {
 type ComposerMediaItem = {
   assetId?: string | null;
   fileName: string;
-  mediaId?: number;
   mimeType: string;
   type: "image" | "video";
   uri: string;
@@ -114,17 +99,6 @@ type ComposerRouteOption = {
 };
 
 type SelectionSheet = "hotspot" | "route" | "tag" | null;
-
-type CommunityPostSuccessState = {
-  message: string;
-  rewardText: string | null;
-  title: string;
-};
-
-type CommunityPostComposeParams = {
-  mode?: string | string[];
-  postId?: string | string[];
-};
 
 type RoutePickerSheetProps = {
   errorMessage: string | null;
@@ -170,6 +144,7 @@ const maxPostLength = 2000;
 const maxMediaCount = 6;
 const maxSelectableTags = 6;
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
+const avatarFallbackColors = ["#EB489B", "#F58752"] as const;
 const chipBorderColor = "#E7E5EA";
 const footerActionHeight = 44;
 const pageHorizontalPadding = 16;
@@ -211,16 +186,6 @@ function readMeaningfulText(value?: string | null) {
   return ["string", "null", "undefined"].includes(trimmedValue.toLowerCase())
     ? null
     : trimmedValue;
-}
-
-function readSearchParamValue(
-  value?: string | string[] | null,
-): string | null {
-  if (Array.isArray(value)) {
-    return readSearchParamValue(value[0] ?? null);
-  }
-
-  return readMeaningfulText(value);
 }
 
 function normalizeLookupText(value: string) {
@@ -395,52 +360,19 @@ function buildHashtagLabel(tagName: string) {
   return `#${tagName.trim().replace(/^#/, "").replace(/\s+/g, "_")}`;
 }
 
-function stripTrailingHashtagBlock(content: string) {
+function buildTaggedPostContent(content: string, tagNames: string[]) {
   const normalizedContent = content.trim();
+  const hashtags = dedupeStringList(tagNames).map(buildHashtagLabel).join(" ");
+
+  if (!hashtags) {
+    return normalizedContent;
+  }
 
   if (!normalizedContent) {
-    return normalizedContent;
+    return hashtags;
   }
 
-  const lines = normalizedContent
-    .split(/\r?\n/)
-    .map((line) => line.trimEnd());
-  let lastMeaningfulLineIndex = lines.length - 1;
-
-  while (
-    lastMeaningfulLineIndex >= 0 &&
-    lines[lastMeaningfulLineIndex]?.trim() === ""
-  ) {
-    lastMeaningfulLineIndex -= 1;
-  }
-
-  if (lastMeaningfulLineIndex < 0) {
-    return "";
-  }
-
-  const trailingBlockStart = lastMeaningfulLineIndex;
-  const trailingLine = lines[trailingBlockStart]?.trim() ?? "";
-  const hashtagLinePattern =
-    /^(#[\p{L}\p{N}_-]+)(\s+#[\p{L}\p{N}_-]+)*$/u;
-
-  if (!hashtagLinePattern.test(trailingLine)) {
-    return normalizedContent;
-  }
-
-  let previousMeaningfulLineIndex = trailingBlockStart - 1;
-
-  while (
-    previousMeaningfulLineIndex >= 0 &&
-    lines[previousMeaningfulLineIndex]?.trim() === ""
-  ) {
-    previousMeaningfulLineIndex -= 1;
-  }
-
-  if (previousMeaningfulLineIndex < 0) {
-    return "";
-  }
-
-  return lines.slice(0, previousMeaningfulLineIndex + 1).join("\n").trimEnd();
+  return `${normalizedContent}\n\n${hashtags}`;
 }
 
 function buildComposerIdentityFromSession(
@@ -548,42 +480,6 @@ function dedupeComposerMediaItems(values: ComposerMediaItem[]) {
     seenKeys.add(lookupKey);
     return [value];
   });
-}
-
-function resolveComposerMediaType(
-  mediaType?: string | null,
-  mimeType?: string | null,
-): "image" | "video" {
-  const normalizedDescriptor = `${mediaType ?? ""} ${mimeType ?? ""}`
-    .trim()
-    .toLowerCase();
-
-  return normalizedDescriptor.includes("video") ? "video" : "image";
-}
-
-function mapCreatedPostMediaToComposerMediaItem(
-  media: CreatedPostResponse["medias"][number],
-): ComposerMediaItem | null {
-  const mediaUri = readMeaningfulText(media.fileUrl);
-
-  if (!mediaUri) {
-    return null;
-  }
-
-  const type = resolveComposerMediaType(media.mediaType, media.mimeType);
-
-  return {
-    assetId: null,
-    fileName:
-      readMeaningfulText(media.fileName) ??
-      buildFallbackFileName(type, media.mimeType, media.mediaId),
-    mediaId: media.mediaId,
-    mimeType:
-      readMeaningfulText(media.mimeType) ??
-      (type === "video" ? "video/mp4" : "image/jpeg"),
-    type,
-    uri: mediaUri,
-  };
 }
 
 function mapRouteHotspotToComposerHotspot(
@@ -705,6 +601,7 @@ function mapCreatedPostToCommunityFeedPost(
   createdPost: CreatedPostResponse,
   options?: {
     fallbackRouteIds?: number[];
+    fallbackTagNames?: string[];
   },
 ): CommunityFeedPost {
   const author =
@@ -722,6 +619,7 @@ function mapCreatedPostToCommunityFeedPost(
       .map((tag) => readMeaningfulText(tag.tagName))
       .filter((tag): tag is string => Boolean(tag))
       .slice(0, 4),
+    ...(options?.fallbackTagNames ?? []),
   ]).slice(0, 4);
   const mediaItems: CommunityFeedMediaItem[] = createdPost.medias
     .filter(
@@ -753,8 +651,7 @@ function mapCreatedPostToCommunityFeedPost(
       : "Explorer community",
     time: "Vừa xong",
     caption:
-      readMeaningfulText(stripTrailingHashtagBlock(createdPost.content)) ??
-      "Bài viết mới từ cộng đồng.",
+      readMeaningfulText(createdPost.content) ?? "Bài viết mới từ cộng đồng.",
     location: buildCreatedPostLocationLabel(
       createdPost.hotspotIds,
       mergedRouteIds,
@@ -789,10 +686,38 @@ function mapCreatedPostToCommunityFeedPost(
     canComment: true,
     canLike: true,
     canOpenProfile: true,
-    createdAt: createdPost.createdAt,
-    status: readMeaningfulText(createdPost.status) ?? "",
     visibility: visibilityValue,
   };
+}
+
+function AvatarMonogram({
+  initials,
+  size,
+}: {
+  initials: string;
+  size: number;
+}) {
+  return (
+    <LinearGradient
+      colors={avatarFallbackColors}
+      end={{ x: 1, y: 0.5 }}
+      start={{ x: 0, y: 0.5 }}
+      style={{
+        alignItems: "center",
+        borderRadius: size / 2,
+        height: size,
+        justifyContent: "center",
+        width: size,
+      }}
+    >
+      <Text
+        className="font-normal text-white"
+        style={{ fontSize: Math.max(16, size * 0.34) }}
+      >
+        {initials}
+      </Text>
+    </LinearGradient>
+  );
 }
 
 function ComposerAvatar({
@@ -802,7 +727,24 @@ function ComposerAvatar({
   displayName: string;
   uri: string | null;
 }) {
-  return <UserAvatar displayName={displayName} size={48} uri={uri} />;
+  const [failedUri, setFailedUri] = useState<string | null>(null);
+  const hasError = !uri || failedUri === uri;
+
+  if (hasError) {
+    return <AvatarMonogram initials={getNameInitials(displayName)} size={48} />;
+  }
+
+  return (
+    <Image
+      source={{ uri }}
+      contentFit="cover"
+      transition={120}
+      style={{ borderRadius: 24, height: 48, width: 48 }}
+      onError={() => {
+        setFailedUri(uri);
+      }}
+    />
+  );
 }
 
 function MediaAddTile({
@@ -1650,14 +1592,8 @@ function TagPickerSheet({
 
 export default function CommunityPostComposeScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<CommunityPostComposeParams>();
   const insets = useSafeAreaInsets();
   const authSession = useAuthSession();
-  const isEditMode = readSearchParamValue(params.mode)?.toLowerCase() === "edit";
-  const resolvedEditingPostId = Number.parseInt(
-    readSearchParamValue(params.postId) ?? "",
-    10,
-  );
   const fallbackComposerIdentity = buildComposerIdentityFromSession(
     authSession.isAuthenticated,
     authSession.displayName,
@@ -1700,18 +1636,16 @@ export default function CommunityPostComposeScreen() {
   const [isHotspotSearching, setIsHotspotSearching] = useState(false);
   const [hotspotError, setHotspotError] = useState<string | null>(null);
   const [activeTags, setActiveTags] = useState<ActiveTagDto[]>([]);
-  const [initialMediaIds, setInitialMediaIds] = useState<number[]>([]);
-  const [isLoadingEditingPost, setIsLoadingEditingPost] = useState(isEditMode);
-  const [editingPostError, setEditingPostError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successState, setSuccessState] =
-    useState<CommunityPostSuccessState | null>(null);
   const resolvedComposerIdentity =
     composerIdentity.accountKey === fallbackComposerIdentity.accountKey
       ? composerIdentity
       : fallbackComposerIdentity;
   const trimmedDraftText = draftText.trim();
-  const composedDraftText = trimmedDraftText;
+  const composedDraftText = useMemo(
+    () => buildTaggedPostContent(draftText, selectedTags),
+    [draftText, selectedTags],
+  );
   const composedDraftLength = composedDraftText.length;
   const visibilityLabel = getPostVisibilityLabel(postVisibility);
   const routeIdsForSubmit =
@@ -1720,21 +1654,13 @@ export default function CommunityPostComposeScreen() {
     (hotspot) => hotspot.hotspotId,
   );
   const submitDisabledReason = !authSession.isAuthenticated
-    ? isEditMode
-      ? "Đăng nhập để chỉnh sửa bài viết."
-      : "Đăng nhập để đăng bài viết cộng đồng."
-    : isEditMode && isLoadingEditingPost
-      ? "Đang tải dữ liệu bài viết."
-      : isEditMode && editingPostError
-        ? "Không thể tải bài viết để chỉnh sửa."
+    ? "Đăng nhập để đăng bài viết cộng đồng."
     : !trimmedDraftText
       ? "Nhập nội dung để bật nút đăng."
       : composedDraftLength > maxPostLength
-        ? "Nội dung đang vượt quá giới hạn."
+        ? "Nội dung và hashtag đang vượt quá giới hạn."
         : null;
   const isSubmitDisabled = submitDisabledReason !== null || isSubmitting;
-  const screenTitle = isEditMode ? "Chỉnh sửa bài viết" : "Tạo bài viết";
-  const submitButtonLabel = isEditMode ? "Lưu" : "Đăng bài";
   const routeSummaryLabel = selectedRoute?.routeName ?? "Chọn tuyến đường";
   const hotspotSummaryLabel =
     selectedHotspots.length === 0
@@ -1857,96 +1783,9 @@ export default function CommunityPostComposeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!isEditMode) {
-        setPostVisibility(getCommunityPostVisibility());
-      }
-    }, [isEditMode]),
+      setPostVisibility(getCommunityPostVisibility());
+    }, []),
   );
-
-  useEffect(() => {
-    if (!isEditMode) {
-      return;
-    }
-
-    let isActive = true;
-
-    async function loadEditingPost() {
-      if (
-        !Number.isInteger(resolvedEditingPostId) ||
-        resolvedEditingPostId <= 0
-      ) {
-        if (!isActive) {
-          return;
-        }
-
-        setEditingPostError("Không xác định được bài viết cần chỉnh sửa.");
-        setIsLoadingEditingPost(false);
-        return;
-      }
-
-      const accessToken = await getValidAccessToken();
-
-      if (!accessToken) {
-        if (!isActive) {
-          return;
-        }
-
-        setEditingPostError(
-          "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại trước khi chỉnh sửa bài viết.",
-        );
-        setIsLoadingEditingPost(false);
-        return;
-      }
-
-      setIsLoadingEditingPost(true);
-      setEditingPostError(null);
-
-      try {
-        const post = await getPostById({
-          accessToken,
-          postId: resolvedEditingPostId,
-          tokenType: authSession.tokenType,
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        setDraftText(readMeaningfulText(post.content) ?? "");
-        setPostVisibility(normalizePostVisibilityValue(post.visibility));
-        setInitialMediaIds(post.medias.map((media) => media.mediaId));
-        setSelectedMedia(
-          dedupeComposerMediaItems(
-            post.medias
-              .map(mapCreatedPostMediaToComposerMediaItem)
-              .filter(
-                (media): media is ComposerMediaItem => media !== null,
-              ),
-          ),
-        );
-      } catch (error) {
-        if (!isActive) {
-          return;
-        }
-
-        setEditingPostError(
-          error instanceof Error
-            ? error.message
-            : "Không thể tải dữ liệu bài viết cần chỉnh sửa.",
-        );
-      } finally {
-        if (isActive) {
-          setIsLoadingEditingPost(false);
-        }
-      }
-    }
-
-    void loadEditingPost();
-
-    return () => {
-      isActive = false;
-    };
-  }, [authSession.tokenType, isEditMode, resolvedEditingPostId]);
 
   useEffect(() => {
     let isActive = true;
@@ -2306,29 +2145,11 @@ export default function CommunityPostComposeScreen() {
     );
   }
 
-  function handleCloseSuccessOverlay() {
-    setSuccessState(null);
-    router.replace("/community" as Href);
-  }
-
   async function handleSubmit() {
     if (!authSession.isAuthenticated) {
       Alert.alert(
         "Cần đăng nhập",
-        isEditMode
-          ? "Bạn cần đăng nhập để chỉnh sửa bài viết cộng đồng."
-          : "Bạn cần đăng nhập để đăng bài viết cộng đồng.",
-      );
-      return;
-    }
-
-    if (
-      isEditMode &&
-      (!Number.isInteger(resolvedEditingPostId) || resolvedEditingPostId <= 0)
-    ) {
-      Alert.alert(
-        "Không thể chỉnh sửa",
-        "Không xác định được bài viết cần chỉnh sửa.",
+        "Bạn cần đăng nhập để đăng bài viết cộng đồng.",
       );
       return;
     }
@@ -2336,7 +2157,7 @@ export default function CommunityPostComposeScreen() {
     if (composedDraftText.length > maxPostLength) {
       Alert.alert(
         "Nội dung quá dài",
-        `Bài viết của bạn đang vượt quá ${maxPostLength} ký tự.`,
+        `Bài viết của bạn đang vượt quá ${maxPostLength} ký tự sau khi gắn thẻ.`,
       );
       return;
     }
@@ -2346,9 +2167,7 @@ export default function CommunityPostComposeScreen() {
     if (!accessToken) {
       Alert.alert(
         "Phiên đăng nhập hết hạn",
-        isEditMode
-          ? "Vui lòng đăng nhập lại trước khi chỉnh sửa bài viết cộng đồng."
-          : "Vui lòng đăng nhập lại trước khi đăng bài viết cộng đồng.",
+        "Vui lòng đăng nhập lại trước khi đăng bài viết cộng đồng.",
       );
       return;
     }
@@ -2356,62 +2175,7 @@ export default function CommunityPostComposeScreen() {
     setIsSubmitting(true);
 
     try {
-      if (isEditMode) {
-        const selectedExistingMediaIds = new Set(
-          selectedMedia
-            .map((media) => media.mediaId)
-            .filter((mediaId): mediaId is number => mediaId !== undefined),
-        );
-        const updatedPost = await updatePost({
-          accessToken,
-          content: composedDraftText,
-          files: selectedMedia
-            .filter((media) => media.mediaId === undefined)
-            .map((media) => ({
-              fileName: media.fileName,
-              mimeType: media.mimeType,
-              uri: media.uri,
-            })),
-          postId: resolvedEditingPostId,
-          removedMediaIds: initialMediaIds.filter(
-            (mediaId) => !selectedExistingMediaIds.has(mediaId),
-          ),
-          tokenType: authSession.tokenType,
-          visibility: postVisibility,
-        });
-        const updatedPostStatus =
-          readMeaningfulText(updatedPost.status)?.toUpperCase() ?? "";
-        const updatedPostVisibility =
-          readMeaningfulText(updatedPost.visibility)?.toUpperCase() ?? "PUBLIC";
-        const shouldAppearInCommunityFeed =
-          updatedPostVisibility === "PUBLIC" && updatedPostStatus === "APPROVED";
-
-        cacheProfilePost(mapCreatedPostToProfilePost(updatedPost));
-
-        if (shouldAppearInCommunityFeed) {
-          const communityFeedPost = mapCreatedPostToCommunityFeedPost(
-            updatedPost,
-          );
-          cacheCommunityPost(communityFeedPost);
-          cacheCommunityExplorerProfile(communityFeedPost);
-        } else {
-          removeCachedCommunityPost(updatedPost.postId);
-        }
-
-        Keyboard.dismiss();
-        setSuccessState({
-          message:
-            updatedPostStatus === "PENDING"
-              ? "Bài viết đã được cập nhật và đang chờ duyệt lại."
-              : updatedPostVisibility !== "PUBLIC"
-                ? "Bài viết đã được cập nhật trong hồ sơ của bạn."
-                : "Bài viết đã được cập nhật trên cộng đồng.",
-          rewardText: null,
-          title: "Cập nhật bài viết thành công",
-        });
-        return;
-      }
-
+      const fallbackTagNames = [...selectedTags];
       const fallbackRouteIds = [...routeIdsForSubmit];
       const createdPost = await createPost({
         accessToken,
@@ -2441,13 +2205,14 @@ export default function CommunityPostComposeScreen() {
           createdPost,
           {
             fallbackRouteIds,
+            fallbackTagNames,
           },
         );
         cacheCommunityPost(communityFeedPost);
         cacheCommunityExplorerProfile(communityFeedPost);
       }
 
-      const rewardText = getCreatedPostRewardText(createdPost);
+      const rewardMessage = getCreatedPostRewardMessage(createdPost);
       const successMessage = isCreatedPostPending(createdPost)
         ? "Bài viết đã được gửi và hiện chỉ xuất hiện trong hồ sơ của bạn để chờ duyệt."
         : createdPostVisibility !== "PUBLIC"
@@ -2455,22 +2220,25 @@ export default function CommunityPostComposeScreen() {
           : isCreatedPostApproved(createdPost) && shouldAppearInCommunityFeed
             ? "Bài viết đã được duyệt và xuất hiện trên cộng đồng."
             : "Bài viết đã được lưu trong hồ sơ của bạn.";
-      const successOverlayMessage = successMessage;
 
-      Keyboard.dismiss();
-      setSuccessState({
-        message: successOverlayMessage,
-        rewardText,
-        title: "Đăng bài thành công",
-      });
+      Alert.alert(
+        "Đăng bài thành công",
+        rewardMessage ? `${successMessage} ${rewardMessage}` : successMessage,
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              router.back();
+            },
+          },
+        ],
+      );
     } catch (error) {
       Alert.alert(
-        isEditMode ? "Không thể cập nhật bài viết" : "Không thể đăng bài",
+        "Không thể đăng bài",
         error instanceof Error
           ? error.message
-          : isEditMode
-            ? "Đã có lỗi xảy ra khi cập nhật bài viết cộng đồng."
-            : "Đã có lỗi xảy ra khi gửi bài viết cộng đồng.",
+          : "Đã có lỗi xảy ra khi gửi bài viết cộng đồng.",
       );
     } finally {
       setIsSubmitting(false);
@@ -2510,7 +2278,7 @@ export default function CommunityPostComposeScreen() {
             </Pressable>
 
             <Text className="text-[18px] font-semibold text-[#111827]">
-              {screenTitle}
+              Tạo bài viết
             </Text>
 
             <Pressable
@@ -2552,230 +2320,201 @@ export default function CommunityPostComposeScreen() {
                   {resolvedComposerIdentity.displayName}
                 </Text>
 
-                {!isEditMode ? (
-                  <View
-                    className="mt-1 self-start rounded-[8px] border px-2.5 py-1"
-                    style={{ borderColor: "#E9E5EA" }}
-                  >
-                    <View className="flex-row items-center">
-                      <SymbolView
-                        name={{
-                          ios: "globe",
-                          android: "public",
-                          web: "public",
+                <View
+                  className="mt-1 self-start rounded-[8px] border px-2.5 py-1"
+                  style={{ borderColor: "#E9E5EA" }}
+                >
+                  <View className="flex-row items-center">
+                    <SymbolView
+                      name={{
+                        ios: "globe",
+                        android: "public",
+                        web: "public",
+                      }}
+                      size={12}
+                      tintColor="#6B7280"
+                    />
+                    <Text className="ml-1.5 text-[11px] font-normal text-[#374151]">
+                      {visibilityLabel}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            <View
+              className="mt-3 rounded-[12px] border bg-white px-3 py-3"
+              style={{ borderColor: "#ECE7EC" }}
+            >
+              <TextInput
+                multiline
+                maxLength={maxPostLength}
+                onChangeText={setDraftText}
+                placeholder="Bạn đang nghĩ gì?"
+                placeholderTextColor="#A09AA8"
+                style={{
+                  color: "#111827",
+                  fontSize: 14,
+                  lineHeight: 20,
+                  minHeight: 92,
+                  padding: 0,
+                  textAlignVertical: "top",
+                }}
+                value={draftText}
+              />
+
+              <View className="mt-2 flex-row items-center justify-end">
+                <Text className="text-[10px] font-normal text-[#A09AA8]">
+                  {`${composedDraftLength}/${maxPostLength}`}
+                </Text>
+              </View>
+            </View>
+
+            <View className="mt-4">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-[13px] font-medium text-[#111827]">
+                  Ảnh / video
+                </Text>
+                <Text className="text-[11px] font-normal text-[#9CA3AF]">
+                  {selectedMedia.length}/{maxMediaCount}
+                </Text>
+              </View>
+
+              <ScrollView
+                className="mt-2.5"
+                contentContainerStyle={{ paddingRight: 8 }}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+              >
+                <MediaAddTile
+                  canAddMore={selectedMedia.length < maxMediaCount}
+                  count={selectedMedia.length}
+                  onPress={() => {
+                    void handlePickMedia();
+                  }}
+                />
+
+                {selectedMedia.map((media, index) => (
+                  <View key={`${media.uri}-${index}`} className="ml-2">
+                    <MediaPreviewCard
+                      item={media}
+                      onPress={() => {
+                        setActiveMediaViewerIndex(index);
+                      }}
+                      onRemove={() => {
+                        setSelectedMedia((current) =>
+                          current.filter(
+                            (_, currentIndex) => currentIndex !== index,
+                          ),
+                        );
+                      }}
+                    />
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+
+            <View className="mt-4 bg-white">
+              <View className="py-1.5">
+                <SelectionRow
+                  iconName={{
+                    ios: "map.fill",
+                    android: "alt_route",
+                    web: "alt_route",
+                  }}
+                  onPress={openRouteSheet}
+                  subtitle={
+                    selectedRoute?.metaLabel ?? "Gắn bài viết với một lộ trình"
+                  }
+                  title="Chọn tuyến đường"
+                  value={routeSummaryLabel}
+                />
+
+                {selectedRoute ? (
+                  <View className="mt-2">
+                    <SelectedEntityChip
+                      fullWidth
+                      imageUri={selectedRoute.coverUri}
+                      label={selectedRoute.routeName}
+                      onRemove={handleClearRouteSelection}
+                      subtitle={selectedRoute.metaLabel}
+                    />
+                  </View>
+                ) : null}
+              </View>
+
+              <View className="py-1.5">
+                <SelectionRow
+                  iconName={{
+                    ios: "mappin.circle.fill",
+                    android: "location_on",
+                    web: "location_on",
+                  }}
+                  onPress={openHotspotSheet}
+                  subtitle={
+                    selectedHotspots.length > 0
+                      ? `Đã chọn ${selectedHotspots.length} địa điểm`
+                      : "Chọn địa điểm liên quan đến bài viết"
+                  }
+                  title="Gắn địa điểm"
+                  value={hotspotSummaryLabel}
+                />
+
+                {selectedHotspots.length > 0 ? (
+                  <View className="mt-2 gap-2">
+                    {selectedHotspots.map((hotspot) => (
+                      <SelectedEntityChip
+                        key={hotspot.hotspotId}
+                        imageUri={hotspot.imageUri}
+                        label={hotspot.hotspotName}
+                        onRemove={() => {
+                          setSelectedHotspots((current) =>
+                            current.filter(
+                              (item) => item.hotspotId !== hotspot.hotspotId,
+                            ),
+                          );
                         }}
-                        size={12}
-                        tintColor="#6B7280"
+                        subtitle={hotspot.distanceLabel ?? hotspot.address}
                       />
-                      <Text className="ml-1.5 text-[11px] font-normal text-[#374151]">
-                        {visibilityLabel}
-                      </Text>
-                    </View>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+
+              <View className="py-1.5">
+                <SelectionRow
+                  iconName={{
+                    ios: "tag.fill",
+                    android: "sell",
+                    web: "sell",
+                  }}
+                  onPress={openTagSheet}
+                  subtitle={
+                    selectedTags.length > 0
+                      ? `Đã chọn ${selectedTags.length} thẻ`
+                      : "Thêm các thẻ liên quan"
+                  }
+                  title="Chọn thẻ"
+                  value={tagSummaryLabel}
+                />
+
+                {selectedTags.length > 0 ? (
+                  <View className="mt-2 flex-row flex-wrap gap-2">
+                    {selectedTags.map((tagName) => (
+                      <TagPill
+                        key={tagName}
+                        active
+                        label={buildHashtagLabel(tagName)}
+                        onPress={() => {
+                          removeSelectedTag(tagName);
+                        }}
+                        removable
+                      />
+                    ))}
                   </View>
                 ) : null}
               </View>
             </View>
-
-            {isEditMode && isLoadingEditingPost ? (
-              <View className="mt-10 items-center justify-center">
-                <ActivityIndicator color="#EB489B" size="small" />
-                <Text className="mt-3 text-[13px] font-normal text-[#6B7280]">
-                  Đang tải bài viết để chỉnh sửa...
-                </Text>
-              </View>
-            ) : editingPostError ? (
-              <View
-                className="mt-4 rounded-[16px] border bg-[#FFF7F7] px-4 py-4"
-                style={{ borderColor: "#F5D0D6" }}
-              >
-                <Text className="text-[13px] font-medium text-[#B42318]">
-                  {editingPostError}
-                </Text>
-              </View>
-            ) : (
-              <>
-                <View
-                  className="mt-3 rounded-[12px] border bg-white px-3 py-3"
-                  style={{ borderColor: "#ECE7EC" }}
-                >
-                  <TextInput
-                    multiline
-                    maxLength={maxPostLength}
-                    onChangeText={setDraftText}
-                    placeholder="Bạn đang nghĩ gì?"
-                    placeholderTextColor="#A09AA8"
-                    style={{
-                      color: "#111827",
-                      fontSize: 14,
-                      lineHeight: 11,
-                      minHeight: 92,
-                      padding: 0,
-                      textAlignVertical: "top",
-                    }}
-                    value={draftText}
-                  />
-
-                  <View className="mt-2 flex-row items-center justify-end">
-                    <Text className="text-[10px] font-normal text-[#A09AA8]">
-                      {`${composedDraftLength}/${maxPostLength}`}
-                    </Text>
-                  </View>
-                </View>
-
-                <View className="mt-4">
-                  <View className="flex-row items-center justify-between">
-                    <Text className="text-[13px] font-medium text-[#111827]">
-                      Ảnh / video
-                    </Text>
-                    <Text className="text-[11px] font-normal text-[#9CA3AF]">
-                      {selectedMedia.length}/{maxMediaCount}
-                    </Text>
-                  </View>
-
-                  <ScrollView
-                    className="mt-2.5"
-                    contentContainerStyle={{ paddingRight: 8 }}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                  >
-                    <MediaAddTile
-                      canAddMore={selectedMedia.length < maxMediaCount}
-                      count={selectedMedia.length}
-                      onPress={() => {
-                        void handlePickMedia();
-                      }}
-                    />
-
-                    {selectedMedia.map((media, index) => (
-                      <View
-                        key={`${media.mediaId ?? media.uri}-${index}`}
-                        className="ml-2"
-                      >
-                        <MediaPreviewCard
-                          item={media}
-                          onPress={() => {
-                            setActiveMediaViewerIndex(index);
-                          }}
-                          onRemove={() => {
-                            setSelectedMedia((current) =>
-                              current.filter(
-                                (_, currentIndex) => currentIndex !== index,
-                              ),
-                            );
-                          }}
-                        />
-                      </View>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                {!isEditMode ? (
-                  <View className="mt-4 bg-white">
-                    <View className="py-1.5">
-                      <SelectionRow
-                        iconName={{
-                          ios: "map.fill",
-                          android: "alt_route",
-                          web: "alt_route",
-                        }}
-                        onPress={openRouteSheet}
-                        subtitle={
-                          selectedRoute?.metaLabel ??
-                          "Gắn bài viết với một lộ trình"
-                        }
-                        title="Chọn tuyến đường"
-                        value={routeSummaryLabel}
-                      />
-
-                      {selectedRoute ? (
-                        <View className="mt-2">
-                          <SelectedEntityChip
-                            fullWidth
-                            imageUri={selectedRoute.coverUri}
-                            label={selectedRoute.routeName}
-                            onRemove={handleClearRouteSelection}
-                            subtitle={selectedRoute.metaLabel}
-                          />
-                        </View>
-                      ) : null}
-                    </View>
-
-                    <View className="py-1.5">
-                      <SelectionRow
-                        iconName={{
-                          ios: "mappin.circle.fill",
-                          android: "location_on",
-                          web: "location_on",
-                        }}
-                        onPress={openHotspotSheet}
-                        subtitle={
-                          selectedHotspots.length > 0
-                            ? `Đã chọn ${selectedHotspots.length} địa điểm`
-                            : "Chọn địa điểm liên quan đến bài viết"
-                        }
-                        title="Gắn địa điểm"
-                        value={hotspotSummaryLabel}
-                      />
-
-                      {selectedHotspots.length > 0 ? (
-                        <View className="mt-2 gap-2">
-                          {selectedHotspots.map((hotspot) => (
-                            <SelectedEntityChip
-                              key={hotspot.hotspotId}
-                              imageUri={hotspot.imageUri}
-                              label={hotspot.hotspotName}
-                              onRemove={() => {
-                                setSelectedHotspots((current) =>
-                                  current.filter(
-                                    (item) =>
-                                      item.hotspotId !== hotspot.hotspotId,
-                                  ),
-                                );
-                              }}
-                              subtitle={hotspot.distanceLabel ?? hotspot.address}
-                            />
-                          ))}
-                        </View>
-                      ) : null}
-                    </View>
-
-                    <View className="py-1.5">
-                      <SelectionRow
-                        iconName={{
-                          ios: "tag.fill",
-                          android: "sell",
-                          web: "sell",
-                        }}
-                        onPress={openTagSheet}
-                        subtitle={
-                          selectedTags.length > 0
-                            ? `Đã chọn ${selectedTags.length} thẻ`
-                            : "Thêm các thẻ liên quan"
-                        }
-                        title="Chọn thẻ"
-                        value={tagSummaryLabel}
-                      />
-
-                      {selectedTags.length > 0 ? (
-                        <View className="mt-2 flex-row flex-wrap gap-2">
-                          {selectedTags.map((tagName) => (
-                            <TagPill
-                              key={tagName}
-                              active
-                              label={buildHashtagLabel(tagName)}
-                              onPress={() => {
-                                removeSelectedTag(tagName);
-                              }}
-                              removable
-                            />
-                          ))}
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
-                ) : null}
-              </>
-            )}
           </ScrollView>
 
           <View
@@ -2788,43 +2527,41 @@ export default function CommunityPostComposeScreen() {
             ]}
           >
             <View className="flex-row items-center gap-3">
-              {!isEditMode ? (
-                <Pressable
-                  className="flex-1 flex-row items-center justify-center rounded-[12px] border bg-white px-3"
-                  onPress={() => {
-                    router.push("/community/post-visibility" as Href);
+              <Pressable
+                className="flex-1 flex-row items-center justify-center rounded-[12px] border bg-white px-3"
+                onPress={() => {
+                  router.push("/community/post-visibility" as Href);
+                }}
+                style={{
+                  borderColor: chipBorderColor,
+                  height: footerActionHeight,
+                }}
+              >
+                <SymbolView
+                  name={{
+                    ios: "globe",
+                    android: "public",
+                    web: "public",
                   }}
-                  style={{
-                    borderColor: chipBorderColor,
-                    height: footerActionHeight,
+                  size={15}
+                  tintColor="#111827"
+                />
+                <Text className="ml-1.5 text-[12px] font-normal text-[#111827]">
+                  {visibilityLabel}
+                </Text>
+                <SymbolView
+                  name={{
+                    ios: "chevron.down",
+                    android: "keyboard_arrow_down",
+                    web: "keyboard_arrow_down",
                   }}
-                >
-                  <SymbolView
-                    name={{
-                      ios: "globe",
-                      android: "public",
-                      web: "public",
-                    }}
-                    size={15}
-                    tintColor="#111827"
-                  />
-                  <Text className="ml-1.5 text-[12px] font-normal text-[#111827]">
-                    {visibilityLabel}
-                  </Text>
-                  <SymbolView
-                    name={{
-                      ios: "chevron.down",
-                      android: "keyboard_arrow_down",
-                      web: "keyboard_arrow_down",
-                    }}
-                    size={16}
-                    tintColor="#9CA3AF"
-                  />
-                </Pressable>
-              ) : null}
+                  size={16}
+                  tintColor="#9CA3AF"
+                />
+              </Pressable>
 
               <Pressable
-                className={`${isEditMode ? "w-full" : "flex-1"} overflow-hidden rounded-[12px]`}
+                className="flex-1 overflow-hidden rounded-[12px]"
                 disabled={isSubmitDisabled}
                 onPress={() => {
                   void handleSubmit();
@@ -2849,7 +2586,7 @@ export default function CommunityPostComposeScreen() {
                       <ActivityIndicator color="#FFFFFF" size="small" />
                     ) : (
                       <Text className="text-[14px] font-normal text-white">
-                        {submitButtonLabel}
+                        Đăng bài
                       </Text>
                     )}
                   </View>
@@ -2860,9 +2597,7 @@ export default function CommunityPostComposeScreen() {
             <View className="mt-1.5 flex-row items-center justify-between gap-4">
               <Text className="flex-1 text-[10px] font-normal text-[#9CA3AF]">
                 {submitDisabledReason ??
-                  (isEditMode
-                    ? "Bạn có thể cập nhật nội dung và ảnh/video của bài viết."
-                    : `Sẽ gắn ${routeIdsForSubmit.length} tuyến đường, ${hotspotIdsForSubmit.length} địa điểm và ${selectedTags.length} thẻ.`)}
+                  `Sẽ gắn ${routeIdsForSubmit.length} tuyến đường, ${hotspotIdsForSubmit.length} địa điểm và ${selectedTags.length} thẻ.`}
               </Text>
               <Text className="text-[10px] font-normal text-[#9CA3AF]">
                 {selectedMedia.length}/{maxMediaCount}
@@ -2870,57 +2605,53 @@ export default function CommunityPostComposeScreen() {
             </View>
           </View>
 
-          {!isEditMode ? (
-            <>
-              <RoutePickerSheet
-                errorMessage={routeError}
-                isLoading={isRouteLoading}
-                onChangeQuery={setRouteSearchQuery}
-                onClearSelection={handleClearRouteSelection}
-                onClose={() => {
-                  setActiveSheet(null);
-                }}
-                onSelectRoute={handleSelectRoute}
-                query={routeSearchQuery}
-                routes={filteredRouteOptions}
-                selectedRouteId={selectedRoute?.routeId ?? null}
-                visible={activeSheet === "route"}
-              />
+          <RoutePickerSheet
+            errorMessage={routeError}
+            isLoading={isRouteLoading}
+            onChangeQuery={setRouteSearchQuery}
+            onClearSelection={handleClearRouteSelection}
+            onClose={() => {
+              setActiveSheet(null);
+            }}
+            onSelectRoute={handleSelectRoute}
+            query={routeSearchQuery}
+            routes={filteredRouteOptions}
+            selectedRouteId={selectedRoute?.routeId ?? null}
+            visible={activeSheet === "route"}
+          />
 
-              <HotspotPickerSheet
-                errorMessage={hotspotError}
-                hotspots={displayedHotspots}
-                isLoading={isHotspotLoading}
-                isSearching={isHotspotSearching}
-                isShowingSearchResults={isShowingHotspotSearchResults}
-                onChangeQuery={handleHotspotSearchQueryChange}
-                onClose={() => {
-                  setActiveSheet(null);
-                }}
-                onConfirm={handleConfirmHotspotSelection}
-                onToggleHotspot={toggleHotspotSelection}
-                query={hotspotSearchQuery}
-                selectedHotspotIds={hotspotSheetSelectionIds}
-                visible={activeSheet === "hotspot"}
-              />
+          <HotspotPickerSheet
+            errorMessage={hotspotError}
+            hotspots={displayedHotspots}
+            isLoading={isHotspotLoading}
+            isSearching={isHotspotSearching}
+            isShowingSearchResults={isShowingHotspotSearchResults}
+            onChangeQuery={handleHotspotSearchQueryChange}
+            onClose={() => {
+              setActiveSheet(null);
+            }}
+            onConfirm={handleConfirmHotspotSelection}
+            onToggleHotspot={toggleHotspotSelection}
+            query={hotspotSearchQuery}
+            selectedHotspotIds={hotspotSheetSelectionIds}
+            visible={activeSheet === "hotspot"}
+          />
 
-              <TagPickerSheet
-                draft={tagDraft}
-                onAddTag={() => {
-                  addSelectedTag(tagDraft);
-                }}
-                onChangeDraft={setTagDraft}
-                onClose={() => {
-                  setActiveSheet(null);
-                }}
-                onRemoveTag={removeSelectedTag}
-                onSelectSuggestedTag={addSelectedTag}
-                selectedTags={selectedTags}
-                suggestedTags={suggestedTagNames}
-                visible={activeSheet === "tag"}
-              />
-            </>
-          ) : null}
+          <TagPickerSheet
+            draft={tagDraft}
+            onAddTag={() => {
+              addSelectedTag(tagDraft);
+            }}
+            onChangeDraft={setTagDraft}
+            onClose={() => {
+              setActiveSheet(null);
+            }}
+            onRemoveTag={removeSelectedTag}
+            onSelectSuggestedTag={addSelectedTag}
+            selectedTags={selectedTags}
+            suggestedTags={suggestedTagNames}
+            visible={activeSheet === "tag"}
+          />
 
           {activeMediaViewerIndex !== null &&
           selectedMediaViewerItems.length > 0 ? (
@@ -2934,19 +2665,6 @@ export default function CommunityPostComposeScreen() {
           ) : null}
         </KeyboardAvoidingView>
       </SafeAreaView>
-
-      {successState !== null ? (
-        <SuccessOverlay
-          avatarFallbackLabel={resolvedComposerIdentity.displayName}
-          avatarUri={resolvedComposerIdentity.avatarUri}
-          description={successState.message}
-          onClose={handleCloseSuccessOverlay}
-          onPrimaryAction={handleCloseSuccessOverlay}
-          primaryActionLabel="OK"
-          rewardText={successState.rewardText}
-          title={successState.title}
-        />
-      ) : null}
     </View>
   );
 }
