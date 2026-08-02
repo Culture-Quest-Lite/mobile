@@ -225,14 +225,14 @@ export default function PremiumSubscriptionScreen() {
     }
     if (paymentResponse.qrCodeUrl || paymentResponse.qrCode) {
       Alert.alert(
-        "Không mở được trang PayOS",
+        "Không mở được trang thanh toán",
         "Bạn có thể quét mã QR bên dưới để thanh toán.",
       );
       return;
     }
     Alert.alert(
-      "Không mở được PayOS",
-      "Backend chưa trả checkoutUrl hoặc mã QR để thanh toán.",
+      "Không mở được trang thanh toán",
+      "Hệ thống chưa trả liên kết hoặc mã QR để thanh toán.",
     );
   }
 
@@ -538,14 +538,14 @@ export default function PremiumSubscriptionScreen() {
             )}
           </Pressable>
 
-          {/* PayOS result */}
+          {/* Payment result */}
           {payment ? (
             <View className="mt-5 rounded-2xl border border-[#EDE8F5] bg-white p-4">
               <Text className="text-[15px] font-extrabold text-[#2B2233]">
-                Thanh toán qua PayOS
+                Hoàn tất thanh toán
               </Text>
               <Text className="mt-1 text-[13px] text-[#8E869A]">
-                Mở trang thanh toán PayOS an toàn. Nếu trình duyệt không mở
+                Mở trang thanh toán an toàn để hoàn tất. Nếu trình duyệt không mở
                 được, hãy quét mã QR bên dưới.
               </Text>
               <Pressable
@@ -553,7 +553,7 @@ export default function PremiumSubscriptionScreen() {
                 className="mt-4 rounded-xl bg-[#7C3AED] px-4 py-3"
               >
                 <Text className="text-center text-[13px] font-extrabold text-white">
-                  Mở trang thanh toán PayOS
+                  Mở trang thanh toán
                 </Text>
               </Pressable>
               {qrImageUri ? (

@@ -358,6 +358,7 @@ const communityRowShadowStyle = {
 
 type ExplorerSummary = {
   avatar: string | null;
+  isPremium: boolean;
   level: number | null;
   name: string;
   username: string;
@@ -1224,7 +1225,7 @@ function ExplorerHeaderAvatar({
   level,
   name,
   username,
-}: ExplorerSummary) {
+}: Omit<ExplorerSummary, "isPremium">) {
   const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
   const initials = getProfileInitials(name, username);
   const shouldShowFallback = !avatar || failedAvatar === avatar;
@@ -1686,6 +1687,7 @@ export default function HomeScreen() {
     "Ngọc";
   const explorerAvatar = explorerSummary?.avatar ?? null;
   const explorerLevel = explorerSummary?.level ?? null;
+  const isPremiumExplorer = explorerSummary?.isPremium ?? false;
   const explorerUsername =
     explorerSummary?.username.trim() ||
     authSession.username?.trim() ||
@@ -2069,6 +2071,7 @@ export default function HomeScreen() {
 
           setExplorerSummary({
             avatar: profile.avatar?.trim() || null,
+            isPremium: profile.isPremium,
             level: profile.level,
             name: resolvedName || "Ngọc",
             username: profile.username.trim(),
@@ -2166,41 +2169,70 @@ export default function HomeScreen() {
             />
           ) : null}
 
-          {/* Compact Premium Promo Banner */}
-          <Pressable
-            onPress={() => router.push("/explore")}
-            className="overflow-hidden rounded-2xl border border-[#FCDDEC] bg-[#FFF0F7] p-3.5 shadow-sm"
-          >
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-3">
-                <View className="mb-1 flex-row items-center gap-1.5 self-start rounded-full bg-[#EB489B] px-2.5 py-0.5">
-                  <SymbolView
-                    name={{
-                      ios: "crown.fill",
-                      android: "workspace_premium",
-                      web: "workspace_premium",
-                    }}
-                    size={10}
-                    tintColor="#FFFFFF"
-                  />
-                  <Text className="text-[9px] font-extrabold uppercase tracking-wider text-white">
-                    CULTUREQUEST PREMIUM
+          {/* Premium status / upsell banner (driven by real subscription data) */}
+          {isPremiumExplorer ? (
+            <View className="overflow-hidden rounded-2xl border border-[#EADFFF] bg-[#F5F0FF] p-3.5 shadow-sm">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 pr-3">
+                  <View className="mb-1 flex-row items-center gap-1.5 self-start rounded-full bg-[#7C3AED] px-2.5 py-0.5">
+                    <SymbolView
+                      name={{
+                        ios: "crown.fill",
+                        android: "workspace_premium",
+                        web: "workspace_premium",
+                      }}
+                      size={10}
+                      tintColor="#FFFFFF"
+                    />
+                    <Text className="text-[9px] font-extrabold uppercase tracking-wider text-white">
+                      PREMIUM EXPLORER
+                    </Text>
+                  </View>
+                  <Text className="text-[14px] font-extrabold text-[#2B2233]">
+                    Bạn đã mở khoá đầy đủ tính năng Premium
+                  </Text>
+                  <Text className="mt-0.5 text-[11px] text-[#8E869A]">
+                    AI Lập kế hoạch, Ghi hành trình Live & Audio Guide đã sẵn sàng ở trang Khám phá
                   </Text>
                 </View>
-                <Text className="text-[14px] font-extrabold text-[#2B2233]">
-                  Mở khóa AI Lập kế hoạch & Ghi hành trình Live
-                </Text>
-                <Text className="mt-0.5 text-[11px] text-[#8E869A]">
-                  Trải nghiệm bộ tính năng Premium (User Plan & Record) tại trang Khám phá
-                </Text>
-              </View>
-              <View className="flex-row items-center rounded-full bg-[#EB489B] px-3 py-1.5">
-                <Text className="text-[11px] font-extrabold text-white">
-                  Khám phá ngay →
-                </Text>
               </View>
             </View>
-          </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => router.push("/subscription/premium")}
+              className="overflow-hidden rounded-2xl border border-[#FCDDEC] bg-[#FFF0F7] p-3.5 shadow-sm"
+            >
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 pr-3">
+                  <View className="mb-1 flex-row items-center gap-1.5 self-start rounded-full bg-[#EB489B] px-2.5 py-0.5">
+                    <SymbolView
+                      name={{
+                        ios: "crown.fill",
+                        android: "workspace_premium",
+                        web: "workspace_premium",
+                      }}
+                      size={10}
+                      tintColor="#FFFFFF"
+                    />
+                    <Text className="text-[9px] font-extrabold uppercase tracking-wider text-white">
+                      CULTUREQUEST PREMIUM
+                    </Text>
+                  </View>
+                  <Text className="text-[14px] font-extrabold text-[#2B2233]">
+                    Mở khóa AI Lập kế hoạch & Ghi hành trình Live
+                  </Text>
+                  <Text className="mt-0.5 text-[11px] text-[#8E869A]">
+                    Trải nghiệm bộ tính năng Premium (User Plan & Record) tại trang Khám phá
+                  </Text>
+                </View>
+                <View className="flex-row items-center rounded-full bg-[#EB489B] px-3 py-1.5">
+                  <Text className="text-[11px] font-extrabold text-white">
+                    Khám phá ngay →
+                  </Text>
+                </View>
+              </View>
+            </Pressable>
+          )}
 
           <View className="gap-4">
             <Text className="text-[17px] font-extrabold text-[#2B2233]">
