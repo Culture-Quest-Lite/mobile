@@ -121,6 +121,29 @@ export function cacheProfilePost(post: ProfilePost) {
   return cachedEntry;
 }
 
+export function getCachedProfilePost(postId?: number | string | null) {
+  const resolvedPostId = normalizePostId(postId);
+
+  if (resolvedPostId === null) {
+    return null;
+  }
+
+  return postsById.get(resolvedPostId) ?? null;
+}
+
+export function updateCachedProfilePost(
+  postId: number,
+  updater: (post: ProfilePost) => ProfilePost,
+) {
+  const currentEntry = getCachedProfilePost(postId);
+
+  if (!currentEntry) {
+    return null;
+  }
+
+  return cacheProfilePost(updater(currentEntry.post));
+}
+
 export function useCachedProfilePosts(options?: UseCachedProfilePostsOptions) {
   const cachedEntries = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 

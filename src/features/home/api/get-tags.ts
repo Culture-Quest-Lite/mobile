@@ -9,6 +9,7 @@ type GetTagsRequest = {
 
 export type ActiveTagDto = {
   createdAt: string;
+  imageUrl?: string | null;
   tagId: number;
   tagName: string;
   tagStatus: string;
@@ -31,6 +32,14 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function isNullableString(value: unknown) {
+  return value === null || value === undefined || typeof value === "string";
+}
+
+function readNullableString(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
 function isTagDto(value: unknown): value is ActiveTagDto {
   if (!isObject(value)) {
     return false;
@@ -40,6 +49,7 @@ function isTagDto(value: unknown): value is ActiveTagDto {
     typeof value.tagId === "number" &&
     typeof value.tagName === "string" &&
     typeof value.tagStatus === "string" &&
+    isNullableString(value.imageUrl) &&
     typeof value.createdAt === "string" &&
     typeof value.updatedAt === "string"
   );
@@ -192,6 +202,7 @@ export async function getActiveTags({
 
     tagsById.set(item.tagId, {
       ...item,
+      imageUrl: readNullableString(item.imageUrl)?.trim() || null,
       tagName: normalizedTagName,
     });
   });

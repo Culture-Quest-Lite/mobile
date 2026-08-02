@@ -10,7 +10,6 @@ import {
 import {
   ActivityIndicator,
   type GestureResponderEvent,
-  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -54,22 +53,12 @@ import {
   unSaveRoute,
   type UserRouteProgressDto,
 } from "@/features/route/api/route-api";
-import {
-  buildRouteDetailGroupPreview,
-  type RouteGroupMember,
-  type RouteGroupVisibility,
-} from "@/features/route/data/route-group-demo";
 import { useCheckins } from "@/lib/checkin-store";
 import { openGoogleMapsMultiStopRoute } from "@/lib/google-maps-navigation";
 import { getHotspotDetailHref } from "@/lib/hotspot-navigation";
 
 const fallbackStopImage =
   "https://i.pinimg.com/736x/f3/0f/e8/f30fe84218790e6ffd25f987d434eb13.jpg";
-const groupPlannerMeetupOptions = [
-  "Thứ 6, 19:00",
-  "Thứ 7, 18:30",
-  "Chủ nhật, 07:15",
-] as const;
 
 const cardShadow = {
   shadowColor: "rgba(28, 45, 80, 0.10)",
@@ -438,202 +427,6 @@ function RouteReviewCard({ review }: { review: RouteReview }) {
   );
 }
 
-function RouteGroupPlannerSheet({
-  isVisible,
-  members,
-  meetingPoint,
-  meetupOption,
-  onClose,
-  onConfirm,
-  onSelectMeetupOption,
-  onToggleMember,
-  onToggleVisibility,
-  routeName,
-  selectedFriendIds,
-  visibility,
-}: {
-  isVisible: boolean;
-  members: RouteGroupMember[];
-  meetingPoint: string;
-  meetupOption: string;
-  onClose: () => void;
-  onConfirm: () => void;
-  onSelectMeetupOption: (option: string) => void;
-  onToggleMember: (memberId: string) => void;
-  onToggleVisibility: (nextVisibility: RouteGroupVisibility) => void;
-  routeName: string;
-  selectedFriendIds: string[];
-  visibility: RouteGroupVisibility;
-}) {
-  return (
-    <Modal
-      visible={isVisible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <Pressable className="flex-1 justify-end bg-black/45" onPress={onClose}>
-        <Pressable
-          className="rounded-t-[32px] bg-[#F7F8FC] px-4 pb-8 pt-4"
-          onPress={(event) => event.stopPropagation()}
-        >
-          <View className="mb-4 items-center">
-            <View className="h-1.5 w-12 rounded-full bg-[#D6DAE6]" />
-          </View>
-
-          <View className="flex-row items-start justify-between gap-3">
-            <View className="flex-1">
-              <Text className="text-[21px] font-extrabold text-[#2B2233]">
-                Mời bạn cùng đi route
-              </Text>
-              <Text className="mt-1 text-[12px] leading-5 text-[#777181]">
-                UI demo cho flow tạo group trên tuyến {routeName}.
-              </Text>
-            </View>
-            <Pressable
-              className="h-9 w-9 items-center justify-center rounded-full bg-white"
-              style={cardShadow}
-              onPress={onClose}
-            >
-              <Text className="text-[17px] font-bold text-[#676270]">×</Text>
-            </Pressable>
-          </View>
-
-          <ScrollView className="mt-4" showsVerticalScrollIndicator={false}>
-            <View className="rounded-3xl bg-white p-4" style={cardShadow}>
-              <Text className="text-[12px] font-bold uppercase tracking-wider text-[#EB489B]">
-                Lịch hẹn gợi ý
-              </Text>
-              <View className="mt-3 flex-row flex-wrap gap-2">
-                {groupPlannerMeetupOptions.map((option) => {
-                  const isSelected = meetupOption === option;
-
-                  return (
-                    <Pressable
-                      key={option}
-                      className={`rounded-full px-3 py-2 ${isSelected ? "bg-[#EB489B]" : "bg-[#F4EFF8]"}`}
-                      onPress={() => onSelectMeetupOption(option)}
-                    >
-                      <Text
-                        className={`text-[11px] font-extrabold ${isSelected ? "text-white" : "text-[#584E61]"}`}
-                      >
-                        {option}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <Text className="mt-4 text-[12px] font-bold uppercase tracking-wider text-[#EB489B]">
-                Cách tham gia
-              </Text>
-              <View className="mt-3 flex-row gap-2">
-                {(
-                  [
-                    { value: "FOLLOWING", label: "Chỉ bạn đang follow" },
-                    { value: "LINK", label: "Ai có link đều join được" },
-                  ] as const
-                ).map((option) => {
-                  const isSelected = visibility === option.value;
-
-                  return (
-                    <Pressable
-                      key={option.value}
-                      className={`flex-1 rounded-2xl border px-3 py-3 ${isSelected ? "border-[#EB489B] bg-[#FFF5FA]" : "border-[#E4E7EF] bg-white"}`}
-                      onPress={() => onToggleVisibility(option.value)}
-                    >
-                      <Text
-                        className={`text-[12px] font-extrabold ${isSelected ? "text-[#D93679]" : "text-[#3C3445]"}`}
-                      >
-                        {option.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-
-            <View className="mt-3 rounded-3xl bg-white p-4" style={cardShadow}>
-              <Text className="text-[12px] font-bold uppercase tracking-wider text-[#EB489B]">
-                Bạn đang follow
-              </Text>
-              <Text className="mt-1 text-[12px] leading-5 text-[#777181]">
-                Chọn những người muốn rủ cùng đi. Đây là dữ liệu giả để duyệt
-                UI.
-              </Text>
-
-              <View className="mt-3 gap-2.5">
-                {members.map((member) => {
-                  const isSelected = selectedFriendIds.includes(member.id);
-
-                  return (
-                    <Pressable
-                      key={member.id}
-                      className={`flex-row items-center gap-3 rounded-2xl border px-3 py-3 ${isSelected ? "border-[#F3BED2] bg-[#FFF7FA]" : "border-[#E6EAF2] bg-[#FBFCFE]"}`}
-                      onPress={() => onToggleMember(member.id)}
-                    >
-                      <Image
-                        source={member.avatarUri}
-                        contentFit="cover"
-                        style={{ height: 46, width: 46, borderRadius: 999 }}
-                      />
-                      <View className="flex-1">
-                        <Text className="text-[14px] font-bold text-[#2B2233]">
-                          {member.name}
-                        </Text>
-                        <Text className="mt-0.5 text-[11px] text-[#7A7283]">
-                          {member.role} · {member.username}
-                        </Text>
-                      </View>
-                      <View
-                        className={`h-7 w-7 items-center justify-center rounded-full ${isSelected ? "bg-[#EB489B]" : "bg-[#E7EAF2]"}`}
-                      >
-                        {isSelected ? (
-                          <SymbolView
-                            name={{
-                              ios: "checkmark",
-                              android: "check",
-                              web: "check",
-                            }}
-                            size={13}
-                            tintColor="#fff"
-                          />
-                        ) : null}
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-
-            <View className="mt-3 rounded-3xl border border-[#F3D7E2] bg-[#FFF9FC] p-4">
-              <Text className="text-[12px] font-bold uppercase tracking-wider text-[#EB489B]">
-                Tóm tắt group
-              </Text>
-              <Text className="mt-2 text-[13px] font-extrabold text-[#2B2233]">
-                {selectedFriendIds.length} người được mời · {meetingPoint}
-              </Text>
-              <Text className="mt-1 text-[11px] leading-5 text-[#7A7283]">
-                Sau này có thể thêm chat, polling thời gian, trạng thái đã xem
-                lời mời và check-in theo nhóm.
-              </Text>
-            </View>
-          </ScrollView>
-
-          <Pressable
-            className="mt-4 rounded-2xl bg-[#EB489B] py-3.5"
-            onPress={onConfirm}
-          >
-            <Text className="text-center text-[13px] font-extrabold text-white">
-              Tạo group demo
-            </Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
 export default function RouteDetailScreen() {
   const { id: routeId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -648,14 +441,6 @@ export default function RouteDetailScreen() {
   const [savedRouteId, setSavedRouteId] = useState<number | null>(null);
   const [activeRouteProgress, setActiveRouteProgress] =
     useState<UserRouteProgressDto | null>(null);
-  const [showGroupPlanner, setShowGroupPlanner] = useState(false);
-  const [selectedGroupFriendIds, setSelectedGroupFriendIds] = useState<
-    string[]
-  >([]);
-  const [groupPlannerVisibility, setGroupPlannerVisibility] =
-    useState<RouteGroupVisibility>("FOLLOWING");
-  const [selectedGroupMeetupOption, setSelectedGroupMeetupOption] =
-    useState<string>(groupPlannerMeetupOptions[1]);
 
   const { height: screenHeight } = useWindowDimensions();
   const collapsedMapHeight = 240;
@@ -854,16 +639,14 @@ export default function RouteDetailScreen() {
       ) ?? orderedStops[0]
     );
   }, [checkedInIds, orderedStops]);
-  const routeGroupPreview = useMemo(
-    () => (route ? buildRouteDetailGroupPreview(route) : null),
-    [route],
-  );
 
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-white">
         <ActivityIndicator color="#EB489B" />
-        <Text className="mt-3 text-[14px] text-[#8E869A]">Đang tải chi tiết tuyến...</Text>
+        <Text className="mt-3 text-[14px] text-[#8E869A]">
+          Đang tải chi tiết tuyến...
+        </Text>
       </SafeAreaView>
     );
   }
@@ -989,41 +772,6 @@ export default function RouteDetailScreen() {
     } finally {
       setIsStartingRoute(false);
     }
-  }
-
-  function toggleSelectedGroupFriend(memberId: string) {
-    setSelectedGroupFriendIds((current) =>
-      current.includes(memberId)
-        ? current.filter((id) => id !== memberId)
-        : [...current, memberId],
-    );
-  }
-
-  function handleConfirmDemoGroup() {
-    const routeGroupName = routeGroupPreview?.routeName ?? "tuyến này";
-    const selectedNames =
-      routeGroupPreview?.invitedFriends
-        .filter((friend) => selectedGroupFriendIds.includes(friend.id))
-        .map((friend) => friend.name)
-        .join(", ") ?? "";
-
-    routeSystemAlert.alert(
-      "Đã tạo group demo",
-      selectedNames
-        ? `Đã tạo group cho ${routeGroupName} và mời: ${selectedNames}.`
-        : `Đã tạo group demo cho ${routeGroupName}.`,
-    );
-    setShowGroupPlanner(false);
-  }
-
-  function openDemoGroupPlanner() {
-    if (routeGroupPreview && selectedGroupFriendIds.length === 0) {
-      setSelectedGroupFriendIds(
-        routeGroupPreview.invitedFriends.slice(0, 2).map((friend) => friend.id),
-      );
-    }
-
-    setShowGroupPlanner(true);
   }
 
   return (
@@ -1196,58 +944,60 @@ export default function RouteDetailScreen() {
           </View>
 
           <View className="mt-3.5 gap-2.5">
-            {routeGroupPreview ? (
-              <View className="overflow-hidden rounded-[30px]">
-                <LinearGradient
-                  colors={["#FFF7FA", "#FCEEF4", "#F9E7F0"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  className="p-3.5"
-                >
-                  <View className="self-start rounded-full bg-[#F6E5ED] px-3 py-1.5">
-                    <View className="flex-row items-center gap-2">
-                      <SymbolView
-                        name={{
-                          ios: "person.2",
-                          android: "groups",
-                          web: "groups",
-                        }}
-                        size={12}
-                        tintColor="#B94A77"
-                      />
-                      <Text className="text-[12px] font-extrabold uppercase tracking-wider text-[#8A5570]">
-                        Đi cùng nhau
-                      </Text>
-                    </View>
+            <View className="overflow-hidden rounded-[30px]">
+              <LinearGradient
+                colors={["#FFF7FA", "#FCEEF4", "#F9E7F0"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                className="p-3.5"
+              >
+                <View className="self-start rounded-full bg-[#F6E5ED] px-3 py-1.5">
+                  <View className="flex-row items-center gap-2">
+                    <SymbolView
+                      name={{
+                        ios: "person.2",
+                        android: "groups",
+                        web: "groups",
+                      }}
+                      size={12}
+                      tintColor="#B94A77"
+                    />
+                    <Text className="text-[12px] font-extrabold uppercase tracking-wider text-[#8A5570]">
+                      Đi cùng nhau
+                    </Text>
                   </View>
+                </View>
 
-                  <Text className="text-[14px] leading-[15px] text-[#6F6671] pt-1">
-                    Tạo nhóm, chia sẻ link rủ bạn bè cùng nhau chinh phục cung
-                    đường này.
-                  </Text>
+                <Text className="pt-1 text-[14px] leading-[15px] text-[#6F6671]">
+                  Chọn một nhóm bạn đã tạo trước đó để gắn với tuyến. Liên kết
+                  sẽ được lưu sau khi bạn xác nhận.
+                </Text>
 
-                  <Pressable
-                    className="mt-2 rounded-full bg-[#D95B8D] px-4 py-3"
-                    onPress={openDemoGroupPlanner}
-                  >
-                    <View className="flex-row items-center justify-center gap-2.5">
-                      <SymbolView
-                        name={{
-                          ios: "person.badge.plus",
-                          android: "person_add",
-                          web: "person_add",
-                        }}
-                        size={15}
-                        tintColor="#FFFFFF"
-                      />
-                      <Text className="text-center text-[14px] font-bold text-white">
-                        Tạo nhóm cho tuyến này
-                      </Text>
-                    </View>
-                  </Pressable>
-                </LinearGradient>
-              </View>
-            ) : null}
+                <Pressable
+                  className="mt-2 rounded-full bg-[#D95B8D] px-4 py-3"
+                  onPress={() => {
+                    router.push(
+                      `/route/${route.routeId}/group-quest?routeName=${encodeURIComponent(route.routeName)}` as Href,
+                    );
+                  }}
+                >
+                  <View className="flex-row items-center justify-center gap-2.5">
+                    <SymbolView
+                      name={{
+                        ios: "person.badge.plus",
+                        android: "person_add",
+                        web: "person_add",
+                      }}
+                      size={15}
+                      tintColor="#FFFFFF"
+                    />
+                    <Text className="text-center text-[14px] font-bold text-white">
+                      Chọn nhóm để tham gia tuyến
+                    </Text>
+                  </View>
+                </Pressable>
+              </LinearGradient>
+            </View>
 
             <View className="mt-0.5 h-px bg-[#F0DEE7]" />
           </View>
@@ -1582,23 +1332,6 @@ export default function RouteDetailScreen() {
           </Pressable>
         </View>
       </View>
-
-      {routeGroupPreview ? (
-        <RouteGroupPlannerSheet
-          isVisible={showGroupPlanner}
-          members={routeGroupPreview.invitedFriends}
-          meetingPoint={routeGroupPreview.meetingPoint}
-          meetupOption={selectedGroupMeetupOption}
-          onClose={() => setShowGroupPlanner(false)}
-          onConfirm={handleConfirmDemoGroup}
-          onSelectMeetupOption={setSelectedGroupMeetupOption}
-          onToggleMember={toggleSelectedGroupFriend}
-          onToggleVisibility={setGroupPlannerVisibility}
-          routeName={route.routeName}
-          selectedFriendIds={selectedGroupFriendIds}
-          visibility={groupPlannerVisibility}
-        />
-      ) : null}
     </View>
   );
 }

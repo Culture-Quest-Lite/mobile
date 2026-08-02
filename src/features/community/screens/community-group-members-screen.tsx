@@ -25,6 +25,7 @@ import {
 
 import { appToast } from "@/components/ui/app-toast";
 import { SymbolView } from "@/components/ui/symbol-view";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import {
   getValidAccessToken,
   useAuthSession,
@@ -43,13 +44,6 @@ import { buildCommunityInviteWebUrl } from "../lib/community-group-invite-links"
 
 const detailTextMaxFontSizeMultiplier = 1.05;
 const communityGroupsHeroImage = require("../../../../assets/images/tachnengroup.png");
-
-const avatarPalettes = [
-  ["#EB489B", "#F58752"],
-  ["#F58752", "#FFC93C"],
-  ["#F973A8", "#FB7185"],
-  ["#FB7185", "#F59E0B"],
-] as const;
 
 const palette = {
   accent: "#EB489B",
@@ -189,25 +183,6 @@ function formatRequestElapsedTime(value?: string | null) {
   return formatGroupCreatedDate(normalizedDateValue);
 }
 
-function getInitials(name?: string | null) {
-  const normalizedName = readMeaningfulText(name) ?? "CQ";
-  const parts = normalizedName.split(/\s+/).filter(Boolean);
-
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-
-  return `${parts[0]?.[0] ?? ""}${parts.at(-1)?.[0] ?? ""}`.toUpperCase();
-}
-
-function getAvatarPalette(seed: string) {
-  const paletteIndex =
-    Array.from(seed).reduce((total, char) => total + char.charCodeAt(0), 0) %
-    avatarPalettes.length;
-
-  return avatarPalettes[paletteIndex] as readonly [string, string];
-}
-
 function getRoleLabel(role?: string | null) {
   switch ((role ?? "").trim().toUpperCase()) {
     case "LEADER":
@@ -219,36 +194,6 @@ function getRoleLabel(role?: string | null) {
   }
 }
 
-function AvatarMonogram({
-  displayName,
-  size,
-}: {
-  displayName: string;
-  size: number;
-}) {
-  return (
-    <LinearGradient
-      colors={getAvatarPalette(displayName)}
-      end={{ x: 1, y: 0.5 }}
-      start={{ x: 0, y: 0.5 }}
-      style={{
-        alignItems: "center",
-        borderRadius: size / 2,
-        height: size,
-        justifyContent: "center",
-        width: size,
-      }}
-    >
-      <Text
-        className="font-bold text-white"
-        style={{ fontSize: Math.max(14, size * 0.33), lineHeight: size * 0.33 }}
-      >
-        {getInitials(displayName)}
-      </Text>
-    </LinearGradient>
-  );
-}
-
 function ProfileAvatar({
   avatarUri,
   displayName,
@@ -256,25 +201,7 @@ function ProfileAvatar({
   avatarUri: string | null;
   displayName: string;
 }) {
-  const [failedUri, setFailedUri] = useState<string | null>(null);
-  const hasError = !avatarUri || failedUri === avatarUri;
-
-  if (hasError) {
-    return <AvatarMonogram displayName={displayName} size={46} />;
-  }
-
-  return (
-    <View className="h-[46px] w-[46px] overflow-hidden rounded-full bg-white">
-      <Image
-        source={{ uri: avatarUri }}
-        resizeMode="cover"
-        style={{ height: 46, width: 46 }}
-        onError={() => {
-          setFailedUri(avatarUri);
-        }}
-      />
-    </View>
-  );
+  return <UserAvatar displayName={displayName} size={46} uri={avatarUri} />;
 }
 
 function MemberRow({

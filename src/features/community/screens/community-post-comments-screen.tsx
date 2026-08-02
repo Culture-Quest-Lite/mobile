@@ -1,5 +1,10 @@
 import { Image } from "expo-image";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+  type Href,
+} from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -20,16 +25,37 @@ import {
 
 import { SymbolView } from "@/components/ui/symbol-view";
 import {
+  UserAvatar,
+  UserAvatarFallback,
+} from "@/components/ui/user-avatar";
+import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 import { commentPost } from "@/features/home/api/comment-post";
+import { getHotspotById } from "@/features/home/api/get-hotspot-by-id";
 import {
   getPostComments,
   type PostComment,
 } from "@/features/home/api/get-post-comments";
-import { useLikedPostIds } from "@/features/home/data/liked-post-store";
-import { getPostVisibilityIcon } from "@/lib/post-visibility";
+import { likePost } from "@/features/home/api/like-post";
+import {
+  getApiHotspotRouteSlug,
+  getHotspotHref,
+} from "@/features/home/data/hotspots";
+import {
+  addLikedPostId,
+  removeLikedPostId,
+  useLikedPostIds,
+} from "@/features/home/data/liked-post-store";
+import { getMyProfile } from "@/features/profile/api/get-me";
+import { getRouteById } from "@/features/route/api/route-api";
+import { useScreenLayout } from "@/hooks/use-screen-layout";
+import {
+  getPostVisibilityIcon,
+  getPostVisibilityLabel,
+} from "@/lib/post-visibility";
+import { getCachedCommunityExplorerProfile } from "../data/community-explorer-profile-cache";
 import {
   cacheCommunityPost,
   getCachedCommunityPost,
@@ -53,6 +79,17 @@ const communityCommentMaxLength = 320;
 const communityPostCommentsPageSize = 10;
 
 type CommunityCommentsStatus = "idle" | "loading" | "ready" | "error";
+type ResolvedHotspotPreview = {
+  hotspotId: number;
+  imageUri: string | null;
+  hotspotName: string;
+};
+type ResolvedRoutePreview = {
+  hotspotCount: number;
+  routeDurationLabel: string | null;
+  routeId: number;
+  routeName: string;
+};
 
 const meaninglessTextValues = new Set(["", "string", "null", "undefined"]);
 const avatarPalettes = [
@@ -92,6 +129,14 @@ function formatCompactCount(value?: number | null) {
   const formattedValue = resolvedValue / 1000;
 
   return `${formattedValue >= 10 ? formattedValue.toFixed(0) : formattedValue.toFixed(1)}K`;
+}
+
+function formatCommunityTagLabel(tag: string) {
+  const meaningfulTag = readMeaningfulText(tag)
+    ?.replace(/^#/, "")
+    .replace(/\s+/g, "_");
+
+  return meaningfulTag ? `#${meaningfulTag}` : null;
 }
 
 function formatCommunityTime(isoTimestamp?: string | null) {
@@ -178,6 +223,28 @@ function buildPostMediaItems(post: CommunityFeedPost) {
   return [];
 }
 
+function formatRouteEstimateLabel(estimateTimeMinutes?: number | null) {
+  if (
+    typeof estimateTimeMinutes !== "number" ||
+    !Number.isFinite(estimateTimeMinutes) ||
+    estimateTimeMinutes <= 0
+  ) {
+    return null;
+  }
+
+  if (estimateTimeMinutes >= 480) {
+    const dayCount = Math.max(1, Math.round(estimateTimeMinutes / 480));
+    return `${dayCount} ngày`;
+  }
+
+  if (estimateTimeMinutes >= 60) {
+    const hourCount = Math.max(1, Math.round(estimateTimeMinutes / 60));
+    return `${hourCount} giờ`;
+  }
+
+  return `${Math.round(estimateTimeMinutes)} phút`;
+}
+
 function getCommentDisplayName(item: PostComment) {
   return (
     readMeaningfulText(item.displayName) ??
@@ -196,6 +263,26 @@ function replaceCommunityPostCommentCount(
     ...post,
     commentCountValue: normalizedCommentCount,
     comments: formatCompactCount(normalizedCommentCount),
+  };
+}
+
+function replaceCommunityPostLikeState(
+  post: CommunityFeedPost,
+  {
+    isLiked,
+    likeCount,
+  }: {
+    isLiked: boolean;
+    likeCount: number;
+  },
+) {
+  const normalizedLikeCount = Math.max(0, Math.round(likeCount));
+
+  return {
+    ...post,
+    isLiked,
+    likeCountValue: normalizedLikeCount,
+    likes: formatCompactCount(normalizedLikeCount),
   };
 }
 
@@ -250,7 +337,6 @@ function replaceCommunityPostStats(
 }
 
 function AvatarMonogram({
-  colors,
   initials,
   size,
 }: {
@@ -258,139 +344,637 @@ function AvatarMonogram({
   initials: string;
   size: number;
 }) {
+  return <UserAvatarFallback displayName={initials} size={size} />;
+}
+
+function CommunityPostMediaGallery({
+  edgeToEdgeWidth,
+  items,
+}: {
+  edgeToEdgeWidth: number;
+  items: CommunityFeedMediaItem[];
+}) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [galleryWidth, setGalleryWidth] = useState(
+    Math.max(edgeToEdgeWidth - 52, 240),
+  );
+  const safeActiveIndex = Math.max(0, Math.min(items.length - 1, activeIndex));
+  const mediaHeight = Math.min(Math.max(galleryWidth * 0.74, 188), 278);
+
+  if (items.length === 0) {
+    return null;
+  }
+
   return (
     <View
-      style={{
-        alignItems: "center",
-        borderRadius: size / 2,
-        height: size,
-        justifyContent: "center",
-        overflow: "hidden",
-        width: size,
+      className="overflow-hidden rounded-[18px] bg-[#EEF2F7]"
+      onLayout={(event) => {
+        const nextWidth = event.nativeEvent.layout.width;
+
+        if (Math.abs(nextWidth - galleryWidth) > 1) {
+          setGalleryWidth(nextWidth);
+        }
       }}
     >
-      <View
-        style={{
-          backgroundColor: colors[0],
-          height: size,
-          position: "absolute",
-          width: size,
-        }}
-      />
-      <View
-        style={{
-          backgroundColor: colors[1],
-          borderRadius: size / 2,
-          height: size * 0.72,
-          opacity: 0.82,
-          position: "absolute",
-          right: -(size * 0.1),
-          top: -(size * 0.12),
-          width: size * 0.72,
-        }}
-      />
-      <Text
-        className="font-black text-white"
-        style={{ fontSize: Math.max(14, size * 0.34) }}
-      >
-        {initials}
-      </Text>
+      {items.length === 1 ? (
+        <Image
+          source={items[0].source}
+          contentFit="cover"
+          style={{ height: mediaHeight, width: "100%" }}
+        />
+      ) : (
+        <>
+          <ScrollView
+            decelerationRate="fast"
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(event) => {
+              const layoutWidth =
+                galleryWidth ||
+                event.nativeEvent.layoutMeasurement.width ||
+                1;
+              const nextIndex = Math.round(
+                event.nativeEvent.contentOffset.x / layoutWidth,
+              );
+
+              setActiveIndex(
+                Math.max(0, Math.min(items.length - 1, nextIndex)),
+              );
+            }}
+          >
+            {items.map((item) => (
+              <Image
+                key={item.key}
+                source={item.source}
+                contentFit="cover"
+                style={{ height: mediaHeight, width: galleryWidth }}
+              />
+            ))}
+          </ScrollView>
+
+          <View className="absolute right-3 top-3 rounded-full bg-black/35 px-2.5 py-1">
+            <Text
+              className="text-[11px] font-semibold text-white"
+              style={{ includeFontPadding: false, lineHeight: 12 }}
+            >
+              {`${safeActiveIndex + 1}/${items.length}`}
+            </Text>
+          </View>
+
+          <View className="absolute bottom-3 left-0 right-0 flex-row items-center justify-center">
+            {items.map((item, index) => (
+              <View
+                key={`${item.key}-dot`}
+                className={`mx-1 rounded-full ${index === safeActiveIndex ? "bg-[#F15C9B]" : "bg-white/88"}`}
+                style={{
+                  height: index === safeActiveIndex ? 7 : 6,
+                  width: index === safeActiveIndex ? 7 : 6,
+                }}
+              />
+            ))}
+          </View>
+        </>
+      )}
     </View>
   );
 }
 
-function SocialCountChip({
+function CommunityPostFooterAction({
   active = false,
+  disabled = false,
   icon,
-  value,
+  isLoading = false,
+  label,
+  onPress,
 }: {
   active?: boolean;
+  disabled?: boolean;
   icon: {
     android: string;
     ios: string;
     web: string;
   };
-  value: string;
+  isLoading?: boolean;
+  label: string;
+  onPress?: (() => void) | undefined;
 }) {
   return (
-    <View className="flex-row items-center">
-      <SymbolView
-        name={icon}
-        size={15}
-        tintColor={active ? "#2563EB" : "#6B7280"}
-      />
+    <Pressable
+      className="flex-row items-center rounded-full pr-2"
+      disabled={disabled || !onPress}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        opacity: disabled ? 0.5 : pressed ? 0.72 : 1,
+      })}
+    >
+      {isLoading ? (
+        <ActivityIndicator color="#F15C9B" size="small" />
+      ) : (
+        <SymbolView
+          name={icon}
+          size={18}
+          tintColor={active ? "#F15C9B" : "#7A7380"}
+        />
+      )}
       <Text
-        className="ml-1 text-[13px] font-semibold"
+        className="ml-1.5 text-[13px] text-[#706775]"
         style={{
-          color: active ? "#2563EB" : "#4B5563",
           includeFontPadding: false,
-          lineHeight: 13,
+          lineHeight: 12,
         }}
       >
-        {value}
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function CommunityPostTagChip({ label }: { label: string }) {
+  return (
+    <View className="mr-2 mt-1.5 rounded-full bg-[#F4F1F4] px-3 py-0.5">
+      <Text
+        className="text-[12px] text-[#7D7680]"
+        style={{ includeFontPadding: false, lineHeight: 12 }}
+      >
+        {label}
       </Text>
     </View>
   );
 }
 
-function SocialPostMediaGallery({
-  items,
+function CommunityPostRouteCard({
+  label,
+  onPress,
 }: {
-  items: CommunityFeedMediaItem[];
+  label: string;
+  onPress?: () => void;
 }) {
-  if (items.length === 0) {
-    return null;
-  }
-
-  if (items.length === 1) {
-    return (
-      <View className="overflow-hidden bg-[#EEF2F7]">
-        <Image
-          source={items[0].source}
-          contentFit="cover"
-          style={{ height: 360, width: "100%" }}
+  return (
+    <Pressable
+      className="rounded-[16px] bg-[#FFF4F8] px-2.5 py-1.5"
+      disabled={!onPress}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        opacity: onPress && pressed ? 0.72 : 1,
+      })}
+    >
+      <View className="flex-row items-center">
+        <View className="mr-2 h-8 w-8 items-center justify-center rounded-full bg-white/80">
+          <SymbolView
+            name={{
+              ios: "point.topleft.down.curvedto.point.bottomright.up",
+              android: "alt_route",
+              web: "alt_route",
+            }}
+            size={15}
+            tintColor="#F2608E"
+          />
+        </View>
+        <View className="flex-1 pr-2">
+          <Text
+            className="text-[12px] font-semibold text-[#F2608E]"
+            style={{ includeFontPadding: false, lineHeight: 11 }}
+          >
+            Route
+          </Text>
+          <Text
+            className="text-[13px] font-medium text-[#4B414C]"
+            numberOfLines={2}
+            style={{ includeFontPadding: false, lineHeight: 12 }}
+          >
+            {label}
+          </Text>
+        </View>
+        <SymbolView
+          name={{
+            ios: "chevron.right",
+            android: "chevron_right",
+            web: "chevron_right",
+          }}
+          size={16}
+          tintColor="#8A7D86"
         />
       </View>
-    );
-  }
+    </Pressable>
+  );
+}
 
-  const previewItems = items.slice(0, 4);
-  const hiddenCount = Math.max(items.length - previewItems.length, 0);
+function CommunityPostHotspotCard({
+  count,
+  imageUris,
+  onPress,
+  subtitle,
+}: {
+  count: number;
+  imageUris: string[];
+  onPress?: () => void;
+  subtitle: string;
+}) {
+  const previewImageUris = imageUris.slice(0, 3);
+  const remainingCount = Math.max(imageUris.length - previewImageUris.length, 0);
 
   return (
-    <View className="flex-row flex-wrap bg-[#EEF2F7]" style={{ gap: 2 }}>
-      {previewItems.map((item, index) => {
-        const isWideSingle = previewItems.length === 3 && index === 0;
-        const shouldShowOverlay =
-          index === previewItems.length - 1 && hiddenCount > 0;
-        const itemWidth =
-          previewItems.length === 3 && index > 0 ? "49.7%" : "49.7%";
-        const itemHeight = isWideSingle ? 272 : 180;
-
-        return (
-          <View
-            key={item.key}
-            style={{
-              height: itemHeight,
-              overflow: "hidden",
-              position: "relative",
-              width:
-                previewItems.length === 3 && index === 0 ? "100%" : itemWidth,
-            }}
-          >
-            <Image
-              source={item.source}
-              contentFit="cover"
-              style={{ height: "100%", width: "100%" }}
-            />
-            {shouldShowOverlay ? (
-              <View className="absolute inset-0 items-center justify-center bg-[#111827]/48">
-                <Text className="text-[32px] font-black text-white">{`+${hiddenCount}`}</Text>
-              </View>
-            ) : null}
-          </View>
-        );
+    <Pressable
+      className="rounded-[16px] bg-[#F2FAFB] px-2.5 py-1.5"
+      disabled={!onPress}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        opacity: onPress && pressed ? 0.72 : 1,
       })}
+    >
+      <View className="flex-row items-start">
+        <View className="mr-2 h-8 w-8 items-center justify-center rounded-full bg-white/80">
+          <SymbolView
+            name={{
+              ios: "mappin.and.ellipse",
+              android: "location_on",
+              web: "location_on",
+            }}
+            size={15}
+            tintColor="#18A7B4"
+          />
+        </View>
+        <View className="flex-1 pr-2">
+          <Text
+            className="text-[12px] font-semibold text-[#18A7B4]"
+            style={{ includeFontPadding: false, lineHeight: 11 }}
+          >
+            {`${count} hotspot`}
+          </Text>
+          <Text
+            className="text-[13px] text-[#6D6671]"
+            numberOfLines={2}
+            style={{ includeFontPadding: false, lineHeight: 11 }}
+          >
+            {subtitle}
+          </Text>
+          {previewImageUris.length > 0 ? (
+            <View className="mt-1 flex-row items-center">
+              {previewImageUris.map((imageUri, index) => (
+                <View
+                  key={`${imageUri}-${index}`}
+                  className={index === 0 ? "h-6 w-6 overflow-hidden rounded-full border-2 border-white" : "-ml-2 h-6 w-6 overflow-hidden rounded-full border-2 border-white"}
+                >
+                  <Image
+                    source={{ uri: imageUri }}
+                    contentFit="cover"
+                    style={{ height: "100%", width: "100%" }}
+                  />
+                </View>
+              ))}
+              {remainingCount > 0 ? (
+                <View className="-ml-2 h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#E7EEF2]">
+                  <Text
+                    className="text-[11px] font-semibold text-[#55606C]"
+                    style={{ includeFontPadding: false, lineHeight: 11 }}
+                  >
+                    {`+${remainingCount}`}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+        <SymbolView
+          name={{
+            ios: "chevron.right",
+            android: "chevron_right",
+            web: "chevron_right",
+          }}
+          size={16}
+          tintColor="#8A7D86"
+        />
+      </View>
+    </Pressable>
+  );
+}
+
+function CommunityPostAuthorAvatar({
+  authorId,
+  authorName,
+  size,
+}: {
+  authorId: string;
+  authorName: string;
+  avatarColors: readonly [string, string];
+  initials: string;
+  size: number;
+}) {
+  const avatarUri =
+    getCachedCommunityExplorerProfile(authorId)?.profile.avatar ?? null;
+  return (
+    <UserAvatar
+      displayName={authorName}
+      size={size}
+      uri={avatarUri}
+    />
+  );
+}
+
+function ExpandablePostCaption({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const normalizedText = text.trim();
+  const maxLength = 150;
+  const shouldTruncate = normalizedText.length > maxLength;
+  const collapsedText = shouldTruncate
+    ? `${normalizedText.slice(0, maxLength).trimEnd()}...`
+    : normalizedText;
+
+  return (
+    <Text
+      className="text-[13px] text-[#2B232D]"
+      style={{ includeFontPadding: false, lineHeight: 12 }}
+    >
+      {expanded || !shouldTruncate ? normalizedText : collapsedText}
+      {shouldTruncate ? (
+        <Text
+          className="font-medium text-[#D4578F]"
+          onPress={() => {
+            setExpanded((current) => !current);
+          }}
+        >
+          {expanded ? " Rút gọn" : " Xem thêm"}
+        </Text>
+      ) : null}
+    </Text>
+  );
+}
+
+function CommunityPostCard({
+  edgeToEdgeWidth,
+  isEmbedded = false,
+  isLiked,
+  isLiking,
+  post,
+  resolvedHotspots,
+  resolvedRoutes,
+  onCommentPost,
+  onLikePost,
+  onOpenProfile,
+  onOpenHotspot,
+  onOpenRoute,
+}: {
+  edgeToEdgeWidth: number;
+  isEmbedded?: boolean;
+  isLiked: boolean;
+  isLiking: boolean;
+  post: CommunityFeedPost;
+  resolvedHotspots: Record<number, ResolvedHotspotPreview>;
+  resolvedRoutes: Record<number, ResolvedRoutePreview>;
+  onCommentPost: (post: CommunityFeedPost) => void;
+  onLikePost: (post: CommunityFeedPost) => void;
+  onOpenProfile: (authorId: string) => void;
+  onOpenHotspot: (hotspotId: number) => void;
+  onOpenRoute: (routeId: number) => void;
+}) {
+  const mediaItems = buildPostMediaItems(post);
+  const visibilityIcon = getPostVisibilityIcon(post.visibility);
+  const visibilityLabel = getPostVisibilityLabel(post.visibility);
+  const hotspotIds = (post.hotspotIds ?? []).filter(
+    (hotspotId) => Number.isInteger(hotspotId) && hotspotId > 0,
+  );
+  const routeIds = (post.routeIds ?? []).filter(
+    (routeId) => Number.isInteger(routeId) && routeId > 0,
+  );
+  const tagLabels = post.tags
+    .map(formatCommunityTagLabel)
+    .filter((tagLabel): tagLabel is string => Boolean(tagLabel));
+  const routeItems = routeIds.map((routeId) => ({
+    id: routeId,
+    hotspotCount: resolvedRoutes[routeId]?.hotspotCount ?? 0,
+    label: resolvedRoutes[routeId]?.routeName?.trim() || `Route #${routeId}`,
+    routeDurationLabel: resolvedRoutes[routeId]?.routeDurationLabel ?? null,
+  }));
+  const hotspotItems = hotspotIds.map((hotspotId) => ({
+    id: hotspotId,
+    imageUri: resolvedHotspots[hotspotId]?.imageUri ?? null,
+    label:
+      resolvedHotspots[hotspotId]?.hotspotName?.trim() ||
+      `Hotspot #${hotspotId}`,
+  }));
+  const primaryRouteLabel =
+    routeItems.length <= 1
+      ? routeItems[0]?.label ?? null
+      : `${routeItems[0]?.label ?? "Route"} +${routeItems.length - 1}`;
+  const hotspotSubtitle =
+    hotspotItems.length === 0
+      ? null
+      : hotspotItems.length === 1
+        ? hotspotItems[0]?.label ?? null
+        : hotspotItems.length === 2
+          ? `${hotspotItems[0]?.label ?? ""}, ${hotspotItems[1]?.label ?? ""}`
+          : `${hotspotItems[0]?.label ?? ""}, ${hotspotItems[1]?.label ?? ""} và ${hotspotItems.length - 2} địa điểm khác`;
+  const hotspotImageUris = hotspotItems
+    .map((item) => item.imageUri)
+    .filter((imageUri): imageUri is string => Boolean(imageUri));
+
+  return (
+    <View
+      className={isEmbedded ? "bg-transparent px-0 pb-2.5 pt-1" : "rounded-[24px] border bg-white px-4 pb-2.5 pt-3"}
+      style={
+        isEmbedded
+          ? undefined
+          : {
+              borderColor: "#F0E7ED",
+              borderWidth: 0.8,
+              shadowColor: "rgba(64, 34, 58, 0.08)",
+              shadowOpacity: 1,
+              shadowRadius: 20,
+              shadowOffset: { width: 0, height: 10 },
+              elevation: 4,
+            }
+      }
+    >
+      <View className="flex-row items-start">
+        <Pressable
+          accessibilityLabel={`Mở hồ sơ của ${post.author}`}
+          accessibilityRole={post.canOpenProfile === false ? undefined : "button"}
+          className="rounded-full"
+          disabled={post.canOpenProfile === false}
+          hitSlop={8}
+          onPress={() => {
+            if (post.canOpenProfile === false) {
+              return;
+            }
+
+            onOpenProfile(post.authorId);
+          }}
+        >
+          <CommunityPostAuthorAvatar
+            authorId={post.authorId}
+            authorName={post.author}
+            avatarColors={post.avatarColors}
+            initials={post.initials}
+            size={42}
+          />
+        </Pressable>
+
+        <View className="ml-3 flex-1 pr-2">
+          <Text
+            className="text-[15px] font-bold text-[#2F2432]"
+            numberOfLines={1}
+            style={{ includeFontPadding: false, lineHeight: 12 }}
+          >
+            {post.author}
+          </Text>
+
+          <View className="-mt-0.5 flex-row flex-wrap items-center gap-1">
+            <Text
+              className="text-[12px] text-[#8A7D86]"
+              style={{ includeFontPadding: false, lineHeight: 11 }}
+            >
+              {post.time}
+            </Text>
+            <Text
+              className="text-[12px] text-[#8A7D86]"
+              style={{ includeFontPadding: false, lineHeight: 11 }}
+            >
+              •
+            </Text>
+            <SymbolView name={visibilityIcon} size={10} tintColor="#8A7D86" />
+            <Text
+              className="text-[12px] text-[#8A7D86]"
+              style={{ includeFontPadding: false, lineHeight: 11 }}
+            >
+              {visibilityLabel}
+            </Text>
+          </View>
+        </View>
+
+        <View className="h-8 w-8 items-center justify-center">
+          <SymbolView
+            name={{
+              ios: "ellipsis",
+              android: "more_horiz",
+              web: "more_horiz",
+            }}
+            size={20}
+            tintColor="#554C56"
+          />
+        </View>
+      </View>
+
+      <View className="pt-1.5">
+        <ExpandablePostCaption text={post.caption} />
+
+        {tagLabels.length > 0 ? (
+          <View className="mt-1 flex-row flex-wrap items-center">
+            {tagLabels.map((tagLabel) => (
+              <CommunityPostTagChip
+                key={`${post.id}-${tagLabel}`}
+                label={tagLabel}
+              />
+            ))}
+          </View>
+        ) : null}
+
+        {primaryRouteLabel ? (
+          <View className="mt-1.5">
+            <CommunityPostRouteCard
+              label={primaryRouteLabel}
+              onPress={() => {
+                onOpenRoute(routeItems[0]?.id ?? 0);
+              }}
+            />
+          </View>
+        ) : null}
+
+        {hotspotSubtitle ? (
+          <View className="mt-1.5">
+            <CommunityPostHotspotCard
+              count={hotspotItems.length}
+              imageUris={hotspotImageUris}
+              onPress={() => {
+                onOpenHotspot(hotspotItems[0]?.id ?? 0);
+              }}
+              subtitle={hotspotSubtitle}
+            />
+          </View>
+        ) : null}
+      </View>
+
+      {mediaItems.length > 0 ? (
+        <View className="mt-2">
+          <CommunityPostMediaGallery
+            edgeToEdgeWidth={edgeToEdgeWidth}
+            items={mediaItems}
+          />
+        </View>
+      ) : null}
+
+      <View className="mt-1.5 flex-row items-center">
+        <CommunityPostFooterAction
+          active={isLiked}
+          disabled={!post.canLike || isLiking}
+          icon={
+            isLiked
+              ? {
+                  ios: "heart.fill",
+                  android: "favorite",
+                  web: "favorite",
+                }
+              : {
+                  ios: "heart",
+                  android: "favorite_border",
+                  web: "favorite_border",
+                }
+          }
+          isLoading={isLiking}
+          onPress={
+            post.canLike
+              ? () => {
+                  onLikePost(post);
+                }
+              : undefined
+          }
+          label={post.likes}
+        />
+        <View className="ml-4">
+          <CommunityPostFooterAction
+            disabled={!post.canComment}
+            icon={{
+              ios: "bubble.left",
+              android: "chat_bubble_outline",
+              web: "chat_bubble_outline",
+            }}
+            onPress={
+              post.canComment
+                ? () => {
+                    onCommentPost(post);
+                  }
+                : undefined
+            }
+            label={post.comments}
+          />
+        </View>
+        <View className="ml-4">
+          <CommunityPostFooterAction
+            disabled
+            icon={{
+              ios: "arrowshape.turn.up.right",
+              android: "share",
+              web: "share",
+            }}
+            label="Chia sẻ"
+          />
+        </View>
+        <View className="flex-1" />
+        <View className="h-9 w-9 items-center justify-center rounded-full">
+          <SymbolView
+            name={{
+              ios: "bookmark",
+              android: "bookmark_border",
+              web: "bookmark_border",
+            }}
+            size={18}
+            tintColor="#706775"
+          />
+        </View>
+      </View>
     </View>
   );
 }
@@ -421,13 +1005,13 @@ function CommunityCommentItem({
         <View className="self-start rounded-[16px] bg-[#F3F4F6] px-3 py-2">
           <Text
             className="text-[14px] font-bold text-[#111827]"
-            style={{ includeFontPadding: false, lineHeight: 14 }}
+            style={{ includeFontPadding: false, lineHeight: 12 }}
           >
             {displayName}
           </Text>
           <Text
             className="mt-0.5 text-[14px] text-[#374151]"
-            style={{ includeFontPadding: false, lineHeight: 16 }}
+            style={{ includeFontPadding: false, lineHeight: 12 }}
           >
             {readMeaningfulText(item.comment) ?? "Đã gửi một bình luận."}
           </Text>
@@ -556,6 +1140,7 @@ export default function CommunityPostCommentsScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
+  const { safeWidth } = useScreenLayout({ maxContentWidth: 640 });
   const commentInputRef = useRef<TextInput>(null);
   const { id } = useLocalSearchParams<{ id?: string }>();
   const resolvedPostId = Number.parseInt(
@@ -579,16 +1164,42 @@ export default function CommunityPostCommentsScreen() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [replyTarget, setReplyTarget] = useState<PostComment | null>(null);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [isLikingPost, setIsLikingPost] = useState(false);
+  const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
+  const [resolvedHotspots, setResolvedHotspots] = useState<
+    Record<number, ResolvedHotspotPreview>
+  >({});
+  const [resolvedRoutes, setResolvedRoutes] = useState<
+    Record<number, ResolvedRoutePreview>
+  >({});
   const persistedLikedPostIds = useLikedPostIds(likedPostsAccountKey);
   const likedPostIdsSet = useMemo(
     () => new Set(persistedLikedPostIds),
     [persistedLikedPostIds],
   );
 
-  const postMediaItems = useMemo(
-    () => (post ? buildPostMediaItems(post) : []),
-    [post],
-  );
+  const hotspotIdsToResolve = useMemo(() => {
+    const hotspotIds = new Set<number>();
+
+    for (const hotspotId of post?.hotspotIds ?? []) {
+      if (Number.isInteger(hotspotId) && hotspotId > 0) {
+        hotspotIds.add(hotspotId);
+      }
+    }
+
+    return Array.from(hotspotIds);
+  }, [post]);
+  const routeIdsToResolve = useMemo(() => {
+    const routeIds = new Set<number>();
+
+    for (const routeId of post?.routeIds ?? []) {
+      if (Number.isInteger(routeId) && routeId > 0) {
+        routeIds.add(routeId);
+      }
+    }
+
+    return Array.from(routeIds);
+  }, [post]);
   const { repliesByParentId, topLevelComments } = useMemo(() => {
     const commentIds = new Set(comments.map((item) => item.postActionId));
     const nextRepliesByParentId: Record<number, PostComment[]> = {};
@@ -706,8 +1317,141 @@ export default function CommunityPostCommentsScreen() {
     }, [loadComments, resolvedPostId]),
   );
 
-  function handleReplyToComment(item: PostComment) {
-    setReplyTarget(item);
+  useEffect(() => {
+    if (hotspotIdsToResolve.length === 0) {
+      return;
+    }
+
+    let isActive = true;
+
+    async function loadHotspotPreviews() {
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const results = await Promise.allSettled(
+          hotspotIdsToResolve.map((hotspotId) =>
+            getHotspotById({
+              accessToken,
+              hotspotId,
+              tokenType: authSession.tokenType,
+            }),
+          ),
+        );
+
+        if (!isActive) {
+          return;
+        }
+
+        setResolvedHotspots((current) => {
+          const next = { ...current };
+
+          for (const result of results) {
+            if (result.status !== "fulfilled") {
+              continue;
+            }
+
+            const hotspotName = readMeaningfulText(result.value.hotspotName);
+
+            if (!hotspotName) {
+              continue;
+            }
+
+            const imageUri =
+              result.value.medias
+                .map((media) => readMeaningfulText(media.fileUrl))
+                .find((uri): uri is string => Boolean(uri)) ?? null;
+
+            next[result.value.hotspotId] = {
+              hotspotId: result.value.hotspotId,
+              imageUri,
+              hotspotName,
+            };
+          }
+
+          return next;
+        });
+      } catch (error) {
+        console.warn("[community-comments] load hotspot previews failed", {
+          error: error instanceof Error ? error.message : error,
+        });
+      }
+    }
+
+    void loadHotspotPreviews();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.isAuthenticated, authSession.tokenType, hotspotIdsToResolve]);
+
+  useEffect(() => {
+    if (routeIdsToResolve.length === 0) {
+      return;
+    }
+
+    let isActive = true;
+
+    async function loadRoutePreviews() {
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const results = await Promise.allSettled(
+          routeIdsToResolve.map((routeId) =>
+            getRouteById({
+              accessToken,
+              routeId,
+              tokenType: authSession.tokenType,
+            }),
+          ),
+        );
+
+        if (!isActive) {
+          return;
+        }
+
+        setResolvedRoutes((current) => {
+          const next = { ...current };
+
+          for (const result of results) {
+            if (result.status !== "fulfilled") {
+              continue;
+            }
+
+            const routeName = readMeaningfulText(result.value.routeName);
+
+            if (!routeName) {
+              continue;
+            }
+
+            next[result.value.routeId] = {
+              hotspotCount: result.value.hotspots.length,
+              routeDurationLabel: formatRouteEstimateLabel(
+                result.value.estimateTime,
+              ),
+              routeId: result.value.routeId,
+              routeName,
+            };
+          }
+
+          return next;
+        });
+      } catch (error) {
+        console.warn("[community-comments] load route previews failed", {
+          error: error instanceof Error ? error.message : error,
+        });
+      }
+    }
+
+    void loadRoutePreviews();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.isAuthenticated, authSession.tokenType, routeIdsToResolve]);
+
+  function focusCommentComposer() {
     setIsComposerFocused(true);
 
     requestAnimationFrame(() => {
@@ -715,8 +1459,173 @@ export default function CommunityPostCommentsScreen() {
     });
   }
 
+  function handleOpenCommentComposer() {
+    focusCommentComposer();
+  }
+
+  function handleOpenProfile(authorId: string) {
+    void (async () => {
+      if (currentProfileId && authorId === currentProfileId) {
+        router.push("/profile" as Href);
+        return;
+      }
+
+      if (!currentProfileId && authSession.isAuthenticated) {
+        try {
+          const accessToken = await getValidAccessToken();
+
+          if (accessToken) {
+            const profile = await getMyProfile({
+              accessToken,
+              tokenType: authSession.tokenType,
+            });
+
+            setCurrentProfileId(profile.id);
+            router.push(
+              (authorId === profile.id
+                ? "/profile"
+                : `/community/profile/${authorId}`) as Href,
+            );
+            return;
+          }
+        } catch (error) {
+          console.warn("[community-comments] resolve profile route failed", {
+            authorId,
+            error: error instanceof Error ? error.message : error,
+          });
+        }
+      }
+
+      router.push(`/community/profile/${authorId}` as Href);
+    })();
+  }
+
+  function openHotspotDetail(hotspotId: number) {
+    if (!Number.isInteger(hotspotId) || hotspotId <= 0) {
+      return;
+    }
+
+    router.push(getHotspotHref(getApiHotspotRouteSlug(hotspotId), hotspotId));
+  }
+
+  function openRouteDetail(routeId: number) {
+    if (!Number.isInteger(routeId) || routeId <= 0) {
+      return;
+    }
+
+    router.push(`/route/${routeId}` as Href);
+  }
+
+  function handleReplyToComment(item: PostComment) {
+    setReplyTarget(item);
+    focusCommentComposer();
+  }
+
   function handleCancelReplyTarget() {
     setReplyTarget(null);
+  }
+
+  async function handleLikePost(targetPost: CommunityFeedPost) {
+    const postNumericId = targetPost.postNumericId;
+
+    if (
+      !targetPost.canLike ||
+      typeof postNumericId !== "number" ||
+      postNumericId <= 0 ||
+      isLikingPost
+    ) {
+      return;
+    }
+
+    if (!authSession.isAuthenticated) {
+      Alert.alert(
+        "Cần đăng nhập",
+        "Bạn cần đăng nhập để thả tim bài viết cộng đồng.",
+      );
+      return;
+    }
+
+    const accessToken = await getValidAccessToken();
+
+    if (!accessToken) {
+      Alert.alert(
+        "Phiên đăng nhập hết hạn",
+        "Vui lòng đăng nhập lại trước khi thả tim bài viết cộng đồng.",
+      );
+      return;
+    }
+
+    const currentIsLiked =
+      targetPost.isLiked === true || likedPostIdsSet.has(postNumericId);
+    const currentLikeCount = Math.max(
+      0,
+      Math.round(targetPost.likeCountValue ?? 0),
+    );
+    const optimisticIsLiked = !currentIsLiked;
+    const optimisticLikeCount = optimisticIsLiked
+      ? currentLikeCount + 1
+      : Math.max(0, currentLikeCount - 1);
+    const optimisticPost = replaceCommunityPostLikeState(targetPost, {
+      isLiked: optimisticIsLiked,
+      likeCount: optimisticLikeCount,
+    });
+
+    setIsLikingPost(true);
+    setPost(optimisticPost);
+    cacheCommunityPost(optimisticPost);
+    updateCachedCommunityPost(postNumericId, () => optimisticPost);
+
+    try {
+      const result = await likePost({
+        accessToken,
+        postId: postNumericId,
+        tokenType: authSession.tokenType,
+      });
+      const resolvedIsLiked = result.isLiked ?? optimisticIsLiked;
+      const resolvedLikeCount = result.likeCount ?? optimisticLikeCount;
+      const resolvedPost = replaceCommunityPostLikeState(optimisticPost, {
+        isLiked: resolvedIsLiked,
+        likeCount: resolvedLikeCount,
+      });
+
+      setPost(resolvedPost);
+      cacheCommunityPost(resolvedPost);
+      updateCachedCommunityPost(postNumericId, () => resolvedPost);
+
+      if (likedPostsAccountKey) {
+        if (resolvedIsLiked) {
+          addLikedPostId(likedPostsAccountKey, postNumericId);
+        } else {
+          removeLikedPostId(likedPostsAccountKey, postNumericId);
+        }
+      }
+    } catch (error) {
+      const revertedPost = replaceCommunityPostLikeState(targetPost, {
+        isLiked: currentIsLiked,
+        likeCount: currentLikeCount,
+      });
+
+      setPost(revertedPost);
+      cacheCommunityPost(revertedPost);
+      updateCachedCommunityPost(postNumericId, () => revertedPost);
+
+      if (likedPostsAccountKey) {
+        if (currentIsLiked) {
+          addLikedPostId(likedPostsAccountKey, postNumericId);
+        } else {
+          removeLikedPostId(likedPostsAccountKey, postNumericId);
+        }
+      }
+
+      Alert.alert(
+        "Không thể thả tim",
+        error instanceof Error
+          ? error.message
+          : "Đã có lỗi xảy ra khi thả tim bài viết cộng đồng.",
+      );
+    } finally {
+      setIsLikingPost(false);
+    }
   }
 
   async function handleSubmitComment() {
@@ -789,7 +1698,6 @@ export default function CommunityPostCommentsScreen() {
     return <NotFoundState />;
   }
 
-  const palette = getAvatarPalette(`${post.author}-${post.authorId}`);
   const postNumericId = post.postNumericId ?? null;
   const isPostLiked =
     (typeof postNumericId === "number" && likedPostIdsSet.has(postNumericId)) ||
@@ -850,133 +1758,23 @@ export default function CommunityPostCommentsScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 16 }}
           >
-            <View className="bg-white">
-              <View className="px-4 pb-2 pt-2">
-                <View className="flex-row items-start">
-                  <AvatarMonogram
-                    colors={palette}
-                    initials={getNameInitials(post.author)}
-                    size={42}
-                  />
-
-                  <View className="ml-3 flex-1">
-                    <View className="flex-row items-center">
-                      <Text
-                        className="text-[16px] font-black text-[#111827]"
-                        numberOfLines={1}
-                        style={{ includeFontPadding: false, lineHeight: 17 }}
-                      >
-                        {post.author}
-                      </Text>
-                      <SymbolView
-                        name={{
-                          ios: "checkmark.seal.fill",
-                          android: "verified",
-                          web: "verified",
-                        }}
-                        size={15}
-                        tintColor="#2563EB"
-                      />
-                    </View>
-                    <View className="mt-1 flex-row items-center">
-                      <Text
-                        className="text-[12px] font-medium text-[#6B7280]"
-                        style={{ includeFontPadding: false, lineHeight: 13 }}
-                      >
-                        {post.time}
-                      </Text>
-                      <Text className="mx-1 text-[12px] text-[#9CA3AF]">·</Text>
-                      <SymbolView
-                        name={getPostVisibilityIcon(post.visibility)}
-                        size={13}
-                        tintColor="#9CA3AF"
-                      />
-                    </View>
-                  </View>
-                </View>
-
-                <Text
-                  className="mt-1.5 text-[14px] text-[#111827]"
-                  style={{ includeFontPadding: false, lineHeight: 16 }}
-                >
-                  {post.caption}
-                </Text>
-              </View>
-
-              <SocialPostMediaGallery items={postMediaItems} />
-
-              <View className="border-t border-[#E5E7EB] px-4 py-2">
-                <View className="flex-row items-center justify-between gap-3">
-                  <View className="flex-row items-center gap-4">
-                    <SocialCountChip
-                      active={isPostLiked}
-                      icon={
-                        isPostLiked
-                          ? {
-                              ios: "hand.thumbsup.fill",
-                              android: "thumb_up",
-                              web: "thumb_up",
-                            }
-                          : {
-                              ios: "hand.thumbsup",
-                              android: "thumb_up_off_alt",
-                              web: "thumb_up_off_alt",
-                            }
-                      }
-                      value={post.likes}
-                    />
-                    <SocialCountChip
-                      icon={{
-                        ios: "bubble.left",
-                        android: "chat_bubble_outline",
-                        web: "chat_bubble_outline",
-                      }}
-                      value={post.comments}
-                    />
-                    {typeof post.replyCountValue === "number" ? (
-                      <SocialCountChip
-                        icon={{
-                          ios: "arrowshape.turn.up.left",
-                          android: "reply",
-                          web: "reply",
-                        }}
-                        value={
-                          post.replies ??
-                          formatCompactCount(post.replyCountValue)
-                        }
-                      />
-                    ) : null}
-                    <SocialCountChip
-                      icon={{
-                        ios: "square.and.arrow.up",
-                        android: "ios_share",
-                        web: "ios_share",
-                      }}
-                      value={post.shares}
-                    />
-                  </View>
-
-                  {/* {isPostLiked ? (
-                    <View className="flex-row items-center rounded-full bg-[#EFF6FF] px-2.5 py-1">
-                      <SymbolView
-                        name={{
-                          ios: "hand.thumbsup.fill",
-                          android: "thumb_up",
-                          web: "thumb_up",
-                        }}
-                        size={12}
-                        tintColor="#2563EB"
-                      />
-                      <Text
-                        className="ml-1 text-[12px] font-semibold text-[#2563EB]"
-                        style={{ includeFontPadding: false, lineHeight: 13 }}
-                      >
-                        Đã thích
-                      </Text>
-                    </View>
-                  ) : null} */}
-                </View>
-              </View>
+            <View className="bg-white px-4 pb-2 pt-2">
+              <CommunityPostCard
+                edgeToEdgeWidth={safeWidth}
+                isEmbedded
+                isLiked={isPostLiked}
+                isLiking={isLikingPost}
+                post={post}
+                resolvedHotspots={resolvedHotspots}
+                resolvedRoutes={resolvedRoutes}
+                onCommentPost={handleOpenCommentComposer}
+                onLikePost={(targetPost) => {
+                  void handleLikePost(targetPost);
+                }}
+                onOpenProfile={handleOpenProfile}
+                onOpenHotspot={openHotspotDetail}
+                onOpenRoute={openRouteDetail}
+              />
             </View>
 
             <View className="px-4 pb-4 pt-2.5">

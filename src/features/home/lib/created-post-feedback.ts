@@ -8,7 +8,7 @@ function formatPointReward(value: number) {
   return new Intl.NumberFormat("vi-VN").format(value);
 }
 
-export function getCreatedPostRewardMessage(createdPost: CreatedPostResponse) {
+export function getCreatedPostRewardPoints(createdPost: CreatedPostResponse) {
   const resolvedReward =
     typeof createdPost.pointRemaining === "number" &&
     Number.isFinite(createdPost.pointRemaining)
@@ -16,6 +16,26 @@ export function getCreatedPostRewardMessage(createdPost: CreatedPostResponse) {
       : 0;
 
   if (resolvedReward <= 0) {
+    return null;
+  }
+
+  return resolvedReward;
+}
+
+export function getCreatedPostRewardText(createdPost: CreatedPostResponse) {
+  const resolvedReward = getCreatedPostRewardPoints(createdPost);
+
+  if (resolvedReward === null) {
+    return null;
+  }
+
+  return `+${formatPointReward(resolvedReward)} điểm`;
+}
+
+export function getCreatedPostRewardMessage(createdPost: CreatedPostResponse) {
+  const resolvedReward = getCreatedPostRewardPoints(createdPost);
+
+  if (resolvedReward === null) {
     return null;
   }
 

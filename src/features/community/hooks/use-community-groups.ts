@@ -1,5 +1,5 @@
 import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   getValidAccessToken,
@@ -15,12 +15,21 @@ export type CommunityGroupsStatus = "idle" | "loading" | "ready" | "error";
 
 export function useCommunityGroups() {
   const authSession = useAuthSession();
+  const communitySessionKey = authSession.isAuthenticated
+    ? authSession.username?.trim() || authSession.displayName.trim() || "authenticated-user"
+    : "guest";
+  const communitySessionKeyRef = useRef(communitySessionKey);
   const [groups, setGroups] = useState<CommunityGroupPayload[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [status, setStatus] = useState<CommunityGroupsStatus>("idle");
 
+  useEffect(() => {
+    communitySessionKeyRef.current = communitySessionKey;
+  }, [communitySessionKey]);
+
   const loadCommunityGroups = useCallback(
     async (isActive?: () => boolean) => {
+      const sessionKeyAtRequestStart = communitySessionKey;
       setStatus("loading");
       setErrorMessage(null);
 
@@ -33,7 +42,10 @@ export function useCommunityGroups() {
           tokenType: authSession.tokenType,
         });
 
-        if (isActive && !isActive()) {
+        if (
+          (isActive && !isActive()) ||
+          communitySessionKeyRef.current !== sessionKeyAtRequestStart
+        ) {
           return;
         }
 
@@ -50,7 +62,10 @@ export function useCommunityGroups() {
           error: error instanceof Error ? error.message : error,
         });
 
-        if (isActive && !isActive()) {
+        if (
+          (isActive && !isActive()) ||
+          communitySessionKeyRef.current !== sessionKeyAtRequestStart
+        ) {
           return;
         }
 
@@ -63,7 +78,7 @@ export function useCommunityGroups() {
         setStatus("error");
       }
     },
-    [authSession.isAuthenticated, authSession.tokenType],
+    [authSession.isAuthenticated, authSession.tokenType, communitySessionKey],
   );
 
   useFocusEffect(
@@ -78,8 +93,8 @@ export function useCommunityGroups() {
     }, [loadCommunityGroups]),
   );
 
-  const reload = useCallback(() => {
-    void loadCommunityGroups();
+  const reload = useCallback(async () => {
+    await loadCommunityGroups();
   }, [loadCommunityGroups]);
 
   return {
