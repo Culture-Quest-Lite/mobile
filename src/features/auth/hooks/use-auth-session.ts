@@ -1,16 +1,24 @@
 import { useSyncExternalStore } from "react";
 
-import {
-  loginWithGoogleViaKeycloak,
-  refreshGoogleAccessToken,
-} from "@/features/auth/api/google-login";
 import { loginWithPassword } from "@/features/auth/api/login";
 import { refreshAccessToken } from "@/features/auth/api/refresh-token";
+import {
+  loginWithSocialViaKeycloak,
+  refreshSocialAccessToken,
+  type SocialProvider,
+} from "@/features/auth/api/social-login";
+import { syncSocialAccount } from "@/features/auth/api/social-sync";
 import { readStoredJson, writeStoredJson } from "@/lib/persistent-json-storage";
 
 export type AuthRole = "guest" | "explorer";
 
-export type AuthProvider = "password" | "google";
+export type AuthProvider = "password" | SocialProvider;
+
+function isSocialProvider(
+  provider: AuthProvider | null,
+): provider is SocialProvider {
+  return provider === "google" || provider === "facebook";
+}
 
 export type AuthSession = {
   accessToken: string | null;
@@ -115,6 +123,7 @@ function createExplorerSession({
   refreshExpiresAt = null,
   refreshToken = null,
   tokenType = null,
+  username,
 }: {
   accessToken?: string | null;
   authProvider?: AuthProvider;
@@ -123,8 +132,10 @@ function createExplorerSession({
   refreshExpiresAt?: number | null;
   refreshToken?: string | null;
   tokenType?: string | null;
+  username?: string;
 }): AuthSession {
   const normalizedName = name?.trim();
+  const normalizedUsername = username?.trim();
 
   return {
     accessToken,
@@ -137,7 +148,7 @@ function createExplorerSession({
     refreshToken,
     role: "explorer",
     tokenType,
-    username: normalizedName || null,
+    username: normalizedUsername || normalizedName || null,
   };
 }
 
@@ -163,22 +174,24 @@ async function refreshAuthSessionInternal() {
 
   try {
     // Refresh token Keycloak bị bind theo client: token cấp cho mobile qua
-    // Google/Keycloak không refresh được qua backend nên phải gọi thẳng Keycloak.
-    const response =
-      currentSession.authProvider === "google"
-        ? await refreshGoogleAccessToken(currentSession.refreshToken)
-        : await refreshAccessToken({
-            refreshToken: currentSession.refreshToken,
-          });
+    // Google/Facebook không refresh được qua backend nên phải gọi thẳng Keycloak.
+    const response = isSocialProvider(currentSession.authProvider)
+      ? await refreshSocialAccessToken(currentSession.refreshToken)
+      : await refreshAccessToken({
+          refreshToken: currentSession.refreshToken,
+        });
     const now = Date.now();
     const refreshedSession = createExplorerSession({
       accessToken: response.accessToken,
       authProvider: currentSession.authProvider ?? "password",
       expiresAt: now + response.expiresIn * 1000,
-      name: currentSession.username ?? currentSession.displayName,
+      // displayName đã ở dạng tên gọi ngắn, username có thể là email nên phải
+      // giữ riêng hai giá trị, nếu không sau mỗi lần refresh app sẽ chào bằng email.
+      name: currentSession.displayName,
       refreshExpiresAt: now + response.refreshExpiresIn * 1000,
       refreshToken: response.refreshToken,
       tokenType: response.tokenType,
+      username: currentSession.username ?? undefined,
     });
 
     if (
@@ -228,19 +241,35 @@ export async function signInWithPassword(username: string, password: string) {
   return response;
 }
 
-export async function signInWithGoogle() {
-  const response = await loginWithGoogleViaKeycloak();
+export async function signInWithSocial(provider: SocialProvider) {
+  const response = await loginWithSocialViaKeycloak(provider);
+
+  // Backend chỉ biết tới người dùng này khi được sync: bỏ qua bước dưới thì user
+  // mới sẽ không có row trong bảng users và mọi màn hình sau đó đều lỗi.
+  let syncedAccount;
+  try {
+    syncedAccount = await syncSocialAccount({
+      accessToken: response.accessToken,
+      provider,
+      tokenType: response.tokenType,
+    });
+  } catch (error) {
+    resetAuthSessionToGuest();
+    throw error;
+  }
+
   const now = Date.now();
 
   setAuthSession(
     createExplorerSession({
       accessToken: response.accessToken,
-      authProvider: "google",
+      authProvider: provider,
       expiresAt: now + response.expiresIn * 1000,
-      name: response.displayName ?? undefined,
+      name: syncedAccount.displayName || (response.displayName ?? undefined),
       refreshExpiresAt: now + response.refreshExpiresIn * 1000,
       refreshToken: response.refreshToken,
       tokenType: response.tokenType,
+      username: syncedAccount.username,
     }),
   );
 
