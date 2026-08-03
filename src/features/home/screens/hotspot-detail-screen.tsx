@@ -2,7 +2,12 @@ import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
-import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+  type Href,
+} from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   useCallback,
@@ -13,17 +18,17 @@ import {
   type ComponentProps,
 } from "react";
 import {
-  Alert,
   ActivityIndicator,
+  Alert,
   Modal,
   Platform,
   Pressable,
-  Share,
   Text as RNText,
   ScrollView,
+  Share,
   View,
-  type GestureResponderEvent,
   useWindowDimensions,
+  type GestureResponderEvent,
 } from "react-native";
 import MapView, {
   Marker,
@@ -49,6 +54,10 @@ import {
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 import {
+  getRoutesByHotspot,
+  mapRouteToRouteItem,
+} from "@/features/route/api/route-api";
+import {
   addApiCheckin,
   addCheckin,
   mergeApiCheckins,
@@ -56,24 +65,17 @@ import {
   useCheckins,
 } from "@/lib/checkin-store";
 import { type RouteItem } from "@/lib/demo-data";
-import {
-  getRoutesByHotspot,
-  mapRouteToRouteItem,
-} from "@/features/route/api/route-api";
 import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
-import {
-  getHotspotPosts,
-  type HotspotPost,
-} from "../api/get-hotspot-posts";
+import { getHotspotPosts, type HotspotPost } from "../api/get-hotspot-posts";
 import {
   getHotspotReviews,
   getReviewCreatedAtTime,
   type HotspotReview,
 } from "../api/get-hotspot-reviews";
+import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
 import { likePost } from "../api/like-post";
 import { deleteReview } from "../api/review-mutations";
-import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
 import {
   HiddenStoryUnlockedContent,
   hiddenStoryActionForegroundColor,
@@ -84,18 +86,14 @@ import { ReviewDeleteDialog } from "../components/review-delete-dialog";
 import { ReviewMediaViewer } from "../components/review-media-viewer";
 import { avatarImageUri } from "../data/home-screen.mock";
 import { cacheHotspotDetail } from "../data/hotspot-detail-cache";
+import { cacheHotspotReviewForEdit } from "../data/hotspot-review-edit-cache";
+import { getCachedHotspotStories } from "../data/hotspot-story-cache";
+import { type HotspotDetail } from "../data/hotspots";
 import {
   addLikedPostId,
   removeLikedPostId,
   useLikedPostIds,
 } from "../data/liked-post-store";
-import {
-  getCachedHotspotStories,
-} from "../data/hotspot-story-cache";
-import { cacheHotspotReviewForEdit } from "../data/hotspot-review-edit-cache";
-import {
-  type HotspotDetail,
-} from "../data/hotspots";
 import {
   resolveRouteIdParam,
   resolveSelectedHotspotId,
@@ -134,11 +132,7 @@ type PersonalExperienceComposerProps = {
   avatarUri: string;
   onPressCompose: () => void;
 };
-type RelatedRoutesSectionStatus =
-  | "idle"
-  | "loading"
-  | "ready"
-  | "empty";
+type RelatedRoutesSectionStatus = "idle" | "loading" | "ready" | "empty";
 
 const loginGradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const screenBackground = "#FFFFFF";
@@ -291,9 +285,7 @@ function formatApiTimeWindow(start?: string | null, end?: string | null) {
   return formattedStart ?? formattedEnd;
 }
 
-function resolveRemoteMediaUris(
-  apiHotspot: NearbyHotspotDto,
-) {
+function resolveRemoteMediaUris(apiHotspot: NearbyHotspotDto) {
   const remoteMediaUris = [...apiHotspot.medias]
     .filter((media) => readMeaningfulApiText(media.fileUrl))
     .sort((left, right) => {
@@ -324,10 +316,7 @@ function formatEstimatedDurationLabel(
       ? Math.max(0, Math.round(maximumDuration))
       : null;
 
-  if (
-    resolvedMinimumDuration !== null &&
-    resolvedMaximumDuration !== null
-  ) {
+  if (resolvedMinimumDuration !== null && resolvedMaximumDuration !== null) {
     return resolvedMinimumDuration === resolvedMaximumDuration
       ? `${resolvedMinimumDuration} phút`
       : `${resolvedMinimumDuration} - ${resolvedMaximumDuration} phút`;
@@ -408,6 +397,17 @@ function buildHotspotFromApi({
     formatApiTimeWindow(apiHotspot.openingTime, apiHotspot.closingTime) ??
     formatApiTimeWindow(apiHotspot.startTime, apiHotspot.endTime) ??
     "";
+  const averageRating =
+    typeof apiHotspot.averageRating === "number" &&
+    Number.isFinite(apiHotspot.averageRating)
+      ? clampNumber(apiHotspot.averageRating, 0, 5)
+      : 0;
+  const reviewCount =
+    typeof apiHotspot.totalReviews === "number" &&
+    Number.isFinite(apiHotspot.totalReviews)
+      ? Math.max(0, Math.round(apiHotspot.totalReviews))
+      : 0;
+  const reviewCountLabel = new Intl.NumberFormat("vi-VN").format(reviewCount);
 
   return {
     hotspot: {
@@ -424,8 +424,8 @@ function buildHotspotFromApi({
       highlights: [],
       imageUri,
       overview,
-      rating: 0,
-      reviews: `${Math.max(0, Math.round(apiHotspot.point ?? 0))}`,
+      rating: averageRating,
+      reviews: reviewCountLabel,
       reward: `+${Math.max(0, Math.round(apiHotspot.xp ?? 0))}`,
       routePairing: "",
       scheduleLabel,
@@ -684,7 +684,6 @@ function getRouteBadgeColors(label: string) {
   return { backgroundColor: "rgba(255,255,255,0.9)", textColor: "#5E7486" };
 }
 
-
 function dedupeRouteItemsById(items: RouteItem[]) {
   return Array.from(
     new Map(items.map((item) => [item.id, item] as const)).values(),
@@ -728,7 +727,9 @@ function formatPersonalExperienceDate(isoTimestamp: string) {
     return `${elapsedDays} ngày trước`;
   }
 
-  return `${parsedDate.getDate().toString().padStart(2, "0")}/${(parsedDate.getMonth() + 1)
+  return `${parsedDate.getDate().toString().padStart(2, "0")}/${(
+    parsedDate.getMonth() + 1
+  )
     .toString()
     .padStart(2, "0")}/${parsedDate.getFullYear()}`;
 }
@@ -739,24 +740,25 @@ function buildApiPersonalExperienceItems(
   likingPostIds: number[],
 ): PersonalExperienceItem[] {
   return posts.map((post) => {
-    const resolvedMedia = (post.medias.length > 0
-      ? post.medias.map((media) => ({
-          duration:
-            media.type.trim().toUpperCase() === "VIDEO" ? "Video" : undefined,
-          type:
-            media.type.trim().toUpperCase() === "VIDEO"
-              ? ("video" as const)
-              : ("image" as const),
-          uri: media.url,
-        }))
-      : post.image
-        ? [
-            {
-              type: "image" as const,
-              uri: post.image,
-            },
-          ]
-        : []
+    const resolvedMedia = (
+      post.medias.length > 0
+        ? post.medias.map((media) => ({
+            duration:
+              media.type.trim().toUpperCase() === "VIDEO" ? "Video" : undefined,
+            type:
+              media.type.trim().toUpperCase() === "VIDEO"
+                ? ("video" as const)
+                : ("image" as const),
+            uri: media.url,
+          }))
+        : post.image
+          ? [
+              {
+                type: "image" as const,
+                uri: post.image,
+              },
+            ]
+          : []
     ).filter((media) => Boolean(readMeaningfulApiText(media.uri)));
 
     return {
@@ -764,8 +766,7 @@ function buildApiPersonalExperienceItems(
       createdAtTime: parsePersonalExperienceTime(post.createdAt),
       date: formatPersonalExperienceDate(post.createdAt ?? ""),
       id: `post-${post.postId}`,
-      isLiked:
-        post.isLiked === true || likedPostIds.includes(post.postId),
+      isLiked: post.isLiked === true || likedPostIds.includes(post.postId),
       isLikePending: likingPostIds.includes(post.postId),
       likeCount: Math.max(0, Math.round(post.likeCount ?? 0)),
       media: resolvedMedia,
@@ -979,14 +980,14 @@ function SummaryStatsRow({ items }: { items: SummaryStatItem[] }) {
           ))}
         </View>
 
-        {items.map((item, index) => (
+        {items.map((item, index) =>
           index < items.length - 1 ? (
             <SummaryStatDivider
               key={`summary-stat-divider-${item.label}-${index}`}
               leftPercent={((index + 1) / items.length) * 100}
             />
-          ) : null
-        ))}
+          ) : null,
+        )}
       </View>
     </View>
   );
@@ -1170,10 +1171,16 @@ function DirectionMapCard({
             backgroundColor: "rgba(255, 69, 58, 0.92)",
           }}
         >
-          <Text className="text-[12px] font-bold text-white" style={{ lineHeight: 16 }}>
+          <Text
+            className="text-[12px] font-bold text-white"
+            style={{ lineHeight: 16 }}
+          >
             Google Maps error:
           </Text>
-          <Text className="mt-1 text-[12px] text-white" style={{ lineHeight: 16 }}>
+          <Text
+            className="mt-1 text-[12px] text-white"
+            style={{ lineHeight: 16 }}
+          >
             {activeMapError}
           </Text>
         </View>
@@ -1547,7 +1554,10 @@ function HistoricalInfoSection({ text }: { text: string }) {
         Thông tin lịch sử
       </Text>
 
-      <View className="rounded-[16px] bg-[#FFF9F3] px-4 py-4" style={cardShadowStyle}>
+      <View
+        className="rounded-[16px] bg-[#FFF9F3] px-4 py-4"
+        style={cardShadowStyle}
+      >
         <Text
           className="text-[15px]"
           numberOfLines={isExpanded ? undefined : 4}
@@ -1711,15 +1721,15 @@ function HiddenStoryCheckinSection({
           </LinearGradient>
 
           <Text
-            className="mt-5 text-center text-[18px] font-semibold text-[#2B2233]"
-            style={{ lineHeight: 22 }}
+            className="mt-4 text-center text-[18px] font-semibold text-[#2B2233]"
+            style={{ lineHeight: 20 }}
           >
             Câu chuyện đang chờ bạn
           </Text>
 
           <Text
-            className="mt-2 max-w-[320px] text-center text-[15px]"
-            style={sectionBodyTextStyle}
+            className="mt-1 max-w-[320px] text-center text-[15px]"
+            style={[sectionBodyTextStyle, { lineHeight: 18 }]}
           >
             {isCheckinStatusLoading
               ? "Đang kiểm tra trạng thái check-in từ hệ thống trước khi mở khóa nội dung."
@@ -1729,7 +1739,7 @@ function HiddenStoryCheckinSection({
           </Text>
 
           <Pressable
-            className="mt-6 overflow-hidden rounded-full"
+            className="mt-4 overflow-hidden rounded-full"
             disabled={isCheckinStatusLoading}
             onPress={onCheckinPress}
             style={buttonShadowStyle}
@@ -1802,7 +1812,7 @@ function HotspotRouteCarouselCard({
             contentFit="cover"
             transition={180}
             cachePolicy="memory-disk"
-           style={{ height: relatedRouteCardImageHeight, width: "100%" }}
+            style={{ height: relatedRouteCardImageHeight, width: "100%" }}
           />
 
           <View className="absolute right-2 top-2 rounded-full bg-[#FFF1F6] px-2 py-[5px]">
@@ -2052,7 +2062,11 @@ function PersonalExperienceLikeButton({
         name={
           isLiked
             ? { ios: "heart.fill", android: "favorite", web: "favorite" }
-            : { ios: "heart", android: "favorite_border", web: "favorite_border" }
+            : {
+                ios: "heart",
+                android: "favorite_border",
+                web: "favorite_border",
+              }
         }
         size={20}
         tintColor={isLiked ? "#F43F5E" : "#2B2233"}
@@ -2103,8 +2117,13 @@ function PersonalExperienceCard({
     Math.floor((reviewMediaContentWidth - reviewMediaGridGap) / 2),
     0,
   );
-  const multiMediaPreviewItems = hasSingleMedia ? item.media : item.media.slice(0, 4);
-  const hiddenMediaCount = Math.max(item.media.length - multiMediaPreviewItems.length, 0);
+  const multiMediaPreviewItems = hasSingleMedia
+    ? item.media
+    : item.media.slice(0, 4);
+  const hiddenMediaCount = Math.max(
+    item.media.length - multiMediaPreviewItems.length,
+    0,
+  );
   const singleMediaHeight = Math.round(
     reviewMediaContentWidth / singleMediaAspectRatio,
   );
@@ -2350,7 +2369,10 @@ function PersonalExperienceCard({
       {hasText ? (
         <Text
           className="mt-1 text-[14px] text-[#554751]"
-          style={[sectionBodyEmphasisTextStyle, { lineHeight: reviewTextLineHeight }]}
+          style={[
+            sectionBodyEmphasisTextStyle,
+            { lineHeight: reviewTextLineHeight },
+          ]}
         >
           {item.text}
         </Text>
@@ -2403,7 +2425,12 @@ function PersonalExperienceCard({
                 onPress={() => setViewerMediaIndex(0)}
                 width={threeMediaLeadWidth}
               />
-              <View style={{ rowGap: reviewMediaGridGap, width: threeMediaSideWidth }}>
+              <View
+                style={{
+                  rowGap: reviewMediaGridGap,
+                  width: threeMediaSideWidth,
+                }}
+              >
                 {item.media.slice(1).map((media, index) => (
                   <PersonalExperienceMediaThumb
                     borderRadius={reviewMediaBorderRadius}
@@ -2478,7 +2505,10 @@ function EmptyPersonalExperienceCard({
       className="bg-white px-5 py-5"
       style={[cardShadowStyle, { borderRadius: reviewCardBorderRadius }]}
     >
-      <Text className="text-[16px] font-semibold text-[#2B2233]" style={{ lineHeight: 20 }}>
+      <Text
+        className="text-[16px] font-semibold text-[#2B2233]"
+        style={{ lineHeight: 20 }}
+      >
         Chưa có bài đánh giá
       </Text>
       <Text className="mt-2 text-[15px]" style={sectionBodyTextStyle}>
@@ -2509,7 +2539,10 @@ function PersonalExperienceErrorCard({ message }: { message: string }) {
       className="border border-[#F9E2EA] bg-[#FFF8FC] px-5 py-5"
       style={[cardShadowStyle, { borderRadius: reviewCardBorderRadius }]}
     >
-      <Text className="text-[14px] font-bold text-[#C2416C]" style={{ lineHeight: 18 }}>
+      <Text
+        className="text-[14px] font-bold text-[#C2416C]"
+        style={{ lineHeight: 18 }}
+      >
         {message}
       </Text>
     </View>
@@ -2559,9 +2592,7 @@ function PersonalExperienceSection({
           visibleItems.map((item) => (
             <PersonalExperienceCard
               key={item.id}
-              isReviewActionPending={
-                item.review?.reviewId === deletingReviewId
-              }
+              isReviewActionPending={item.review?.reviewId === deletingReviewId}
               item={item}
               onDeleteReview={onDeleteReview}
               onEditReview={onEditReview}
@@ -2589,7 +2620,10 @@ function PersonalExperienceSection({
 
       {isCheckedIn && composer ? (
         <View className="gap-2">
-          <Text className="text-[15px] font-semibold text-[#2B2233]" style={{ lineHeight: 16 }}>
+          <Text
+            className="text-[15px] font-semibold text-[#2B2233]"
+            style={{ lineHeight: 16 }}
+          >
             Chia sẻ bài đánh giá của bạn
           </Text>
           <PersonalExperienceComposer
@@ -2742,7 +2776,10 @@ function NotFoundState() {
 function LoadingState() {
   return (
     <View style={{ backgroundColor: screenBackground, flex: 1 }}>
-      <SafeAreaView className="flex-1" edges={["top", "left", "right", "bottom"]}>
+      <SafeAreaView
+        className="flex-1"
+        edges={["top", "left", "right", "bottom"]}
+      >
         <View className="flex-1 items-center justify-center px-6">
           <View className="items-center">
             <ActivityIndicator color="#F58752" size="large" />
@@ -2978,7 +3015,12 @@ export default function HotspotDetailScreen() {
     return () => {
       isActive = false;
     };
-  }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId, resolvedSlug]);
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    resolvedHotspotId,
+    resolvedSlug,
+  ]);
 
   // Chạy theo focus để bài đánh giá vừa gửi ở màn review-compose hiện ngay khi quay lại.
   useFocusEffect(
@@ -3472,7 +3514,8 @@ export default function HotspotDetailScreen() {
   const hotspotCheckinId = hotspot.slug;
   const isCheckedInFromRemoteHotspot = remoteHotspot?.isCheckedIn === true;
   const isCheckedInFromApiStore =
-    resolvedHotspotId !== null && checkedInApiHotspots.includes(resolvedHotspotId);
+    resolvedHotspotId !== null &&
+    checkedInApiHotspots.includes(resolvedHotspotId);
   const isCheckedIn =
     isCheckedInFromRemoteHotspot ||
     isCheckedInFromApiStore ||
@@ -3512,7 +3555,9 @@ export default function HotspotDetailScreen() {
       : (`/hotspot/${hotspot.slug}/stories` as Href);
   const reviewComposeHref = {
     params: {
-      ...(resolvedHotspotId !== null ? { hotspotId: `${resolvedHotspotId}` } : {}),
+      ...(resolvedHotspotId !== null
+        ? { hotspotId: `${resolvedHotspotId}` }
+        : {}),
       slug: hotspot.slug,
       title: hotspot.title,
     },
@@ -3531,9 +3576,7 @@ export default function HotspotDetailScreen() {
 
     router.push({
       params: {
-        ...(editHotspotId !== null
-          ? { hotspotId: `${editHotspotId}` }
-          : {}),
+        ...(editHotspotId !== null ? { hotspotId: `${editHotspotId}` } : {}),
         reviewId: `${review.reviewId}`,
         slug: hotspot.slug,
         title: hotspot.title,
@@ -3549,10 +3592,7 @@ export default function HotspotDetailScreen() {
 
     if (!authSession.isAuthenticated) {
       setReviewPendingDeletion(null);
-      Alert.alert(
-        "Cần đăng nhập",
-        "Bạn cần đăng nhập để xóa bài đánh giá.",
-      );
+      Alert.alert("Cần đăng nhập", "Bạn cần đăng nhập để xóa bài đánh giá.");
       return;
     }
 
@@ -3626,7 +3666,8 @@ export default function HotspotDetailScreen() {
       ...apiPersonalExperienceItems,
     ]),
   );
-  const personalExperienceErrorMessage = hotspotReviewsError ?? hotspotPostsError;
+  const personalExperienceErrorMessage =
+    hotspotReviewsError ?? hotspotPostsError;
   const summaryStats = buildSummaryStats({
     apiHotspot: remoteHotspot,
     hotspot,
@@ -3800,13 +3841,59 @@ export default function HotspotDetailScreen() {
                 </Text>
                 <Text
                   className="text-[22px] font-semibold text-[#2B2233]"
-                  style={sectionTitleTextStyle}
+                  style={[sectionTitleTextStyle, { lineHeight: 20 }]}
                 >
                   {hotspot.title}
                 </Text>
+
+                <View className="mt-0.5 flex-row flex-wrap items-center gap-2">
+                  <View className="flex-row items-center gap-1.5 rounded-full bg-[#FFF7FA] px-2.5 py-1">
+                    <SymbolView
+                      name={{
+                        ios: "star.fill",
+                        android: "star",
+                        web: "star",
+                      }}
+                      size={12}
+                      tintColor="#F58752"
+                    />
+                    <Text
+                      className="text-[12px] font-bold text-[#F58752]"
+                      style={{ lineHeight: 14 }}
+                    >
+                      {hotspot.rating.toFixed(1)}
+                    </Text>
+                    <Text
+                      className="text-[12px] text-[#A39AAB]"
+                      style={{ lineHeight: 14 }}
+                    >
+                      ({hotspot.reviews} đánh giá)
+                    </Text>
+                  </View>
+
+                  <View className="flex-row items-center gap-1.5 rounded-full bg-[#F7F7FB] px-2.5 py-1">
+                    <SymbolView
+                      name={{
+                        ios: "text.bubble.fill",
+                        android: "chat_bubble",
+                        web: "chat_bubble",
+                      }}
+                      size={12}
+                      tintColor="#8E869A"
+                    />
+                    <Text
+                      className="text-[12px] font-semibold text-[#6F657A]"
+                      style={{ lineHeight: 14 }}
+                    >
+                      Total review: {hotspot.reviews}
+                    </Text>
+                  </View>
+                </View>
               </View>
 
-              {overviewText ? <HotspotOverviewSection text={overviewText} /> : null}
+              {overviewText ? (
+                <HotspotOverviewSection text={overviewText} />
+              ) : null}
 
               <SummaryStatsRow items={summaryStats} />
 
@@ -3857,7 +3944,10 @@ export default function HotspotDetailScreen() {
 
               {relatedRoutesError ? (
                 <View className="rounded-[16px] border border-[#F9E2EA] bg-[#FFF8FC] px-4 py-4">
-                  <Text className="text-[14px] font-bold text-[#C2416C]" style={{ lineHeight: 18 }}>
+                  <Text
+                    className="text-[14px] font-bold text-[#C2416C]"
+                    style={{ lineHeight: 18 }}
+                  >
                     {relatedRoutesError}
                   </Text>
                 </View>
@@ -3897,10 +3987,16 @@ export default function HotspotDetailScreen() {
                   className="rounded-[16px] bg-white px-5 py-5"
                   style={cardShadowStyle}
                 >
-                  <Text className="text-[16px] font-semibold text-[#2B2233]" style={{ lineHeight: 20 }}>
+                  <Text
+                    className="text-[16px] font-semibold text-[#2B2233]"
+                    style={{ lineHeight: 20 }}
+                  >
                     Chưa có route published
                   </Text>
-                  <Text className="mt-2 text-[15px]" style={sectionBodyTextStyle}>
+                  <Text
+                    className="mt-2 text-[15px]"
+                    style={sectionBodyTextStyle}
+                  >
                     {`API route theo hotspot/${resolvedHotspotId} hiện chưa trả về tuyến published nào cho điểm đến này.`}
                   </Text>
                 </View>
@@ -3918,7 +4014,9 @@ export default function HotspotDetailScreen() {
               }
               deletingReviewId={deletingReviewId}
               isCheckedIn={isCheckedIn}
-              isLoadingReviews={isHotspotReviewsLoading || isHotspotPostsLoading}
+              isLoadingReviews={
+                isHotspotReviewsLoading || isHotspotPostsLoading
+              }
               items={personalExperienceItems}
               onDeleteReview={handleDeleteHotspotReview}
               onEditReview={handleEditHotspotReview}

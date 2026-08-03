@@ -6,6 +6,7 @@ import type {
   ProfilePostMedia,
   ProfilePostTag,
 } from "@/features/profile/types";
+import { parseSharedPost } from "@/lib/shared-post";
 
 type GetHotspotPostsRequest = {
   accessToken?: string | null;
@@ -240,7 +241,7 @@ function parsePost(value: unknown): HotspotPost | null {
     likeCount: readNullableNumber(value.likeCount),
     commentCount: readNullableNumber(value.commentCount),
     shareCount: readNullableNumber(value.shareCount),
-    sharedPost: isNullableString(value.sharedPost) ? value.sharedPost : null,
+    sharedPost: parseSharedPost(value.sharedPost),
   };
 }
 

@@ -53,7 +53,9 @@ import type { RouteItem } from "@/lib/demo-data";
 import {
   getPostVisibilityIcon,
   getPostVisibilityLabel,
+  normalizePostVisibilityValue,
 } from "@/lib/post-visibility";
+import type { SharedPostSummary } from "@/lib/shared-post";
 import { getRouteById } from "@/features/route/api/route-api";
 import { LevelProgressCard } from "../components/level-progress-card";
 import { useProfile } from "../hooks/use-profile";
@@ -128,7 +130,7 @@ const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
   },
   {
     key: "pending-posts",
-    label: "Chờ duyệt",
+    label: "Riêng tư & chờ duyệt",
     icon: {
       ios: "lock",
       android: "lock",
@@ -678,12 +680,18 @@ export default function ProfileScreen() {
   const avatarSize = 126;
   const profileOverlap = avatarSize * 0.52;
   const approvedPosts = posts.filter(
-    (post) => normalizeProfilePostStatus(post.status) === "APPROVED",
+    (post) =>
+      normalizeProfilePostStatus(post.status) === "APPROVED" &&
+      normalizePostVisibilityValue(post.visibility) !== "PRIVATE",
   );
-  const pendingPosts = posts.filter(
-    (post) => normalizeProfilePostStatus(post.status) === "PENDING",
+  // Tab ổ khóa gom bài chờ duyệt và mọi bài riêng tư (kể cả bài chia sẻ lại).
+  const lockedPosts = posts.filter(
+    (post) =>
+      normalizeProfilePostStatus(post.status) === "PENDING" ||
+      (normalizeProfilePostStatus(post.status) === "APPROVED" &&
+        normalizePostVisibilityValue(post.visibility) === "PRIVATE"),
   );
-  const visiblePosts = tab === "pending-posts" ? pendingPosts : approvedPosts;
+  const visiblePosts = tab === "pending-posts" ? lockedPosts : approvedPosts;
   const visibleHotspotIdsToResolve = useMemo(() => {
     const hotspotIds = new Set<number>();
 
@@ -1112,7 +1120,9 @@ export default function ProfileScreen() {
         ? "PRO"
         : null;
   const postSectionTitle =
-    tab === "pending-posts" ? "Bài viết chờ duyệt" : "Bài viết đã duyệt";
+    tab === "pending-posts"
+      ? "Bài viết riêng tư & chờ duyệt"
+      : "Bài viết đã duyệt";
 
   return (
     <SafeAreaView className="flex-1 bg-[#F7F8FC]" edges={["left", "right"]}>
@@ -1897,6 +1907,92 @@ function ExpandablePostCaption({ text }: { text: string }) {
   );
 }
 
+function SharedPostCard({
+  sharedPost,
+  withTopSpacing,
+}: {
+  sharedPost: SharedPostSummary;
+  withTopSpacing: boolean;
+}) {
+  const author =
+    sharedPost.displayName.trim() ||
+    sharedPost.username.trim() ||
+    fallbackPostAuthorName;
+  const content = stripTrailingProfileHashtagBlock(sharedPost.content);
+  const mediaItems: CommunityFeedMediaItem[] = sharedPost.medias
+    .filter(
+      (media) =>
+        media.type.trim().toUpperCase() === "IMAGE" && Boolean(media.url.trim()),
+    )
+    .map((media) => ({
+      key: `shared-${sharedPost.postId}-media-${media.id}`,
+      source: {
+        uri: media.url,
+      },
+    }));
+  const tagLabels = sharedPost.tags
+    .map((tag) => formatProfileTagLabel(tag.name))
+    .filter((tagLabel): tagLabel is string => Boolean(tagLabel));
+
+  return (
+    <View
+      className="overflow-hidden rounded-[20px] border border-[#E9EAF0] bg-[#FBFBFD] px-3 pb-3 pt-2.5"
+      style={{ marginTop: withTopSpacing ? 10 : 4 }}
+    >
+      <View className="flex-row items-center">
+        <UserAvatar displayName={author} size={34} uri={null} />
+
+        <View className="ml-2.5 flex-1 pr-2">
+          <Text
+            className="text-[14px] font-bold text-[#2F2432]"
+            numberOfLines={1}
+            style={{ includeFontPadding: false, lineHeight: 14 }}
+          >
+            {author}
+          </Text>
+
+          <View className="mt-0.5 flex-row items-center gap-1">
+            <Text
+              className="text-[12px] text-[#8A7D86]"
+              style={{ includeFontPadding: false, lineHeight: 11 }}
+            >
+              {formatPostTimestamp(sharedPost.createdAt)}
+            </Text>
+            <SymbolView
+              name={getPostVisibilityIcon(sharedPost.visibility)}
+              size={10}
+              tintColor="#8A7D86"
+            />
+          </View>
+        </View>
+      </View>
+
+      {content ? (
+        <View className="pt-2">
+          <ExpandablePostCaption text={content} />
+        </View>
+      ) : null}
+
+      {mediaItems.length > 0 ? (
+        <View className="mt-2">
+          <PostMediaGallery items={mediaItems} />
+        </View>
+      ) : null}
+
+      {tagLabels.length > 0 ? (
+        <View className="mt-1 flex-row flex-wrap items-center">
+          {tagLabels.map((tagLabel) => (
+            <PostTagChip
+              key={`shared-${sharedPost.postId}-${tagLabel}`}
+              label={tagLabel}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function PostTagChip({ label }: { label: string }) {
   return (
     <View className="mr-2 mt-1.5 rounded-full bg-[#F4F1F4] px-3 py-0.5">
@@ -2187,9 +2283,10 @@ function PostCard({
   const [isPostMenuVisible, setIsPostMenuVisible] = useState(false);
   const authorName =
     post.displayName.trim() || profileName.trim() || fallbackPostAuthorName;
+  const sharedPost = post.sharedPost;
   const postContent =
     stripTrailingProfileHashtagBlock(post.text) ||
-    "Chuyến đi hôm nay rất đáng nhớ.";
+    (sharedPost ? "" : "Chuyến đi hôm nay rất đáng nhớ.");
   const mediaItems = buildProfilePostMediaItems(post);
   const visibilityIcon = getPostVisibilityIcon(post.visibility);
   const visibilityLabel = getPostVisibilityLabel(post.visibility);
@@ -2354,7 +2451,14 @@ function PostCard({
       </View>
 
       <View className="pt-1.5">
-        <ExpandablePostCaption text={postContent} />
+        {postContent ? <ExpandablePostCaption text={postContent} /> : null}
+
+        {sharedPost ? (
+          <SharedPostCard
+            sharedPost={sharedPost}
+            withTopSpacing={Boolean(postContent)}
+          />
+        ) : null}
 
         {tagLabels.length > 0 ? (
           <View className="mt-1 flex-row flex-wrap items-center">
@@ -2591,7 +2695,7 @@ function EmptyPosts({ tab }: { tab: Extract<Tab, "posts" | "pending-posts"> }) {
       />
       <Text className="mt-2 text-[13px] text-[#8E869A]">
         {tab === "pending-posts"
-          ? "Bạn chưa có bài viết nào đang chờ duyệt"
+          ? "Bạn chưa có bài viết riêng tư hoặc đang chờ duyệt"
           : "Bạn chưa có bài viết nào đã được duyệt"}
       </Text>
     </View>

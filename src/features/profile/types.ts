@@ -1,3 +1,5 @@
+import type { SharedPostSummary } from "@/lib/shared-post";
+
 export type Profile = {
   id: string;
   name: string;
@@ -22,6 +24,7 @@ export type Profile = {
   followers: number;
   following: number;
   totalPosts: number;
+  isFollowing?: boolean | null;
   routeIds: string[];
   savedHotspotSlugs: string[];
   role: string | null;
@@ -74,5 +77,5 @@ export type ProfilePost = {
   pointRemaining: number | null;
   replyCount?: number | null;
   shareCount: number | null;
-  sharedPost: string | null;
+  sharedPost: SharedPostSummary | null;
 };

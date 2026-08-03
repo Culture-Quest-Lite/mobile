@@ -199,7 +199,11 @@ function parseHotspot(value: unknown): NearbyHotspotDto | null {
 
   return {
     address: readString(value.address),
+    averageRating: readNumber(value.averageRating),
     closingTime: readString(value.closingTime),
+    totalReviews: readNumber(
+      value.totalReviews ?? value.totalReview ?? value.total_reviews,
+    ),
     createByUserId: readNumber(value.createByUserId),
     createdAt: readString(value.createdAt),
     description: readString(value.description),

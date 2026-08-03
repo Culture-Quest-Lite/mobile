@@ -34,6 +34,7 @@ type AuthenticatedGroupRequest = {
 
 export type CreateCommunityGroupRequest = AuthenticatedGroupRequest & {
   groupName: string;
+  userIds?: (number | string)[];
 };
 
 export type JoinCommunityGroupRequest = AuthenticatedGroupRequest & {
@@ -120,6 +121,38 @@ function readNumber(value: unknown) {
 
 function readBoolean(value: unknown) {
   return typeof value === "boolean" ? value : null;
+}
+
+function normalizeCreateGroupUserIds(userIds?: (number | string)[]) {
+  if (!Array.isArray(userIds)) {
+    return [];
+  }
+
+  const normalizedUserIds: number[] = [];
+  const seenUserIds = new Set<number>();
+
+  for (const userId of userIds) {
+    const parsedUserId =
+      typeof userId === "number" && Number.isSafeInteger(userId) && userId > 0
+        ? Math.trunc(userId)
+        : typeof userId === "string" && /^\d+$/.test(userId.trim())
+          ? Number(userId.trim())
+          : null;
+
+    if (
+      parsedUserId === null ||
+      !Number.isSafeInteger(parsedUserId) ||
+      parsedUserId <= 0 ||
+      seenUserIds.has(parsedUserId)
+    ) {
+      continue;
+    }
+
+    seenUserIds.add(parsedUserId);
+    normalizedUserIds.push(parsedUserId);
+  }
+
+  return normalizedUserIds;
 }
 
 async function parseResponseBody(response: Response) {
@@ -393,8 +426,10 @@ export async function createCommunityGroup({
   accessToken,
   groupName,
   tokenType,
+  userIds,
 }: CreateCommunityGroupRequest) {
   const trimmedGroupName = groupName.trim();
+  const normalizedUserIds = normalizeCreateGroupUserIds(userIds);
 
   if (!trimmedGroupName) {
     throw new Error("Hay nhap ten nhom truoc khi tao.");
@@ -404,6 +439,7 @@ export async function createCommunityGroup({
     accessToken,
     body: {
       groupName: trimmedGroupName,
+      userIds: normalizedUserIds,
     },
     method: "POST",
     tokenType,

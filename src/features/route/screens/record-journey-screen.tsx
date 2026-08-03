@@ -118,6 +118,8 @@ export default function RecordJourneyScreen() {
         hotspotId: hotspot.hotspotId,
         hotspotName: hotspot.hotspotName ?? `Hotspot #${hotspot.hotspotId}`,
         address: hotspot.address ?? "",
+        averageRating: null,
+        totalReviews: null,
         latitude: hotspot.latitude ?? DEFAULT_COORDINATE.latitude,
         longitude: hotspot.longitude ?? DEFAULT_COORDINATE.longitude,
         closingTime: "", createByUserId: null, createdAt: "", description: "", endTime: "",

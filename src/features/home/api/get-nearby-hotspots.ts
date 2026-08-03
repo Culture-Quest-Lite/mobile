@@ -49,7 +49,9 @@ export type NearbyHotspotStoryDto = {
 
 export type NearbyHotspotDto = {
   address: string;
+  averageRating: number | null;
   closingTime: string;
+  totalReviews: number | null;
   createByUserId: number | null;
   createdAt: string;
   description: string;
@@ -200,7 +202,8 @@ function parseStory(value: unknown): NearbyHotspotStoryDto | null {
   }
 
   return {
-    audioScript: readString(value.audioScript) || readString(value.audio_script),
+    audioScript:
+      readString(value.audioScript) || readString(value.audio_script),
     content: readString(value.content),
     distanceToNext: readNumber(value.distanceToNext),
     medias: Array.isArray(value.medias)
@@ -235,7 +238,11 @@ function parseNearbyHotspot(value: unknown): NearbyHotspotDto | null {
 
   return {
     address: readString(value.address),
+    averageRating: readNumber(value.averageRating),
     closingTime: readString(value.closingTime),
+    totalReviews: readNumber(
+      value.totalReviews ?? value.totalReview ?? value.total_reviews,
+    ),
     createByUserId: readNumber(value.createByUserId),
     createdAt: readString(value.createdAt),
     description: readString(value.description),
