@@ -20,6 +20,7 @@ import {
   getCommunityGroups,
   type CommunityGroupPayload,
 } from "@/features/community/api/group-api";
+import { cacheCommunityGroupSession } from "@/features/community/data/community-group-session-store";
 import { getMyProfile } from "@/features/profile/api/get-me";
 import {
   getRouteById,
@@ -41,9 +42,9 @@ const cardShadow = {
 } as const;
 
 type GroupQuestSuccessState = {
+  detailRouteKey: string;
   groupName: string;
   routeName: string;
-  shareToken: string;
 };
 
 function readMeaningfulText(value: unknown) {
@@ -167,7 +168,7 @@ function GroupQuestSuccessModal({
   onViewGroup,
   routeName,
   visible,
-}: GroupQuestSuccessState & {
+}: Pick<GroupQuestSuccessState, "groupName" | "routeName"> & {
   onClose: () => void;
   onViewGroup: () => void;
   visible: boolean;
@@ -523,12 +524,23 @@ export default function RouteGroupQuestScreen() {
         tokenType: authSession.tokenType,
       });
 
+      const cachedGroup = selectedGroup
+        ? cacheCommunityGroupSession({
+            ...selectedGroup,
+            source: "listed",
+          })
+        : null;
+      const detailRouteKey =
+        readMeaningfulText(cachedGroup?.groupId) ??
+        readMeaningfulText(cachedGroup?.shareToken) ??
+        normalizedGroupId;
+
       setSuccessState({
+        detailRouteKey,
         groupName: selectedGroup
           ? getCommunityGroupDisplayName(selectedGroup)
           : `Group #${normalizedGroupId}`,
         routeName: routeDisplayName,
-        shareToken: selectedGroup?.shareToken ?? "",
       });
     } catch (error) {
       routeSystemAlert.alert(
@@ -886,23 +898,22 @@ export default function RouteGroupQuestScreen() {
         <GroupQuestSuccessModal
           groupName={successState.groupName}
           routeName={successState.routeName}
-          shareToken={successState.shareToken}
           visible
           onClose={() => {
             setSuccessState(null);
             router.back();
           }}
           onViewGroup={() => {
-            const shareToken = readMeaningfulText(successState.shareToken);
+            const detailRouteKey = readMeaningfulText(successState.detailRouteKey);
             setSuccessState(null);
 
-            if (!shareToken) {
+            if (!detailRouteKey) {
               router.back();
               return;
             }
 
             router.push(
-              `/community/group/${encodeURIComponent(shareToken)}` as Href,
+              `/community/group/${encodeURIComponent(detailRouteKey)}` as Href,
             );
           }}
         />

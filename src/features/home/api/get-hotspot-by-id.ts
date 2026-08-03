@@ -116,7 +116,8 @@ function parseStory(value: unknown) {
   }
 
   return {
-    audioScript: readString(value.audioScript) || readString(value.audio_script),
+    audioScript:
+      readString(value.audioScript) || readString(value.audio_script),
     content: readString(value.content),
     distanceToNext: readNumber(value.distanceToNext),
     medias: Array.isArray(value.medias)
@@ -155,7 +156,11 @@ function parseHotspot(value: unknown): NearbyHotspotDto | null {
 
   return {
     address: readString(value.address),
+    averageRating: readNumber(value.averageRating),
     closingTime: readString(value.closingTime),
+    totalReviews: readNumber(
+      value.totalReviews ?? value.totalReview ?? value.total_reviews,
+    ),
     createByUserId: readNumber(value.createByUserId),
     createdAt: readString(value.createdAt),
     description: readString(value.description),
@@ -302,7 +307,9 @@ export async function getHotspotById({
       hotspotId,
       url: getHotspotByIdUrl,
     });
-    throw new Error("API chi tiết hotspot trả về dữ liệu không đúng định dạng.");
+    throw new Error(
+      "API chi tiết hotspot trả về dữ liệu không đúng định dạng.",
+    );
   }
 
   if (!isPublishedHotspotStatus(parsedHotspot.status)) {

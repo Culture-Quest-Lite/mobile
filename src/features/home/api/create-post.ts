@@ -6,6 +6,7 @@ import {
   normalizePostVisibilityValue,
   type PostVisibilityValue,
 } from "@/lib/post-visibility";
+import { parseSharedPost, type SharedPostSummary } from "@/lib/shared-post";
 
 export type PostVisibility = PostVisibilityValue;
 
@@ -49,7 +50,7 @@ export type CreatedPostResponse = {
   reason: string | null;
   routeIds: number[];
   shareCount: number | null;
-  sharedPost: string | null;
+  sharedPost: SharedPostSummary | null;
   status: string;
   tags: CreatedPostTag[];
   userId: number;
@@ -190,7 +191,7 @@ export function parseCreatedPostResponse(
     reason: readNullableString(value.reason),
     routeIds,
     shareCount: readNullableNumber(value.shareCount),
-    sharedPost: readNullableString(value.sharedPost),
+    sharedPost: parseSharedPost(value.sharedPost),
     status: readString(value.status),
     tags,
     userId,

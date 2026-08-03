@@ -1,5 +1,7 @@
 import type { ImageSourcePropType } from "react-native";
 
+import type { SharedPostSummary } from "@/lib/shared-post";
+
 import type { CommunityPost } from "./community-demo";
 
 export type CommunityFeedMediaItem = {
@@ -23,7 +25,7 @@ export type CommunityFeedPost = Omit<CommunityPost, "image"> & {
   replyCountValue?: number | null;
   routeIds?: number[];
   shareCountValue?: number | null;
-  sharedText?: string | null;
+  sharedPost?: SharedPostSummary | null;
   status?: string;
   visibility?: string;
 };

@@ -232,7 +232,7 @@ function CommunityGroupListRow({
                   style={{
                     flexShrink: 1,
                     includeFontPadding: false,
-                    lineHeight: 18,
+                    lineHeight: 15,
                   }}
                 >
                   {groupName}
@@ -252,7 +252,7 @@ function CommunityGroupListRow({
             </View>
             <Text
               className="text-[12px] font-medium text-[#A9A1B1]"
-              style={{ includeFontPadding: false, lineHeight: 16 }}
+              style={{ includeFontPadding: false, lineHeight: 14 }}
             >
               {formatGroupRowDate(group)}
             </Text>
@@ -262,7 +262,7 @@ function CommunityGroupListRow({
             <View className="h-2 w-2 rounded-full bg-[#4BB862]" />
             <Text
               className="ml-1.5 text-[12px] font-normal text-[#5A5563]"
-              style={{ includeFontPadding: false, lineHeight: 14 }}
+              style={{ includeFontPadding: false, lineHeight: 13 }}
             >
               {getLocalizedGroupStatusLabel(group.status)}
             </Text>
@@ -460,13 +460,13 @@ export default function CommunityGroupsScreen() {
             <View className="max-w-[56%]">
               <Text
                 className="text-[15px] font-semibold text-[#2E2336]"
-                style={{ includeFontPadding: false, lineHeight: 18 }}
+                style={{ includeFontPadding: false, lineHeight: 15 }}
               >
                 Nhóm của bạn
               </Text>
               <Text
                 className="mt-0.5 text-[12px] text-[#7F7488]"
-                style={{ includeFontPadding: false, lineHeight: 14 }}
+                style={{ includeFontPadding: false, lineHeight: 12 }}
               >
                 {status === "ready"
                   ? `${groups.length} nhóm đang có sẵn trong tài khoản của bạn`
@@ -493,7 +493,7 @@ export default function CommunityGroupsScreen() {
                   />
                   <Text
                     className="ml-1.5 text-[13px] font-medium text-white"
-                    style={{ includeFontPadding: false, lineHeight: 13 }}
+                    style={{ includeFontPadding: false, lineHeight: 12 }}
                   >
                     Tạo nhóm mới
                   </Text>
@@ -540,7 +540,7 @@ export default function CommunityGroupsScreen() {
             />
             <Text
               className="ml-1.5 text-[13px] font-medium text-[#756B80]"
-              style={{ includeFontPadding: false, lineHeight: 15 }}
+              style={{ includeFontPadding: false, lineHeight: 13 }}
             >
               Bộ lọc
             </Text>

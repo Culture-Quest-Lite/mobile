@@ -492,7 +492,7 @@ export default function CommunityGroupCreatedScreen() {
                 <Pressable
                   onPress={() => {
                     router.push(
-                      `/community/group/${encodeURIComponent(groupSession.shareToken)}/invite` as Href,
+                      `/community/group/${encodeURIComponent(groupSession.shareToken)}` as Href,
                     );
                   }}
                   style={({ pressed }) => ({

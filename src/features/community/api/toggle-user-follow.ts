@@ -8,6 +8,13 @@ type ToggleUserFollowRequest = {
   userId: number | string;
 };
 
+export type ToggleUserFollowResponse = {
+  isFollowing: boolean;
+  message?: string | null;
+  totalFollowers: number;
+  userId: number;
+};
+
 function resolveToggleUserFollowUrl(userId: number | string) {
   const normalizedPath = `/api/users/${encodeURIComponent(`${userId}`)}/follow`;
 
@@ -20,6 +27,20 @@ function resolveToggleUserFollowUrl(userId: number | string) {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isToggleUserFollowResponse(
+  value: unknown,
+): value is ToggleUserFollowResponse {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.userId === "number" &&
+    typeof value.isFollowing === "boolean" &&
+    typeof value.totalFollowers === "number"
+  );
 }
 
 function serializeError(error: unknown) {
@@ -81,7 +102,7 @@ function getConnectionErrorMessage(url: string) {
 async function requestToggleUserFollow(
   method: "DELETE" | "POST",
   { accessToken, tokenType, userId }: ToggleUserFollowRequest,
-) {
+): Promise<ToggleUserFollowResponse> {
   const url = resolveToggleUserFollowUrl(userId);
   let response: Response;
 
@@ -118,6 +139,22 @@ async function requestToggleUserFollow(
     });
     throw new Error(getErrorMessage(responseBody, response.status));
   }
+
+  if (!isToggleUserFollowResponse(responseBody)) {
+    return {
+      isFollowing: method === "POST",
+      message:
+        typeof responseBody === "object" &&
+        responseBody &&
+        "message" in responseBody
+          ? `${responseBody.message}`
+          : null,
+      totalFollowers: 0,
+      userId: Number(userId),
+    };
+  }
+
+  return responseBody;
 }
 
 export function followUser(request: ToggleUserFollowRequest) {

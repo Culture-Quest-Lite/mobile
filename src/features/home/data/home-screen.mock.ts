@@ -43,6 +43,7 @@ export type CommunityBoard = {
 export type NearbyCategoryCard = {
   accent: string;
   background: string;
+  imageUrl?: string | null;
   icon: SymbolName;
   label: string;
 };

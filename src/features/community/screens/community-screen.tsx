@@ -37,6 +37,7 @@ import {
   type AuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 import { commentPost } from "@/features/home/api/comment-post";
+import type { CreatedPostResponse } from "@/features/home/api/create-post";
 import { deletePost } from "@/features/home/api/delete-post";
 import { getHotspotById } from "@/features/home/api/get-hotspot-by-id";
 import {
@@ -44,6 +45,7 @@ import {
   type PostComment,
 } from "@/features/home/api/get-post-comments";
 import { likePost } from "@/features/home/api/like-post";
+import { sharePost } from "@/features/home/api/share-post";
 import {
   ReviewDeleteDialog,
 } from "@/features/home/components/review-delete-dialog";
@@ -57,14 +59,23 @@ import {
   useLikedPostIds,
 } from "@/features/home/data/liked-post-store";
 import { getMyProfile } from "@/features/profile/api/get-me";
-import { updateCachedProfilePost } from "@/features/profile/data/profile-post-cache";
+import {
+  cacheProfilePost,
+  updateCachedProfilePost,
+} from "@/features/profile/data/profile-post-cache";
+import { mapCreatedPostToProfilePost } from "@/features/profile/lib/map-created-post-to-profile-post";
 import type { Profile } from "@/features/profile/types";
 import { getRouteById } from "@/features/route/api/route-api";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import {
+  getPostVisibilityDescription,
   getPostVisibilityIcon,
   getPostVisibilityLabel,
+  normalizePostVisibilityValue,
+  postVisibilityOptions,
+  type PostVisibilityValue,
 } from "@/lib/post-visibility";
+import type { SharedPostSummary } from "@/lib/shared-post";
 import { getNewsfeedPosts, type NewsfeedPost } from "../api/get-newsfeed-posts";
 import type { CommunityGroupPayload } from "../api/group-api";
 import {
@@ -183,6 +194,7 @@ const meaninglessTextValues = new Set(["", "string", "null", "undefined"]);
 const communityFeedPageSize = 10;
 const communityPostCommentsPageSize = 10;
 const communityCommentMaxLength = 320;
+const communitySharePostMaxLength = 500;
 const communityPostMenuItems: readonly CommunityPostMenuItem[] = [
   {
     key: "edit-post",
@@ -467,7 +479,10 @@ function resolveTopicFromNewsfeed(
   return "culture";
 }
 
-function buildNewsfeedLocation(post: NewsfeedPost) {
+function buildNewsfeedLocation(post: {
+  hotspotIds: number[];
+  routeIds: number[];
+}) {
   if (post.hotspotIds.length === 1) {
     return "1 hotspot được gắn";
   }
@@ -487,7 +502,7 @@ function buildNewsfeedLocation(post: NewsfeedPost) {
   return "";
 }
 
-function buildNewsfeedMood(post: NewsfeedPost) {
+function buildNewsfeedMood(post: { status: string; visibility: string }) {
   const statusLabel =
     readMeaningfulText(post.status)?.toUpperCase() === "APPROVED"
       ? "Đã duyệt"
@@ -503,7 +518,10 @@ function buildNewsfeedMood(post: NewsfeedPost) {
   return segments.join(" · ") || "Cập nhật mới từ cộng đồng";
 }
 
-function buildNewsfeedBadge(post: NewsfeedPost) {
+function buildNewsfeedBadge(post: {
+  isTaggedHotspot: boolean;
+  isTaggedRoute: boolean;
+}) {
   if (post.isTaggedHotspot) {
     return "Hotspot";
   }
@@ -532,6 +550,24 @@ function replaceCommunityFeedPostLikeState(
           isLiked: options.isLiked,
           likeCountValue: normalizedLikeCount,
           likes: formatCompactCount(normalizedLikeCount),
+        }
+      : post,
+  );
+}
+
+function replaceCommunityFeedPostShareCount(
+  posts: CommunityFeedPost[],
+  postNumericId: number,
+  shareCount: number,
+) {
+  const normalizedShareCount = Math.max(0, Math.round(shareCount));
+
+  return posts.map((post) =>
+    post.postNumericId === postNumericId
+      ? {
+          ...post,
+          shareCountValue: normalizedShareCount,
+          shares: formatCompactCount(normalizedShareCount),
         }
       : post,
   );
@@ -729,10 +765,10 @@ function mapNewsfeedPostToCommunityFeedPost(
     time: formatCommunityTime(post.createdAt),
     caption:
       readMeaningfulText(stripTrailingHashtagBlock(post.text)) ??
-      "Bài viết mới từ cộng đồng.",
+      (post.sharedPost ? "" : "Bài viết mới từ cộng đồng."),
     location: buildNewsfeedLocation(post),
     mood: buildNewsfeedMood(post),
-    badge: buildNewsfeedBadge(post),
+    badge: post.sharedPost ? "Chia sẻ" : buildNewsfeedBadge(post),
     hotScore: formatCompactCount(engagementTotal),
     views: formatCompactCount(post.pointRemaining ?? 0),
     likes: formatCompactCount(post.likeCount),
@@ -752,6 +788,7 @@ function mapNewsfeedPostToCommunityFeedPost(
     postNumericId: post.postId,
     replyCountValue: post.replyCount,
     shareCountValue: post.shareCount,
+    sharedPost: post.sharedPost,
     avatarColors: getAvatarPalette(`${author}-${post.userNumericId}`),
     canComment: true,
     canLike: true,
@@ -759,6 +796,83 @@ function mapNewsfeedPostToCommunityFeedPost(
     createdAt: post.createdAt,
     status: readMeaningfulText(post.status) ?? "",
     visibility: readMeaningfulText(post.visibility) ?? "PUBLIC",
+  };
+}
+
+function mapSharedPostToCommunityFeedPost(
+  sharedPost: CreatedPostResponse,
+): CommunityFeedPost {
+  const author =
+    readMeaningfulText(sharedPost.displayName) ??
+    readMeaningfulText(sharedPost.username) ??
+    "Người dùng";
+  const tags = sharedPost.tags
+    .map((tag) => readMeaningfulText(tag.tagName))
+    .filter((tag): tag is string => Boolean(tag));
+  const mediaItems: CommunityFeedMediaItem[] = sharedPost.medias
+    .filter(
+      (media) =>
+        media.mediaType.trim().toUpperCase() === "IMAGE" &&
+        Boolean(readMeaningfulText(media.fileUrl)),
+    )
+    .map((media) => ({
+      key: `${sharedPost.postId}-media-${media.mediaId}`,
+      source: {
+        uri: media.fileUrl,
+      },
+    }));
+  const originalPost = sharedPost.sharedPost;
+  const normalizedVisibility = normalizePostVisibilityValue(
+    sharedPost.visibility,
+  );
+  const shareCount = Math.max(0, Math.round(sharedPost.shareCount ?? 0));
+  const likeCount = Math.max(0, Math.round(sharedPost.likeCount ?? 0));
+  const commentCount = Math.max(0, Math.round(sharedPost.commentCount ?? 0));
+
+  return {
+    id: `newsfeed-post-${sharedPost.postId}`,
+    authorId: `${sharedPost.userId}`,
+    author,
+    initials: getNameInitials(author),
+    role: readMeaningfulText(sharedPost.username)
+      ? `@${sharedPost.username.trim()}`
+      : "Explorer community",
+    time: formatCommunityTime(sharedPost.createdAt),
+    caption:
+      readMeaningfulText(stripTrailingHashtagBlock(sharedPost.content)) ?? "",
+    location: buildNewsfeedLocation(sharedPost),
+    mood: buildNewsfeedMood({
+      status: sharedPost.status,
+      visibility: normalizedVisibility,
+    }),
+    badge: originalPost ? "Chia sẻ" : buildNewsfeedBadge(sharedPost),
+    hotScore: formatCompactCount(likeCount + commentCount + shareCount),
+    views: formatCompactCount(sharedPost.pointRemaining ?? 0),
+    likes: formatCompactCount(likeCount),
+    comments: formatCompactCount(commentCount),
+    replies: formatCompactCount(0),
+    shares: formatCompactCount(shareCount),
+    topic: "culture",
+    isFollowing: false,
+    tags,
+    image: mediaItems[0]?.source ?? null,
+    hotspotIds: sharedPost.hotspotIds,
+    routeIds: sharedPost.routeIds,
+    commentCountValue: commentCount,
+    isLiked: sharedPost.isLiked === true,
+    likeCountValue: likeCount,
+    mediaItems,
+    postNumericId: sharedPost.postId,
+    replyCountValue: 0,
+    shareCountValue: shareCount,
+    sharedPost: originalPost,
+    avatarColors: getAvatarPalette(`${author}-${sharedPost.userId}`),
+    canComment: true,
+    canLike: true,
+    canOpenProfile: true,
+    createdAt: sharedPost.createdAt,
+    status: readMeaningfulText(sharedPost.status) ?? "",
+    visibility: normalizedVisibility,
   };
 }
 
@@ -821,10 +935,16 @@ export default function CommunityScreen() {
   const [deletingPostIds, setDeletingPostIds] = useState<number[]>([]);
   const [postPendingDeletion, setPostPendingDeletion] =
     useState<CommunityFeedPost | null>(null);
-  const [postDeleteToastMessage, setPostDeleteToastMessage] = useState<
+  const [communityToastMessage, setCommunityToastMessage] = useState<
     string | null
   >(null);
   const [likingPostIds, setLikingPostIds] = useState<number[]>([]);
+  const [sharePostTarget, setSharePostTarget] =
+    useState<CommunityFeedPost | null>(null);
+  const [shareDraft, setShareDraft] = useState("");
+  const [shareVisibility, setShareVisibility] =
+    useState<PostVisibilityValue>("PUBLIC");
+  const [isSharingPost, setIsSharingPost] = useState(false);
   const [communityFeedStatus, setCommunityFeedStatus] =
     useState<CommunityFeedStatus>("loading");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -835,7 +955,7 @@ export default function CommunityScreen() {
   const communitySessionKeyRef = useRef(communitySessionKey);
   const communityFeedPostsRef = useRef<CommunityFeedPost[]>([]);
   const hasSkippedInitialFeedFocusRef = useRef(false);
-  const postDeleteToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+  const communityToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
   const persistedLikedPostIds = useLikedPostIds(likedPostsAccountKey);
@@ -855,27 +975,27 @@ export default function CommunityScreen() {
   }, [communityFeedPosts]);
 
   useEffect(() => {
-    if (postDeleteToastTimeoutRef.current) {
-      clearTimeout(postDeleteToastTimeoutRef.current);
-      postDeleteToastTimeoutRef.current = null;
+    if (communityToastTimeoutRef.current) {
+      clearTimeout(communityToastTimeoutRef.current);
+      communityToastTimeoutRef.current = null;
     }
 
-    if (!postDeleteToastMessage) {
+    if (!communityToastMessage) {
       return;
     }
 
-    postDeleteToastTimeoutRef.current = setTimeout(() => {
-      setPostDeleteToastMessage(null);
-      postDeleteToastTimeoutRef.current = null;
+    communityToastTimeoutRef.current = setTimeout(() => {
+      setCommunityToastMessage(null);
+      communityToastTimeoutRef.current = null;
     }, 2600);
 
     return () => {
-      if (postDeleteToastTimeoutRef.current) {
-        clearTimeout(postDeleteToastTimeoutRef.current);
-        postDeleteToastTimeoutRef.current = null;
+      if (communityToastTimeoutRef.current) {
+        clearTimeout(communityToastTimeoutRef.current);
+        communityToastTimeoutRef.current = null;
       }
     };
-  }, [postDeleteToastMessage]);
+  }, [communityToastMessage]);
 
   useEffect(() => {
     clearCommunityPostCache();
@@ -893,9 +1013,11 @@ export default function CommunityScreen() {
       size: communityFeedPageSize,
       tokenType: authSession.tokenType,
     });
-    const mappedPosts = response.content.map(
-      mapNewsfeedPostToCommunityFeedPost,
-    );
+    const mappedPosts = response.content
+      .filter(
+        (post) => normalizePostVisibilityValue(post.visibility) !== "PRIVATE",
+      )
+      .map(mapNewsfeedPostToCommunityFeedPost);
 
     mappedPosts.forEach(cacheCommunityExplorerProfile);
 
@@ -959,7 +1081,10 @@ export default function CommunityScreen() {
     const hotspotIds = new Set<number>();
 
     for (const post of communityFeedPosts) {
-      for (const hotspotId of post.hotspotIds ?? []) {
+      for (const hotspotId of [
+        ...(post.hotspotIds ?? []),
+        ...(post.sharedPost?.hotspotIds ?? []),
+      ]) {
         if (Number.isInteger(hotspotId) && hotspotId > 0) {
           hotspotIds.add(hotspotId);
         }
@@ -973,7 +1098,10 @@ export default function CommunityScreen() {
     const routeIds = new Set<number>();
 
     for (const post of communityFeedPosts) {
-      for (const routeId of post.routeIds ?? []) {
+      for (const routeId of [
+        ...(post.routeIds ?? []),
+        ...(post.sharedPost?.routeIds ?? []),
+      ]) {
         if (Number.isInteger(routeId) && routeId > 0) {
           routeIds.add(routeId);
         }
@@ -1746,6 +1874,130 @@ export default function CommunityScreen() {
     }
   }
 
+  function handleOpenSharePostComposer(post: CommunityFeedPost) {
+    const postNumericId = post.postNumericId;
+
+    if (typeof postNumericId !== "number" || postNumericId <= 0) {
+      Alert.alert(
+        "Không thể chia sẻ",
+        "Bài viết này chưa có mã hợp lệ để chia sẻ.",
+      );
+      return;
+    }
+
+    if (!authSession.isAuthenticated) {
+      Alert.alert(
+        "Cần đăng nhập",
+        "Bạn cần đăng nhập để chia sẻ bài viết cộng đồng.",
+      );
+      return;
+    }
+
+    setShareDraft("");
+    setShareVisibility("PUBLIC");
+    setSharePostTarget(post);
+  }
+
+  function handleCloseSharePostComposer() {
+    if (isSharingPost) {
+      return;
+    }
+
+    setShareDraft("");
+    setShareVisibility("PUBLIC");
+    setSharePostTarget(null);
+  }
+
+  async function handleSubmitSharePost() {
+    const post = sharePostTarget;
+    const postNumericId = post?.postNumericId;
+
+    if (!post || typeof postNumericId !== "number" || postNumericId <= 0) {
+      return;
+    }
+
+    const accessToken = await getValidAccessToken();
+
+    if (!accessToken) {
+      Alert.alert(
+        "Phiên đăng nhập hết hạn",
+        "Vui lòng đăng nhập lại trước khi chia sẻ bài viết cộng đồng.",
+      );
+      return;
+    }
+
+    setIsSharingPost(true);
+
+    try {
+      const sharedPost = await sharePost({
+        accessToken,
+        content: shareDraft,
+        postId: postNumericId,
+        tokenType: authSession.tokenType,
+        visibility: shareVisibility,
+      });
+      const sharedVisibility = normalizePostVisibilityValue(
+        sharedPost.visibility,
+      );
+      const sharedFeedPost = mapSharedPostToCommunityFeedPost(sharedPost);
+      const nextShareCount =
+        Math.max(0, Math.round(post.shareCountValue ?? 0)) + 1;
+
+      setCommunityFeedPosts((current) => {
+        const withUpdatedShareCount = replaceCommunityFeedPostShareCount(
+          current,
+          postNumericId,
+          nextShareCount,
+        );
+
+        if (sharedVisibility === "PRIVATE") {
+          return withUpdatedShareCount;
+        }
+
+        return sortCommunityFeedPostsNewestFirst([
+          sharedFeedPost,
+          ...withUpdatedShareCount.filter(
+            (currentPost) =>
+              currentPost.postNumericId !== sharedFeedPost.postNumericId,
+          ),
+        ]);
+      });
+      updateCachedCommunityPost(postNumericId, (currentPost) => ({
+        ...currentPost,
+        shareCountValue: nextShareCount,
+        shares: formatCompactCount(nextShareCount),
+      }));
+
+      // Bài chia sẻ luôn nằm trong hồ sơ của mình: công khai ở tab bài viết,
+      // riêng tư ở tab ổ khóa.
+      cacheProfilePost(mapCreatedPostToProfilePost(sharedPost));
+
+      if (sharedVisibility === "PRIVATE") {
+        removeCachedCommunityPost(sharedPost.postId);
+      } else {
+        cacheCommunityPost(sharedFeedPost);
+      }
+
+      setSharePostTarget(null);
+      setShareDraft("");
+      setShareVisibility("PUBLIC");
+      setCommunityToastMessage(
+        sharedVisibility === "PRIVATE"
+          ? "Đã chia sẻ vào mục riêng tư trong hồ sơ của bạn"
+          : "Đã chia sẻ bài viết lên cộng đồng",
+      );
+    } catch (error) {
+      Alert.alert(
+        "Không thể chia sẻ",
+        error instanceof Error
+          ? error.message
+          : "Đã có lỗi xảy ra khi chia sẻ bài viết cộng đồng.",
+      );
+    } finally {
+      setIsSharingPost(false);
+    }
+  }
+
   function handleEditPost(post: CommunityFeedPost) {
     const postNumericId = post.postNumericId;
 
@@ -1872,7 +2124,7 @@ export default function CommunityScreen() {
       }
 
       setPostPendingDeletion(null);
-      setPostDeleteToastMessage("Đã xóa bài viết thành công");
+      setCommunityToastMessage("Đã xóa bài viết thành công");
     } catch (error) {
       Alert.alert(
         "Không thể chuyển bài viết",
@@ -2080,6 +2332,11 @@ export default function CommunityScreen() {
                         isDeleting={deletingPostIdsSet.has(postNumericId ?? -1)}
                         isLiked={isLiked}
                         isLiking={isLiking}
+                        isSharing={
+                          isSharingPost &&
+                          postNumericId !== null &&
+                          sharePostTarget?.postNumericId === postNumericId
+                        }
                         onEditPost={handleEditPost}
                         onEditPostVisibility={handleEditPostVisibility}
                         onMovePostToTrash={handleMovePostToTrash}
@@ -2088,6 +2345,7 @@ export default function CommunityScreen() {
                         resolvedRoutes={resolvedRoutes}
                         onCommentPost={handleOpenCommentComposer}
                         onLikePost={handleLikePost}
+                        onSharePost={handleOpenSharePostComposer}
                         onOpenProfile={openExplorerProfile}
                         onOpenHotspot={openHotspotDetail}
                         onOpenRoute={openRouteDetail}
@@ -2131,6 +2389,22 @@ export default function CommunityScreen() {
         visible={commentTargetPost !== null}
       />
 
+      <CommunitySharePostModal
+        authorAvatarUri={resolvedComposerIdentity.avatarUri}
+        authorName={resolvedComposerIdentity.displayName}
+        authorUsername={resolvedComposerIdentity.username}
+        draft={shareDraft}
+        isSubmitting={isSharingPost}
+        onChangeDraft={setShareDraft}
+        onChangeVisibility={setShareVisibility}
+        onClose={handleCloseSharePostComposer}
+        onSubmit={() => {
+          void handleSubmitSharePost();
+        }}
+        visibility={shareVisibility}
+        visible={sharePostTarget !== null}
+      />
+
       <ReviewDeleteDialog
         confirmLabel="Chuyển bài"
         description="Bài viết và toàn bộ ảnh, video đính kèm sẽ được chuyển vào thùng rác của bạn."
@@ -2148,7 +2422,7 @@ export default function CommunityScreen() {
         visible={postPendingDeletion !== null}
       />
 
-      {postDeleteToastMessage ? (
+      {communityToastMessage ? (
         <View
           pointerEvents="box-none"
           style={{
@@ -2161,7 +2435,7 @@ export default function CommunityScreen() {
           <Pressable
             className="rounded-[18px] px-4 py-3"
             onPress={() => {
-              setPostDeleteToastMessage(null);
+              setCommunityToastMessage(null);
             }}
             style={{
               backgroundColor: "rgba(33, 33, 33, 0.92)",
@@ -2177,7 +2451,7 @@ export default function CommunityScreen() {
                 className="flex-1 text-[14px] font-normal text-white"
                 style={{ includeFontPadding: false, lineHeight: 17 }}
               >
-                {postDeleteToastMessage}
+                {communityToastMessage}
               </Text>
             </View>
           </Pressable>
@@ -2615,12 +2889,185 @@ function CommunityPostAuthorAvatar({
   return <UserAvatar displayName={authorName} size={size} uri={avatarUri} />;
 }
 
+function CommunitySharedPostCard({
+  edgeToEdgeWidth,
+  onOpenHotspot,
+  onOpenRoute,
+  resolvedHotspots,
+  resolvedRoutes,
+  sharedPost,
+  withTopSpacing,
+}: {
+  edgeToEdgeWidth: number;
+  onOpenHotspot: (hotspotId: number) => void;
+  onOpenRoute: (routeId: number) => void;
+  resolvedHotspots: Record<number, ResolvedHotspotPreview>;
+  resolvedRoutes: Record<number, ResolvedRoutePreview>;
+  sharedPost: SharedPostSummary;
+  withTopSpacing: boolean;
+}) {
+  const author =
+    readMeaningfulText(sharedPost.displayName) ??
+    readMeaningfulText(sharedPost.username) ??
+    "Người dùng";
+  const caption = readMeaningfulText(
+    stripTrailingHashtagBlock(sharedPost.content),
+  );
+  const mediaItems: CommunityFeedMediaItem[] = sharedPost.medias
+    .filter(
+      (media) =>
+        media.type.trim().toUpperCase() === "IMAGE" &&
+        Boolean(readMeaningfulText(media.url)),
+    )
+    .map((media) => ({
+      key: `shared-${sharedPost.postId}-media-${media.id}`,
+      source: {
+        uri: media.url,
+      },
+    }));
+  const tagLabels = sharedPost.tags
+    .map((tag) => formatCommunityTagLabel(tag.name))
+    .filter((tagLabel): tagLabel is string => Boolean(tagLabel));
+  const routeItems = sharedPost.routeIds
+    .filter((routeId) => Number.isInteger(routeId) && routeId > 0)
+    .map((routeId) => ({
+      id: routeId,
+      label: resolvedRoutes[routeId]?.routeName?.trim() || `Route #${routeId}`,
+    }));
+  const hotspotItems = sharedPost.hotspotIds
+    .filter((hotspotId) => Number.isInteger(hotspotId) && hotspotId > 0)
+    .map((hotspotId) => ({
+      id: hotspotId,
+      imageUri: resolvedHotspots[hotspotId]?.imageUri ?? null,
+      label:
+        resolvedHotspots[hotspotId]?.hotspotName?.trim() ||
+        `Hotspot #${hotspotId}`,
+    }));
+  const primaryRouteLabel =
+    routeItems.length <= 1
+      ? (routeItems[0]?.label ?? null)
+      : `${routeItems[0]?.label ?? "Route"} +${routeItems.length - 1}`;
+  const hotspotSubtitle =
+    hotspotItems.length === 0
+      ? null
+      : hotspotItems.length === 1
+        ? (hotspotItems[0]?.label ?? null)
+        : hotspotItems.length === 2
+          ? `${hotspotItems[0]?.label ?? ""}, ${hotspotItems[1]?.label ?? ""}`
+          : `${hotspotItems[0]?.label ?? ""}, ${hotspotItems[1]?.label ?? ""} và ${hotspotItems.length - 2} địa điểm khác`;
+  const hotspotImageUris = hotspotItems
+    .map((item) => item.imageUri)
+    .filter((imageUri): imageUri is string => Boolean(imageUri));
+
+  return (
+    <View
+      className="overflow-hidden rounded-[20px] border bg-[#FDFBFC] px-3 pb-3 pt-2.5"
+      style={{
+        borderColor: "#F0E7ED",
+        borderWidth: subtleBorderWidth,
+        marginTop: withTopSpacing ? 10 : 4,
+      }}
+    >
+      <View className="flex-row items-center">
+        <CommunityPostAuthorAvatar
+          authorId={sharedPost.userId}
+          authorName={author}
+          avatarColors={getAvatarPalette(`${author}-${sharedPost.userId}`)}
+          initials={getNameInitials(author)}
+          size={34}
+        />
+
+        <View className="ml-2.5 flex-1 pr-2">
+          <Text
+            className="text-[14px] font-bold text-[#2F2432]"
+            numberOfLines={1}
+            style={{ includeFontPadding: false, lineHeight: 14 }}
+          >
+            {author}
+          </Text>
+
+          <View className="mt-0.5 flex-row flex-wrap items-center gap-1">
+            <Text
+              className="text-[12px] text-[#8A7D86]"
+              style={{ includeFontPadding: false, lineHeight: 11 }}
+            >
+              {formatCommunityTime(sharedPost.createdAt)}
+            </Text>
+            <Text
+              className="text-[12px] text-[#8A7D86]"
+              style={{ includeFontPadding: false, lineHeight: 11 }}
+            >
+              •
+            </Text>
+            <SymbolView
+              name={getPostVisibilityIcon(sharedPost.visibility)}
+              size={10}
+              tintColor="#8A7D86"
+            />
+          </View>
+        </View>
+      </View>
+
+      {caption ? (
+        <View className="pt-2">
+          <ExpandablePostCaption text={caption} />
+        </View>
+      ) : null}
+
+      {mediaItems.length > 0 ? (
+        <View className="mt-2">
+          <CommunityPostMediaGallery
+            edgeToEdgeWidth={Math.max(edgeToEdgeWidth - 24, 200)}
+            items={mediaItems}
+          />
+        </View>
+      ) : null}
+
+      {primaryRouteLabel ? (
+        <View className="mt-1.5">
+          <CommunityPostRouteCard
+            label={primaryRouteLabel}
+            onPress={() => {
+              onOpenRoute(routeItems[0]?.id ?? 0);
+            }}
+          />
+        </View>
+      ) : null}
+
+      {hotspotSubtitle ? (
+        <View className="mt-1.5">
+          <CommunityPostHotspotCard
+            count={hotspotItems.length}
+            imageUris={hotspotImageUris}
+            onPress={() => {
+              onOpenHotspot(hotspotItems[0]?.id ?? 0);
+            }}
+            subtitle={hotspotSubtitle}
+          />
+        </View>
+      ) : null}
+
+      {tagLabels.length > 0 ? (
+        <View className="mt-1 flex-row flex-wrap items-center">
+          {tagLabels.map((tagLabel) => (
+            <CommunityPostTagChip
+              key={`shared-${sharedPost.postId}-${tagLabel}`}
+              label={tagLabel}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function CommunityPostCard({
   canManagePost,
   edgeToEdgeWidth,
   isDeleting,
   isLiked,
   isLiking,
+  isSharing,
   onEditPost,
   onEditPostVisibility,
   onMovePostToTrash,
@@ -2629,6 +3076,7 @@ function CommunityPostCard({
   resolvedRoutes,
   onCommentPost,
   onLikePost,
+  onSharePost,
   onOpenProfile,
   onOpenHotspot,
   onOpenRoute,
@@ -2638,6 +3086,7 @@ function CommunityPostCard({
   isDeleting: boolean;
   isLiked: boolean;
   isLiking: boolean;
+  isSharing: boolean;
   onEditPost: (post: CommunityFeedPost) => void;
   onEditPostVisibility: (post: CommunityFeedPost) => void;
   onMovePostToTrash: (post: CommunityFeedPost) => void;
@@ -2646,6 +3095,7 @@ function CommunityPostCard({
   resolvedRoutes: Record<number, ResolvedRoutePreview>;
   onCommentPost: (post: CommunityFeedPost) => void;
   onLikePost: (post: CommunityFeedPost) => void;
+  onSharePost: (post: CommunityFeedPost) => void;
   onOpenProfile: (authorId: string) => void;
   onOpenHotspot: (hotspotId: number) => void;
   onOpenRoute: (routeId: number) => void;
@@ -2653,6 +3103,8 @@ function CommunityPostCard({
   const insets = useSafeAreaInsets();
   const [isPostOptionsVisible, setIsPostOptionsVisible] = useState(false);
   const mediaItems = buildCommunityPostMediaItems(post);
+  const sharedPost = post.sharedPost ?? null;
+  const caption = readMeaningfulText(post.caption);
   const visibilityIcon = getPostVisibilityIcon(post.visibility);
   const visibilityLabel = getPostVisibilityLabel(post.visibility);
   const hotspotIds = (post.hotspotIds ?? []).filter(
@@ -2810,7 +3262,19 @@ function CommunityPostCard({
         </View>
 
         <View className="pt-1.5">
-          <ExpandablePostCaption text={post.caption} />
+          {caption ? <ExpandablePostCaption text={caption} /> : null}
+
+          {sharedPost ? (
+            <CommunitySharedPostCard
+              edgeToEdgeWidth={edgeToEdgeWidth}
+              onOpenHotspot={onOpenHotspot}
+              onOpenRoute={onOpenRoute}
+              resolvedHotspots={resolvedHotspots}
+              resolvedRoutes={resolvedRoutes}
+              sharedPost={sharedPost}
+              withTopSpacing={Boolean(caption)}
+            />
+          ) : null}
 
           {tagLabels.length > 0 ? (
             <View className="mt-1 flex-row flex-wrap items-center">
@@ -2904,27 +3368,20 @@ function CommunityPostCard({
           </View>
           <View className="ml-4">
             <CommunityPostFooterAction
-              disabled
+              disabled={isSharing}
               icon={{
                 ios: "arrowshape.turn.up.right",
                 android: "share",
                 web: "share",
               }}
-              label="Chia sẻ"
+              isLoading={isSharing}
+              onPress={() => {
+                onSharePost(post);
+              }}
+              label={post.shares}
             />
           </View>
           <View className="flex-1" />
-          <View className="h-9 w-9 items-center justify-center rounded-full">
-            <SymbolView
-              name={{
-                ios: "bookmark",
-                android: "bookmark_border",
-                web: "bookmark_border",
-              }}
-              size={18}
-              tintColor="#706775"
-            />
-          </View>
         </View>
       </View>
 
@@ -3155,6 +3612,297 @@ function CommunityCommentCard({ item }: { item: PostComment }) {
         </View>
       </View>
     </View>
+  );
+}
+
+function CommunitySharePostPill({
+  disabled,
+  icon,
+  isActive,
+  label,
+  onPress,
+}: {
+  disabled: boolean;
+  icon: SymbolName;
+  isActive: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled, expanded: isActive }}
+      className="flex-row items-center rounded-[8px] px-2.5 py-[3px]"
+      disabled={disabled}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        backgroundColor: isActive ? "#FCE4F0" : "#F7F1F5",
+        opacity: disabled ? 0.6 : pressed ? 0.75 : 1,
+      })}
+    >
+      <SymbolView name={icon} size={12} tintColor="#EB489B" />
+
+      <Text
+        className="ml-[5px] text-[13px] font-normal text-[#2F2337]"
+        style={{
+          includeFontPadding: false,
+          lineHeight: 11,
+        }}
+      >
+        {label}
+      </Text>
+
+      <View className="ml-1">
+        <SymbolView
+          name={{
+            ios: "chevron.down",
+            android: "keyboard_arrow_down",
+            web: "keyboard_arrow_down",
+          }}
+          size={12}
+          tintColor="#8A7D86"
+        />
+      </View>
+    </Pressable>
+  );
+}
+
+function CommunitySharePostMenuRow({
+  description,
+  disabled,
+  icon,
+  isSelected,
+  label,
+  onPress,
+}: {
+  description: string;
+  disabled: boolean;
+  icon: SymbolName;
+  isSelected: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ disabled, selected: isSelected }}
+      className="flex-row items-center rounded-[12px] px-2 py-2"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        backgroundColor: isSelected
+          ? "#FFE7F2"
+          : pressed
+            ? "#F7F1F5"
+            : "transparent",
+        opacity: disabled ? 0.6 : 1,
+      })}
+    >
+      <View className="h-8 w-8 items-center justify-center rounded-full bg-white">
+        <SymbolView
+          name={icon}
+          size={15}
+          tintColor={isSelected ? "#EB489B" : "#7A7380"}
+        />
+      </View>
+
+      <View className="ml-2.5 flex-1">
+        <Text
+          className="text-[14px] font-semibold text-[#2F2337]"
+          style={{ includeFontPadding: false, lineHeight: 15 }}
+        >
+          {label}
+        </Text>
+        <Text
+          className="mt-0.5 text-[12px] text-[#8F8298]"
+          style={{ includeFontPadding: false, lineHeight: 14 }}
+        >
+          {description}
+        </Text>
+      </View>
+
+      {isSelected ? (
+        <SymbolView
+          name={{
+            ios: "checkmark.circle.fill",
+            android: "check_circle",
+            web: "check_circle",
+          }}
+          size={18}
+          tintColor="#EB489B"
+        />
+      ) : null}
+    </Pressable>
+  );
+}
+
+function CommunitySharePostModal({
+  authorAvatarUri,
+  authorName,
+  authorUsername,
+  draft,
+  isSubmitting,
+  onChangeDraft,
+  onChangeVisibility,
+  onClose,
+  onSubmit,
+  visibility,
+  visible,
+}: {
+  authorAvatarUri: string | null;
+  authorName: string;
+  authorUsername: string | null;
+  draft: string;
+  isSubmitting: boolean;
+  onChangeDraft: (value: string) => void;
+  onChangeVisibility: (value: PostVisibilityValue) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+  visibility: PostVisibilityValue;
+  visible: boolean;
+}) {
+  const [isVisibilityMenuOpen, setIsVisibilityMenuOpen] = useState(false);
+  const [wasVisible, setWasVisible] = useState(visible);
+
+  if (wasVisible !== visible) {
+    setWasVisible(visible);
+    setIsVisibilityMenuOpen(false);
+  }
+
+  return (
+    <Modal
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
+      transparent
+      visible={visible}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        className="flex-1"
+      >
+        <View className="flex-1 justify-end bg-black/35">
+          <Pressable
+            className="flex-1"
+            disabled={isSubmitting}
+            onPress={onClose}
+          />
+
+          <SafeAreaView edges={["left", "right", "bottom"]}>
+            <View className="rounded-t-[26px] bg-white px-4 pb-5 pt-2.5">
+              <View className="items-center pb-2.5">
+                <View className="h-1 w-10 rounded-full bg-[#EFDCE7]" />
+              </View>
+
+              <View className="flex-row items-center">
+                <UserAvatar
+                  displayName={authorName}
+                  size={44}
+                  uri={authorAvatarUri}
+                  username={authorUsername}
+                />
+
+                <View className="ml-3 flex-1">
+                  <Text
+                    className="text-[15px] font-bold text-[#2F2337]"
+                    style={{
+                      includeFontPadding: false,
+                      lineHeight: 12,
+                      marginTop: 7,
+                    }}
+                  >
+                    {authorName}
+                  </Text>
+
+                  <View className="flex-row items-center">
+                    <CommunitySharePostPill
+                      disabled={isSubmitting}
+                      icon={getPostVisibilityIcon(visibility)}
+                      isActive={isVisibilityMenuOpen}
+                      label={getPostVisibilityLabel(visibility)}
+                      onPress={() => {
+                        setIsVisibilityMenuOpen((current) => !current);
+                      }}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {isVisibilityMenuOpen ? (
+                <View className="mt-2.5 rounded-[16px] bg-[#FDF4F9] px-1.5 py-1.5">
+                  {postVisibilityOptions.map((option) => (
+                    <CommunitySharePostMenuRow
+                      key={option}
+                      description={getPostVisibilityDescription(option)}
+                      disabled={isSubmitting}
+                      icon={getPostVisibilityIcon(option)}
+                      isSelected={visibility === option}
+                      label={getPostVisibilityLabel(option)}
+                      onPress={() => {
+                        onChangeVisibility(option);
+                        setIsVisibilityMenuOpen(false);
+                      }}
+                    />
+                  ))}
+                </View>
+              ) : null}
+
+              <TextInput
+                editable={!isSubmitting}
+                maxLength={communitySharePostMaxLength}
+                multiline
+                onChangeText={onChangeDraft}
+                placeholder="Hãy nói gì đó về nội dung này..."
+                placeholderTextColor="#B39EAD"
+                style={{
+                  color: "#2F242C",
+                  fontSize: 14,
+                  lineHeight: 17,
+                  marginTop: 12,
+                  maxHeight: 96,
+                  minHeight: 46,
+                  padding: 0,
+                  textAlignVertical: "top",
+                }}
+                value={draft}
+              />
+
+              <View className="mt-2.5 flex-row items-center justify-end">
+                <Pressable
+                  className="overflow-hidden rounded-[12px]"
+                  disabled={isSubmitting}
+                  onPress={onSubmit}
+                  style={({ pressed }) => ({
+                    opacity: isSubmitting ? 0.72 : pressed ? 0.9 : 1,
+                  })}
+                >
+                  <LinearGradient
+                    colors={gradientColors}
+                    end={{ x: 1, y: 0.5 }}
+                    locations={[0, 0.58, 1]}
+                    start={{ x: 0, y: 0.5 }}
+                    className="items-center justify-center px-4 py-1.5"
+                    style={{ minWidth: 118 }}
+                  >
+                    {isSubmitting ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <Text
+                        className="text-[14px] font-extrabold text-white"
+                        style={{ includeFontPadding: false, lineHeight: 16 }}
+                      >
+                        Chia sẻ ngay
+                      </Text>
+                    )}
+                  </LinearGradient>
+                </Pressable>
+              </View>
+            </View>
+          </SafeAreaView>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 

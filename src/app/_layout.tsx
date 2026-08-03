@@ -99,6 +99,7 @@ export default function RootLayout() {
           <Stack.Screen name="community/group/[shareToken]/members" />
           <Stack.Screen name="community/group/[shareToken]/settings" />
           <Stack.Screen name="community/group/[shareToken]/invite" />
+          <Stack.Screen name="community/leaderboard" />
           <Stack.Screen name="community/post-visibility" />
           <Stack.Screen name="community/post/[id]" />
           <Stack.Screen name="community/profile/[id]" />

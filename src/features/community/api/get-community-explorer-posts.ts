@@ -2,39 +2,55 @@ import { Platform } from "react-native";
 
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 import { parseSharedPost } from "@/lib/shared-post";
-
 import type {
   ProfilePost,
   ProfilePostMedia,
-  ProfilePostStatus,
   ProfilePostTag,
-} from "../types";
+} from "@/features/profile/types";
 
-type FetchProfilePostsRequest = {
+type GetCommunityExplorerPostsRequest = {
   accessToken?: string | null;
   page?: number;
   size?: number;
-  status?: ProfilePostStatus | null;
   sort?: string[];
   tokenType?: string | null;
-};
-
-type GetMyProfilePostsRequest = FetchProfilePostsRequest & {
-  accessToken: string;
-};
-
-type GetUserProfilePostsRequest = FetchProfilePostsRequest & {
   userId: number;
 };
 
-type ParsedPostsResponse = {
-  content: ProfilePost[];
-  isLast: boolean;
-  size: number;
+type CommunityExplorerPostsSortState = {
+  empty: boolean;
+  sorted: boolean;
+  unsorted: boolean;
 };
 
-function resolveProfilePostsUrl(path: string, query: URLSearchParams) {
-  const normalizedPath = `${path}?${query.toString()}`;
+type CommunityExplorerPostsPageable = {
+  offset: number;
+  pageNumber: number;
+  pageSize: number;
+  paged: boolean;
+  sort: CommunityExplorerPostsSortState | null;
+  unpaged: boolean;
+};
+
+export type CommunityExplorerPostsPage = {
+  content: ProfilePost[];
+  empty: boolean;
+  first: boolean;
+  isLast: boolean;
+  last: boolean;
+  number: number;
+  numberOfElements: number;
+  page: number;
+  pageable: CommunityExplorerPostsPageable | null;
+  size: number;
+  sort: CommunityExplorerPostsSortState | null;
+};
+
+function resolveCommunityExplorerPostsUrl(
+  userId: number,
+  query: URLSearchParams,
+) {
+  const normalizedPath = `/api/users/user/${userId}/posts?${query.toString()}`;
 
   if (PublicEnv.apiBaseUrl.trim()) {
     return buildApiUrl(normalizedPath);
@@ -46,17 +62,12 @@ function resolveProfilePostsUrl(path: string, query: URLSearchParams) {
 function buildPostsQuery({
   page = 0,
   size = 10,
-  sort = [],
-  status,
-}: FetchProfilePostsRequest) {
+  sort = ["createdAt,DESC"],
+}: Pick<GetCommunityExplorerPostsRequest, "page" | "size" | "sort">) {
   const query = new URLSearchParams({
     page: `${page}`,
     size: `${size}`,
   });
-
-  if (typeof status === "string" && status.trim()) {
-    query.set("status", status.trim().toUpperCase());
-  }
 
   for (const value of sort) {
     if (value.trim()) {
@@ -93,6 +104,37 @@ function readBoolean(value: unknown) {
 
 function isNonNull<T>(value: T | null): value is T {
   return value !== null;
+}
+
+function parseSortState(
+  value: unknown,
+): CommunityExplorerPostsSortState | null {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  return {
+    empty: readBoolean(value.empty),
+    sorted: readBoolean(value.sorted),
+    unsorted: readBoolean(value.unsorted),
+  };
+}
+
+function parsePageable(
+  value: unknown,
+): CommunityExplorerPostsPageable | null {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  return {
+    offset: readNumber(value.offset) ?? 0,
+    pageNumber: readNumber(value.pageNumber) ?? 0,
+    pageSize: readNumber(value.pageSize) ?? 0,
+    paged: readBoolean(value.paged),
+    sort: parseSortState(value.sort),
+    unpaged: readBoolean(value.unpaged),
+  };
 }
 
 function parsePostTag(value: unknown): ProfilePostTag | null {
@@ -200,13 +242,12 @@ function parsePost(value: unknown): ProfilePost | null {
   };
 }
 
-function parsePostsResponse(value: unknown): ParsedPostsResponse | null {
+function parsePostsResponse(value: unknown): CommunityExplorerPostsPage | null {
   if (!isObject(value) || !Array.isArray(value.content)) {
     return null;
   }
 
   const posts = value.content.map(parsePost).filter(isNonNull);
-  const size = readNumber(value.size) ?? posts.length;
 
   if (posts.length !== value.content.length) {
     return null;
@@ -214,8 +255,16 @@ function parsePostsResponse(value: unknown): ParsedPostsResponse | null {
 
   return {
     content: posts,
+    empty: readBoolean(value.empty),
+    first: readBoolean(value.first),
     isLast: readBoolean(value.last),
-    size,
+    last: readBoolean(value.last),
+    number: readNumber(value.number) ?? 0,
+    numberOfElements: readNumber(value.numberOfElements) ?? posts.length,
+    page: readNumber(value.number) ?? 0,
+    pageable: parsePageable(value.pageable),
+    size: readNumber(value.size) ?? posts.length,
+    sort: parseSortState(value.sort),
   };
 }
 
@@ -259,7 +308,7 @@ async function parseResponseBody(response: Response) {
   }
 }
 
-function getErrorMessage(body: unknown, status: number) {
+function getErrorMessage(body: unknown, userId: number, status: number) {
   if (isObject(body)) {
     for (const key of ["message", "error", "detail", "title"]) {
       const candidate = body[key];
@@ -278,7 +327,7 @@ function getErrorMessage(body: unknown, status: number) {
     return "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.";
   }
 
-  return `Không thể tải bài viết (${status}).`;
+  return `Không thể tải bài viết của explorer #${userId} (${status}).`;
 }
 
 function getConnectionErrorMessage(url: string) {
@@ -289,19 +338,22 @@ function getConnectionErrorMessage(url: string) {
   return "Không thể kết nối đến máy chủ bài viết.";
 }
 
-async function fetchProfilePostsPage({
+export async function getCommunityExplorerPosts({
   accessToken,
+  page = 0,
+  size = 10,
+  sort,
   tokenType,
-  url,
-}: {
-  accessToken?: string | null;
-  tokenType?: string | null;
-  url: string;
-}): Promise<ParsedPostsResponse> {
+  userId,
+}: GetCommunityExplorerPostsRequest): Promise<CommunityExplorerPostsPage> {
+  const communityExplorerPostsUrl = resolveCommunityExplorerPostsUrl(
+    userId,
+    buildPostsQuery({ page, size, sort }),
+  );
   let response: Response;
 
   try {
-    response = await fetch(url, {
+    response = await fetch(communityExplorerPostsUrl, {
       headers: {
         Accept: "application/json",
         ...(accessToken
@@ -313,111 +365,37 @@ async function fetchProfilePostsPage({
       method: "GET",
     });
   } catch (error) {
-    console.warn("[profile] get posts network failure", {
+    console.warn("[community-explorer-posts] get posts network failure", {
       error: serializeError(error),
       platform: Platform.OS,
-      url,
+      url: communityExplorerPostsUrl,
+      userId,
     });
-    throw new Error(getConnectionErrorMessage(url));
+    throw new Error(getConnectionErrorMessage(communityExplorerPostsUrl));
   }
 
   const responseBody = await parseResponseBody(response);
 
   if (!response.ok) {
-    console.warn("[profile] get posts rejected", {
+    console.warn("[community-explorer-posts] get posts rejected", {
       body: summarizeBody(responseBody),
       status: response.status,
-      url,
+      url: communityExplorerPostsUrl,
+      userId,
     });
-    throw new Error(getErrorMessage(responseBody, response.status));
+    throw new Error(getErrorMessage(responseBody, userId, response.status));
   }
 
   const parsedResponse = parsePostsResponse(responseBody);
 
   if (!parsedResponse) {
-    console.warn("[profile] get posts invalid payload", {
+    console.warn("[community-explorer-posts] get posts invalid payload", {
       body: summarizeBody(responseBody),
-      url,
+      url: communityExplorerPostsUrl,
+      userId,
     });
-    throw new Error("API bài viết trả về dữ liệu không đúng định dạng.");
+    throw new Error("API bài viết explorer trả về dữ liệu không đúng định dạng.");
   }
 
   return parsedResponse;
-}
-
-async function getAllProfilePosts({
-  accessToken,
-  page = 0,
-  resolvePageUrl,
-  size = 20,
-  tokenType,
-}: FetchProfilePostsRequest & {
-  resolvePageUrl: (nextPage: number) => string;
-}): Promise<ProfilePost[]> {
-  const posts: ProfilePost[] = [];
-  let nextPage = page;
-
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const response = await fetchProfilePostsPage({
-      accessToken,
-      tokenType,
-      url: resolvePageUrl(nextPage),
-    });
-
-    posts.push(...response.content);
-
-    if (
-      response.isLast ||
-      response.content.length === 0 ||
-      response.content.length < (response.size || size)
-    ) {
-      break;
-    }
-
-    nextPage += 1;
-  }
-
-  return posts;
-}
-
-export async function getMyProfilePosts({
-  accessToken,
-  page,
-  size,
-  status,
-  sort,
-  tokenType,
-}: GetMyProfilePostsRequest): Promise<ProfilePost[]> {
-  return getAllProfilePosts({
-    accessToken,
-    page,
-    resolvePageUrl: (nextPage) =>
-      resolveProfilePostsUrl(
-        "/api/posts",
-        buildPostsQuery({ page: nextPage, size, sort, status }),
-      ),
-    size,
-    tokenType,
-  });
-}
-
-export async function getUserProfilePosts({
-  accessToken,
-  page,
-  size,
-  sort,
-  tokenType,
-  userId,
-}: GetUserProfilePostsRequest): Promise<ProfilePost[]> {
-  return getAllProfilePosts({
-    accessToken,
-    page,
-    resolvePageUrl: (nextPage) =>
-      resolveProfilePostsUrl(
-        `/api/users/user/${userId}/posts`,
-        buildPostsQuery({ page: nextPage, size, sort }),
-      ),
-    size,
-    tokenType,
-  });
 }

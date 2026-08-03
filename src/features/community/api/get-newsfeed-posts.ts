@@ -6,6 +6,7 @@ import type {
   ProfilePostMedia,
   ProfilePostTag,
 } from "@/features/profile/types";
+import { parseSharedPost } from "@/lib/shared-post";
 
 type GetNewsfeedPostsRequest = {
   accessToken?: string | null;
@@ -229,7 +230,7 @@ function parsePost(value: unknown): NewsfeedPost | null {
     commentCount: readNullableNumber(value.commentCount),
     replyCount: readNullableNumber(value.replyCount),
     shareCount: readNullableNumber(value.shareCount),
-    sharedPost: isNullableString(value.sharedPost) ? value.sharedPost : null,
+    sharedPost: parseSharedPost(value.sharedPost),
   };
 }
 
