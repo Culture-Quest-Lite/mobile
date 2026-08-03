@@ -5,17 +5,24 @@ import { PublicEnv } from "@/constants/env";
 import type { LoginResponse } from "@/features/auth/api/login";
 import { readExpoScheme } from "@/lib/expo-scheme";
 
-const GOOGLE_AUTH_CALLBACK_PATH = "auth/callback/google";
 const DEFAULT_EXPO_SCHEME = "culturequestlitemobile";
 
-export type GoogleLoginResult = LoginResponse & {
-  displayName: string | null;
+export type SocialProvider = "facebook" | "google";
+
+const PROVIDER_LABELS: Record<SocialProvider, string> = {
+  facebook: "Facebook",
+  google: "Google",
 };
 
-export class GoogleSignInCancelledError extends Error {
-  constructor() {
-    super("Đăng nhập Google đã bị hủy.");
-    this.name = "GoogleSignInCancelledError";
+export type SocialLoginResult = LoginResponse & {
+  displayName: string | null;
+  provider: SocialProvider;
+};
+
+export class SocialSignInCancelledError extends Error {
+  constructor(provider: SocialProvider) {
+    super(`Đăng nhập ${PROVIDER_LABELS[provider]} đã bị hủy.`);
+    this.name = "SocialSignInCancelledError";
   }
 }
 
@@ -45,13 +52,18 @@ function buildKeycloakDiscovery(): KeycloakDiscovery {
   };
 }
 
-function resolveRedirectUri() {
-  if (PublicEnv.googleRedirectUri) {
-    return PublicEnv.googleRedirectUri;
+function resolveRedirectUri(provider: SocialProvider) {
+  const configuredRedirectUri =
+    provider === "facebook"
+      ? PublicEnv.facebookRedirectUri
+      : PublicEnv.googleRedirectUri;
+
+  if (configuredRedirectUri) {
+    return configuredRedirectUri;
   }
 
   return makeRedirectUri({
-    path: GOOGLE_AUTH_CALLBACK_PATH,
+    path: `auth/callback/${provider}`,
     scheme: readExpoScheme() || DEFAULT_EXPO_SCHEME,
   });
 }
@@ -125,7 +137,7 @@ async function parseResponseBody(response: Response) {
   }
 }
 
-function getErrorMessage(body: unknown, status: number) {
+function getErrorMessage(body: unknown, status: number, label: string) {
   if (isObject(body)) {
     for (const key of ["error_description", "message", "error", "detail"]) {
       const candidate = body[key];
@@ -140,7 +152,7 @@ function getErrorMessage(body: unknown, status: number) {
     return body.trim();
   }
 
-  return `Đăng nhập Google thất bại (${status}).`;
+  return `Đăng nhập ${label} thất bại (${status}).`;
 }
 
 function getConnectionErrorMessage(tokenUrl: string) {
@@ -212,6 +224,7 @@ function extractDisplayName(idToken: string | undefined) {
 async function requestKeycloakToken(
   body: Record<string, string>,
   context: "login" | "refresh",
+  label: string,
 ): Promise<KeycloakTokenResponse> {
   const discovery = buildKeycloakDiscovery();
   const tokenUrl = discovery.tokenEndpoint;
@@ -227,9 +240,10 @@ async function requestKeycloakToken(
       method: "POST",
     });
   } catch (error) {
-    console.warn(`[auth] google ${context} network failure`, {
+    console.warn(`[auth] social ${context} network failure`, {
       error: serializeError(error),
       platform: Platform.OS,
+      provider: label,
       url: tokenUrl,
     });
     throw new Error(getConnectionErrorMessage(tokenUrl));
@@ -237,24 +251,27 @@ async function requestKeycloakToken(
 
   const responseBody = await parseResponseBody(response);
 
-  console.info(`[auth] google ${context} token response received`, {
+  console.info(`[auth] social ${context} token response received`, {
     ok: response.ok,
+    provider: label,
     status: response.status,
     url: tokenUrl,
   });
 
   if (!response.ok) {
-    console.warn(`[auth] google ${context} token rejected`, {
+    console.warn(`[auth] social ${context} token rejected`, {
       body: summarizeBody(responseBody),
+      provider: label,
       status: response.status,
       url: tokenUrl,
     });
-    throw new Error(getErrorMessage(responseBody, response.status));
+    throw new Error(getErrorMessage(responseBody, response.status, label));
   }
 
   if (!isKeycloakTokenResponse(responseBody)) {
-    console.warn(`[auth] google ${context} invalid payload`, {
+    console.warn(`[auth] social ${context} invalid payload`, {
       body: summarizeBody(responseBody),
+      provider: label,
       url: tokenUrl,
     });
     throw new Error("Keycloak trả về dữ liệu không đúng định dạng.");
@@ -273,9 +290,12 @@ function toLoginResponse(tokenResponse: KeycloakTokenResponse): LoginResponse {
   };
 }
 
-export async function loginWithGoogleViaKeycloak(): Promise<GoogleLoginResult> {
+export async function loginWithSocialViaKeycloak(
+  provider: SocialProvider,
+): Promise<SocialLoginResult> {
   const discovery = buildKeycloakDiscovery();
-  const redirectUri = resolveRedirectUri();
+  const redirectUri = resolveRedirectUri(provider);
+  const label = PROVIDER_LABELS[provider];
 
   if (!PublicEnv.keycloakClientId) {
     throw new Error(
@@ -283,16 +303,17 @@ export async function loginWithGoogleViaKeycloak(): Promise<GoogleLoginResult> {
     );
   }
 
-  console.info("[auth] google login started", {
+  console.info("[auth] social login started", {
     authorizationEndpoint: discovery.authorizationEndpoint,
     platform: Platform.OS,
+    provider,
     redirectUri,
   });
 
   const request = new AuthRequest({
     clientId: PublicEnv.keycloakClientId,
     extraParams: {
-      kc_idp_hint: "google",
+      kc_idp_hint: provider,
     },
     redirectUri,
     responseType: ResponseType.Code,
@@ -304,19 +325,23 @@ export async function loginWithGoogleViaKeycloak(): Promise<GoogleLoginResult> {
 
   if (result.type !== "success") {
     if (result.type === "error") {
-      console.warn("[auth] google login browser error", {
+      console.warn("[auth] social login browser error", {
         error: serializeError(result.error),
         params: result.params,
+        provider,
       });
       throw new Error(
         result.params?.error_description?.trim() ||
           result.error?.message ||
-          "Đăng nhập Google thất bại.",
+          `Đăng nhập ${label} thất bại.`,
       );
     }
 
-    console.info("[auth] google login dismissed", { type: result.type });
-    throw new GoogleSignInCancelledError();
+    console.info("[auth] social login dismissed", {
+      provider,
+      type: result.type,
+    });
+    throw new SocialSignInCancelledError(provider);
   }
 
   const code = result.params.code;
@@ -334,10 +359,12 @@ export async function loginWithGoogleViaKeycloak(): Promise<GoogleLoginResult> {
       redirect_uri: redirectUri,
     },
     "login",
+    label,
   );
 
-  console.info("[auth] google login succeeded", {
+  console.info("[auth] social login succeeded", {
     expiresIn: tokenResponse.expires_in,
+    provider,
     refreshExpiresIn: tokenResponse.refresh_expires_in,
     tokenType: tokenResponse.token_type,
   });
@@ -345,10 +372,11 @@ export async function loginWithGoogleViaKeycloak(): Promise<GoogleLoginResult> {
   return {
     ...toLoginResponse(tokenResponse),
     displayName: extractDisplayName(tokenResponse.id_token),
+    provider,
   };
 }
 
-export async function refreshGoogleAccessToken(
+export async function refreshSocialAccessToken(
   refreshToken: string,
 ): Promise<LoginResponse> {
   if (!PublicEnv.keycloakClientId) {
@@ -364,6 +392,7 @@ export async function refreshGoogleAccessToken(
       refresh_token: refreshToken,
     },
     "refresh",
+    "mạng xã hội",
   );
 
   return toLoginResponse(tokenResponse);
