@@ -3,6 +3,8 @@ const keycloakUrl = process.env.EXPO_PUBLIC_KEYCLOAK_URL?.trim() ?? '';
 const keycloakRealm = process.env.EXPO_PUBLIC_KEYCLOAK_REALM?.trim() ?? '';
 const keycloakClientId = process.env.EXPO_PUBLIC_KEYCLOAK_CLIENT_ID?.trim() ?? '';
 const googleRedirectUri = process.env.EXPO_PUBLIC_GOOGLE_REDIRECT_URI?.trim() ?? '';
+const facebookRedirectUri =
+  process.env.EXPO_PUBLIC_FACEBOOK_REDIRECT_URI?.trim() ?? '';
 const rawUseDevLocationOverride =
   process.env.EXPO_PUBLIC_USE_DEV_LOCATION_OVERRIDE?.trim() ?? '';
 const devLatitude = process.env.EXPO_PUBLIC_DEV_LATITUDE?.trim() ?? '';
@@ -40,6 +42,7 @@ export const PublicEnv = {
   keycloakClientId,
   keycloakRealm,
   keycloakUrl,
+  facebookRedirectUri,
   googleRedirectUri,
   goongApiKey,
 } as const;

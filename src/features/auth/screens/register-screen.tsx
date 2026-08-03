@@ -24,12 +24,15 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
-import { GoogleSignInCancelledError } from "@/features/auth/api/google-login";
+import {
+  SocialSignInCancelledError,
+  type SocialProvider,
+} from "@/features/auth/api/social-login";
 import { registerWithPassword } from "@/features/auth/api/register";
 import { AuthInput } from "@/features/auth/components/auth-input";
 import { SocialAuthButton } from "@/features/auth/components/social-auth-button";
 import { useAuthScreenLayout } from "@/features/auth/hooks/use-auth-screen-layout";
-import { signInWithGoogle } from "@/features/auth/hooks/use-auth-session";
+import { signInWithSocial } from "@/features/auth/hooks/use-auth-session";
 import {
   hasAnyFieldError,
   validateRegisterForm,
@@ -88,7 +91,8 @@ export default function RegisterScreen() {
   const [didAttemptSubmit, setDidAttemptSubmit] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const [pendingSocialProvider, setPendingSocialProvider] =
+    useState<SocialProvider | null>(null);
   const [touchedFields, setTouchedFields] = useState({
     confirmPassword: false,
     displayName: false,
@@ -137,8 +141,9 @@ export default function RegisterScreen() {
     touchedFields.confirmPassword || didAttemptSubmit
       ? registerErrors.confirmPassword ?? null
       : null;
+  const isSocialSubmitting = pendingSocialProvider !== null;
   const isSubmitDisabled =
-    isSubmitting || isGoogleSubmitting || hasAnyFieldError(registerErrors);
+    isSubmitting || isSocialSubmitting || hasAnyFieldError(registerErrors);
 
   useEffect(() => {
     if (entry !== "home") {
@@ -225,33 +230,34 @@ export default function RegisterScreen() {
     }
   };
 
-  const handleGoogleSignUp = async () => {
+  const handleSocialSignUp = async (provider: SocialProvider) => {
     setErrorMessage(null);
-    setIsGoogleSubmitting(true);
+    setPendingSocialProvider(provider);
 
     try {
-      await signInWithGoogle();
-      console.info("[auth] google sign-up navigation to /home");
+      await signInWithSocial(provider);
+      console.info("[auth] social sign-up navigation to /home", { provider });
       router.replace("/home");
     } catch (error) {
-      if (error instanceof GoogleSignInCancelledError) {
-        console.info("[auth] google sign-up cancelled by user");
+      if (error instanceof SocialSignInCancelledError) {
+        console.info("[auth] social sign-up cancelled by user", { provider });
         return;
       }
 
-      console.warn("[auth] google sign-up screen caught error", {
+      console.warn("[auth] social sign-up screen caught error", {
         error:
           error instanceof Error
             ? { message: error.message, name: error.name, stack: error.stack }
             : error,
+        provider,
       });
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "Không thể đăng ký với Google. Vui lòng thử lại.",
+          : `Không thể đăng ký với ${provider === "facebook" ? "Facebook" : "Google"}. Vui lòng thử lại.`,
       );
     } finally {
-      setIsGoogleSubmitting(false);
+      setPendingSocialProvider(null);
     }
   };
 
@@ -495,13 +501,20 @@ export default function RegisterScreen() {
                     <View className="flex-row justify-center gap-3.5">
                       <SocialAuthButton
                         accentColor="#EA4335"
-                        disabled={isSubmitting || isGoogleSubmitting}
+                        disabled={isSubmitting || isSocialSubmitting}
                         label="G"
                         onPress={() => {
-                          void handleGoogleSignUp();
+                          void handleSocialSignUp("google");
                         }}
                       />
-                      <SocialAuthButton accentColor="#1877F2" label="f" />
+                      <SocialAuthButton
+                        accentColor="#1877F2"
+                        disabled={isSubmitting || isSocialSubmitting}
+                        label="f"
+                        onPress={() => {
+                          void handleSocialSignUp("facebook");
+                        }}
+                      />
                     </View>
 
                     <View className="flex-row items-center justify-center gap-1.5">
