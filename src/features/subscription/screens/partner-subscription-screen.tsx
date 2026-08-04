@@ -206,8 +206,16 @@ function normalizePickedAsset(
   return { name, type, uri: asset.uri };
 }
 
+type RegistrationStep = 1 | 2;
+
+const STEP_LABELS: Record<RegistrationStep, string> = {
+  1: "Thông tin đăng ký",
+  2: "Thanh toán ngân hàng",
+};
+
 export default function PartnerSubscriptionScreen() {
   const router = useRouter();
+  const [currentStep, setCurrentStep] = useState<RegistrationStep>(1);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("MONTHLY");
@@ -447,7 +455,7 @@ export default function PartnerSubscriptionScreen() {
     }
   }
 
-  function validateForm() {
+  function validateStep1() {
     if (!selectedPlan) return "Vui lòng chọn gói đăng ký.";
     if (!shopName.trim()) return "Vui lòng nhập tên shop.";
     if (!/^\S+@\S+\.\S+$/.test(shopEmail.trim())) return "Email shop không đúng định dạng.";
@@ -457,6 +465,15 @@ export default function PartnerSubscriptionScreen() {
     }
     if (!documentFile) return "Vui lòng upload giấy tờ xác minh.";
     return null;
+  }
+
+  function handleContinueToPayment() {
+    const validationMessage = validateStep1();
+    if (validationMessage) {
+      Alert.alert("Thiếu thông tin", validationMessage);
+      return;
+    }
+    setCurrentStep(2);
   }
 
 
@@ -472,9 +489,10 @@ export default function PartnerSubscriptionScreen() {
   }, []);
 
   async function handleRegisterAndPay() {
-    const validationMessage = validateForm();
+    const validationMessage = validateStep1();
     if (validationMessage) {
       Alert.alert("Thiếu thông tin", validationMessage);
+      setCurrentStep(1);
       return;
     }
 
@@ -509,17 +527,17 @@ export default function PartnerSubscriptionScreen() {
         subscriptionId: subscription.id,
       });
       setPayment(paymentResponse);
-      await openPayOs(paymentResponse);
+      await openBankPayment(paymentResponse);
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "Đăng ký Partner hoặc khởi tạo thanh toán PayOS thất bại.",
+        error instanceof Error ? error.message : "Đăng ký Partner hoặc khởi tạo thanh toán ngân hàng thất bại.",
       );
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  async function openPayOs(paymentResponse = payment) {
+  async function openBankPayment(paymentResponse = payment) {
     if (!paymentResponse) return;
     const targetUrl =
       paymentResponse.checkoutUrl ||
@@ -538,10 +556,16 @@ export default function PartnerSubscriptionScreen() {
       }
     }
     if (paymentResponse.qrCodeUrl || paymentResponse.qrCode) {
-      Alert.alert("Không mở được trang PayOS", "Bạn có thể quét mã QR PayOS bên dưới để thanh toán.");
+      Alert.alert(
+        "Không mở được trang thanh toán",
+        "Bạn có thể quét mã QR bên dưới để chuyển khoản qua ngân hàng.",
+      );
       return;
     }
-    Alert.alert("Không mở được PayOS", "Backend chưa trả checkoutUrl hoặc mã QR PayOS để thanh toán.");
+    Alert.alert(
+      "Không mở được trang thanh toán",
+      "Hệ thống chưa trả liên kết hoặc mã QR để thanh toán bằng ngân hàng.",
+    );
   }
 
   return (
@@ -595,6 +619,76 @@ export default function PartnerSubscriptionScreen() {
           <Text className="mt-1 text-[14px] leading-5 text-white/80">
             Hiển thị shop lên bản đồ CultureQuest, phát hành voucher & thu hút khách du lịch
           </Text>
+
+          {/* Step indicator */}
+          <View className="mt-5 flex-row items-center gap-2">
+            {([1, 2] as RegistrationStep[]).map((step) => {
+              const isActive = currentStep === step;
+              const isCompleted = currentStep > step;
+              return (
+                <View key={step} className="flex-1 flex-row items-center gap-2">
+                  <View
+                    style={{
+                      alignItems: "center",
+                      backgroundColor: isActive || isCompleted ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.25)",
+                      borderRadius: 999,
+                      height: 28,
+                      justifyContent: "center",
+                      width: 28,
+                    }}
+                  >
+                    {isCompleted ? (
+                      <SymbolView
+                        name={{ ios: "checkmark", android: "check", web: "check" }}
+                        size={14}
+                        tintColor="#EB489B"
+                      />
+                    ) : (
+                      <Text
+                        style={{
+                          color: isActive ? "#EB489B" : "rgba(255,255,255,0.85)",
+                          fontSize: 13,
+                          fontWeight: "800",
+                        }}
+                      >
+                        {step}
+                      </Text>
+                    )}
+                  </View>
+                  <View className="flex-1">
+                    <Text
+                      style={{
+                        color: isActive ? "white" : "rgba(255,255,255,0.7)",
+                        fontSize: 11,
+                        fontWeight: isActive ? "800" : "600",
+                      }}
+                    >
+                      Bước {step}
+                    </Text>
+                    <Text
+                      style={{
+                        color: isActive ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.65)",
+                        fontSize: 11,
+                        fontWeight: "700",
+                      }}
+                      numberOfLines={1}
+                    >
+                      {STEP_LABELS[step]}
+                    </Text>
+                  </View>
+                  {step === 1 ? (
+                    <View
+                      style={{
+                        backgroundColor: currentStep > 1 ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.35)",
+                        height: 2,
+                        width: 16,
+                      }}
+                    />
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
         </View>
 
         <View className="px-5 pt-5">
@@ -615,6 +709,7 @@ export default function PartnerSubscriptionScreen() {
           ) : null}
 
           {/* Partner Benefits Banner */}
+          {currentStep === 1 ? (
           <View className="mb-5 rounded-2xl border border-[#F8D7E3] bg-[#FFF8FC] p-4">
             <View className="flex-row items-center gap-2 mb-2">
               <SymbolView
@@ -639,12 +734,15 @@ export default function PartnerSubscriptionScreen() {
               ))}
             </View>
           </View>
+          ) : null}
 
+          {currentStep === 1 ? (
+            <>
           {/* Plan Selection */}
           {!isLoading && plans.length > 0 ? (
             <View className="mb-5">
               <Text className="mb-3 text-[15px] font-extrabold text-[#2B2233]">
-                1. Chọn gói Partner
+                Chọn gói Partner
               </Text>
               <View className="gap-3">
                 {plans.map((plan) => {
@@ -730,7 +828,7 @@ export default function PartnerSubscriptionScreen() {
 
           {/* Shop Info Form */}
           <Text className="mb-3 text-[15px] font-extrabold text-[#2B2233]">
-            2. Thông tin shop
+            Thông tin shop
           </Text>
           <View className="mb-5 gap-4 rounded-2xl bg-[#FFF8FC] p-4">
             <View>
@@ -892,7 +990,7 @@ export default function PartnerSubscriptionScreen() {
 
           {/* Verification Docs */}
           <Text className="mb-3 text-[15px] font-extrabold text-[#2B2233]">
-            3. Hồ sơ xác minh
+            Hồ sơ xác minh
           </Text>
           <View className="mb-5 gap-3 rounded-2xl bg-[#FFF8FC] p-4">
             <Pressable
@@ -932,6 +1030,92 @@ export default function PartnerSubscriptionScreen() {
             </Pressable>
           </View>
 
+          {/* Continue to payment step */}
+          <Pressable
+            onPress={handleContinueToPayment}
+            style={{
+              backgroundColor: "#EB489B",
+              borderRadius: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              paddingHorizontal: 16,
+              paddingVertical: 16,
+            }}
+          >
+            <Text className="text-center text-[15px] font-extrabold text-white">
+              Tiếp tục đến bước thanh toán
+            </Text>
+            <SymbolView
+              name={{ ios: "arrow.right", android: "arrow_forward", web: "arrow_forward" }}
+              size={16}
+              tintColor="white"
+            />
+          </Pressable>
+            </>
+          ) : null}
+
+          {currentStep === 2 ? (
+            <>
+          {/* Back to step 1 */}
+          <Pressable
+            onPress={() => setCurrentStep(1)}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              marginBottom: 16,
+            }}
+          >
+            <SymbolView
+              name={{ ios: "chevron.left", android: "arrow_back", web: "arrow_back" }}
+              size={14}
+              tintColor="#EB489B"
+            />
+            <Text className="text-[13px] font-extrabold text-[#EB489B]">
+              Quay lại thông tin đăng ký
+            </Text>
+          </Pressable>
+
+          {/* Payment method */}
+          <Text className="mb-3 text-[15px] font-extrabold text-[#2B2233]">
+            Phương thức thanh toán
+          </Text>
+          <View className="mb-5 rounded-2xl border border-[#EB489B] bg-[#FFF0F8] p-4">
+            <View className="flex-row items-center gap-3">
+              <View
+                style={{
+                  alignItems: "center",
+                  backgroundColor: "#EB489B",
+                  borderRadius: 999,
+                  height: 36,
+                  justifyContent: "center",
+                  width: 36,
+                }}
+              >
+                <SymbolView
+                  name={{ ios: "qrcode", android: "qr_code", web: "qr_code" }}
+                  size={18}
+                  tintColor="white"
+                />
+              </View>
+              <View className="flex-1">
+                <Text className="text-[14px] font-extrabold text-[#2B2233]">
+                  Chuyển khoản ngân hàng / QR
+                </Text>
+                <Text className="mt-0.5 text-[12px] leading-4 text-[#8E869A]">
+                  Quét mã VietQR hoặc chuyển khoản qua ứng dụng ngân hàng bất kỳ.
+                </Text>
+              </View>
+              <SymbolView
+                name={{ ios: "checkmark.circle.fill", android: "check_circle", web: "check_circle" }}
+                size={20}
+                tintColor="#EB489B"
+              />
+            </View>
+          </View>
+
           {/* Summary */}
           <View className="mb-5 rounded-2xl bg-[#F4EFF8] p-4">
             <Text className="text-[14px] font-extrabold text-[#2B2233]">
@@ -969,22 +1153,22 @@ export default function PartnerSubscriptionScreen() {
               <ActivityIndicator color="white" />
             ) : (
               <Text className="text-center text-[15px] font-extrabold text-white">
-                🏪 Đăng ký và thanh toán PayOS
+                🏪 Đăng ký và thanh toán
               </Text>
             )}
           </Pressable>
 
-          {/* PayOS Result */}
+          {/* Payment Result */}
           {payment ? (
             <View className="mt-5 rounded-2xl border border-[#F4EFF8] bg-white p-4">
               <Text className="text-[15px] font-extrabold text-[#2B2233]">
-                Thanh toán qua PayOS
+                Hoàn tất thanh toán
               </Text>
               <Text className="mt-2 text-[13px] text-[#8E869A]">
-                Mở trang thanh toán PayOS an toàn. Nếu trình duyệt không mở được, hãy quét mã QR bên dưới.
+                Mở trang thanh toán an toàn để hoàn tất. Nếu trình duyệt không mở được, hãy quét mã QR bên dưới.
               </Text>
               <Pressable
-                onPress={() => openPayOs()}
+                onPress={() => openBankPayment()}
                 style={{
                   backgroundColor: "#A50064",
                   borderRadius: 12,
@@ -994,7 +1178,7 @@ export default function PartnerSubscriptionScreen() {
                 }}
               >
                 <Text className="text-center text-[13px] font-extrabold text-white">
-                  Mở trang thanh toán PayOS
+                  Mở trang thanh toán
                 </Text>
               </Pressable>
               {qrImageUri ? (
@@ -1006,6 +1190,8 @@ export default function PartnerSubscriptionScreen() {
                 </View>
               ) : null}
             </View>
+          ) : null}
+            </>
           ) : null}
         </View>
 

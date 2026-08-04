@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect, useState } from "react";
@@ -75,7 +75,9 @@ export default function LoginScreen() {
     typeof redirectTo === "string" ? decodeURIComponent(redirectTo) : null;
   const isSupportedEntry =
     entry === "home" || (entry === "invite" && Boolean(resolvedRedirectTo));
-  const postLoginRedirect = resolvedRedirectTo ?? "/home";
+  // Redirect đến từ query param nên chỉ biết được lúc runtime -> không thể để
+  // TS suy ra literal route type, phải ép kiểu Href.
+  const postLoginRedirect = (resolvedRedirectTo ?? "/home") as Href;
   const {
     backButtonTop,
     cardMaxWidth,

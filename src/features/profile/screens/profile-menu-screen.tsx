@@ -17,6 +17,7 @@ import {
   resetAuthSessionToGuest,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
+import { resetPremiumStatus } from "../hooks/use-premium-status";
 import { useProfile } from "../hooks/use-profile";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
@@ -71,6 +72,9 @@ export default function ProfileMenuScreen() {
 
   const handleLogout = () => {
     resetAuthSessionToGuest();
+    // Store isPremium là singleton dùng chung cho cả app -> phải xoá khi logout,
+    // nếu không tài khoản đăng nhập kế tiếp sẽ thừa hưởng isPremium của user cũ.
+    resetPremiumStatus();
     router.replace("/home");
   };
 
@@ -96,8 +100,10 @@ export default function ProfileMenuScreen() {
       onPress: () => {},
     },
     {
-      label: "Ví của tôi",
-      onPress: () => {},
+      label: "Kho voucher",
+      onPress: () => {
+        router.push("/vouchers" as Href);
+      },
     },
   ];
 

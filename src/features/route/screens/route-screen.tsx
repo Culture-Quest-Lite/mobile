@@ -14,6 +14,7 @@ import { SymbolView } from "expo-symbols";
 import {
   type ComponentProps,
   useCallback,
+  useEffect,
   useMemo,
   useState
 } from "react";
@@ -54,6 +55,7 @@ import {
   myRouteGroupsDemo,
   type RouteGroupDemo,
 } from "@/features/route/data/route-group-demo";
+import { usePremiumStatus } from "@/features/profile/hooks/use-premium-status";
 
 type Tab =
   | "official"
@@ -251,6 +253,14 @@ export default function RouteScreen() {
   const [myPlans, setMyPlans] = useState<UserPlan[]>([]);
   const [planError, setPlanError] = useState<string | null>(null);
   const [myRecordJourneys, setMyRecordJourneys] = useState<RecordRouteDto[]>([]);
+  const { ensureLoaded: ensurePremiumLoaded } = usePremiumStatus();
+
+  // Màn này có nhiều nút gọi `requirePremium()`. Nếu store isPremium chưa được
+  // nạp (VD user mở thẳng tab Tuyến sau khi khởi động, chưa qua Home/Explore)
+  // thì mặc định là false -> user Premium thật sẽ bị chặn oan. Nạp sẵn ở đây.
+  useEffect(() => {
+    void ensurePremiumLoaded();
+  }, [ensurePremiumLoaded]);
 
   useFocusEffect(
     useCallback(() => {
@@ -836,12 +846,16 @@ function ActiveProgressSummary({
 
 function UserPlanTab({ plans, error }: { plans: UserPlan[]; error: string | null }) {
   const router = useRouter();
+  const { requirePremium } = usePremiumStatus();
 
   return (
     <View className="gap-3">
       <Pressable
         className="overflow-hidden rounded-3xl"
-        onPress={() => router.push("/route/custom/plan" as Href)}
+        onPress={() => {
+          if (!requirePremium("Tạo kế hoạch hành trình (User Plan)")) return;
+          router.push("/route/custom/plan" as Href);
+        }}
       >
         <LinearGradient
           colors={["#7C5CFC", "#EB489B", "#F58752"]}
@@ -908,6 +922,7 @@ function MyJourneyTab({
   journeys: RecordRouteDto[];
 }) {
   const router = useRouter();
+  const { requirePremium } = usePremiumStatus();
 
   const grouped = useMemo(() => {
     const result: Record<string, RecordRouteDto[]> = {
@@ -970,7 +985,10 @@ function MyJourneyTab({
     <View className="gap-4">
       <Pressable
         className="overflow-hidden rounded-3xl"
-        onPress={() => router.push("/route/custom/record" as Href)}
+        onPress={() => {
+          if (!requirePremium("Ghi hành trình cá nhân (Record Journey)")) return;
+          router.push("/route/custom/record" as Href);
+        }}
       >
         <LinearGradient
           colors={["#E84D6A", "#EB489B", "#F58752"]}
@@ -1076,6 +1094,7 @@ function MyJourneyTab({
                       section.key === "RECORDING" ||
                       section.key === "DRAFT"
                     ) {
+                      if (!requirePremium("Ghi hành trình cá nhân (Record Journey)")) return;
                       router.push("/route/custom/record" as Href);
                       return;
                     }
@@ -1339,6 +1358,7 @@ function MyGroupsTab({
 
 function CommunityTab() {
   const router = useRouter();
+  const { requirePremium } = usePremiumStatus();
   const [showCustomRouteMenu, setShowCustomRouteMenu] = useState(false);
   const [showCustomRouteHelp, setShowCustomRouteHelp] = useState(false);
   const popular = useMemo(
@@ -1451,6 +1471,7 @@ function CommunityTab() {
               style={cardShadowStyle}
               onPress={() => {
                 setShowCustomRouteMenu(false);
+                if (!requirePremium("Tạo kế hoạch hành trình (User Plan)")) return;
                 router.push("/route/custom/plan" as Href);
               }}
             >
@@ -1483,6 +1504,7 @@ function CommunityTab() {
               style={cardShadowStyle}
               onPress={() => {
                 setShowCustomRouteMenu(false);
+                if (!requirePremium("Ghi hành trình cá nhân (Record Journey)")) return;
                 router.push("/route/custom/record" as Href);
               }}
             >
