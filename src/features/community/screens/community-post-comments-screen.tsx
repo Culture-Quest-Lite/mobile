@@ -981,30 +981,54 @@ function CommunityPostCard({
 
 function CommunityCommentItem({
   item,
+  onOpenProfile,
   onReply,
   replyCount,
   showReplyingState = false,
 }: {
   item: PostComment;
+  onOpenProfile: (authorId: string) => void;
   onReply: (item: PostComment) => void;
   replyCount: number;
   showReplyingState?: boolean;
 }) {
   const displayName = getCommentDisplayName(item);
   const palette = getAvatarPalette(`${displayName}-${item.userId}`);
+  const commenterId =
+    Number.isInteger(item.userId) && item.userId > 0 ? `${item.userId}` : null;
 
   return (
     <View className="flex-row items-start gap-2">
-      <AvatarMonogram
-        colors={palette}
-        initials={getNameInitials(displayName)}
-        size={36}
-      />
+      <Pressable
+        accessibilityLabel={`Xem trang cá nhân của ${displayName}`}
+        accessibilityRole="button"
+        disabled={commenterId === null}
+        hitSlop={6}
+        onPress={() => {
+          if (commenterId !== null) {
+            onOpenProfile(commenterId);
+          }
+        }}
+        style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+      >
+        <CommunityPostAuthorAvatar
+          authorId={commenterId ?? ""}
+          authorName={displayName}
+          avatarColors={palette}
+          initials={getNameInitials(displayName)}
+          size={36}
+        />
+      </Pressable>
 
       <View className="flex-1">
         <View className="self-start rounded-[16px] bg-[#F3F4F6] px-3 py-2">
           <Text
             className="text-[14px] font-bold text-[#111827]"
+            onPress={() => {
+              if (commenterId !== null) {
+                onOpenProfile(commenterId);
+              }
+            }}
             style={{ includeFontPadding: false, lineHeight: 12 }}
           >
             {displayName}
@@ -1064,12 +1088,14 @@ function CommunityCommentItem({
 function CommunityCommentThread({
   depth = 0,
   item,
+  onOpenProfile,
   onReply,
   repliesByParentId,
   replyTargetId,
 }: {
   depth?: number;
   item: PostComment;
+  onOpenProfile: (authorId: string) => void;
   onReply: (item: PostComment) => void;
   repliesByParentId: Record<number, PostComment[]>;
   replyTargetId: number | null;
@@ -1081,6 +1107,7 @@ function CommunityCommentThread({
     <View style={{ marginLeft: depth > 0 ? 18 : 0 }}>
       <CommunityCommentItem
         item={item}
+        onOpenProfile={onOpenProfile}
         onReply={onReply}
         replyCount={Math.max(item.replyCount ?? 0, childComments.length)}
         showReplyingState={replyTargetId === item.postActionId}
@@ -1093,6 +1120,7 @@ function CommunityCommentThread({
               key={`${reply.postActionId}-${reply.userId}`}
               depth={nestedDepth}
               item={reply}
+              onOpenProfile={onOpenProfile}
               onReply={onReply}
               repliesByParentId={repliesByParentId}
               replyTargetId={replyTargetId}
@@ -1812,6 +1840,7 @@ export default function CommunityPostCommentsScreen() {
                   {topLevelComments.map((item) => (
                     <CommunityCommentThread
                       key={`${item.postActionId}-${item.userId}`}
+                      onOpenProfile={handleOpenProfile}
                       onReply={handleReplyToComment}
                       item={item}
                       repliesByParentId={repliesByParentId}

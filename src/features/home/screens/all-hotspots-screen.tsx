@@ -2,8 +2,8 @@ import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
-import { useRouter, type Href } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -29,7 +29,6 @@ import {
   getNearbyHotspots,
   type NearbyHotspotDto,
 } from "../api/get-nearby-hotspots";
-import { getActiveTagNames } from "../api/get-tags";
 import { type SymbolName } from "../data/home-screen.mock";
 import { getApiHotspotRouteSlug, getHotspotHref } from "../data/hotspots";
 
@@ -51,17 +50,6 @@ const hotspotTagAccentStyles = [
   },
 ] as const;
 
-const cardShadowStyle = {
-  shadowColor: "rgba(245, 135, 82, 0.16)",
-  shadowOpacity: 1,
-  shadowRadius: 16,
-  shadowOffset: {
-    width: 0,
-    height: 10,
-  },
-  elevation: 7,
-} as const;
-
 const gpsChipShadowStyle = {
   shadowColor: "rgba(201, 108, 30, 0.22)",
   shadowOpacity: 1,
@@ -72,11 +60,6 @@ const gpsChipShadowStyle = {
   },
   elevation: 4,
 } as const;
-
-type HotspotTagFilter = {
-  icon?: SymbolName;
-  label: string;
-};
 
 type HotspotCollectionListItem = {
   category: string;
@@ -96,10 +79,9 @@ type HotspotCollectionListItem = {
 
 type NearbyCollectionStatus = "empty" | "loading" | "ready";
 
-const defaultHotspotTag: HotspotTagFilter = {
-  label: "__all__",
-};
 const defaultNearbySearchDistanceMeters = 1000;
+const minimumNearbySearchDistanceMeters = 1000;
+const maximumNearbySearchDistanceMeters = 30000;
 const nearbyPlaceFallbackImageUri =
   "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
 
@@ -107,14 +89,18 @@ function toRadians(value: number) {
   return (value * Math.PI) / 180;
 }
 
-function normalizeFilterLabel(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+function resolveSearchDistanceMeters(value: string | string[] | undefined) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  const parsedValue = Number(rawValue);
+
+  if (!Number.isFinite(parsedValue)) {
+    return defaultNearbySearchDistanceMeters;
+  }
+
+  return Math.min(
+    Math.max(Math.round(parsedValue), minimumNearbySearchDistanceMeters),
+    maximumNearbySearchDistanceMeters,
+  );
 }
 
 function getDistanceMeters(
@@ -227,46 +213,6 @@ function resolveOpeningHoursLabel(hotspot: NearbyHotspotDto) {
     formatApiTimeWindow(hotspot.startTime, hotspot.endTime) ??
     "Giờ mở cửa đang cập nhật"
   );
-}
-
-function buildTagFilters(tagLabels: string[]): HotspotTagFilter[] {
-  const filtersByKey = new Map<string, HotspotTagFilter>();
-
-  tagLabels.forEach((label) => {
-    const trimmedLabel = label.trim();
-    const normalizedLabel = normalizeFilterLabel(trimmedLabel);
-
-    if (
-      !trimmedLabel ||
-      !normalizedLabel ||
-      filtersByKey.has(normalizedLabel)
-    ) {
-      return;
-    }
-
-    filtersByKey.set(normalizedLabel, {
-      label: trimmedLabel,
-    });
-  });
-
-  return Array.from(filtersByKey.values());
-}
-
-function isHeritageTagLabel(value: string) {
-  return normalizeFilterLabel(value).includes("di san");
-}
-
-function sortHotspotTagFilters(filters: HotspotTagFilter[]) {
-  return [...filters].sort((left, right) => {
-    const leftPriority = isHeritageTagLabel(left.label) ? 0 : 1;
-    const rightPriority = isHeritageTagLabel(right.label) ? 0 : 1;
-
-    if (leftPriority !== rightPriority) {
-      return leftPriority - rightPriority;
-    }
-
-    return left.label.localeCompare(right.label, "vi");
-  });
 }
 
 function getPrimaryNearbyCategory(hotspot: NearbyHotspotDto) {
@@ -435,39 +381,6 @@ function HotspotStatChip({
   );
 }
 
-function HotspotTagPill({
-  active,
-  item,
-  onPress,
-}: {
-  active: boolean;
-  item: HotspotTagFilter;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable className="rounded-full" hitSlop={6} onPress={onPress}>
-      <View
-        className={`flex-row items-center rounded-full px-2.5 py-1 ${active ? "bg-[#FFF1F6]" : "bg-[#FAF7FC]"}`}
-      >
-        {item.icon ? (
-          <SymbolView
-            name={item.icon}
-            size={12}
-            tintColor={active ? "#EB489B" : "#7D7281"}
-          />
-        ) : null}
-        <Text
-          className={`${item.icon ? "ml-1 " : ""}text-[12px] font-extrabold`}
-          numberOfLines={1}
-          style={{ color: active ? "#EB489B" : "#7D7281" }}
-        >
-          {item.label}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
-
 function HotspotCollectionCard({
   onPress,
   place,
@@ -610,99 +523,15 @@ function HotspotCollectionCard({
 export default function AllHotspotsScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
-  const [activeTag, setActiveTag] = useState(defaultHotspotTag.label);
+  const searchParams = useLocalSearchParams<{ distance?: string }>();
+  const searchDistanceMeters = resolveSearchDistanceMeters(
+    searchParams.distance,
+  );
   const [allHotspots, setAllHotspots] = useState<HotspotCollectionListItem[]>(
     [],
   );
-  const [apiTagFilters, setApiTagFilters] = useState<HotspotTagFilter[]>([]);
-  const [isTagPanelVisible, setIsTagPanelVisible] = useState(false);
   const [nearbyHotspotsStatus, setNearbyHotspotsStatus] =
     useState<NearbyCollectionStatus>("loading");
-
-  const fallbackTagFilters = useMemo(
-    () =>
-      sortHotspotTagFilters(
-        buildTagFilters(allHotspots.flatMap((place) => place.tags)),
-      ),
-    [allHotspots],
-  );
-  const hotspotTagFilters = useMemo(
-    () =>
-      apiTagFilters.length > 0
-        ? sortHotspotTagFilters(apiTagFilters)
-        : fallbackTagFilters,
-    [apiTagFilters, fallbackTagFilters],
-  );
-  const preferredDefaultTagLabel = useMemo(
-    () =>
-      hotspotTagFilters.find((item) => isHeritageTagLabel(item.label))?.label ??
-      defaultHotspotTag.label,
-    [hotspotTagFilters],
-  );
-  const resolvedActiveTag = hotspotTagFilters.some(
-    (item) => item.label === activeTag,
-  )
-    ? activeTag
-    : preferredDefaultTagLabel;
-
-  const filteredPlaces = useMemo(() => {
-    if (resolvedActiveTag === defaultHotspotTag.label) {
-      return allHotspots;
-    }
-
-    const normalizedActiveTag = normalizeFilterLabel(resolvedActiveTag);
-
-    return allHotspots.filter((place) =>
-      place.tags.some(
-        (tag) => normalizeFilterLabel(tag) === normalizedActiveTag,
-      ),
-    );
-  }, [allHotspots, resolvedActiveTag]);
-
-  useEffect(() => {
-    let isActive = true;
-
-    async function loadHotspotTags() {
-      setApiTagFilters([]);
-
-      try {
-        const accessToken = authSession.isAuthenticated
-          ? await getValidAccessToken()
-          : null;
-
-        if (!isActive) {
-          return;
-        }
-
-        const tagNames = await getActiveTagNames({
-          accessToken,
-          tokenType: authSession.tokenType,
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        setApiTagFilters(buildTagFilters(tagNames));
-      } catch (error) {
-        console.warn("[hotspots] load tags failed", {
-          error: error instanceof Error ? error.message : error,
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        setApiTagFilters([]);
-      }
-    }
-
-    void loadHotspotTags();
-
-    return () => {
-      isActive = false;
-    };
-  }, [authSession.isAuthenticated, authSession.tokenType]);
 
   useEffect(() => {
     let isActive = true;
@@ -728,7 +557,7 @@ export default function AllHotspotsScreen() {
           : null;
         const apiNearbyHotspots = await getNearbyHotspots({
           accessToken,
-          distance: defaultNearbySearchDistanceMeters,
+          distance: searchDistanceMeters,
           latitude: coordinate.latitude,
           longitude: coordinate.longitude,
           tokenType: authSession.tokenType,
@@ -761,7 +590,7 @@ export default function AllHotspotsScreen() {
     return () => {
       isActive = false;
     };
-  }, [authSession.isAuthenticated, authSession.tokenType]);
+  }, [authSession.isAuthenticated, authSession.tokenType, searchDistanceMeters]);
 
   return (
     <SafeAreaView
@@ -819,93 +648,8 @@ export default function AllHotspotsScreen() {
                     tintColor="#8E869A"
                   />
                 </Pressable>
-
-                <Pressable
-                  accessibilityLabel="Mở toàn bộ tag địa điểm"
-                  className="h-11 w-11 items-center justify-center rounded-full border border-[#F0E8F4] bg-[#FAF7FC]"
-                  hitSlop={8}
-                  onPress={() =>
-                    setIsTagPanelVisible((currentValue) => !currentValue)
-                  }
-                >
-                  <SymbolView
-                    name={{
-                      ios: "ellipsis",
-                      android: "more_horiz",
-                      web: "more_horiz",
-                    }}
-                    size={18}
-                    tintColor="#8E869A"
-                  />
-                </Pressable>
               </View>
             </View>
-
-            <ScrollView
-              className="mt-4"
-              contentContainerStyle={{ paddingRight: 30 }}
-              horizontal
-              nestedScrollEnabled
-              showsHorizontalScrollIndicator={false}
-            >
-              {hotspotTagFilters.map((item, index) => (
-                <View
-                  key={item.label}
-                  className={
-                    index === hotspotTagFilters.length - 1 ? "" : "mr-3"
-                  }
-                >
-                  <HotspotTagPill
-                    active={item.label === resolvedActiveTag}
-                    item={item}
-                    onPress={() => {
-                      setActiveTag(item.label);
-                      setIsTagPanelVisible(false);
-                    }}
-                  />
-                </View>
-              ))}
-            </ScrollView>
-
-            {isTagPanelVisible ? (
-              <View
-                className="mt-4 rounded-[26px] border border-[#F0E8F4] bg-white p-4"
-                style={cardShadowStyle}
-              >
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-[14px] font-extrabold text-[#2B2233]">
-                    Tag từ dữ liệu
-                  </Text>
-                  {resolvedActiveTag !== defaultHotspotTag.label ? (
-                    <Pressable
-                      hitSlop={8}
-                      onPress={() => {
-                        setActiveTag(defaultHotspotTag.label);
-                        setIsTagPanelVisible(false);
-                      }}
-                    >
-                      <Text className="text-[12px] font-bold text-[#F58752]">
-                        Xóa lọc
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-
-                <View className="mt-4 flex-row flex-wrap gap-3">
-                  {hotspotTagFilters.map((item) => (
-                    <HotspotTagPill
-                      key={`panel-${item.label}`}
-                      active={item.label === resolvedActiveTag}
-                      item={item}
-                      onPress={() => {
-                        setActiveTag(item.label);
-                        setIsTagPanelVisible(false);
-                      }}
-                    />
-                  ))}
-                </View>
-              </View>
-            ) : null}
           </View>
         </LinearGradient>
 
@@ -916,7 +660,7 @@ export default function AllHotspotsScreen() {
             </View>
           ) : (
             <View className="gap-4">
-              {filteredPlaces.map((place) => (
+              {allHotspots.map((place) => (
                 <HotspotCollectionCard
                   key={place.key}
                   onPress={() =>
@@ -926,17 +670,13 @@ export default function AllHotspotsScreen() {
                 />
               ))}
 
-              {filteredPlaces.length === 0 ? (
+              {allHotspots.length === 0 ? (
                 <View className="items-center rounded-[28px] border border-dashed border-[#F0E8F4] bg-[#FAF7FC] px-6 py-10">
                   <Text className="text-[15px] font-extrabold text-[#2B2233]">
-                    {resolvedActiveTag === defaultHotspotTag.label
-                      ? "Chưa có địa điểm gần bạn"
-                      : "Chưa có địa điểm cho thẻ này"}
+                    Chưa có địa điểm gần bạn
                   </Text>
                   <Text className="mt-2 max-w-[260px] text-center text-[12px] leading-[18px] text-[#8E869A]">
-                    {resolvedActiveTag === defaultHotspotTag.label
-                      ? "Hãy thử lại khi vị trí và dữ liệu sẵn sàng."
-                      : "Hãy chọn tag khác để xem thêm các địa điểm phù hợp."}
+                    Hãy thử lại khi vị trí và dữ liệu sẵn sàng.
                   </Text>
                 </View>
               ) : null}

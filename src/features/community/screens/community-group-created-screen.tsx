@@ -73,16 +73,10 @@ function Text({
 
 function SuccessHeroImage({
   frameHeight,
-  glowHeight,
-  glowTop,
-  glowWidth,
   imageHeight,
   imageWidth,
 }: {
   frameHeight: number;
-  glowHeight: number;
-  glowTop: number;
-  glowWidth: number;
   imageHeight: number;
   imageWidth: number;
 }) {
@@ -153,42 +147,10 @@ function SuccessHeroImage({
     };
   });
 
-  const animatedGlowStyle = useAnimatedStyle(() => {
-    const scaleOffset = heroScale.get() - 1;
-
-    return {
-      opacity: 0.54 + scaleOffset * 7,
-      transform: [
-        { translateY: heroFloat.get() * 0.58 },
-        { scale: 0.92 + scaleOffset * 6 },
-      ],
-    };
-  });
-
   return (
     <View className="items-center">
       <View style={[styles.heroImageFrame, { height: frameHeight, width: imageWidth + 20 }]}>
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.heroGlow,
-            animatedGlowStyle,
-            { height: glowHeight, top: glowTop, width: glowWidth },
-          ]}
-        >
-          <LinearGradient
-            colors={[
-              "rgba(247,189,215,0.48)",
-              "rgba(240,158,195,0.24)",
-              "rgba(255,255,255,0)",
-            ]}
-            end={{ x: 1, y: 0.5 }}
-            start={{ x: 0, y: 0.5 }}
-            style={styles.heroGlowFill}
-          />
-        </Animated.View>
-
-        <Animated.View style={[styles.heroImageShell, animatedHeroStyle]}>
+        <Animated.View style={animatedHeroStyle}>
           <Image
             resizeMode="contain"
             source={successHeroImage}
@@ -335,11 +297,9 @@ export default function CommunityGroupCreatedScreen() {
   const heroImageWidth = Math.min(Math.max(contentMaxWidth - 8, 250), 304);
   const heroImageHeight = Math.round(heroImageWidth * (202 / 304));
   const heroFrameHeight = heroImageHeight + 26;
-  const heroGlowWidth = Math.round(heroImageWidth * 0.9);
-  const heroGlowHeight = Math.round(heroImageHeight * 0.68);
-  const heroGlowTop = Math.max(Math.round(heroImageHeight * 0.08), 14);
-  const closeButtonTop = insets.top + (safeScreenWidth < 360 ? 22 : 26);
-  const scrollTopPadding = closeButtonTop + 28;
+  const closeButtonTop =
+    Math.max(insets.top, 16) + (safeScreenWidth < 360 ? 44 : 52);
+  const scrollTopPadding = closeButtonTop + 56;
   const descriptionMaxWidth = Math.min(contentMaxWidth * 0.82, 278);
 
   useEffect(() => {
@@ -446,9 +406,6 @@ export default function CommunityGroupCreatedScreen() {
               <View className="items-center">
                 <SuccessHeroImage
                   frameHeight={heroFrameHeight}
-                  glowHeight={heroGlowHeight}
-                  glowTop={heroGlowTop}
-                  glowWidth={heroGlowWidth}
                   imageHeight={heroImageHeight}
                   imageWidth={heroImageWidth}
                 />
@@ -632,19 +589,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 58,
   },
-  heroGlow: {
-    alignItems: "center",
-    height: 188,
-    justifyContent: "center",
-    position: "absolute",
-    top: 24,
-    width: 316,
-  },
-  heroGlowFill: {
-    borderRadius: 999,
-    height: "100%",
-    width: "100%",
-  },
   heroImage: {
     height: 202,
     width: 304,
@@ -654,13 +598,6 @@ const styles = StyleSheet.create({
     height: 252,
     justifyContent: "center",
     width: 324,
-  },
-  heroImageShell: {
-    elevation: 9,
-    shadowColor: "#EE97BC",
-    shadowOffset: { width: 0, height: 22 },
-    shadowOpacity: 0.24,
-    shadowRadius: 28,
   },
   inviteCard: {
     backgroundColor: "#FFFFFF",

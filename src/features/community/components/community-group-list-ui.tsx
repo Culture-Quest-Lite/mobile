@@ -17,6 +17,12 @@ const cardShadowStyle = {
 
 const subtleBorderColor = "#E5E7EB";
 const subtleBorderWidth = 0.8;
+// Card cao cố định để tên nhóm dài không đẩy nút "Mở nhóm" tràn ra ngoài viền.
+const cardHeight = 220;
+const cardMaxFontSizeMultiplier = 1.1;
+const groupNameLineHeight = 15;
+const groupNameMaxLines = 2;
+const groupNameBlockHeight = groupNameLineHeight * groupNameMaxLines;
 
 function readMeaningfulText(value?: string | null) {
   if (typeof value !== "string") {
@@ -78,7 +84,7 @@ export function CommunityCreateGroupCard({
       style={({ pressed }) => [
         cardShadowStyle,
         {
-          minHeight: 220,
+          minHeight: cardHeight,
           opacity: pressed ? 0.88 : 1,
           width: 160,
         },
@@ -144,7 +150,7 @@ export function CommunityGroupCompactStateCard({
         {
           borderColor: subtleBorderColor,
           borderWidth: subtleBorderWidth,
-          minHeight: 220,
+          minHeight: cardHeight,
           width,
         },
       ]}
@@ -185,7 +191,7 @@ export function CommunityGroupPlaceholderCard({
         {
           borderColor: subtleBorderColor,
           borderWidth: subtleBorderWidth,
-          minHeight: 220,
+          minHeight: cardHeight,
           width,
         },
       ]}
@@ -226,7 +232,7 @@ export function CommunityGroupListCard({
         {
           borderColor: subtleBorderColor,
           borderWidth: subtleBorderWidth,
-          minHeight: 220,
+          height: cardHeight,
           width,
         },
       ]}
@@ -258,68 +264,69 @@ export function CommunityGroupListCard({
           </View>
         </View>
 
-        <View className="mt-2 min-h-[30px]">
-          <View
-            className="flex-row items-center self-start"
-            style={{ columnGap: 4, maxWidth: "100%" }}
+        <View
+          className="mt-2 flex-row items-start self-stretch"
+          style={{ columnGap: 4, height: groupNameBlockHeight }}
+        >
+          <Text
+            className="text-[12px] font-medium text-[#2E2336]"
+            maxFontSizeMultiplier={cardMaxFontSizeMultiplier}
+            numberOfLines={groupNameMaxLines}
+            style={{
+              flex: 1,
+              includeFontPadding: false,
+              lineHeight: groupNameLineHeight,
+            }}
           >
-            <Text
-              className="text-[13px] font-medium text-[#2E2336]"
-              numberOfLines={2}
-              style={{
-                flexShrink: 1,
-                includeFontPadding: false,
-                lineHeight: 15,
+            {groupName}
+          </Text>
+          {isLeader ? (
+            <SymbolView
+              name={{
+                ios: "crown.fill",
+                android: "workspace-premium",
+                web: "workspace-premium",
               }}
-            >
-              {groupName}
-            </Text>
-            {isLeader ? (
-              <SymbolView
-                name={{
-                  ios: "crown.fill",
-                  android: "workspace-premium",
-                  web: "workspace-premium",
-                }}
-                size={16}
-                tintColor="#E39B1A"
-              />
-            ) : null}
-          </View>
+              size={14}
+              tintColor="#E39B1A"
+            />
+          ) : null}
         </View>
 
-        <View className="mt-2" style={{ rowGap: 6 }}>
-          <View className="self-start flex-row items-center rounded-full bg-[#F4F2F7] px-2.5 py-1">
+        <View className="mt-1.5" style={{ rowGap: 5 }}>
+          <View className="self-start flex-row items-center">
             <SymbolView
               name={{ ios: "person.2.fill", android: "groups", web: "groups" }}
-              size={13}
+              size={12}
               tintColor="#7D7488"
             />
             <Text
-              className="ml-1 text-[11px] font-normal text-[#7D7488]"
+              className="ml-1 text-[10.5px] font-normal text-[#7D7488]"
+              maxFontSizeMultiplier={cardMaxFontSizeMultiplier}
               numberOfLines={1}
-              style={{ includeFontPadding: false, lineHeight: 11 }}
+              style={{ includeFontPadding: false, lineHeight: 13 }}
             >
               {formatGroupMemberCountLabel(memberCount)}
             </Text>
           </View>
 
           <View
-            className="self-start flex-row items-center rounded-full px-2.5 py-1"
+            className="self-start flex-row items-center rounded-full px-2 py-1"
             style={{ backgroundColor: accessPalette.backgroundColor }}
           >
             <SymbolView
               name={group.requiredApproval === true ? "lock.fill" : "link"}
-              size={12}
+              size={11}
               tintColor={accessPalette.iconColor}
             />
             <Text
-              className="ml-1 text-[11px] font-normal"
+              className="ml-1 text-[10.5px] font-normal"
+              maxFontSizeMultiplier={cardMaxFontSizeMultiplier}
               numberOfLines={1}
               style={{
                 color: accessPalette.textColor,
                 includeFontPadding: false,
-                lineHeight: 11,
+                lineHeight: 13,
               }}
             >
               {getCommunityGroupAccessLabel(group.requiredApproval)}
@@ -337,6 +344,7 @@ export function CommunityGroupListCard({
           >
             <Text
               className="text-[11px] font-semibold text-[#6B7280]"
+              maxFontSizeMultiplier={cardMaxFontSizeMultiplier}
               style={{ includeFontPadding: false, lineHeight: 12 }}
             >
               Mở nhóm

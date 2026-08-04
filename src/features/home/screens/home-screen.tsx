@@ -11,6 +11,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   StatusBar as RNStatusBar,
   ScrollView,
   Text,
@@ -432,7 +433,7 @@ type CommunityBoardViewModel = {
 
 const defaultNearbySearchDistanceMeters = 1000;
 const nearbyDistanceSliderMinimumMeters = 1000;
-const nearbyDistanceSliderMaximumMeters = 15000;
+const nearbyDistanceSliderMaximumMeters = 30000;
 const nearbyDistanceSliderStepMeters = 20;
 const suggestedRouteCardImageHeight = 136;
 const suggestedRouteCardHeight = 248;
@@ -1864,46 +1865,41 @@ export default function HomeScreen() {
   const [themeCategories, setThemeCategories] = useState<NearbyCategoryCard[]>(
     [],
   );
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const nearbyPlacesRequestRef = useRef(0);
+  const themeCategoriesRequestRef = useRef(0);
+  const communityLeaderboardRequestRef = useRef(0);
+  const explorerSummaryRequestRef = useRef(0);
+
+  const syncRemoteCheckinState = useCallback(async () => {
+    if (!authSession.isAuthenticated) {
+      return;
+    }
+
+    try {
+      const accessToken = await getValidAccessToken();
+
+      if (!accessToken) {
+        return;
+      }
+
+      const checkedInHotspotIds = await getCheckedInHotspotIds({
+        accessToken,
+        tokenType: authSession.tokenType,
+      });
+
+      mergeApiCheckins(checkedInHotspotIds);
+    } catch (error) {
+      console.info("[home] check-in sync skipped", {
+        error: error instanceof Error ? error.message : error,
+      });
+    }
+  }, [authSession.isAuthenticated, authSession.tokenType]);
 
   useFocusEffect(
     useCallback(() => {
-      let isActive = true;
-
-      async function syncRemoteCheckinState() {
-        if (!authSession.isAuthenticated) {
-          return;
-        }
-
-        try {
-          const accessToken = await getValidAccessToken();
-
-          if (!accessToken || !isActive) {
-            return;
-          }
-
-          const checkedInHotspotIds = await getCheckedInHotspotIds({
-            accessToken,
-            tokenType: authSession.tokenType,
-          });
-
-          if (!isActive) {
-            return;
-          }
-
-          mergeApiCheckins(checkedInHotspotIds);
-        } catch (error) {
-          console.info("[home] check-in sync skipped", {
-            error: error instanceof Error ? error.message : error,
-          });
-        }
-      }
-
       void syncRemoteCheckinState();
-
-      return () => {
-        isActive = false;
-      };
-    }, [authSession.isAuthenticated, authSession.tokenType]),
+    }, [syncRemoteCheckinState]),
   );
   const isGuest = authSession.role === "guest";
   const homeHeaderTopPadding = 12;
@@ -1964,6 +1960,9 @@ export default function HomeScreen() {
     explorerName;
   const handleOpenHotspots = () => {
     router.push("/hotspots");
+  };
+  const handleOpenNearbyHotspots = () => {
+    router.push(`/hotspots?distance=${nearbySearchDistanceMeters}`);
   };
   const handleOpenThemeCategory = (item: NearbyCategoryCard) => {
     router.push(
@@ -2063,58 +2062,117 @@ export default function HomeScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    let isActive = true;
+  const loadNearbyPlaces = useCallback(async () => {
+    const requestId = nearbyPlacesRequestRef.current + 1;
+    nearbyPlacesRequestRef.current = requestId;
+    const isActive = () => nearbyPlacesRequestRef.current === requestId;
 
-    async function loadNearbyPlaces() {
-      setNearbyPlacesStatus("loading");
-      setNearbyPlacesNote(null);
-      setSuggestedRoutesStatus("loading");
-      setSuggestedRoutesNote(null);
+    setNearbyPlacesStatus("loading");
+    setNearbyPlacesNote(null);
+    setSuggestedRoutesStatus("loading");
+    setSuggestedRoutesNote(null);
+
+    try {
+      const { coordinate, fallbackMessage } =
+        await resolveNearbyRequestCoordinate();
+
+      if (!isActive()) {
+        return;
+      }
+
+      if (!coordinate) {
+        setResolvedNearbyPlaces([]);
+        setNearbyPlacesNote(fallbackMessage);
+        setNearbyPlacesStatus("empty");
+        setSuggestedRoutes([]);
+        setSuggestedRoutesNote(
+          "Không xác định được vị trí hiện tại nên chưa thể gợi ý tuyến đường phù hợp.",
+        );
+        setSuggestedRoutesStatus("empty");
+        return;
+      }
+
+      const accessToken = authSession.isAuthenticated
+        ? await getValidAccessToken()
+        : null;
+      const apiNearbyHotspots = await getNearbyHotspots({
+        accessToken,
+        distance: nearbySearchDistanceMeters,
+        latitude: coordinate.latitude,
+        longitude: coordinate.longitude,
+        tokenType: authSession.tokenType,
+      });
+
+      if (!isActive()) {
+        return;
+      }
+
+      if (apiNearbyHotspots.length === 0) {
+        setResolvedNearbyPlaces([]);
+        setNearbyPlacesNote(
+          coordinate.source === "dev-override"
+            ? `Không có dữ liệu phù hợp trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
+            : `Không có dữ liệu phù hợp trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh vị trí hiện tại.`,
+        );
+        setNearbyPlacesStatus("empty");
+        setSuggestedRoutes([]);
+        setSuggestedRoutesNote("Không có dữ liệu tuyến đường phù hợp gần bạn.");
+        setSuggestedRoutesStatus("empty");
+        return;
+      }
+
+      mergeApiCheckins(
+        apiNearbyHotspots
+          .filter((hotspot) => hotspot.isCheckedIn === true)
+          .map((hotspot) => hotspot.hotspotId),
+      );
+      setResolvedNearbyPlaces(
+        buildApiNearbyPlaceItems(apiNearbyHotspots, coordinate),
+      );
+      setNearbyPlacesNote(
+        coordinate.source === "dev-override"
+          ? `Đang hiển thị địa điểm trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
+          : null,
+      );
+      setNearbyPlacesStatus("ready");
+
+      const nearbyHotspotsByDistance = sortNearbyHotspotsByDistance(
+        apiNearbyHotspots,
+        coordinate,
+      );
 
       try {
-        const { coordinate, fallbackMessage } =
-          await resolveNearbyRequestCoordinate();
+        const hotspotRouteResults = await Promise.allSettled(
+          nearbyHotspotsByDistance.map((hotspot) =>
+            getRoutesByHotspot({
+              accessToken,
+              hotspotId: hotspot.hotspotId,
+              routeStatus: "PUBLISHED",
+              tokenType: authSession.tokenType,
+            }),
+          ),
+        );
 
-        if (!isActive) {
+        if (!isActive()) {
           return;
         }
 
-        if (!coordinate) {
-          setResolvedNearbyPlaces([]);
-          setNearbyPlacesNote(fallbackMessage);
-          setNearbyPlacesStatus("empty");
-          setSuggestedRoutes([]);
-          setSuggestedRoutesNote(
-            "Không xác định được vị trí hiện tại nên chưa thể gợi ý tuyến đường phù hợp.",
-          );
-          setSuggestedRoutesStatus("empty");
-          return;
-        }
+        const failedRouteLookups = hotspotRouteResults.filter(
+          (result) => result.status === "rejected",
+        );
+        const mergedRoutes = dedupeRoutesById(
+          hotspotRouteResults.flatMap((result) =>
+            result.status === "fulfilled" ? result.value : [],
+          ),
+        );
 
-        const accessToken = authSession.isAuthenticated
-          ? await getValidAccessToken()
-          : null;
-        const apiNearbyHotspots = await getNearbyHotspots({
-          accessToken,
-          distance: nearbySearchDistanceMeters,
-          latitude: coordinate.latitude,
-          longitude: coordinate.longitude,
-          tokenType: authSession.tokenType,
-        });
+        if (mergedRoutes.length === 0) {
+          if (failedRouteLookups.length === hotspotRouteResults.length) {
+            throw new Error(
+              "Không tải được tuyến gợi ý cho các địa điểm gần bạn.",
+            );
+          }
 
-        if (!isActive) {
-          return;
-        }
-
-        if (apiNearbyHotspots.length === 0) {
-          setResolvedNearbyPlaces([]);
-          setNearbyPlacesNote(
-            coordinate.source === "dev-override"
-              ? `Không có dữ liệu phù hợp trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
-              : `Không có dữ liệu phù hợp trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh vị trí hiện tại.`,
-          );
-          setNearbyPlacesStatus("empty");
           setSuggestedRoutes([]);
           setSuggestedRoutesNote(
             "Không có dữ liệu tuyến đường phù hợp gần bạn.",
@@ -2123,123 +2181,55 @@ export default function HomeScreen() {
           return;
         }
 
-        mergeApiCheckins(
-          apiNearbyHotspots
-            .filter((hotspot) => hotspot.isCheckedIn === true)
-            .map((hotspot) => hotspot.hotspotId),
+        setSuggestedRoutes(mergedRoutes.map(mapRouteToSuggestedRouteCard));
+        setSuggestedRoutesNote(
+          failedRouteLookups.length > 0
+            ? `Đang hiển thị ${mergedRoutes.length} tuyến từ các địa điểm gần bạn. ${failedRouteLookups.length} địa điểm chưa tải được route.`
+            : coordinate.source === "dev-override"
+              ? `Đang hiển thị ${mergedRoutes.length} tuyến gợi ý tổng hợp từ ${nearbyHotspotsByDistance.length} hotspot gần tọa độ test ${formatCoordinateLabel(coordinate)}.`
+              : null,
         );
-        setResolvedNearbyPlaces(
-          buildApiNearbyPlaceItems(apiNearbyHotspots, coordinate),
-        );
-        setNearbyPlacesNote(
-          coordinate.source === "dev-override"
-            ? `Đang hiển thị địa điểm trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
-            : null,
-        );
-        setNearbyPlacesStatus("ready");
-
-        const nearbyHotspotsByDistance = sortNearbyHotspotsByDistance(
-          apiNearbyHotspots,
-          coordinate,
-        );
-
-        try {
-          const hotspotRouteResults = await Promise.allSettled(
-            nearbyHotspotsByDistance.map((hotspot) =>
-              getRoutesByHotspot({
-                accessToken,
-                hotspotId: hotspot.hotspotId,
-                routeStatus: "PUBLISHED",
-                tokenType: authSession.tokenType,
-              }),
-            ),
-          );
-
-          if (!isActive) {
-            return;
-          }
-
-          const failedRouteLookups = hotspotRouteResults.filter(
-            (result) => result.status === "rejected",
-          );
-          const mergedRoutes = dedupeRoutesById(
-            hotspotRouteResults.flatMap((result) =>
-              result.status === "fulfilled" ? result.value : [],
-            ),
-          );
-
-          if (mergedRoutes.length === 0) {
-            if (failedRouteLookups.length === hotspotRouteResults.length) {
-              throw new Error(
-                "Không tải được tuyến gợi ý cho các địa điểm gần bạn.",
-              );
-            }
-
-            setSuggestedRoutes([]);
-            setSuggestedRoutesNote(
-              "Không có dữ liệu tuyến đường phù hợp gần bạn.",
-            );
-            setSuggestedRoutesStatus("empty");
-            return;
-          }
-
-          setSuggestedRoutes(mergedRoutes.map(mapRouteToSuggestedRouteCard));
-          setSuggestedRoutesNote(
-            failedRouteLookups.length > 0
-              ? `Đang hiển thị ${mergedRoutes.length} tuyến từ các địa điểm gần bạn. ${failedRouteLookups.length} địa điểm chưa tải được route.`
-              : coordinate.source === "dev-override"
-                ? `Đang hiển thị ${mergedRoutes.length} tuyến gợi ý tổng hợp từ ${nearbyHotspotsByDistance.length} hotspot gần tọa độ test ${formatCoordinateLabel(coordinate)}.`
-                : null,
-          );
-          setSuggestedRoutesStatus("ready");
-        } catch (routeError) {
-          console.warn("[home] load suggested routes failed", {
-            error:
-              routeError instanceof Error ? routeError.message : routeError,
-            hotspotIds: nearbyHotspotsByDistance.map(
-              (hotspot) => hotspot.hotspotId,
-            ),
-          });
-
-          if (!isActive) {
-            return;
-          }
-
-          setSuggestedRoutes([]);
-          setSuggestedRoutesNote(
-            routeError instanceof Error
-              ? routeError.message
-              : "Không có dữ liệu tuyến đường phù hợp.",
-          );
-          setSuggestedRoutesStatus("empty");
-        }
-      } catch (error) {
-        console.warn("[home] load nearby places failed", {
-          error: error instanceof Error ? error.message : error,
+        setSuggestedRoutesStatus("ready");
+      } catch (routeError) {
+        console.warn("[home] load suggested routes failed", {
+          error: routeError instanceof Error ? routeError.message : routeError,
+          hotspotIds: nearbyHotspotsByDistance.map(
+            (hotspot) => hotspot.hotspotId,
+          ),
         });
 
-        if (!isActive) {
+        if (!isActive()) {
           return;
         }
 
-        setResolvedNearbyPlaces([]);
-        setNearbyPlacesNote(
-          error instanceof Error
-            ? error.message
-            : "Không có dữ liệu địa điểm phù hợp.",
-        );
-        setNearbyPlacesStatus("empty");
         setSuggestedRoutes([]);
-        setSuggestedRoutesNote("Không có dữ liệu tuyến đường phù hợp.");
+        setSuggestedRoutesNote(
+          routeError instanceof Error
+            ? routeError.message
+            : "Không có dữ liệu tuyến đường phù hợp.",
+        );
         setSuggestedRoutesStatus("empty");
       }
+    } catch (error) {
+      console.warn("[home] load nearby places failed", {
+        error: error instanceof Error ? error.message : error,
+      });
+
+      if (!isActive()) {
+        return;
+      }
+
+      setResolvedNearbyPlaces([]);
+      setNearbyPlacesNote(
+        error instanceof Error
+          ? error.message
+          : "Không có dữ liệu địa điểm phù hợp.",
+      );
+      setNearbyPlacesStatus("empty");
+      setSuggestedRoutes([]);
+      setSuggestedRoutesNote("Không có dữ liệu tuyến đường phù hợp.");
+      setSuggestedRoutesStatus("empty");
     }
-
-    void loadNearbyPlaces();
-
-    return () => {
-      isActive = false;
-    };
   }, [
     authSession.isAuthenticated,
     authSession.tokenType,
@@ -2247,206 +2237,234 @@ export default function HomeScreen() {
   ]);
 
   useEffect(() => {
-    let isActive = true;
+    async function runNearbyPlacesLoad() {
+      await loadNearbyPlaces();
+    }
 
-    async function loadThemeCategories() {
+    void runNearbyPlacesLoad();
+  }, [loadNearbyPlaces]);
+
+  const loadThemeCategories = useCallback(async () => {
+    const requestId = themeCategoriesRequestRef.current + 1;
+    themeCategoriesRequestRef.current = requestId;
+    const isActive = () => themeCategoriesRequestRef.current === requestId;
+
+    try {
+      const accessToken = authSession.isAuthenticated
+        ? await getValidAccessToken()
+        : null;
+
+      if (!isActive()) {
+        return;
+      }
+
+      const tags = await getActiveTags({
+        accessToken,
+        tokenType: authSession.tokenType,
+      });
+
+      if (!isActive()) {
+        return;
+      }
+
+      setThemeCategories(mapActiveTagsToNearbyCategories(tags));
+    } catch (error) {
+      console.warn("[home] load theme categories failed", {
+        error: error instanceof Error ? error.message : error,
+      });
+
+      if (!isActive()) {
+        return;
+      }
+
       setThemeCategories([]);
-
-      try {
-        const accessToken = authSession.isAuthenticated
-          ? await getValidAccessToken()
-          : null;
-
-        if (!isActive) {
-          return;
-        }
-
-        const tags = await getActiveTags({
-          accessToken,
-          tokenType: authSession.tokenType,
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        setThemeCategories(mapActiveTagsToNearbyCategories(tags));
-      } catch (error) {
-        console.warn("[home] load theme categories failed", {
-          error: error instanceof Error ? error.message : error,
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        setThemeCategories([]);
-      }
     }
-
-    void loadThemeCategories();
-
-    return () => {
-      isActive = false;
-    };
   }, [authSession.isAuthenticated, authSession.tokenType]);
+
   useEffect(() => {
-    let isActive = true;
-
-    async function loadCommunityLeaderboard() {
-      setCommunityLeaderboardStatus("loading");
-      setCommunityLeaderboardErrorMessage(null);
-
-      try {
-        const accessToken = authSession.isAuthenticated
-          ? await getValidAccessToken()
-          : null;
-
-        if (!isActive) {
-          return;
-        }
-
-        const leaderboardResponse = await getUserLeaderboard({
-          accessToken,
-          tokenType: authSession.tokenType,
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        setCommunityLeaderboardEntries(leaderboardResponse.content);
-        setCommunityLeaderboardStatus(
-          leaderboardResponse.content.length > 0 ? "ready" : "empty",
-        );
-      } catch (error) {
-        console.warn("[home] load community leaderboard failed", {
-          error: error instanceof Error ? error.message : error,
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        setCommunityLeaderboardEntries([]);
-        setCommunityLeaderboardErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "Không tải được bảng xếp hạng cộng đồng.",
-        );
-        setCommunityLeaderboardStatus("error");
-      }
+    async function runThemeCategoriesLoad() {
+      await loadThemeCategories();
     }
 
-    void loadCommunityLeaderboard();
+    void runThemeCategoriesLoad();
+  }, [loadThemeCategories]);
 
-    return () => {
-      isActive = false;
-    };
+  const loadCommunityLeaderboard = useCallback(async () => {
+    const requestId = communityLeaderboardRequestRef.current + 1;
+    communityLeaderboardRequestRef.current = requestId;
+    const isActive = () => communityLeaderboardRequestRef.current === requestId;
+
+    setCommunityLeaderboardStatus("loading");
+    setCommunityLeaderboardErrorMessage(null);
+
+    try {
+      const accessToken = authSession.isAuthenticated
+        ? await getValidAccessToken()
+        : null;
+
+      if (!isActive()) {
+        return;
+      }
+
+      const leaderboardResponse = await getUserLeaderboard({
+        accessToken,
+        tokenType: authSession.tokenType,
+      });
+
+      if (!isActive()) {
+        return;
+      }
+
+      setCommunityLeaderboardEntries(leaderboardResponse.content);
+      setCommunityLeaderboardStatus(
+        leaderboardResponse.content.length > 0 ? "ready" : "empty",
+      );
+    } catch (error) {
+      console.warn("[home] load community leaderboard failed", {
+        error: error instanceof Error ? error.message : error,
+      });
+
+      if (!isActive()) {
+        return;
+      }
+
+      setCommunityLeaderboardEntries([]);
+      setCommunityLeaderboardErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Không tải được bảng xếp hạng cộng đồng.",
+      );
+      setCommunityLeaderboardStatus("error");
+    }
   }, [authSession.isAuthenticated, authSession.tokenType]);
+
+  useEffect(() => {
+    async function runCommunityLeaderboardLoad() {
+      await loadCommunityLeaderboard();
+    }
+
+    void runCommunityLeaderboardLoad();
+  }, [loadCommunityLeaderboard]);
+
+  const loadExplorerSummary = useCallback(async () => {
+    const requestId = explorerSummaryRequestRef.current + 1;
+    explorerSummaryRequestRef.current = requestId;
+    const isActive = () => explorerSummaryRequestRef.current === requestId;
+
+    if (!authSession.isAuthenticated) {
+      setExplorerSummary(null);
+      return;
+    }
+
+    try {
+      const accessToken = await getValidAccessToken();
+
+      if (!isActive()) {
+        return;
+      }
+
+      if (!accessToken) {
+        setExplorerSummary(null);
+        return;
+      }
+
+      const [profileResult, levelsResult] = await Promise.allSettled([
+        getMyProfile({
+          accessToken,
+          tokenType: authSession.tokenType,
+        }),
+        getGamificationLevels({
+          accessToken,
+          tokenType: authSession.tokenType,
+        }),
+      ]);
+
+      if (profileResult.status !== "fulfilled") {
+        throw profileResult.reason;
+      }
+
+      const profile =
+        levelsResult.status === "fulfilled"
+          ? applyLevelProgressToProfile(profileResult.value, levelsResult.value)
+          : profileResult.value;
+
+      if (!isActive()) {
+        return;
+      }
+
+      if (levelsResult.status !== "fulfilled") {
+        console.warn("[home] load explorer levels failed", {
+          error:
+            levelsResult.reason instanceof Error
+              ? levelsResult.reason.message
+              : levelsResult.reason,
+        });
+      }
+
+      const resolvedName =
+        profile.name.trim() ||
+        authSession.displayName.trim() ||
+        profile.username.trim() ||
+        authSession.username?.trim() ||
+        "Ngọc";
+
+      setPremiumStatusFromProfile(profile.isPremium);
+
+      setExplorerSummary({
+        avatar: profile.avatar?.trim() || null,
+        isPremium: profile.isPremium,
+        level: profile.level,
+        name: resolvedName,
+        username:
+          profile.username.trim() ||
+          authSession.username?.trim() ||
+          authSession.displayName.trim() ||
+          resolvedName,
+      });
+    } catch (error) {
+      if (!isActive()) {
+        return;
+      }
+
+      setExplorerSummary(null);
+      console.warn("[home] load explorer summary failed", {
+        error: error instanceof Error ? error.message : error,
+      });
+    }
+  }, [
+    authSession.displayName,
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    authSession.username,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
-      let isActive = true;
-
-      async function loadExplorerSummary() {
-        if (!authSession.isAuthenticated) {
-          if (isActive) {
-            setExplorerSummary(null);
-          }
-          return;
-        }
-
-        try {
-          const accessToken = await getValidAccessToken();
-
-          if (!isActive) {
-            return;
-          }
-
-          if (!accessToken) {
-            setExplorerSummary(null);
-            return;
-          }
-
-          const [profileResult, levelsResult] = await Promise.allSettled([
-            getMyProfile({
-              accessToken,
-              tokenType: authSession.tokenType,
-            }),
-            getGamificationLevels({
-              accessToken,
-              tokenType: authSession.tokenType,
-            }),
-          ]);
-
-          if (profileResult.status !== "fulfilled") {
-            throw profileResult.reason;
-          }
-
-          const profile =
-            levelsResult.status === "fulfilled"
-              ? applyLevelProgressToProfile(
-                  profileResult.value,
-                  levelsResult.value,
-                )
-              : profileResult.value;
-
-          if (!isActive) {
-            return;
-          }
-
-          if (levelsResult.status !== "fulfilled") {
-            console.warn("[home] load explorer levels failed", {
-              error:
-                levelsResult.reason instanceof Error
-                  ? levelsResult.reason.message
-                  : levelsResult.reason,
-            });
-          }
-
-          const resolvedName = profile.name.trim() || profile.username.trim();
-
-          // Đẩy isPremium vào store dùng chung để mọi màn hình/hành động
-          // Premium khác trong app (record journey, user plan...) đọc được
-          // giá trị mới nhất mà không phải tự gọi lại getMyProfile().
-          setPremiumStatusFromProfile(profile.isPremium);
-
-          setExplorerSummary({
-            avatar: profile.avatar?.trim() || null,
-            isPremium: profile.isPremium,
-            level: profile.level,
-            name: resolvedName,
-            username:
-              profile.username.trim() ||
-              authSession.username?.trim() ||
-              authSession.displayName.trim() ||
-              resolvedName,
-          });
-        } catch (error) {
-          if (!isActive) {
-            return;
-          }
-
-          setExplorerSummary(null);
-          console.warn("[home] load explorer summary failed", {
-            error: error instanceof Error ? error.message : error,
-          });
-        }
-      }
-
       void loadExplorerSummary();
-
-      return () => {
-        isActive = false;
-      };
-    }, [
-      authSession.displayName,
-      authSession.isAuthenticated,
-      authSession.tokenType,
-      authSession.username,
-    ]),
+    }, [loadExplorerSummary]),
   );
+
+  const handleRefreshHome = useCallback(async () => {
+    setIsRefreshing(true);
+
+    try {
+      await Promise.allSettled([
+        loadExplorerSummary(),
+        loadNearbyPlaces(),
+        loadThemeCategories(),
+        loadCommunityLeaderboard(),
+        syncRemoteCheckinState(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [
+    loadCommunityLeaderboard,
+    loadExplorerSummary,
+    loadNearbyPlaces,
+    loadThemeCategories,
+    syncRemoteCheckinState,
+  ]);
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
@@ -2459,6 +2477,19 @@ export default function HomeScreen() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 0 }}
+        refreshControl={
+          <RefreshControl
+            colors={["#EB489B", "#F58752", "#FFC93C"]}
+            onRefresh={() => {
+              void handleRefreshHome();
+            }}
+            progressBackgroundColor="#FFFFFF"
+            refreshing={isRefreshing}
+            tintColor="#EB489B"
+            title="Đang cập nhật..."
+            titleColor="#8E869A"
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
         <View
@@ -2879,7 +2910,7 @@ export default function HomeScreen() {
               <Pressable
                 className="flex-1"
                 hitSlop={8}
-                onPress={handleOpenHotspots}
+                onPress={handleOpenNearbyHotspots}
               >
                 <Text className="text-[18px] font-extrabold text-[#2B2233]">
                   Địa điểm gần bạn
@@ -2887,7 +2918,7 @@ export default function HomeScreen() {
               </Pressable>
               <Pressable
                 className="rounded-full border border-[#F3D9E5] bg-white px-3 py-1.5"
-                onPress={handleOpenHotspots}
+                onPress={handleOpenNearbyHotspots}
               >
                 <Text className="text-[12px] font-bold text-[#D85B86]">
                   Xem tất cả
@@ -3300,6 +3331,7 @@ export default function HomeScreen() {
               <ScrollView
                 horizontal
                 contentContainerStyle={{
+                  alignItems: "stretch",
                   paddingLeft: gutter,
                   paddingRight: gutter,
                 }}
@@ -3321,7 +3353,7 @@ export default function HomeScreen() {
                     style={{ width: nearbyRouteCardWidth }}
                   >
                     <View
-                      className="overflow-hidden border border-[#EEF1F4] bg-white"
+                      className="flex-1 overflow-hidden border border-[#EEF1F4] bg-white"
                       style={[
                         cardShadowStyle,
                         {
@@ -3349,61 +3381,63 @@ export default function HomeScreen() {
                         </View>
                       </View>
 
-                      <View className="px-3 pb-3 pt-2" style={{ gap: 1 }}>
-                        <View className="flex-row flex-wrap items-center gap-1.5">
-                          <View className="rounded-full bg-[#FFF1F6] px-2 py-[5px]">
-                            <Text className="text-[10px] font-extrabold text-[#EB489B]">
-                              {route.distance}
-                            </Text>
-                          </View>
-                          <View className="rounded-full bg-[#FFF4EF] px-2 py-[5px]">
-                            <Text className="text-[10px] font-extrabold text-[#F58752]">
-                              {route.duration}
-                            </Text>
-                          </View>
+                      <View className="flex-1 justify-between px-3 pb-3 pt-2">
+                        <View style={{ gap: 1 }}>
+                          <View className="flex-row flex-wrap items-center gap-1.5">
+                            <View className="rounded-full bg-[#FFF1F6] px-2 py-[5px]">
+                              <Text className="text-[10px] font-extrabold text-[#EB489B]">
+                                {route.distance}
+                              </Text>
+                            </View>
+                            <View className="rounded-full bg-[#FFF4EF] px-2 py-[5px]">
+                              <Text className="text-[10px] font-extrabold text-[#F58752]">
+                                {route.duration}
+                              </Text>
+                            </View>
 
-                          <View
-                            className="rounded-full px-2 py-[5px]"
-                            style={{
-                              backgroundColor: (
-                                routeDifficultyStyles[route.difficulty] ??
-                                routeDifficultyStyles["Trung bình"]
-                              ).background,
-                            }}
-                          >
-                            <Text
-                              className="text-[10px] font-extrabold"
+                            <View
+                              className="rounded-full px-2 py-[5px]"
                               style={{
-                                color: (
+                                backgroundColor: (
                                   routeDifficultyStyles[route.difficulty] ??
                                   routeDifficultyStyles["Trung bình"]
-                                ).color,
+                                ).background,
                               }}
                             >
-                              {route.difficulty}
-                            </Text>
+                              <Text
+                                className="text-[10px] font-extrabold"
+                                style={{
+                                  color: (
+                                    routeDifficultyStyles[route.difficulty] ??
+                                    routeDifficultyStyles["Trung bình"]
+                                  ).color,
+                                }}
+                              >
+                                {route.difficulty}
+                              </Text>
+                            </View>
                           </View>
+
+                          <Text
+                            className="text-[14px] font-semibold text-[#2B2233]"
+                            numberOfLines={2}
+                            ellipsizeMode="tail"
+                            style={{ lineHeight: 16 }}
+                          >
+                            {route.title}
+                          </Text>
+
+                          <Text
+                            className="text-[12px] text-[#7A6F67]"
+                            numberOfLines={2}
+                            ellipsizeMode="tail"
+                            style={{ lineHeight: 13 }}
+                          >
+                            {getSuggestedRouteDescription(route)}
+                          </Text>
                         </View>
 
-                        <Text
-                          className="text-[14px] font-semibold text-[#2B2233]"
-                          numberOfLines={2}
-                          ellipsizeMode="tail"
-                          style={{ lineHeight: 16 }}
-                        >
-                          {route.title}
-                        </Text>
-
-                        <Text
-                          className="text-[12px] text-[#7A6F67]"
-                          numberOfLines={2}
-                          ellipsizeMode="tail"
-                          style={{ lineHeight: 13 }}
-                        >
-                          {getSuggestedRouteDescription(route)}
-                        </Text>
-
-                        <View className="flex-row flex-wrap items-center justify-end gap-1.5 pt-0.5">
+                        <View className="flex-row flex-wrap items-center justify-end gap-1.5 pt-2">
                           {getSuggestedRouteTagLabel(route) ? (
                             <View className="rounded-full bg-[#F4EFF8] px-2 py-[5px]">
                               <Text className="text-[10px] font-extrabold text-[#6F657A]">
@@ -3433,7 +3467,10 @@ export default function HomeScreen() {
                   </Text>
                 </View>
 
-                <Pressable className="rounded-full bg-[#FFF4EF] px-3.5 py-2" onPress={() => router.push("/vouchers")}>
+                <Pressable
+                  className="rounded-full bg-[#FFF4EF] px-3.5 py-2"
+                  onPress={() => router.push("/vouchers" as Href)}
+                >
                   <Text className="text-[12px] font-bold text-[#F58752]">
                     Xem tất cả
                   </Text>

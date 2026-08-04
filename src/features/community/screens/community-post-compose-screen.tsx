@@ -19,8 +19,7 @@ import {
   type ReviewMediaViewerItem,
 } from "@/features/home/components/review-media-viewer";
 import {
-  getCreatedPostRewardMessage,
-  isCreatedPostApproved,
+  getCreatedPostRewardText,
   isCreatedPostPending,
 } from "@/features/home/lib/created-post-feedback";
 import { getMyProfile } from "@/features/profile/api/get-me";
@@ -56,6 +55,10 @@ import {
 } from "react-native-safe-area-context";
 
 import { getPostVisibilityLabel } from "@/lib/post-visibility";
+import {
+  CommunityPostSuccessOverlay,
+  type CommunityPostSuccessVariant,
+} from "../components/community-post-success-overlay";
 import { cacheCommunityExplorerProfile } from "../data/community-explorer-profile-cache";
 import {
   cacheCommunityPost,
@@ -99,6 +102,11 @@ type ComposerRouteOption = {
 };
 
 type SelectionSheet = "hotspot" | "route" | "tag" | null;
+
+type PostSuccessState = {
+  rewardText: string | null;
+  variant: CommunityPostSuccessVariant;
+};
 
 type RoutePickerSheetProps = {
   errorMessage: string | null;
@@ -1637,6 +1645,8 @@ export default function CommunityPostComposeScreen() {
   const [hotspotError, setHotspotError] = useState<string | null>(null);
   const [activeTags, setActiveTags] = useState<ActiveTagDto[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [postSuccessState, setPostSuccessState] =
+    useState<PostSuccessState | null>(null);
   const resolvedComposerIdentity =
     composerIdentity.accountKey === fallbackComposerIdentity.accountKey
       ? composerIdentity
@@ -2145,6 +2155,23 @@ export default function CommunityPostComposeScreen() {
     );
   }
 
+  function handleLeaveComposer() {
+    setPostSuccessState(null);
+
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    // Tab cộng đồng nằm ở route "/bookings".
+    router.replace("/bookings" as Href);
+  }
+
+  function handleContinueExplore() {
+    setPostSuccessState(null);
+    router.replace("/explore" as Href);
+  }
+
   async function handleSubmit() {
     if (!authSession.isAuthenticated) {
       Alert.alert(
@@ -2212,27 +2239,14 @@ export default function CommunityPostComposeScreen() {
         cacheCommunityExplorerProfile(communityFeedPost);
       }
 
-      const rewardMessage = getCreatedPostRewardMessage(createdPost);
-      const successMessage = isCreatedPostPending(createdPost)
-        ? "Bài viết đã được gửi và hiện chỉ xuất hiện trong hồ sơ của bạn để chờ duyệt."
-        : createdPostVisibility !== "PUBLIC"
-          ? "Bài viết đã được lưu trong hồ sơ của bạn."
-          : isCreatedPostApproved(createdPost) && shouldAppearInCommunityFeed
-            ? "Bài viết đã được duyệt và xuất hiện trên cộng đồng."
-            : "Bài viết đã được lưu trong hồ sơ của bạn.";
-
-      Alert.alert(
-        "Đăng bài thành công",
-        rewardMessage ? `${successMessage} ${rewardMessage}` : successMessage,
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              router.back();
-            },
-          },
-        ],
-      );
+      setPostSuccessState({
+        rewardText: getCreatedPostRewardText(createdPost),
+        variant: isCreatedPostPending(createdPost)
+          ? "pending"
+          : shouldAppearInCommunityFeed
+            ? "approved"
+            : "profileOnly",
+      });
     } catch (error) {
       Alert.alert(
         "Không thể đăng bài",
@@ -2665,6 +2679,18 @@ export default function CommunityPostComposeScreen() {
           ) : null}
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {postSuccessState !== null ? (
+        <CommunityPostSuccessOverlay
+          avatarFallbackLabel={resolvedComposerIdentity.displayName}
+          avatarUri={resolvedComposerIdentity.avatarUri}
+          onClose={handleLeaveComposer}
+          onContinueExplore={handleContinueExplore}
+          onViewPost={handleLeaveComposer}
+          rewardText={postSuccessState.rewardText}
+          variant={postSuccessState.variant}
+        />
+      ) : null}
     </View>
   );
 }
