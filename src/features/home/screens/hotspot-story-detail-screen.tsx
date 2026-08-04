@@ -145,10 +145,10 @@ function NotFoundState() {
               đúng.
             </Text>
             <Pressable
-              className="mt-6 items-center rounded-full bg-[#FFF0F6] px-5 py-3.5"
+              className="mt-6 items-center rounded-full bg-[#FFF0F6] px-6 py-4"
               onPress={() => router.back()}
             >
-              <Text className="text-[15px] font-black text-[#EB489B]">
+              <Text className="text-[16px] font-black text-[#EB489B]">
                 Quay lại danh sách
               </Text>
             </Pressable>
@@ -643,13 +643,13 @@ export default function HotspotStoryDetailScreen() {
             />
 
             <Pressable
-              className="absolute left-3 h-9 w-9 items-center justify-center"
+              className="absolute left-3 h-11 w-11 items-center justify-center"
               hitSlop={8}
               onPress={() => router.back()}
               style={{ top: insets.top + 12 }}
             >
               <View
-                className="h-9 w-9 items-center justify-center rounded-full"
+                className="h-11 w-11 items-center justify-center rounded-full"
                 style={{ backgroundColor: "rgba(255,255,255,0.14)" }}
               >
                 <SymbolView
@@ -660,7 +660,7 @@ export default function HotspotStoryDetailScreen() {
                       web: "close",
                     } as SymbolName
                   }
-                  size={18}
+                  size={20}
                   tintColor="#FFFFFF"
                 />
               </View>
@@ -824,9 +824,9 @@ export default function HotspotStoryDetailScreen() {
                   </View>
                 </View>
 
-                <View className="mt-2 flex-row items-center justify-center gap-3">
+                <View className="mt-2 flex-row items-center justify-center gap-4">
                   <Pressable
-                    className="h-12 w-12 items-center justify-center rounded-full"
+                    className="h-14 w-14 items-center justify-center rounded-full"
                     disabled={!hasAudioUrl}
                     hitSlop={8}
                     onPress={() => void handleSeekAudio(-10)}
@@ -843,13 +843,13 @@ export default function HotspotStoryDetailScreen() {
                           web: "fast_rewind",
                         } as SymbolName
                       }
-                      size={19}
+                      size={22}
                       tintColor="#EB489B"
                     />
                   </Pressable>
 
                   <Pressable
-                    className="h-16 w-16 items-center justify-center rounded-full"
+                    className="h-[72px] w-[72px] items-center justify-center rounded-full"
                     disabled={!hasAudioUrl}
                     hitSlop={10}
                     onPress={() => void handleToggleAudioPlayback()}
@@ -880,14 +880,14 @@ export default function HotspotStoryDetailScreen() {
                                 web: "play_arrow",
                               } as SymbolName)
                         }
-                        size={24}
+                        size={28}
                         tintColor="#FFFFFF"
                       />
                     )}
                   </Pressable>
 
                   <Pressable
-                    className="h-12 w-12 items-center justify-center rounded-full"
+                    className="h-14 w-14 items-center justify-center rounded-full"
                     disabled={!hasAudioUrl}
                     hitSlop={8}
                     onPress={() => void handleSeekAudio(10)}
@@ -904,7 +904,7 @@ export default function HotspotStoryDetailScreen() {
                           web: "fast_forward",
                         } as SymbolName
                       }
-                      size={19}
+                      size={22}
                       tintColor="#EB489B"
                     />
                   </Pressable>

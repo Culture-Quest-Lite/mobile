@@ -1,4 +1,5 @@
 import { SymbolView } from "@/components/ui/symbol-view";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
@@ -64,21 +65,25 @@ import {
   type NearbyHotspotDto,
   getNearbyHotspots,
 } from "../api/get-nearby-hotspots";
-import { getActiveTagNames } from "../api/get-tags";
+import { type ActiveTagDto, getActiveTags } from "../api/get-tags";
 import {
-  type CommunityBoardTab,
+  type UserLeaderboardEntryDto,
+  getUserLeaderboard,
+} from "../api/get-user-leaderboard";
+import { LeaderRankingCard } from "../components/leader-ranking-card";
+import {
   type NearbyCategoryCard,
   activeJourney,
-  communityBoards,
-  communityTabs,
   featuredRoutes,
   nearbyCategories,
   voucherMerchants,
 } from "../data/home-screen.mock";
 import { getApiHotspotRouteSlug, getHotspotHref } from "../data/hotspots";
+import { getThemeDetailHref } from "../lib/theme-detail";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const guestPreviewLogo = require("../../../../assets/images/logo3.png");
+const nearbyShowcaseMascot = require("../../../../assets/images/hotspot_nearby.png");
 
 const themeCategoryPresets: Record<
   string,
@@ -196,10 +201,17 @@ function resolveThemeCategoryPreset(
   return nearbyCategories[index % nearbyCategories.length];
 }
 
-function mapTagNamesToNearbyCategories(tagNames: string[]) {
-  return tagNames.map((tagName, index) => ({
-    ...resolveThemeCategoryPreset(tagName, index),
-    label: tagName,
+function readMeaningfulThemeImageUrl(value?: string | null) {
+  const trimmedValue = value?.trim();
+  return trimmedValue ? trimmedValue : null;
+}
+
+function mapActiveTagsToNearbyCategories(tags: ActiveTagDto[]) {
+  return tags.map((tag, index) => ({
+    ...resolveThemeCategoryPreset(tag.tagName, index),
+    imageUrl: readMeaningfulThemeImageUrl(tag.imageUrl),
+    label: tag.tagName,
+    tagId: tag.tagId,
   }));
 }
 
@@ -236,7 +248,21 @@ const nearbyPlaceShadowStyle = {
   elevation: 5,
 } as const;
 
-const routeDifficultyStyles: Record<string, { background: string; color: string }> = {
+const themeCategoryShadowStyle = {
+  shadowColor: "rgba(31, 41, 64, 0.08)",
+  shadowOpacity: 1,
+  shadowRadius: 14,
+  shadowOffset: {
+    width: 0,
+    height: 6,
+  },
+  elevation: 3,
+} as const;
+
+const routeDifficultyStyles: Record<
+  string,
+  { background: string; color: string }
+> = {
   Dễ: {
     background: "#DCFCE7",
     color: "#15803D",
@@ -376,18 +402,37 @@ type NearbyPlaceListItem = {
   key: string;
   openingHours: string;
   rating: string;
+  reviewCountText: string;
   reward: string;
   slug: string | null;
   title: string;
 };
 
+type CommunityLeaderboardStatus = "empty" | "error" | "loading" | "ready";
 type NearbyPlacesSectionStatus = "empty" | "loading" | "ready";
 type SuggestedRoutesSectionStatus = "empty" | "loading" | "ready";
 type SuggestedRouteCard = RouteItem;
+type CommunityBoardViewEntry = {
+  avatarUri: string | null;
+  isCurrentUser: boolean;
+  name: string;
+  points: string;
+  rank: number;
+  subtitle: string;
+  userId: string | null;
+};
+type CommunityBoardViewModel = {
+  entries: CommunityBoardViewEntry[];
+  headlineRankLabel: string;
+  summaryLabel: string;
+  summaryNote: string;
+  summaryXp: number;
+  totalPoints: string;
+};
 
-const defaultNearbySearchDistanceMeters = 20;
-const nearbyDistanceSliderMinimumMeters = 20;
-const nearbyDistanceSliderMaximumMeters = 1000;
+const defaultNearbySearchDistanceMeters = 1000;
+const nearbyDistanceSliderMinimumMeters = 1000;
+const nearbyDistanceSliderMaximumMeters = 15000;
 const nearbyDistanceSliderStepMeters = 20;
 const suggestedRouteCardImageHeight = 136;
 const suggestedRouteCardHeight = 248;
@@ -465,6 +510,182 @@ function formatRewardLabel(value: number | null | undefined, fallback = "+0") {
   return `+${Math.max(0, Math.round(value))}`;
 }
 
+function formatNearbyRating(
+  value: number | null | undefined,
+  fallback = nearbyPlaceFallbackRating,
+) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return clamp(value, 0, 5).toFixed(1);
+}
+
+function formatNearbyReviewCount(
+  value: number | null | undefined,
+  fallback = "0 đánh giá",
+) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  const roundedValue = Math.max(0, Math.round(value));
+  return `${new Intl.NumberFormat("vi-VN").format(roundedValue)} đánh giá`;
+}
+
+function readMeaningfulCommunityText(value?: string | null) {
+  const trimmedValue = value?.trim();
+  return trimmedValue ? trimmedValue : null;
+}
+
+function formatCommunityXp(value: number) {
+  return new Intl.NumberFormat("vi-VN").format(Math.max(0, Math.round(value)));
+}
+
+function getCommunityLeaderboardDisplayName(entry: UserLeaderboardEntryDto) {
+  return (
+    readMeaningfulCommunityText(entry.displayName) ??
+    readMeaningfulCommunityText(entry.username) ??
+    `Explorer #${entry.userId}`
+  );
+}
+
+function getCommunityLeaderboardSubtitle(entry: UserLeaderboardEntryDto) {
+  return `@${entry.username}`;
+}
+
+function isTopCommunityLeaderboardRank(rank: number) {
+  return rank >= 1 && rank <= 3;
+}
+
+function getCommunityLeaderboardRingColor(rank: number) {
+  return isTopCommunityLeaderboardRank(rank)
+    ? communityRankRingColors[rank - 1]
+    : "#D7DCE4";
+}
+
+function getCommunityLeaderboardBadgeColor(rank: number) {
+  return isTopCommunityLeaderboardRank(rank)
+    ? communityRankBadgeColors[rank - 1]
+    : "#C7D1DE";
+}
+
+function getCommunityLeaderboardBadgeTextColor(rank: number) {
+  return isTopCommunityLeaderboardRank(rank) ? "#FFFFFF" : "#667085";
+}
+
+function getVisibleCommunityLeaderboardEntries(
+  entries: UserLeaderboardEntryDto[],
+) {
+  const topEntries = entries.slice(0, 5);
+  const currentUserEntry = entries.find((entry) => entry.isCurrentUser);
+
+  if (!currentUserEntry || currentUserEntry.rank <= topEntries.length) {
+    return topEntries;
+  }
+
+  return [...topEntries, currentUserEntry];
+}
+
+function buildCommunityBoardViewModelFromLeaderboard({
+  entries,
+  errorMessage,
+  status,
+}: {
+  entries: UserLeaderboardEntryDto[];
+  errorMessage: string | null;
+  status: CommunityLeaderboardStatus;
+}): CommunityBoardViewModel {
+  if (status === "loading") {
+    return {
+      entries: [],
+      headlineRankLabel: "#--",
+      summaryLabel: "Đang tải bảng xếp hạng",
+      summaryNote: "Hệ thống đang cập nhật cộng đồng hôm nay.",
+      summaryXp: 0,
+      totalPoints: "--",
+    };
+  }
+
+  if (status === "error") {
+    return {
+      entries: [],
+      headlineRankLabel: "#--",
+      summaryLabel: "Không tải được bảng xếp hạng",
+      summaryNote: errorMessage ?? "Vui lòng thử lại sau.",
+      summaryXp: 0,
+      totalPoints: "--",
+    };
+  }
+
+  if (status === "empty" || entries.length === 0) {
+    return {
+      entries: [],
+      headlineRankLabel: "#--",
+      summaryLabel: "Chưa có dữ liệu bảng xếp hạng",
+      summaryNote: "Bảng xếp hạng sẽ hiển thị khi có hoạt động cộng đồng.",
+      summaryXp: 0,
+      totalPoints: "0 XP",
+    };
+  }
+
+  const sortedEntries = [...entries].sort(
+    (left, right) => left.rank - right.rank,
+  );
+  const currentUserEntry =
+    sortedEntries.find((entry) => entry.isCurrentUser) ?? null;
+  const summaryEntry = currentUserEntry ?? sortedEntries[0];
+  const summaryXpLabel = `${formatCommunityXp(summaryEntry.totalXp)} XP`;
+  let summaryLabel = `#${summaryEntry.rank} ${getCommunityLeaderboardDisplayName(summaryEntry)} đang dẫn đầu`;
+  let summaryNote = `Tổng ${summaryXpLabel} trên bảng xếp hạng.`;
+
+  if (currentUserEntry) {
+    if (currentUserEntry.rank === 1) {
+      summaryLabel = "Bạn đang dẫn đầu bảng xếp hạng";
+      summaryNote = `Tiếp tục giữ phong độ hôm nay!`;
+    } else {
+      summaryLabel = `Bạn đang xếp hạng #${currentUserEntry.rank}`;
+      const previousRankEntry = sortedEntries.find(
+        (entry) => entry.rank === currentUserEntry.rank - 1,
+      );
+
+      if (previousRankEntry) {
+        const xpGap = Math.max(
+          previousRankEntry.totalXp - currentUserEntry.totalXp,
+          0,
+        );
+        summaryNote =
+          xpGap > 0
+            ? `Còn ${formatCommunityXp(xpGap)} XP để vượt hạng #${previousRankEntry.rank}.`
+            : `Tổng ${summaryXpLabel} hiện tại.`;
+      } else {
+        summaryNote = `Tổng ${summaryXpLabel} hiện tại.`;
+      }
+    }
+  }
+
+  return {
+    entries: getVisibleCommunityLeaderboardEntries(sortedEntries).map(
+      (entry) => ({
+        avatarUri: readMeaningfulCommunityText(entry.avatarUrl) ?? null,
+        isCurrentUser: entry.isCurrentUser,
+        name: getCommunityLeaderboardDisplayName(entry),
+        points: `${formatCommunityXp(entry.totalXp)} XP`,
+        rank: entry.rank,
+        subtitle: getCommunityLeaderboardSubtitle(entry),
+        userId: `${entry.userId}`,
+      }),
+    ),
+    headlineRankLabel: currentUserEntry
+      ? `#${currentUserEntry.rank}`
+      : `#${sortedEntries[0].rank}`,
+    summaryLabel,
+    summaryNote,
+    summaryXp: summaryEntry.totalXp,
+    totalPoints: summaryXpLabel,
+  };
+}
+
 function readMeaningfulNearbyText(value?: string | null) {
   const trimmedValue = value?.trim();
 
@@ -530,29 +751,13 @@ function mapRouteToSuggestedRouteCard(route: RouteDto): SuggestedRouteCard {
 }
 
 function getSuggestedRouteDescription(route: SuggestedRouteCard) {
-  return route.description?.trim() || route.subtitle.trim() || route.theme.trim();
+  return (
+    route.description?.trim() || route.subtitle.trim() || route.theme.trim()
+  );
 }
 
 function getSuggestedRouteTagLabel(route: SuggestedRouteCard) {
   return route.era.trim() || route.theme.trim();
-}
-
-function getProfileInitials(name: string, username: string) {
-  const source = name.trim() || username.replace(/^@+/, "").trim();
-
-  if (!source) {
-    return "ME";
-  }
-
-  const parts = source.split(/\s+/).filter(Boolean);
-
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-
-  const firstInitial = parts[0][0] ?? "";
-  const lastInitial = parts[parts.length - 1][0] ?? "";
-  return `${firstInitial}${lastInitial}`.toUpperCase();
 }
 
 function getNearbyOpeningHoursLabel(hotspot: NearbyHotspotDto) {
@@ -597,7 +802,8 @@ function buildApiNearbyPlaceItems(
         isCheckedIn: hotspot.isCheckedIn === true,
         key: `${hotspot.hotspotId}-${index}`,
         openingHours: getNearbyOpeningHoursLabel(hotspot),
-        rating: nearbyPlaceFallbackRating,
+        rating: formatNearbyRating(hotspot.averageRating),
+        reviewCountText: formatNearbyReviewCount(hotspot.totalReviews),
         reward: formatRewardLabel(hotspot.xp),
         slug: null,
         sortDistanceMeters: distanceMeters,
@@ -855,17 +1061,27 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
 
 function SectionEmptyState({
   description = "Không có dữ liệu phù hợp.",
+  isLoading = false,
   title = "Không có dữ liệu phù hợp",
 }: {
   description?: string;
+  isLoading?: boolean;
   title?: string;
 }) {
   return (
     <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-      <Text className="text-[15px] font-bold text-[#3B4454]">{title}</Text>
-      <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
-        {description}
-      </Text>
+      {isLoading ? (
+        <View className="items-center py-1">
+          <ActivityIndicator color="#EB489B" size="small" />
+        </View>
+      ) : (
+        <>
+          <Text className="text-[15px] font-bold text-[#3B4454]">{title}</Text>
+          <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+            {description}
+          </Text>
+        </>
+      )}
     </View>
   );
 }
@@ -904,7 +1120,7 @@ function NearbyDistanceSlider({
   };
 
   return (
-    <View className="gap-1.5">
+    <View className="gap-1">
       <View
         className="relative h-7 justify-center"
         onLayout={(event) => {
@@ -947,10 +1163,10 @@ function NearbyDistanceSlider({
       </View>
 
       <View className="flex-row items-center justify-between">
-        <Text className="text-[11px] font-semibold text-[#A29AA8]">
+        <Text className="text-[10px] font-medium text-[#A29AA8]">
           {formatDistanceMeters(min)}
         </Text>
-        <Text className="text-[11px] font-semibold text-[#A29AA8]">
+        <Text className="text-[10px] font-medium text-[#A29AA8]">
           {formatDistanceMeters(max)}
         </Text>
       </View>
@@ -990,7 +1206,7 @@ function NearbyDistanceDropdown({
           colors={["#FF8A50", "#FF5F87"]}
           end={{ x: 1, y: 1 }}
           start={{ x: 0, y: 0 }}
-          className="h-9 w-9 items-center justify-center rounded-full"
+          className="h-8 w-8 items-center justify-center rounded-full"
         >
           <SymbolView
             name={{
@@ -998,13 +1214,13 @@ function NearbyDistanceDropdown({
               android: "local_fire_department",
               web: "local_fire_department",
             }}
-            size={15}
+            size={14}
             tintColor="#FFFFFF"
           />
         </LinearGradient>
 
         <View className="flex-1">
-          <Text className="text-[16px] font-extrabold tracking-[-0.2px] text-[#2B2233]">
+          <Text className="text-[15px] font-medium tracking-[-0.1px] text-[#2B2233]">
             Địa điểm gần bạn
           </Text>
           <Text className="mt-0.5 text-[11px] font-medium text-[#9C94A5]">
@@ -1017,9 +1233,9 @@ function NearbyDistanceDropdown({
           end={{ x: 1, y: 0.5 }}
           locations={[0, 0.58, 1]}
           start={{ x: 0, y: 0.5 }}
-          className="rounded-full px-2.5 py-1"
+          className="rounded-full px-2 py-[5px]"
         >
-          <Text className="text-[12px] font-extrabold text-white">
+          <Text className="text-[11px] font-semibold text-white">
             {formatDistanceMeters(draftDistanceMeters)}
           </Text>
         </LinearGradient>
@@ -1044,13 +1260,13 @@ function NearbyDistanceDropdown({
             size={13}
             tintColor="#374151"
           />
-          <Text className="ml-1.5 text-[13px] font-bold text-[#2F3947]">
+          <Text className="ml-1.5 text-[12px] font-semibold text-[#2F3947]">
             Xem bản đồ
           </Text>
         </Pressable>
 
         <Pressable
-          className={`flex-1 overflow-hidden rounded-[14px] ${
+          className={`flex-1 overflow-hidden rounded-[12px] ${
             isLoading ? "opacity-70" : ""
           }`}
           disabled={isLoading}
@@ -1076,7 +1292,7 @@ function NearbyDistanceDropdown({
                   size={13}
                   tintColor="#FFFFFF"
                 />
-                <Text className="ml-1.5 text-[13px] font-extrabold text-white">
+                <Text className="ml-1.5 text-[12px] font-semibold text-white">
                   Áp dụng
                 </Text>
               </>
@@ -1092,6 +1308,46 @@ function NearbyDistanceDropdown({
         <Text className="text-[10px] font-bold text-[#8E869A]">
           {formatDistanceMeters(currentDistanceMeters)}
         </Text>
+      </View>
+    </View>
+  );
+}
+
+function NearbyPlacesShowcaseCard({
+  cardHeight,
+  cardWidth,
+  imageHeight,
+}: {
+  cardHeight: number;
+  cardWidth: number;
+  imageHeight: number;
+}) {
+  return (
+    <View
+      className="overflow-hidden"
+      style={{
+        height: cardHeight,
+        width: cardWidth,
+      }}
+    >
+      <View className="absolute -right-6 top-5 h-24 w-24 rounded-full bg-[#FFD6E4]/55" />
+      <View className="absolute -bottom-8 -left-7 h-24 w-24 rounded-full bg-[#FFF8FB]" />
+
+      <View className="flex-1 items-start justify-end px-1 pb-1 pt-1">
+        <View className="mt-auto items-start">
+          <Image
+            source={nearbyShowcaseMascot}
+            contentFit="contain"
+            transition={220}
+            cachePolicy="memory-disk"
+            style={{
+              height: imageHeight,
+              marginBottom: -18,
+              marginLeft: -48,
+              width: cardWidth + 92,
+            }}
+          />
+        </View>
       </View>
     </View>
   );
@@ -1239,23 +1495,13 @@ function ExplorerHeaderAvatar({
         start={{ x: 0, y: 0.1 }}
         className="h-16 w-16 rounded-full p-[2px]"
       >
-        <View className="flex-1 rounded-full bg-white p-[3px]">
-          {shouldShowFallback ? (
-            <View className="flex-1 items-center justify-center rounded-full bg-[#FFF1F6]">
-              <Text className="text-[18px] font-black text-[#D9587F]">
-                {initials}
-              </Text>
-            </View>
-          ) : (
-            <Image
-              source={avatar}
-              contentFit="cover"
-              transition={180}
-              cachePolicy="memory-disk"
-              onError={() => setFailedAvatar(avatar)}
-              style={{ flex: 1, borderRadius: 999 }}
-            />
-          )}
+        <View className="flex-1 items-center justify-center rounded-full bg-white p-[3px]">
+          <UserAvatar
+            displayName={name}
+            size={54}
+            uri={avatar}
+            username={username}
+          />
         </View>
       </LinearGradient>
 
@@ -1611,6 +1857,14 @@ export default function HomeScreen() {
   );
   const [suggestedRoutesStatus, setSuggestedRoutesStatus] =
     useState<SuggestedRoutesSectionStatus>("loading");
+  const [communityLeaderboardEntries, setCommunityLeaderboardEntries] =
+    useState<UserLeaderboardEntryDto[]>([]);
+  const [
+    communityLeaderboardErrorMessage,
+    setCommunityLeaderboardErrorMessage,
+  ] = useState<string | null>(null);
+  const [communityLeaderboardStatus, setCommunityLeaderboardStatus] =
+    useState<CommunityLeaderboardStatus>("loading");
   const [themeCategories, setThemeCategories] = useState<NearbyCategoryCard[]>(
     [],
   );
@@ -1655,8 +1909,6 @@ export default function HomeScreen() {
       };
     }, [authSession.isAuthenticated, authSession.tokenType]),
   );
-  const [activeCommunityTab, setActiveCommunityTab] =
-    useState<CommunityBoardTab>("community");
   const isGuest = authSession.role === "guest";
   const homeHeaderTopPadding = 12;
   const routeCardLeftInset = gutter;
@@ -1666,10 +1918,27 @@ export default function HomeScreen() {
   const nearbyPlaceImageHeight = Math.round(nearbyPlaceCardWidth * 0.8);
   const nearbyPlaceCardHeight =
     nearbyPlaceImageHeight + nearbyPlaceContentHeight;
+  const nearbyPlacesShowcaseWidth = Math.min(
+    Math.max(safeWidth * 0.31, 130),
+    158,
+  );
+  const nearbyPlacesShowcaseHeight = nearbyPlaceCardHeight + 6;
+  const nearbyPlacesShowcaseImageHeight = Math.max(
+    nearbyPlacesShowcaseHeight - 18,
+    232,
+  );
+  const nearbyPlacesSectionTopInset = 10;
+  const nearbyPlacesSectionHeight = nearbyPlacesShowcaseHeight + 24;
+  const nearbyPlacesScrollStartInset = Math.round(
+    gutter + nearbyPlacesShowcaseWidth + 10,
+  );
   const voucherMerchantCircleSize = Math.min(
     Math.max(contentWidth * 0.22, 76),
     86,
   );
+  const themeCategoryCircleSize = Math.min(Math.max(safeWidth * 0.2, 74), 84);
+  const themeCategoryItemWidth = themeCategoryCircleSize + 14;
+  const themeCategoryImageSize = Math.round(themeCategoryCircleSize * 0.74);
   const voucherMerchantLogoSize = Math.round(voucherMerchantCircleSize * 0.88);
   const voucherMerchantItemWidth = voucherMerchantCircleSize + 14;
   const currentJourney =
@@ -1679,7 +1948,11 @@ export default function HomeScreen() {
   const activeJourneyProgress = currentJourney
     ? Math.min(Math.max(currentJourney.progress, 0), 100)
     : 0;
-  const activeCommunityBoard = communityBoards[activeCommunityTab];
+  const activeCommunityBoard = buildCommunityBoardViewModelFromLeaderboard({
+    entries: communityLeaderboardEntries,
+    errorMessage: communityLeaderboardErrorMessage,
+    status: communityLeaderboardStatus,
+  });
   const activeFeaturedRoute = featuredRoutes[activeRouteIndex];
   const explorerName =
     explorerSummary?.name.trim() ||
@@ -1696,11 +1969,25 @@ export default function HomeScreen() {
   const handleOpenHotspots = () => {
     router.push("/hotspots");
   };
+  const handleOpenThemeCategory = (item: NearbyCategoryCard) => {
+    router.push(
+      getThemeDetailHref({
+        accent: item.accent,
+        background: item.background,
+        imageUrl: item.imageUrl,
+        tagId: item.tagId,
+        title: item.label,
+      }),
+    );
+  };
   const handleOpenRoutes = () => {
     router.push("/route");
   };
+  const handleOpenCommunityLeaderboard = () => {
+    router.push("/community/leaderboard" as Href);
+  };
   const handleOpenNotifications = () => {
-    router.push("/notifications");
+    router.push("/notifications" as Href);
   };
   const handleOpenRegister = () => {
     router.push("/login?entry=home");
@@ -1978,7 +2265,7 @@ export default function HomeScreen() {
           return;
         }
 
-        const tagNames = await getActiveTagNames({
+        const tags = await getActiveTags({
           accessToken,
           tokenType: authSession.tokenType,
         });
@@ -1987,7 +2274,7 @@ export default function HomeScreen() {
           return;
         }
 
-        setThemeCategories(mapTagNamesToNearbyCategories(tagNames));
+        setThemeCategories(mapActiveTagsToNearbyCategories(tags));
       } catch (error) {
         console.warn("[home] load theme categories failed", {
           error: error instanceof Error ? error.message : error,
@@ -2002,6 +2289,60 @@ export default function HomeScreen() {
     }
 
     void loadThemeCategories();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.isAuthenticated, authSession.tokenType]);
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadCommunityLeaderboard() {
+      setCommunityLeaderboardStatus("loading");
+      setCommunityLeaderboardErrorMessage(null);
+
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+
+        if (!isActive) {
+          return;
+        }
+
+        const leaderboardResponse = await getUserLeaderboard({
+          accessToken,
+          tokenType: authSession.tokenType,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setCommunityLeaderboardEntries(leaderboardResponse.content);
+        setCommunityLeaderboardStatus(
+          leaderboardResponse.content.length > 0 ? "ready" : "empty",
+        );
+      } catch (error) {
+        console.warn("[home] load community leaderboard failed", {
+          error: error instanceof Error ? error.message : error,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setCommunityLeaderboardEntries([]);
+        setCommunityLeaderboardErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Không tải được bảng xếp hạng cộng đồng.",
+        );
+        setCommunityLeaderboardStatus("error");
+      }
+    }
+
+    void loadCommunityLeaderboard();
 
     return () => {
       isActive = false;
@@ -2079,8 +2420,12 @@ export default function HomeScreen() {
             avatar: profile.avatar?.trim() || null,
             isPremium: profile.isPremium,
             level: profile.level,
-            name: resolvedName || "Ngọc",
-            username: profile.username.trim(),
+            name: resolvedName,
+            username:
+              profile.username.trim() ||
+              authSession.username?.trim() ||
+              authSession.displayName.trim() ||
+              resolvedName,
           });
         } catch (error) {
           if (!isActive) {
@@ -2099,7 +2444,12 @@ export default function HomeScreen() {
       return () => {
         isActive = false;
       };
-    }, [authSession.isAuthenticated, authSession.tokenType]),
+    }, [
+      authSession.displayName,
+      authSession.isAuthenticated,
+      authSession.tokenType,
+      authSession.username,
+    ]),
   );
 
   return (
@@ -2529,17 +2879,21 @@ export default function HomeScreen() {
           ) : null}
 
           <View className="gap-4">
-            <View className="flex-row items-center justify-between">
-              <Pressable hitSlop={8} onPress={handleOpenHotspots}>
-                <Text className="text-[16px] font-extrabold text-[#2B2233]">
+            <View className="flex-row items-center justify-between gap-3">
+              <Pressable
+                className="flex-1"
+                hitSlop={8}
+                onPress={handleOpenHotspots}
+              >
+                <Text className="text-[18px] font-extrabold text-[#2B2233]">
                   Địa điểm gần bạn
                 </Text>
               </Pressable>
               <Pressable
-                className="rounded-full bg-[#FFF4EF] px-3.5 py-2"
+                className="rounded-full border border-[#F3D9E5] bg-white px-3 py-1.5"
                 onPress={handleOpenHotspots}
               >
-                <Text className="text-[12px] font-bold text-[#F58752]">
+                <Text className="text-[12px] font-bold text-[#D85B86]">
                   Xem tất cả
                 </Text>
               </Pressable>
@@ -2562,221 +2916,280 @@ export default function HomeScreen() {
                 title="Chưa có địa điểm phù hợp"
               />
             ) : (
-              <ScrollView
-                horizontal
-                contentContainerStyle={{
-                  paddingLeft: gutter,
-                  paddingRight: gutter,
-                }}
-                showsHorizontalScrollIndicator={false}
+              <View
                 style={{
                   marginHorizontal: -gutter,
                   width: safeWidth,
                 }}
               >
-                {resolvedNearbyPlaces.map((place, index) => {
-                  const isPlaceCheckedIn = isNearbyPlaceCheckedIn(
-                    place,
-                    checkedInApiHotspotIds,
-                    checkedInHotspotSlugs,
-                  );
+                <View
+                  className="bg-[#FFF0F6]"
+                  style={{
+                    minHeight: nearbyPlacesSectionHeight,
+                    paddingVertical: nearbyPlacesSectionTopInset,
+                  }}
+                >
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      left: gutter,
+                      position: "absolute",
+                      top: nearbyPlacesSectionTopInset,
+                    }}
+                  >
+                    <NearbyPlacesShowcaseCard
+                      cardHeight={nearbyPlacesShowcaseHeight}
+                      cardWidth={nearbyPlacesShowcaseWidth}
+                      imageHeight={nearbyPlacesShowcaseImageHeight}
+                    />
+                  </View>
 
-                  return (
-                    <Pressable
-                      key={place.key}
-                      className={
-                        index === resolvedNearbyPlaces.length - 1
-                          ? ""
-                          : "mr-3.5"
-                      }
-                      disabled={!place.slug && place.hotspotId === null}
-                      onPress={() => {
-                        const hotspotId = place.hotspotId;
-                        const routeSlug =
-                          place.slug ??
-                          (hotspotId !== null
-                            ? getApiHotspotRouteSlug(hotspotId)
-                            : null);
+                  <ScrollView
+                    horizontal
+                    contentContainerStyle={{
+                      paddingBottom: 6,
+                      paddingLeft: nearbyPlacesScrollStartInset,
+                      paddingRight: gutter,
+                      paddingTop: 6,
+                    }}
+                    showsHorizontalScrollIndicator={false}
+                    style={{
+                      width: safeWidth,
+                    }}
+                  >
+                    {resolvedNearbyPlaces.map((place, index) => {
+                      const isPlaceCheckedIn = isNearbyPlaceCheckedIn(
+                        place,
+                        checkedInApiHotspotIds,
+                        checkedInHotspotSlugs,
+                      );
 
-                        if (routeSlug) {
-                          router.push(getHotspotHref(routeSlug, hotspotId));
-                        }
-                      }}
-                      style={{ width: nearbyPlaceCardWidth }}
-                    >
-                      <View
-                        className="overflow-hidden rounded-[10px] border border-[#EEF1F4] bg-white"
-                        style={[
-                          nearbyPlaceShadowStyle,
-                          { height: nearbyPlaceCardHeight },
-                        ]}
-                      >
-                        <View className="relative">
-                          <Image
-                            source={place.imageUri}
-                            contentFit="cover"
-                            transition={220}
-                            cachePolicy="memory-disk"
-                            style={{
-                              height: nearbyPlaceImageHeight,
-                              width: "100%",
-                            }}
-                          />
+                      return (
+                        <Pressable
+                          key={place.key}
+                          disabled={!place.slug && place.hotspotId === null}
+                          onPress={() => {
+                            const hotspotId = place.hotspotId;
+                            const routeSlug =
+                              place.slug ??
+                              (hotspotId !== null
+                                ? getApiHotspotRouteSlug(hotspotId)
+                                : null);
 
-                          <View className="absolute inset-x-2.5 top-2.5 flex-row items-center justify-between">
-                            <View className="rounded-full bg-[#45414D]/92 px-2.5 py-1">
-                              <Text className="text-[11px] font-extrabold text-white">
-                                {place.distance}
-                              </Text>
-                            </View>
-
-                            <View
-                              className={`rounded-full px-2.5 py-1 ${
-                                isPlaceCheckedIn
-                                  ? "bg-[#DCFCE7]"
-                                  : "bg-[#f0af16]"
-                              }`}
-                            >
-                              <Text
-                                className={`text-[11px] font-extrabold ${
-                                  isPlaceCheckedIn
-                                    ? "text-[#15803D]"
-                                    : "text-[#2B2233]"
-                                }`}
-                              >
-                                {isPlaceCheckedIn
-                                  ? "Đã check-in"
-                                  : `${place.reward} XP`}
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-
-                        <View
-                          className="flex-1 gap-0.5 px-3.5 pb-3.5 pt-3"
-                          style={{ minHeight: nearbyPlaceContentHeight }}
+                            if (routeSlug) {
+                              router.push(getHotspotHref(routeSlug, hotspotId));
+                            }
+                          }}
+                          style={{
+                            marginRight:
+                              index === resolvedNearbyPlaces.length - 1
+                                ? 0
+                                : 12,
+                            width: nearbyPlaceCardWidth,
+                          }}
                         >
-                          <Text
-                            className="text-[13px] font-extrabold leading-[16px] text-[#3B4454]"
-                            numberOfLines={2}
-                            style={{ minHeight: nearbyPlaceTitleHeight }}
-                          >
-                            {place.title}
-                          </Text>
-
                           <View
-                            className="flex-row items-center gap-1"
-                            style={{ minHeight: nearbyPlaceCategoryHeight }}
+                            className="overflow-hidden rounded-[10px] border border-[#EEF1F4] bg-white"
+                            style={[
+                              nearbyPlaceShadowStyle,
+                              { height: nearbyPlaceCardHeight },
+                            ]}
                           >
-                            <SymbolView
-                              name={{
-                                ios: "clock.fill",
-                                android: "schedule",
-                                web: "schedule",
-                              }}
-                              size={11}
-                              tintColor="#A39AAB"
-                            />
-                            <Text
-                              className="flex-1 text-[12px] text-[#A39AAB]"
-                              numberOfLines={1}
-                            >
-                              {place.openingHours}
-                            </Text>
-                          </View>
+                            <View className="relative">
+                              <Image
+                                source={place.imageUri}
+                                contentFit="cover"
+                                transition={220}
+                                cachePolicy="memory-disk"
+                                style={{
+                                  height: nearbyPlaceImageHeight,
+                                  width: "100%",
+                                }}
+                              />
 
-                          <View
-                            className="flex-row items-center gap-1"
-                            style={{ minHeight: nearbyPlaceDetailRowHeight }}
-                          >
-                            <SymbolView
-                              name={{
-                                ios: "star.fill",
-                                android: "star",
-                                web: "star",
-                              }}
-                              size={11}
-                              tintColor="#F58752"
-                            />
-                            <Text className="text-[12px] font-bold text-[#F58752]">
-                              {place.rating}
-                            </Text>
-                          </View>
+                              <View className="absolute inset-x-2.5 top-2.5 flex-row items-center justify-between">
+                                <View className="rounded-full bg-[#45414D]/92 px-2.5 py-1">
+                                  <Text className="text-[11px] font-extrabold text-white">
+                                    {place.distance}
+                                  </Text>
+                                </View>
 
-                          {isPlaceCheckedIn ? (
-                            <View
-                              className="flex-row items-center gap-1.5"
-                              style={{ minHeight: nearbyPlaceDetailRowHeight }}
-                            >
-                              <View className="h-5 w-5 items-center justify-center rounded-full bg-[#DCFCE7]">
-                                <SymbolView
-                                  name={{
-                                    ios: "checkmark",
-                                    android: "check",
-                                    web: "check",
-                                  }}
-                                  size={11}
-                                  tintColor="#15803D"
-                                />
+                                <View
+                                  className={`rounded-full px-2.5 py-1 ${
+                                    isPlaceCheckedIn
+                                      ? "bg-[#DCFCE7]"
+                                      : "bg-[#f0af16]"
+                                  }`}
+                                >
+                                  <Text
+                                    className={`text-[11px] font-extrabold ${
+                                      isPlaceCheckedIn
+                                        ? "text-[#15803D]"
+                                        : "text-[#2B2233]"
+                                    }`}
+                                  >
+                                    {isPlaceCheckedIn
+                                      ? "Đã check-in"
+                                      : `${place.reward} XP`}
+                                  </Text>
+                                </View>
                               </View>
-                              <Text
-                                className="flex-1 text-[12px] font-bold text-[#15803D]"
-                                numberOfLines={1}
-                              >
-                                Xem câu chuyện
-                              </Text>
                             </View>
-                          ) : (
+
                             <View
-                              className="flex-row items-center gap-1"
-                              style={{ minHeight: nearbyPlaceDetailRowHeight }}
+                              className="flex-1 gap-0.5 px-3.5 pb-3.5 pt-3"
+                              style={{ minHeight: nearbyPlaceContentHeight }}
                             >
-                              {place.detailIcon === "star" ? (
-                                <Text className="text-[12px] text-[#F58752]">
-                                  ★
-                                </Text>
-                              ) : (
+                              <Text
+                                className="text-[13px] font-extrabold leading-[16px] text-[#3B4454]"
+                                numberOfLines={2}
+                                style={{ minHeight: nearbyPlaceTitleHeight }}
+                              >
+                                {place.title}
+                              </Text>
+
+                              <View
+                                className="flex-row items-center gap-1"
+                                style={{ minHeight: nearbyPlaceCategoryHeight }}
+                              >
                                 <SymbolView
                                   name={{
-                                    ios: "location.fill",
-                                    android: "place",
-                                    web: "place",
+                                    ios: "clock.fill",
+                                    android: "schedule",
+                                    web: "schedule",
                                   }}
                                   size={11}
-                                  tintColor="#8E869A"
+                                  tintColor="#A39AAB"
                                 />
-                              )}
-                              <Text
-                                className={
-                                  place.detailIcon === "star"
-                                    ? "text-[12px] font-bold text-[#F58752]"
-                                    : "flex-1 text-[12px] text-[#8E869A]"
-                                }
-                                numberOfLines={1}
-                              >
-                                {place.detailPrimaryText}
-                              </Text>
-                              {place.detailSecondaryText ? (
                                 <Text
-                                  className="text-[12px] text-[#8E869A]"
+                                  className="flex-1 text-[12px] text-[#A39AAB]"
                                   numberOfLines={1}
                                 >
-                                  {place.detailSecondaryText}
+                                  {place.openingHours}
                                 </Text>
-                              ) : null}
+                              </View>
+
+                              <View
+                                className="flex-row items-center gap-1"
+                                style={{
+                                  minHeight: nearbyPlaceDetailRowHeight,
+                                }}
+                              >
+                                <SymbolView
+                                  name={{
+                                    ios: "star.fill",
+                                    android: "star",
+                                    web: "star",
+                                  }}
+                                  size={11}
+                                  tintColor="#F58752"
+                                />
+                                <Text className="text-[12px] font-bold text-[#F58752]">
+                                  {place.rating} ({place.reviewCountText})
+                                </Text>
+                              </View>
+
+                              {isPlaceCheckedIn ? (
+                                <View
+                                  className="flex-row items-center gap-1.5"
+                                  style={{
+                                    minHeight: nearbyPlaceDetailRowHeight,
+                                  }}
+                                >
+                                  <View className="h-5 w-5 items-center justify-center rounded-full bg-[#DCFCE7]">
+                                    <SymbolView
+                                      name={{
+                                        ios: "checkmark",
+                                        android: "check",
+                                        web: "check",
+                                      }}
+                                      size={11}
+                                      tintColor="#15803D"
+                                    />
+                                  </View>
+                                  <Text
+                                    className="flex-1 text-[12px] font-bold text-[#15803D]"
+                                    numberOfLines={1}
+                                  >
+                                    Xem câu chuyện
+                                  </Text>
+                                </View>
+                              ) : (
+                                <View
+                                  className="flex-row items-center gap-1"
+                                  style={{
+                                    minHeight: nearbyPlaceDetailRowHeight,
+                                  }}
+                                >
+                                  {place.detailIcon === "star" ? (
+                                    <Text className="text-[12px] text-[#F58752]">
+                                      ★
+                                    </Text>
+                                  ) : (
+                                    <SymbolView
+                                      name={{
+                                        ios: "location.fill",
+                                        android: "place",
+                                        web: "place",
+                                      }}
+                                      size={11}
+                                      tintColor="#8E869A"
+                                    />
+                                  )}
+                                  <Text
+                                    className={
+                                      place.detailIcon === "star"
+                                        ? "text-[12px] font-bold text-[#F58752]"
+                                        : "flex-1 text-[12px] text-[#8E869A]"
+                                    }
+                                    numberOfLines={1}
+                                  >
+                                    {place.detailPrimaryText}
+                                  </Text>
+                                  {place.detailSecondaryText ? (
+                                    <Text
+                                      className="text-[12px] text-[#8E869A]"
+                                      numberOfLines={1}
+                                    >
+                                      {place.detailSecondaryText}
+                                    </Text>
+                                  ) : null}
+                                </View>
+                              )}
                             </View>
-                          )}
-                        </View>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              </View>
             )}
 
-            <Text className="text-[18px] font-extrabold text-[#2B2233]">
-              Chủ đề
-            </Text>
+            <View className="flex-row items-center justify-between gap-3">
+              <Text className="text-[18px] font-extrabold text-[#2B2233]">
+                Chủ đề
+              </Text>
+
+              <Pressable
+                className="flex-row items-center"
+                hitSlop={8}
+                onPress={handleOpenHotspots}
+              >
+                <Text className="text-[12px] font-bold text-[#D85B86]">
+                  Xem tất cả
+                </Text>
+                <SymbolView
+                  name={{
+                    ios: "chevron.right",
+                    android: "chevron_right",
+                    web: "chevron_right",
+                  }}
+                  size={14}
+                  tintColor="#D85B86"
+                />
+              </Pressable>
+            </View>
 
             {themeCategories.length === 0 ? (
               <SectionEmptyState description="Chưa có dữ liệu chủ đề phù hợp từ API." />
@@ -2796,24 +3209,55 @@ export default function HomeScreen() {
                 {themeCategories.map((item, index) => (
                   <Pressable
                     key={`${item.label}-${index}`}
-                    className={
-                      index === themeCategories.length - 1 ? "" : "mr-3.5"
-                    }
+                    className={`items-center ${index === themeCategories.length - 1 ? "" : "mr-4"}`}
+                    onPress={() => handleOpenThemeCategory(item)}
+                    style={{ width: themeCategoryItemWidth }}
                   >
                     <View
-                      className="h-[104px] w-[104px] items-center justify-center rounded-[22px] p-4"
-                      style={{ backgroundColor: item.background }}
+                      className="items-center"
+                      style={{ width: themeCategoryItemWidth }}
                     >
-                      <View className="items-center justify-center">
-                        <SymbolView
-                          name={item.icon}
-                          size={16}
-                          tintColor={item.accent}
-                        />
+                      <View
+                        className="items-center justify-center rounded-full border border-[#F2EDF2] bg-white"
+                        style={[
+                          themeCategoryShadowStyle,
+                          {
+                            height: themeCategoryCircleSize,
+                            width: themeCategoryCircleSize,
+                          },
+                        ]}
+                      >
+                        {item.imageUrl ? (
+                          <Image
+                            source={item.imageUrl}
+                            contentFit="contain"
+                            transition={180}
+                            cachePolicy="memory-disk"
+                            style={{
+                              height: themeCategoryImageSize,
+                              width: themeCategoryImageSize,
+                            }}
+                          />
+                        ) : (
+                          <View
+                            className="items-center justify-center rounded-full"
+                            style={{
+                              backgroundColor: item.background,
+                              height: themeCategoryImageSize,
+                              width: themeCategoryImageSize,
+                            }}
+                          >
+                            <SymbolView
+                              name={item.icon}
+                              size={20}
+                              tintColor={item.accent}
+                            />
+                          </View>
+                        )}
                       </View>
 
                       <Text
-                        className="mt-3 text-center text-[13px] font-extrabold leading-4 text-[#2F2A35]"
+                        className="mt-3 text-center text-[13px] font-semibold leading-4 text-[#2F2A35]"
                         numberOfLines={2}
                       >
                         {item.label}
@@ -2910,9 +3354,7 @@ export default function HomeScreen() {
                       </View>
 
                       <View className="px-3 pb-3 pt-2" style={{ gap: 1 }}>
-                        <View
-                          className="flex-row flex-wrap items-center gap-1.5"
-                        >
+                        <View className="flex-row flex-wrap items-center gap-1.5">
                           <View className="rounded-full bg-[#FFF1F6] px-2 py-[5px]">
                             <Text className="text-[10px] font-extrabold text-[#EB489B]">
                               {route.distance}
@@ -2927,21 +3369,19 @@ export default function HomeScreen() {
                           <View
                             className="rounded-full px-2 py-[5px]"
                             style={{
-                              backgroundColor:
-                                (
-                                  routeDifficultyStyles[route.difficulty] ??
-                                  routeDifficultyStyles["Trung bình"]
-                                ).background,
+                              backgroundColor: (
+                                routeDifficultyStyles[route.difficulty] ??
+                                routeDifficultyStyles["Trung bình"]
+                              ).background,
                             }}
                           >
                             <Text
                               className="text-[10px] font-extrabold"
                               style={{
-                                color:
-                                  (
-                                    routeDifficultyStyles[route.difficulty] ??
-                                    routeDifficultyStyles["Trung bình"]
-                                  ).color,
+                                color: (
+                                  routeDifficultyStyles[route.difficulty] ??
+                                  routeDifficultyStyles["Trung bình"]
+                                ).color,
                               }}
                             >
                               {route.difficulty}
@@ -3058,201 +3498,227 @@ export default function HomeScreen() {
               </View>
             </View>
           </View>
-
-          <View
-            className="overflow-hidden rounded-[28px] bg-white"
-            style={cardShadowStyle}
-          >
-            <View className="px-4 pb-4 pt-4">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center gap-2.5">
-                  <View className="h-7 w-7 items-center justify-center rounded-full bg-[#FFF1D6]">
+          <View className="gap-4">
+            <View>
+              <View className="flex-row items-start justify-between">
+                <View className="min-w-0 flex-1 flex-row items-center gap-3">
+                  <View className="h-11 w-11 items-center justify-center rounded-[16px] bg-[#FFF1D6]">
                     <SymbolView
                       name={{
                         ios: "trophy.fill",
                         android: "emoji_events",
                         web: "emoji_events",
                       }}
-                      size={15}
-                      tintColor="#C98A10"
+                      size={22}
+                      tintColor="#E8A317"
                     />
                   </View>
-                  <Text className="text-[18px] font-extrabold text-[#1F2940]">
-                    Cộng đồng hôm nay
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-[17px] font-extrabold leading-[23px] text-[#2B2233]">
+                      Cộng đồng hôm nay
+                    </Text>
+                  </View>
+                </View>
+
+                <Pressable
+                  className="ml-2 flex-row items-center pt-1"
+                  hitSlop={8}
+                  onPress={handleOpenCommunityLeaderboard}
+                >
+                  <Text className="text-[13px] font-bold uppercase tracking-[0.3px] text-[#FF5F87]">
+                    BXH
                   </Text>
-                </View>
-
-                <Text className="text-[12px] font-bold uppercase tracking-[0.3px] text-[#FF6F95]">
-                  BXH
-                </Text>
-              </View>
-
-              <View className="mt-4 flex-row items-end justify-between border-b border-[#F3E7ED]">
-                <View className="flex-row">
-                  {communityTabs.map((tab) => {
-                    const isActive = activeCommunityTab === tab.key;
-
-                    return (
-                      <Pressable
-                        key={tab.key}
-                        className="mr-6 pb-3"
-                        onPress={() => {
-                          setActiveCommunityTab(tab.key);
-                        }}
-                      >
-                        <Text
-                          className={`text-[13px] font-bold ${
-                            isActive ? "text-[#FF5F87]" : "text-[#7D7281]"
-                          }`}
-                        >
-                          {tab.label}
-                        </Text>
-                        <View
-                          className={`mt-2 h-[2.5px] rounded-full ${
-                            isActive ? "bg-[#FF5F87]" : "bg-transparent"
-                          }`}
-                        />
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                <View className="mb-3 flex-row items-center">
                   <SymbolView
                     name={{
-                      ios: "chart.line.uptrend.xyaxis",
-                      android: "show_chart",
-                      web: "show_chart",
+                      ios: "chevron.right",
+                      android: "chevron_right",
+                      web: "chevron_right",
                     }}
-                    size={12}
-                    tintColor="#7D7281"
+                    size={14}
+                    tintColor="#FF5F87"
                   />
-                  <Text className="ml-1 text-[11px] font-semibold text-[#7D7281]">
-                    Live
-                  </Text>
-                </View>
+                </Pressable>
               </View>
 
               <View className="mt-4 gap-3">
-                <LinearGradient
-                  colors={["#FFF6F9", "#FFF1F5"]}
-                  start={{ x: 0, y: 0.5 }}
-                  end={{ x: 1, y: 0.5 }}
-                  className="flex-row items-center rounded-[22px] border border-[#F9E2EA] px-3.5 py-3.5"
-                >
-                  <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-[#FFE8F0]">
-                    <Text className="text-[12px] font-black text-[#FF5F87]">
-                      #{activeCommunityTab === "community" ? "24" : "01"}
-                    </Text>
-                  </View>
+                {/* LeaderRankingCard tự chứa padding 16px hai bên nên bù lại
+                    bằng margin âm để thẳng hàng với các mục khác của trang */}
+                <View style={{ marginHorizontal: -16 }}>
+                  <LeaderRankingCard
+                    description={activeCommunityBoard.summaryNote}
+                    title={activeCommunityBoard.summaryLabel}
+                    xp={activeCommunityBoard.summaryXp}
+                  />
+                </View>
 
-                  <View className="flex-1 pr-3">
-                    <Text className="text-[14px] font-extrabold text-[#1F2940]">
-                      {activeCommunityBoard.summaryLabel}
-                    </Text>
-                    <Text className="mt-0.5 text-[11px] leading-4 text-[#9B8D9A]">
-                      {activeCommunityBoard.summaryNote}
-                    </Text>
-                  </View>
+                <View className="gap-2.5">
+                  {activeCommunityBoard.entries.length > 0 ? (
+                    activeCommunityBoard.entries.map((entry) => {
+                      const isChampion = entry.rank === 1;
+                      const badgeColor = getCommunityLeaderboardBadgeColor(
+                        entry.rank,
+                      );
 
-                  <View className="flex-row items-center rounded-full border border-[#F8D8E3] bg-white px-3 py-1.5">
-                    <SymbolView
-                      name={{
-                        ios: "star.fill",
-                        android: "star",
-                        web: "star",
-                      }}
-                      size={12}
-                      tintColor="#FF5F87"
-                    />
-                    <Text className="ml-1 text-[12px] font-extrabold text-[#1F2940]">
-                      {activeCommunityBoard.totalPoints}
-                    </Text>
-                  </View>
-                </LinearGradient>
-
-                <View className="gap-3">
-                  {activeCommunityBoard.entries.map((entry, index) => (
-                    <View
-                      key={`${activeCommunityTab}-${entry.name}`}
-                      className="flex-row items-center rounded-[24px] border border-[#EEF1F4] bg-white px-3.5 py-3"
-                      style={communityRowShadowStyle}
-                    >
-                      <View className="relative mr-3.5 h-12 w-12 items-center justify-center">
+                      return (
                         <View
-                          className="items-center justify-center rounded-full bg-white"
-                          style={{
-                            borderColor:
-                              communityRankRingColors[
-                                Math.min(
-                                  index,
-                                  communityRankRingColors.length - 1,
-                                )
-                              ],
-                            borderWidth: 2.5,
-                            height: 46,
-                            width: 46,
-                          }}
+                          key={`community-${entry.userId ?? entry.name}-${entry.rank}`}
+                          className="flex-row items-center rounded-[18px] px-3 py-2.5"
+                          style={[
+                            communityRowShadowStyle,
+                            {
+                              backgroundColor: isChampion
+                                ? "#FFF9EC"
+                                : entry.isCurrentUser
+                                  ? "#FFF7FA"
+                                  : "#FFFFFF",
+                              borderColor: isChampion
+                                ? "#F4D493"
+                                : entry.isCurrentUser
+                                  ? "#F8D8E3"
+                                  : "#EEF1F4",
+                              borderWidth: 1,
+                            },
+                          ]}
                         >
-                          <View className="h-[38px] w-[38px] overflow-hidden rounded-full bg-[#F3F4F6]">
-                            <Image
-                              source={entry.avatarUri}
-                              contentFit="cover"
-                              transition={180}
-                              cachePolicy="memory-disk"
-                              style={{ height: "100%", width: "100%" }}
+                          <View className="mr-2.5 w-7 items-center justify-center">
+                            {isChampion ? (
+                              <View className="absolute -top-3">
+                                <SymbolView
+                                  name={{
+                                    ios: "crown.fill",
+                                    android: "workspace_premium",
+                                    web: "workspace_premium",
+                                  }}
+                                  size={14}
+                                  tintColor="#F7B500"
+                                />
+                              </View>
+                            ) : null}
+
+                            {entry.rank === 2 || entry.rank === 3 ? (
+                              <View className="absolute -bottom-1 flex-row gap-[3px]">
+                                <View
+                                  style={{
+                                    backgroundColor: badgeColor,
+                                    borderBottomLeftRadius: 2,
+                                    borderBottomRightRadius: 2,
+                                    height: 10,
+                                    transform: [{ rotate: "10deg" }],
+                                    width: 5,
+                                  }}
+                                />
+                                <View
+                                  style={{
+                                    backgroundColor: badgeColor,
+                                    borderBottomLeftRadius: 2,
+                                    borderBottomRightRadius: 2,
+                                    height: 10,
+                                    transform: [{ rotate: "-10deg" }],
+                                    width: 5,
+                                  }}
+                                />
+                              </View>
+                            ) : null}
+
+                            <View
+                              className="h-6 w-6 items-center justify-center rounded-full"
+                              style={{
+                                backgroundColor: isTopCommunityLeaderboardRank(
+                                  entry.rank,
+                                )
+                                  ? badgeColor
+                                  : "#EEF2F7",
+                                borderColor: "#FFFFFF",
+                                borderWidth: 2,
+                              }}
+                            >
+                              <Text
+                                className="text-[11px] font-medium leading-[13px]"
+                                style={{
+                                  color: getCommunityLeaderboardBadgeTextColor(
+                                    entry.rank,
+                                  ),
+                                }}
+                              >
+                                {entry.rank}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View className="mr-2.5 h-10 w-10 items-center justify-center">
+                            <UserAvatar
+                              borderColor={getCommunityLeaderboardRingColor(
+                                entry.rank,
+                              )}
+                              borderWidth={
+                                isTopCommunityLeaderboardRank(entry.rank)
+                                  ? 2
+                                  : 1.5
+                              }
+                              containerStyle={{
+                                backgroundColor: "#FFFFFF",
+                              }}
+                              displayName={entry.name}
+                              size={38}
+                              textSize={12}
+                              uri={entry.avatarUri}
                             />
                           </View>
+
+                          <View className="flex-1 pr-2">
+                            <Text
+                              className="text-[12px] font-medium leading-[14px] text-[#2B2233]"
+                              numberOfLines={1}
+                            >
+                              {entry.name}
+                            </Text>
+                            <Text
+                              className="text-[10px] font-normal leading-[12px] text-[#9A93A5]"
+                              numberOfLines={1}
+                            >
+                              {entry.subtitle}
+                            </Text>
+                          </View>
+
+                          <View className="flex-row items-center rounded-full bg-[#FFF0F5] px-2.5 py-1.5">
+                            <SymbolView
+                              name={{
+                                ios: "star.fill",
+                                android: "star",
+                                web: "star",
+                              }}
+                              size={10}
+                              tintColor="#FF5F87"
+                            />
+                            <Text className="ml-1 text-[10px] font-medium leading-[13px] text-[#2B2233]">
+                              {entry.points}
+                            </Text>
+                          </View>
                         </View>
-
-                        <View
-                          className="absolute bottom-0 right-0 h-6 w-6 items-center justify-center rounded-full border-[2px] border-white"
-                          style={{
-                            backgroundColor:
-                              communityRankBadgeColors[
-                                Math.min(
-                                  index,
-                                  communityRankBadgeColors.length - 1,
-                                )
-                              ],
-                          }}
-                        >
-                          <Text className="text-[13px] font-black text-white">
-                            {index + 1}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View className="flex-1 pr-3">
-                        <Text className="text-[15px] font-extrabold text-[#1F2940]">
-                          {entry.name}
-                        </Text>
-                        <Text className="mt-0.5 text-[12px] leading-4 text-[#8F8290]">
-                          {entry.subtitle}
-                        </Text>
-                      </View>
-
-                      <View className="flex-row items-center rounded-full border border-[#F4DCE5] bg-white px-3 py-1.5">
-                        <SymbolView
-                          name={{
-                            ios: "star.fill",
-                            android: "star",
-                            web: "star",
-                          }}
-                          size={11}
-                          tintColor="#FF5F87"
-                        />
-                        <Text className="ml-1 text-[12px] font-extrabold text-[#1F2940]">
-                          {entry.points}
-                        </Text>
-                      </View>
+                      );
+                    })
+                  ) : (
+                    <View className="items-center rounded-[24px] border border-[#F3E7ED] bg-[#FFF8FB] px-4 py-5">
+                      {communityLeaderboardStatus === "loading" ? (
+                        <ActivityIndicator color="#FF5F87" />
+                      ) : null}
+                      <Text className="mt-3 text-center text-[12px] font-semibold text-[#1F2940]">
+                        {activeCommunityBoard.summaryLabel}
+                      </Text>
+                      <Text className="mt-1 text-center text-[10px] leading-[15px] text-[#8F8290]">
+                        {activeCommunityBoard.summaryNote}
+                      </Text>
                     </View>
-                  ))}
+                  )}
                 </View>
               </View>
             </View>
 
-            <Pressable className="border-t border-[#F3E7ED] px-4 py-3">
+            <Pressable
+              className="rounded-[20px] border border-[#F3E7ED] bg-white px-4 py-3"
+              onPress={handleOpenCommunityLeaderboard}
+              style={communityRowShadowStyle}
+            >
               <View className="flex-row items-center justify-center">
                 <SymbolView
                   name={{
@@ -3263,7 +3729,7 @@ export default function HomeScreen() {
                   size={13}
                   tintColor="#FF5F87"
                 />
-                <Text className="ml-1.5 text-[13px] font-bold text-[#FF5F87]">
+                <Text className="ml-1.5 text-[11px] font-semibold text-[#FF5F87]">
                   Xem bảng xếp hạng đầy đủ
                 </Text>
               </View>

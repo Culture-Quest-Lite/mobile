@@ -94,8 +94,11 @@ const MIN_MAP_DELTA = 0.0032;
 const DEFAULT_MAP_DELTA = 0.0065;
 const MAX_MAP_DELTA = 0.045;
 const MAP_LOAD_TIMEOUT_MS = 6000;
-const SUCCESS_RING_COLORS = ["#4ADE80", "#22C55E", "#16A34A"] as const;
 const SUCCESS_PRIMARY_BUTTON_COLORS = LOGIN_GRADIENT_COLORS;
+const SUCCESS_PRAISE_CARD_COLORS = [
+  "rgba(255, 226, 240, 0.95)",
+  "rgba(255, 236, 226, 0.95)",
+] as const;
 const SOFT_SURFACE = "#FFF9FD";
 const SOFT_SURFACE_ELEVATED = "#FFF5FA";
 const SOFT_SURFACE_OVERLAY = "rgba(255, 247, 251, 0.94)";
@@ -107,11 +110,9 @@ const SUCCESS_CARD_LABEL = "#B888A1";
 const SUCCESS_CARD_VALUE = "#2B2233";
 const SUCCESS_TITLE_COLOR = "#EB489B";
 const SUCCESS_SUBTITLE_COLOR = "#6F657A";
-const SUCCESS_SECONDARY_BUTTON_BACKGROUND = "rgba(255, 245, 250, 0.92)";
-const SUCCESS_SECONDARY_BUTTON_BORDER = "rgba(235, 72, 155, 0.16)";
 const SUCCESS_CHECK_ICON_COLOR = "#22C55E";
-const SUCCESS_CHECK_ICON_BORDER = "rgba(255, 255, 255, 0.92)";
 const HOTSPOT_MARKER_LOGO = require("../../../../assets/images/logo3.png");
+const SUCCESS_ILLUSTRATION = require("../../../../assets/images/success.png");
 
 function isAlwaysReadyHotspot(hotspot: HotspotDetail) {
   return hotspot.checkinMode === "always-ready";
@@ -226,10 +227,27 @@ function formatDistance(distanceMeters: number | null) {
   return `${(distanceMeters / 1000).toFixed(1)}km`;
 }
 
-function formatCheckInTimestamp(value: string) {
-  const date = new Date(value);
+// API trả timestamp không kèm timezone (LocalDateTime của server) nên nếu parse
+// thẳng thì giờ hiển thị lệch với đồng hồ máy. Coi chuỗi thiếu timezone là UTC
+// rồi để Date tự đổi về giờ local của thiết bị.
+function parseApiTimestamp(value: string) {
+  const normalized = value.trim().replace(" ", "T");
 
-  if (Number.isNaN(date.getTime())) {
+  if (!normalized) {
+    return null;
+  }
+
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+  const date = new Date(hasTimezone ? normalized : `${normalized}Z`);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatCheckInTimestamp(value: Date | number | string) {
+  const date =
+    typeof value === "string" ? parseApiTimestamp(value) : new Date(value);
+
+  if (!date || Number.isNaN(date.getTime())) {
     return null;
   }
 
@@ -872,30 +890,19 @@ function VerificationMapPreview({
 
 function SuccessRing() {
   return (
-    <View className="items-center justify-center" style={{ height: 156 }}>
-      <LinearGradient
-        colors={SUCCESS_RING_COLORS}
-        end={{ x: 1, y: 1 }}
-        start={{ x: 0, y: 0 }}
-        className="h-[112px] w-[112px] items-center justify-center rounded-full"
+    <View className="items-center justify-center" style={{ height: 124 }}>
+      <View
+        className="items-center justify-center overflow-hidden rounded-full"
+        style={{ height: 124, width: 124 }}
       >
-        <View
-          className="h-[72px] w-[72px] items-center justify-center rounded-full border-[5px]"
-          style={{ borderColor: SUCCESS_CHECK_ICON_BORDER }}
-        >
-          <SymbolView
-            name={
-              {
-                ios: "checkmark",
-                android: "check",
-                web: "check",
-              } as SymbolName
-            }
-            size={36}
-            tintColor="#FFFFFF"
-          />
-        </View>
-      </LinearGradient>
+        <Image
+          source={SUCCESS_ILLUSTRATION}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={220}
+          style={{ height: 124, width: 124 }}
+        />
+      </View>
     </View>
   );
 }
@@ -934,6 +941,10 @@ export function HotspotGpsCheckinOverlay({
   const [isExistingCheckIn, setIsExistingCheckIn] = useState(false);
   const [checkInError, setCheckInError] = useState<string | null>(null);
   const [checkInResult, setCheckInResult] = useState<CheckInResponse | null>(
+    null,
+  );
+  // Giờ check-in lấy theo đồng hồ thiết bị ngay khi API trả thành công.
+  const [checkInDeviceTime, setCheckInDeviceTime] = useState<number | null>(
     null,
   );
   const storiesHref =
@@ -1131,6 +1142,7 @@ export function HotspotGpsCheckinOverlay({
 
       setIsExistingCheckIn(false);
       setCheckInResult(nextCheckInResult);
+      setCheckInDeviceTime(Date.now());
       onSuccess();
       setCheckinStage("success");
       void prefetchUnlockedStories();
@@ -1191,14 +1203,7 @@ export function HotspotGpsCheckinOverlay({
     : (checkInResult?.totalPointEarned ?? null);
   const checkInMetaLabel = isExistingCheckIn
     ? "Hệ thống xác nhận bạn đã check-in hotspot này trước đó."
-    : checkInResult
-      ? [
-          `Progress #${checkInResult.userProgressId}`,
-          `Hotspot #${checkInResult.hotspotId}`,
-        ]
-          .filter(Boolean)
-          .join(" · ")
-      : null;
+    : null;
   const isSuccessStage = checkinStage === "success";
   const verifyButtonColors = verificationCopy.primaryDisabled
     ? VERIFY_BUTTON_DISABLED_COLORS
@@ -1238,9 +1243,9 @@ export function HotspotGpsCheckinOverlay({
           },
           {
             icon: {
-              ios: "sparkles",
-              android: "auto_awesome",
-              web: "auto_awesome",
+              ios: "star.fill",
+              android: "star",
+              web: "star",
             } as SymbolName,
             iconBackground: "#FFC93C",
             label: "Tổng XP",
@@ -1267,31 +1272,17 @@ export function HotspotGpsCheckinOverlay({
       ? [
           {
             icon: {
-              ios: "clock.fill",
-              android: "schedule",
-              web: "schedule",
+              ios: "calendar",
+              android: "calendar_month",
+              web: "calendar_month",
             } as SymbolName,
             iconBackground: SUCCESS_CHECK_ICON_COLOR,
             label: "Check-in lúc",
             trailing: "✓",
             value:
-              formatCheckInTimestamp(checkInResult.firstVisitedAt) ??
-              checkInResult.firstVisitedAt,
-          },
-        ]
-      : []),
-    ...(checkInResult
-      ? [
-          {
-            icon: {
-              ios: "mappin.and.ellipse",
-              android: "place",
-              web: "place",
-            } as SymbolName,
-            iconBackground: SUCCESS_CHECK_ICON_COLOR,
-            label: "Tọa độ ghi nhận",
-            trailing: "✓",
-            value: `${checkInResult.latitude.toFixed(6)}, ${checkInResult.longitude.toFixed(6)}`,
+              formatCheckInTimestamp(
+                checkInDeviceTime ?? checkInResult.firstVisitedAt,
+              ) ?? checkInResult.firstVisitedAt,
           },
         ]
       : []),
@@ -1359,9 +1350,9 @@ export function HotspotGpsCheckinOverlay({
             <ScrollView
               className="flex-1"
               contentContainerStyle={{
-                paddingBottom: insets.bottom + 20,
+                paddingBottom: insets.bottom + 12,
                 paddingHorizontal: 20,
-                paddingTop: 8,
+                paddingTop: 4,
               }}
               showsVerticalScrollIndicator={false}
             >
@@ -1384,27 +1375,35 @@ export function HotspotGpsCheckinOverlay({
                 />
               </Pressable>
 
-              <View className="mt-4 items-center">
+              <View className="items-center">
                 <SuccessRing />
 
                 <Text
-                  className="mt-3 text-center text-[21px] font-semibold leading-7"
+                  className="mt-1 text-center text-[22px] font-extrabold leading-[26px]"
                   style={{ color: SUCCESS_TITLE_COLOR }}
                 >
                   {isExistingCheckIn
-                    ? "Bạn đã check-in\ntrước đó"
-                    : "Check-in thành\ncông!"}
+                    ? "Bạn đã check-in trước đó"
+                    : "Check-in thành công!"}
                 </Text>
                 <Text
-                  className="mt-2 text-[13px] font-medium"
+                  className="mt-1.5 text-center text-[12px] font-medium leading-[12px]"
                   style={{ color: SUCCESS_SUBTITLE_COLOR }}
+                >
+                  {isExistingCheckIn
+                    ? "Bạn đã ghé địa điểm này rồi.\nHẹn gặp lại bạn ở những điểm đến tiếp theo!"
+                    : "Cảm ơn bạn đã khám phá địa điểm này.\nHẹn gặp lại bạn ở những điểm đến tiếp theo!"}
+                </Text>
+                <Text
+                  className="mt-1 text-center text-[13px] font-semibold leading-[15px]"
+                  style={{ color: SUCCESS_TITLE_COLOR }}
                 >
                   {hotspot.title}
                 </Text>
               </View>
 
               <View
-                className="mt-8 rounded-[28px] border px-4 py-4"
+                className="mt-3 rounded-[24px] border px-4 py-3"
                 style={[
                   panelShadowStyle,
                   {
@@ -1421,29 +1420,29 @@ export function HotspotGpsCheckinOverlay({
                     className={
                       index === successRows.length - 1
                         ? "flex-row items-center"
-                        : "mb-3 flex-row items-center"
+                        : "mb-1.5 flex-row items-center"
                     }
                   >
                     <View
-                      className="h-11 w-11 items-center justify-center rounded-full"
+                      className="h-8 w-8 items-center justify-center rounded-full"
                       style={{ backgroundColor: item.iconBackground }}
                     >
                       <SymbolView
                         name={item.icon}
-                        size={18}
+                        size={15}
                         tintColor="#FFFFFF"
                       />
                     </View>
 
                     <View className="ml-3 flex-1">
                       <Text
-                        className="text-[11px] font-medium uppercase tracking-[0.8px]"
+                        className="text-[12px] font-medium uppercase leading-[12px] tracking-[0.8px]"
                         style={{ color: SUCCESS_CARD_LABEL }}
                       >
                         {item.label}
                       </Text>
                       <Text
-                        className="mt-0.5 text-[15px] leading-5"
+                        className="mt-0.5 text-[11px] font-normal leading-[12px]"
                         style={{ color: SUCCESS_CARD_VALUE }}
                       >
                         {item.value}
@@ -1466,67 +1465,120 @@ export function HotspotGpsCheckinOverlay({
                 ))}
               </View>
 
-              {isStoryAvailable ? (
-                <Pressable
-                  className="mt-8 overflow-hidden rounded-full"
-                  onPress={() => router.push(storiesHref)}
-                  style={buttonShadowStyle}
+              <LinearGradient
+                colors={SUCCESS_PRAISE_CARD_COLORS}
+                end={{ x: 1, y: 1 }}
+                start={{ x: 0, y: 0 }}
+                className="mt-2.5 flex-row items-center rounded-[20px] px-3.5 py-2.5"
+              >
+                <View
+                  className="h-9 w-9 items-center justify-center rounded-full"
+                  style={{ backgroundColor: SUCCESS_TITLE_COLOR }}
                 >
-                  <LinearGradient
-                    colors={SUCCESS_PRIMARY_BUTTON_COLORS}
-                    end={{ x: 1, y: 0.5 }}
-                    locations={[0, 0.58, 1]}
-                    start={{ x: 0, y: 0.5 }}
-                    className="flex-row items-center justify-center px-5 py-4"
+                  <SymbolView
+                    name={
+                      {
+                        ios: "rosette",
+                        android: "workspace_premium",
+                        web: "workspace_premium",
+                      } as SymbolName
+                    }
+                    size={18}
+                    tintColor="#FFFFFF"
+                  />
+                </View>
+
+                <View className="ml-3 flex-1">
+                  <Text
+                    className="text-[13px] font-bold leading-[16px]"
+                    style={{ color: SUCCESS_TITLE_COLOR }}
                   >
-                    <SymbolView
-                      name={
-                        {
-                          ios: "speaker.wave.2.fill",
-                          android: "volume_up",
-                          web: "volume_up",
-                        } as SymbolName
-                      }
-                      size={16}
-                      tintColor="#FFFFFF"
-                    />
-                    <Text className="ml-2 text-[15px] font-medium text-white">
-                      Xem story hotspot
-                    </Text>
-                  </LinearGradient>
-                </Pressable>
-              ) : null}
+                    Bạn thật tuyệt vời!
+                  </Text>
+                  <Text
+                    className="text-[11px] font-medium leading-[14px]"
+                    style={{ color: SUCCESS_SUBTITLE_COLOR }}
+                  >
+                    Hành trình khám phá của bạn ngày càng thú vị hơn đấy!
+                  </Text>
+                </View>
+
+                <SymbolView
+                  name={
+                    {
+                      ios: "heart.fill",
+                      android: "favorite",
+                      web: "favorite",
+                    } as SymbolName
+                  }
+                  size={20}
+                  tintColor={SUCCESS_TITLE_COLOR}
+                />
+              </LinearGradient>
 
               {isStoryAvailable && isStoryPrefetching ? (
-                <View className="mt-4 items-center">
-                  <ActivityIndicator color="#FFFFFF" size="small" />
+                <View className="mt-2 items-center">
+                  <ActivityIndicator color={SUCCESS_TITLE_COLOR} size="small" />
                 </View>
               ) : null}
 
               {isStoryAvailable && storyPrefetchError ? (
-                <Text className="mt-4 text-center text-[13px] text-[#D97706]">
+                <Text className="mt-2 text-center text-[12px] leading-[15px] text-[#D97706]">
                   {storyPrefetchError}
                 </Text>
               ) : null}
 
               {checkInMetaLabel ? (
-                <Text className="mt-4 text-center text-[13px] text-[#8E869A]">
+                <Text className="mt-2 text-center text-[11px] leading-[14px] text-[#8E869A]">
                   {checkInMetaLabel}
                 </Text>
               ) : null}
 
               <Pressable
-                className="mt-5 items-center rounded-full border px-5 py-4"
+                className="mt-3 overflow-hidden rounded-full"
                 onPress={onClose}
-                style={{
-                  backgroundColor: SUCCESS_SECONDARY_BUTTON_BACKGROUND,
-                  borderColor: SUCCESS_SECONDARY_BUTTON_BORDER,
-                }}
+                style={buttonShadowStyle}
               >
-                <Text className="text-[15px] font-medium text-[#6F657A]">
-                  Tiếp tục khám phá
-                </Text>
+                <LinearGradient
+                  colors={SUCCESS_PRIMARY_BUTTON_COLORS}
+                  end={{ x: 1, y: 0.5 }}
+                  locations={[0, 0.58, 1]}
+                  start={{ x: 0, y: 0.5 }}
+                  className="flex-row items-center justify-center px-5 py-3.5"
+                >
+                  <Text className="text-[15px] font-bold text-white">
+                    Tiếp tục khám phá
+                  </Text>
+                  <View className="absolute right-4">
+                    <SymbolView
+                      name={
+                        {
+                          ios: "chevron.right",
+                          android: "chevron_right",
+                          web: "chevron_right",
+                        } as SymbolName
+                      }
+                      size={16}
+                      tintColor="#FFFFFF"
+                    />
+                  </View>
+                </LinearGradient>
               </Pressable>
+
+              {isStoryAvailable ? (
+                <Pressable
+                  className="mt-2 items-center py-1"
+                  hitSlop={8}
+                  onPress={() => router.push(storiesHref)}
+                >
+                  <Text
+                    className="text-[13px] font-semibold leading-[16px]"
+                    style={{ color: SUCCESS_TITLE_COLOR }}
+                  >
+                    Xem story hotspot
+                  </Text>
+                </Pressable>
+              ) : null}
             </ScrollView>
           ) : (
             <ScrollView

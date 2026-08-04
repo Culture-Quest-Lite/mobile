@@ -7,6 +7,7 @@ import { isPublishedHotspotStatus } from "./hotspot-status";
 export type NearbyHotspotTagDto = {
   createdAt: string;
   hotspotCount: number | null;
+  imageUrl?: string | null;
   tagId: number;
   tagName: string;
   tagStatus: string;
@@ -27,6 +28,7 @@ export type NearbyHotspotMediaDto = {
 
 export type NearbyHotspotStoryTagDto = {
   createdAt: string;
+  imageUrl?: string | null;
   tagId: number;
   tagName: string;
   tagStatus: string;
@@ -47,7 +49,9 @@ export type NearbyHotspotStoryDto = {
 
 export type NearbyHotspotDto = {
   address: string;
+  averageRating: number | null;
   closingTime: string;
+  totalReviews: number | null;
   createByUserId: number | null;
   createdAt: string;
   description: string;
@@ -107,6 +111,10 @@ function readString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+function readNullableString(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
 function readNullableBoolean(value: unknown) {
   if (typeof value === "boolean") {
     return value;
@@ -129,6 +137,7 @@ function parseTag(value: unknown): NearbyHotspotTagDto | null {
   return {
     createdAt: readString(value.createdAt),
     hotspotCount: readNumber(value.hotspotCount),
+    imageUrl: readNullableString(value.imageUrl)?.trim() || null,
     tagId,
     tagName: readString(value.tagName),
     tagStatus: readString(value.tagStatus),
@@ -173,6 +182,7 @@ function parseStoryTag(value: unknown): NearbyHotspotStoryTagDto | null {
 
   return {
     createdAt: readString(value.createdAt),
+    imageUrl: readNullableString(value.imageUrl)?.trim() || null,
     tagId,
     tagName: readString(value.tagName),
     tagStatus: readString(value.tagStatus),
@@ -192,7 +202,8 @@ function parseStory(value: unknown): NearbyHotspotStoryDto | null {
   }
 
   return {
-    audioScript: readString(value.audioScript) || readString(value.audio_script),
+    audioScript:
+      readString(value.audioScript) || readString(value.audio_script),
     content: readString(value.content),
     distanceToNext: readNumber(value.distanceToNext),
     medias: Array.isArray(value.medias)
@@ -227,7 +238,11 @@ function parseNearbyHotspot(value: unknown): NearbyHotspotDto | null {
 
   return {
     address: readString(value.address),
+    averageRating: readNumber(value.averageRating),
     closingTime: readString(value.closingTime),
+    totalReviews: readNumber(
+      value.totalReviews ?? value.totalReview ?? value.total_reviews,
+    ),
     createByUserId: readNumber(value.createByUserId),
     createdAt: readString(value.createdAt),
     description: readString(value.description),

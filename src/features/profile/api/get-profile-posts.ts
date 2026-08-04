@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 
 import { PublicEnv, buildApiUrl } from "@/constants/env";
+import { parseSharedPost } from "@/lib/shared-post";
 
 import type {
   ProfilePost,
@@ -195,7 +196,7 @@ function parsePost(value: unknown): ProfilePost | null {
     likeCount: readNullableNumber(value.likeCount),
     pointRemaining: readNumber(value.pointRemaining),
     shareCount: readNullableNumber(value.shareCount),
-    sharedPost: isNullableString(value.sharedPost) ? value.sharedPost : null,
+    sharedPost: parseSharedPost(value.sharedPost),
   };
 }
 

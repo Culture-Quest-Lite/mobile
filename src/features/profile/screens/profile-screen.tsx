@@ -1,10 +1,19 @@
 import { SymbolView } from "@/components/ui/symbol-view";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
-import { type ComponentProps, useCallback, useRef, useState } from "react";
+import {
+  type ComponentProps,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -16,26 +25,55 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
-import { useAuthSession } from "@/features/auth/hooks/use-auth-session";
+import {
+  getValidAccessToken,
+  useAuthSession,
+} from "@/features/auth/hooks/use-auth-session";
 import {
   cacheCommunityPost,
   type CommunityFeedMediaItem,
   type CommunityFeedPost,
+  updateCachedCommunityPost,
 } from "@/features/community/data/community-post-cache";
-import { getCachedHotspotDetail } from "@/features/home/data/hotspot-detail-cache";
-import { getHotspotHref, type HotspotDetail } from "@/features/home/data/hotspots";
+import { likePost } from "@/features/home/api/like-post";
+import { getHotspotById } from "@/features/home/api/get-hotspot-by-id";
+import {
+  addLikedPostId,
+  removeLikedPostId,
+  useLikedPostIds,
+} from "@/features/home/data/liked-post-store";
+import {
+  getApiHotspotRouteSlug,
+  getHotspotHref,
+} from "@/features/home/data/hotspots";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import type { RouteItem } from "@/lib/demo-data";
 import {
   getPostVisibilityIcon,
   getPostVisibilityLabel,
+  normalizePostVisibilityValue,
 } from "@/lib/post-visibility";
+import type { SharedPostSummary } from "@/lib/shared-post";
+import { getRouteById } from "@/features/route/api/route-api";
 import { LevelProgressCard } from "../components/level-progress-card";
 import { useProfile } from "../hooks/use-profile";
+import {
+  cacheProfilePost,
+  updateCachedProfilePost,
+} from "../data/profile-post-cache";
 import type { ProfilePost, ProfilePostStatus } from "../types";
 
-type Tab = "posts" | "pending-posts" | "routes" | "liked-hotspots";
+type Tab = "posts" | "pending-posts" | "routes";
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
+type ResolvedProfileHotspotPreview = {
+  hotspotId: number;
+  hotspotName: string;
+  imageUri: string | null;
+};
+type ResolvedProfileRoutePreview = {
+  routeId: number;
+  routeName: string;
+};
 
 const cardShadow = {
   shadowColor: "rgba(28, 45, 80, 0.10)",
@@ -46,7 +84,6 @@ const cardShadow = {
 } as const;
 
 const heroGradientColors = ["#20476B", "#4F87B2", "#F7F8FC"] as const;
-const avatarFallbackColors = ["#EB489B", "#F58752"] as const;
 const guestHeroBannerImage = require("../../../../assets/images/tachnen5.png");
 const levelBadgeLogo = require("../../../../assets/images/logo3.png");
 const guestScreenGradientColors = ["#FFF1F8", "#FFE8F3", "#FFF9FC"] as const;
@@ -91,7 +128,7 @@ const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
   },
   {
     key: "pending-posts",
-    label: "Chờ duyệt",
+    label: "Riêng tư & chờ duyệt",
     icon: {
       ios: "lock",
       android: "lock",
@@ -103,14 +140,7 @@ const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
     label: "Tuyến đường",
     icon: { ios: "map", android: "route", web: "route" },
   },
-  {
-    key: "liked-hotspots",
-    label: "Hotspot đã thích",
-    icon: { ios: "heart", android: "favorite_border", web: "favorite_border" },
-  },
 ];
-const fallbackPostImageUri =
-  "https://i.pinimg.com/1200x/6d/cd/14/6dcd140b80b210ac445a0eddfc40784a.jpg";
 const fallbackPostAuthorName = "Minh Anh";
 const fallbackPostTimestamp = "02/07/2026";
 const postMenuSections: {
@@ -296,6 +326,22 @@ function formatCompactCount(value?: number | null) {
   return `${formattedValue >= 10 ? formattedValue.toFixed(0) : formattedValue.toFixed(1)}k`;
 }
 
+function replaceProfilePostLikeState(
+  post: ProfilePost,
+  options: {
+    isLiked: boolean;
+    likeCount: number;
+  },
+): ProfilePost {
+  const normalizedLikeCount = Math.max(0, Math.round(options.likeCount));
+
+  return {
+    ...post,
+    isLiked: options.isLiked,
+    likeCount: normalizedLikeCount,
+  };
+}
+
 function getProfileAvatarPalette(seed: string) {
   const paletteIndex =
     Array.from(seed).reduce((total, char) => total + char.charCodeAt(0), 0) %
@@ -373,31 +419,6 @@ function getProfilePostStatusTone(value?: string | null) {
   }
 }
 
-function resolvePostMediaUris(post: ProfilePost) {
-  const mediaUris = post.medias
-    .filter((media) => {
-      const trimmedUrl = media.url.trim();
-      const normalizedType = media.type.trim().toUpperCase();
-      const normalizedMime = media.mimeType.trim().toLowerCase();
-
-      return (
-        trimmedUrl &&
-        (normalizedType === "IMAGE" || normalizedMime.startsWith("image/"))
-      );
-    })
-    .map((media) => media.url.trim());
-
-  if (mediaUris.length > 0) {
-    return Array.from(new Set(mediaUris));
-  }
-
-  if (post.image?.trim()) {
-    return [post.image.trim()];
-  }
-
-  return [fallbackPostImageUri];
-}
-
 function buildProfileCommunityMediaItems(
   post: ProfilePost,
 ): CommunityFeedMediaItem[] {
@@ -418,6 +439,143 @@ function buildProfileCommunityMediaItems(
         uri: media.url.trim(),
       },
     }));
+}
+
+function buildProfilePostMediaItems(post: ProfilePost): CommunityFeedMediaItem[] {
+  const mediaItems = buildProfileCommunityMediaItems(post);
+
+  if (mediaItems.length > 0) {
+    return mediaItems;
+  }
+
+  if (post.image?.trim()) {
+    return [
+      {
+        key: `${post.id}-legacy-image`,
+        source: {
+          uri: post.image.trim(),
+        },
+      },
+    ];
+  }
+
+  return [];
+}
+
+function formatProfileTagLabel(tag: string) {
+  const normalizedTag = tag.trim().replace(/^#/, "").replace(/\s+/g, "_");
+
+  return normalizedTag ? `#${normalizedTag}` : null;
+}
+
+function stripTrailingProfileHashtagBlock(content: string) {
+  const normalizedContent = content.trim();
+
+  if (!normalizedContent) {
+    return normalizedContent;
+  }
+
+  const lines = normalizedContent
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd());
+  let lastMeaningfulLineIndex = lines.length - 1;
+
+  while (
+    lastMeaningfulLineIndex >= 0 &&
+    lines[lastMeaningfulLineIndex]?.trim() === ""
+  ) {
+    lastMeaningfulLineIndex -= 1;
+  }
+
+  if (lastMeaningfulLineIndex < 0) {
+    return "";
+  }
+
+  const trailingLine = lines[lastMeaningfulLineIndex]?.trim() ?? "";
+  const hashtagLinePattern =
+    /^(#[\p{L}\p{N}_-]+)(\s+#[\p{L}\p{N}_-]+)*$/u;
+
+  if (!hashtagLinePattern.test(trailingLine)) {
+    return normalizedContent;
+  }
+
+  let previousMeaningfulLineIndex = lastMeaningfulLineIndex - 1;
+
+  while (
+    previousMeaningfulLineIndex >= 0 &&
+    lines[previousMeaningfulLineIndex]?.trim() === ""
+  ) {
+    previousMeaningfulLineIndex -= 1;
+  }
+
+  if (previousMeaningfulLineIndex < 0) {
+    return "";
+  }
+
+  return lines.slice(0, previousMeaningfulLineIndex + 1).join("\n").trimEnd();
+}
+
+function buildProfileRouteLabel(
+  routeIds: number[],
+  resolvedRoutes: Record<number, ResolvedProfileRoutePreview>,
+) {
+  const validRouteIds = routeIds.filter(
+    (routeId) => Number.isInteger(routeId) && routeId > 0,
+  );
+
+  if (validRouteIds.length === 0) {
+    return null;
+  }
+
+  const primaryRouteId = validRouteIds[0] ?? null;
+  const primaryRouteName =
+    primaryRouteId === null
+      ? null
+      : resolvedRoutes[primaryRouteId]?.routeName?.trim() || null;
+
+  if (validRouteIds.length === 1) {
+    return primaryRouteName ?? "Đang tải tuyến đường...";
+  }
+
+  return `${primaryRouteName ?? `${validRouteIds.length} tuyến đường được gắn`} +${validRouteIds.length - 1}`;
+}
+
+function buildProfileHotspotSubtitle(
+  hotspotIds: number[],
+  resolvedHotspots: Record<number, ResolvedProfileHotspotPreview>,
+) {
+  const validHotspotIds = hotspotIds.filter(
+    (hotspotId) => Number.isInteger(hotspotId) && hotspotId > 0,
+  );
+
+  if (validHotspotIds.length === 0) {
+    return null;
+  }
+
+  const hotspotNames = validHotspotIds
+    .map((hotspotId) => resolvedHotspots[hotspotId]?.hotspotName?.trim() || null)
+    .filter((hotspotName): hotspotName is string => Boolean(hotspotName));
+
+  if (validHotspotIds.length === 1) {
+    return hotspotNames[0] ?? "Đang tải địa điểm...";
+  }
+
+  if (hotspotNames.length >= 2) {
+    return hotspotNames.length === 2
+      ? `${hotspotNames[0]}, ${hotspotNames[1]}`
+      : `${hotspotNames[0]}, ${hotspotNames[1]} và ${validHotspotIds.length - 2} địa điểm khác`;
+  }
+
+  return `${validHotspotIds.length} địa điểm được gắn`;
+}
+
+function buildProfileHotspotImageUris(
+  hotspotIds: number[],
+  resolvedHotspots: Record<number, ResolvedProfileHotspotPreview>,
+) {
+  return hotspotIds
+    .map((hotspotId) => resolvedHotspots[hotspotId]?.imageUri ?? null)
+    .filter((imageUri): imageUri is string => Boolean(imageUri));
 }
 
 function mapProfilePostToCommunityFeedPost(
@@ -444,7 +602,8 @@ function mapProfilePostToCommunityFeedPost(
     author,
     avatarColors: getProfileAvatarPalette(`${author}-${post.userId}`),
     badge: "Hồ sơ",
-    caption: post.text.trim() || "Bài viết mới từ hồ sơ cá nhân.",
+    caption:
+      stripTrailingProfileHashtagBlock(post.text) || "Bài viết mới từ hồ sơ cá nhân.",
     comments: formatCompactCount(post.commentCount),
     hotScore: "0",
     image: mediaItems[0]?.source ?? null,
@@ -468,6 +627,7 @@ function mapProfilePostToCommunityFeedPost(
     canLike: true,
     canOpenProfile: false,
     commentCountValue: post.commentCount,
+    createdAt: post.createdAt,
     hotspotIds: post.hotspotIds,
     isLiked: post.isLiked === true,
     likeCountValue: post.likeCount,
@@ -475,7 +635,9 @@ function mapProfilePostToCommunityFeedPost(
     postNumericId: Number.isInteger(parsedPostId) ? parsedPostId : null,
     replies: formatCompactCount(post.replyCount),
     replyCountValue: post.replyCount ?? 0,
+    routeIds: post.routeIds,
     shareCountValue: post.shareCount,
+    status: post.status,
     visibility: post.visibility,
   };
 }
@@ -483,9 +645,11 @@ function mapProfilePostToCommunityFeedPost(
 export default function ProfileScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
+  const likedPostsAccountKey = authSession.isAuthenticated
+    ? authSession.username?.trim() || authSession.displayName.trim() || null
+    : null;
   const hasFocusedProfileRef = useRef(false);
   const {
-    likedHotspots,
     profile,
     posts,
     userRoutes,
@@ -494,21 +658,226 @@ export default function ProfileScreen() {
     reloadProfile,
   } = useProfile();
   const [tab, setTab] = useState<Tab>("posts");
+  const [likingPostIds, setLikingPostIds] = useState<number[]>([]);
+  const [resolvedPostHotspots, setResolvedPostHotspots] = useState<
+    Record<number, ResolvedProfileHotspotPreview>
+  >({});
+  const [resolvedPostRoutes, setResolvedPostRoutes] = useState<
+    Record<number, ResolvedProfileRoutePreview>
+  >({});
+  const persistedLikedPostIds = useLikedPostIds(likedPostsAccountKey);
   const insets = useSafeAreaInsets();
   const { gutter, safeWidth } = useScreenLayout({ maxContentWidth: 640 });
   const heroHeight = Math.max(Math.min(safeWidth * 0.88, 320), 280);
   const avatarSize = 126;
   const profileOverlap = avatarSize * 0.52;
+  const approvedPosts = posts.filter(
+    (post) =>
+      normalizeProfilePostStatus(post.status) === "APPROVED" &&
+      normalizePostVisibilityValue(post.visibility) !== "PRIVATE",
+  );
+  // Tab ổ khóa gom bài chờ duyệt và mọi bài riêng tư (kể cả bài chia sẻ lại).
+  const lockedPosts = posts.filter(
+    (post) =>
+      normalizeProfilePostStatus(post.status) === "PENDING" ||
+      (normalizeProfilePostStatus(post.status) === "APPROVED" &&
+        normalizePostVisibilityValue(post.visibility) === "PRIVATE"),
+  );
+  const visiblePosts = tab === "pending-posts" ? lockedPosts : approvedPosts;
+  const visibleHotspotIdsToResolve = useMemo(() => {
+    const hotspotIds = new Set<number>();
+
+    for (const post of visiblePosts) {
+      for (const hotspotId of post.hotspotIds ?? []) {
+        if (
+          Number.isInteger(hotspotId) &&
+          hotspotId > 0 &&
+          !resolvedPostHotspots[hotspotId]
+        ) {
+          hotspotIds.add(hotspotId);
+        }
+      }
+    }
+
+    return Array.from(hotspotIds);
+  }, [visiblePosts, resolvedPostHotspots]);
+  const visibleRouteIdsToResolve = useMemo(() => {
+    const routeIds = new Set<number>();
+
+    for (const post of visiblePosts) {
+      for (const routeId of post.routeIds ?? []) {
+        if (
+          Number.isInteger(routeId) &&
+          routeId > 0 &&
+          !resolvedPostRoutes[routeId]
+        ) {
+          routeIds.add(routeId);
+        }
+      }
+    }
+
+    return Array.from(routeIds);
+  }, [visiblePosts, resolvedPostRoutes]);
+  const persistedLikedPostIdsSet = useMemo(
+    () => new Set(persistedLikedPostIds),
+    [persistedLikedPostIds],
+  );
   const handleOpenAuth = () => {
     router.push("/login?entry=home" as Href);
   };
   const handleBackToHome = () => {
     router.replace("/home");
   };
-  const handleOpenLikedHotspot = (slug: string) => {
-    const cachedHotspotId = getCachedHotspotDetail({ slug })?.hotspotId ?? null;
-    router.push(getHotspotHref(slug, cachedHotspotId));
-  };
+  const handleOpenPostHotspot = useCallback(
+    (hotspotId: number) => {
+      router.push(getHotspotHref(getApiHotspotRouteSlug(hotspotId), hotspotId));
+    },
+    [router],
+  );
+  const handleOpenPostRoute = useCallback(
+    (routeId: number) => {
+      router.push(`/route/${routeId}` as Href);
+    },
+    [router],
+  );
+  const handleLikePost = useCallback(
+    async (post: ProfilePost) => {
+      const postNumericId = Number.parseInt(post.id, 10);
+      const normalizedStatus = normalizeProfilePostStatus(post.status);
+      const normalizedVisibility = post.visibility.trim().toUpperCase();
+
+      if (
+        !Number.isInteger(postNumericId) ||
+        postNumericId <= 0 ||
+        normalizedStatus !== "APPROVED" ||
+        normalizedVisibility !== "PUBLIC"
+      ) {
+        return;
+      }
+
+      if (likingPostIds.includes(postNumericId)) {
+        return;
+      }
+
+      if (!authSession.isAuthenticated) {
+        Alert.alert(
+          "Cần đăng nhập",
+          "Bạn cần đăng nhập để thả tim bài viết trong hồ sơ.",
+        );
+        return;
+      }
+
+      const accessToken = await getValidAccessToken();
+
+      if (!accessToken) {
+        Alert.alert(
+          "Phiên đăng nhập hết hạn",
+          "Vui lòng đăng nhập lại trước khi thả tim bài viết trong hồ sơ.",
+        );
+        return;
+      }
+
+      const currentIsLiked =
+        post.isLiked === true || persistedLikedPostIdsSet.has(postNumericId);
+      const currentLikeCount = Math.max(0, Math.round(post.likeCount ?? 0));
+      const optimisticIsLiked = !currentIsLiked;
+      const optimisticLikeCount = optimisticIsLiked
+        ? currentLikeCount + 1
+        : Math.max(0, currentLikeCount - 1);
+
+      setLikingPostIds((current) =>
+        current.includes(postNumericId) ? current : [...current, postNumericId],
+      );
+
+      const optimisticPost = replaceProfilePostLikeState(post, {
+        isLiked: optimisticIsLiked,
+        likeCount: optimisticLikeCount,
+      });
+      if (!updateCachedProfilePost(postNumericId, () => optimisticPost)) {
+        cacheProfilePost(optimisticPost);
+      }
+      updateCachedCommunityPost(postNumericId, (currentPost) => ({
+        ...currentPost,
+        isLiked: optimisticIsLiked,
+        likeCountValue: optimisticLikeCount,
+        likes: formatCompactCount(optimisticLikeCount),
+      }));
+
+      try {
+        const result = await likePost({
+          accessToken,
+          postId: postNumericId,
+          tokenType: authSession.tokenType,
+        });
+
+        const resolvedIsLiked = result.isLiked ?? optimisticIsLiked;
+        const resolvedLikeCount = result.likeCount ?? optimisticLikeCount;
+        const resolvedPost = replaceProfilePostLikeState(post, {
+          isLiked: resolvedIsLiked,
+          likeCount: resolvedLikeCount,
+        });
+
+        if (!updateCachedProfilePost(postNumericId, () => resolvedPost)) {
+          cacheProfilePost(resolvedPost);
+        }
+        updateCachedCommunityPost(postNumericId, (currentPost) => ({
+          ...currentPost,
+          isLiked: resolvedIsLiked,
+          likeCountValue: resolvedLikeCount,
+          likes: formatCompactCount(resolvedLikeCount),
+        }));
+
+        if (likedPostsAccountKey) {
+          if (resolvedIsLiked) {
+            addLikedPostId(likedPostsAccountKey, postNumericId);
+          } else {
+            removeLikedPostId(likedPostsAccountKey, postNumericId);
+          }
+        }
+      } catch (nextError) {
+        const revertedPost = replaceProfilePostLikeState(post, {
+          isLiked: currentIsLiked,
+          likeCount: currentLikeCount,
+        });
+
+        if (!updateCachedProfilePost(postNumericId, () => revertedPost)) {
+          cacheProfilePost(revertedPost);
+        }
+        updateCachedCommunityPost(postNumericId, (currentPost) => ({
+          ...currentPost,
+          isLiked: currentIsLiked,
+          likeCountValue: currentLikeCount,
+          likes: formatCompactCount(currentLikeCount),
+        }));
+
+        if (likedPostsAccountKey) {
+          if (currentIsLiked) {
+            addLikedPostId(likedPostsAccountKey, postNumericId);
+          } else {
+            removeLikedPostId(likedPostsAccountKey, postNumericId);
+          }
+        }
+
+        Alert.alert(
+          "Không thể thả tim",
+          nextError instanceof Error
+            ? nextError.message
+            : "Đã có lỗi xảy ra khi thả tim bài viết trong hồ sơ.",
+        );
+      } finally {
+        setLikingPostIds((current) =>
+          current.filter((id) => id !== postNumericId),
+        );
+      }
+    },
+    [
+      authSession.isAuthenticated,
+      authSession.tokenType,
+      likedPostsAccountKey,
+      likingPostIds,
+      persistedLikedPostIdsSet,
+    ],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -524,6 +893,140 @@ export default function ProfileScreen() {
       void reloadProfile();
     }, [authSession.isAuthenticated, reloadProfile]),
   );
+
+  useEffect(() => {
+    if (!authSession.isAuthenticated || visibleHotspotIdsToResolve.length === 0) {
+      return;
+    }
+
+    let isActive = true;
+
+    async function loadHotspotPreviews() {
+      try {
+        const accessToken = await getValidAccessToken();
+        const results = await Promise.allSettled(
+          visibleHotspotIdsToResolve.map((hotspotId) =>
+            getHotspotById({
+              accessToken,
+              hotspotId,
+              tokenType: authSession.tokenType,
+            }),
+          ),
+        );
+
+        if (!isActive) {
+          return;
+        }
+
+        setResolvedPostHotspots((current) => {
+          const next = { ...current };
+
+          for (const result of results) {
+            if (result.status !== "fulfilled") {
+              continue;
+            }
+
+            const hotspotName = result.value.hotspotName.trim();
+
+            if (!hotspotName) {
+              continue;
+            }
+
+            const imageUri =
+              result.value.medias
+                .map((media) => media.fileUrl.trim())
+                .find(Boolean) ?? null;
+
+            next[result.value.hotspotId] = {
+              hotspotId: result.value.hotspotId,
+              hotspotName,
+              imageUri,
+            };
+          }
+
+          return next;
+        });
+      } catch (nextError) {
+        console.warn("[profile] load hotspot previews failed", {
+          error: nextError instanceof Error ? nextError.message : nextError,
+        });
+      }
+    }
+
+    void loadHotspotPreviews();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    visibleHotspotIdsToResolve,
+  ]);
+
+  useEffect(() => {
+    if (!authSession.isAuthenticated || visibleRouteIdsToResolve.length === 0) {
+      return;
+    }
+
+    let isActive = true;
+
+    async function loadRoutePreviews() {
+      try {
+        const accessToken = await getValidAccessToken();
+        const results = await Promise.allSettled(
+          visibleRouteIdsToResolve.map((routeId) =>
+            getRouteById({
+              accessToken,
+              routeId,
+              tokenType: authSession.tokenType,
+            }),
+          ),
+        );
+
+        if (!isActive) {
+          return;
+        }
+
+        setResolvedPostRoutes((current) => {
+          const next = { ...current };
+
+          for (const result of results) {
+            if (result.status !== "fulfilled") {
+              continue;
+            }
+
+            const routeName = result.value.routeName.trim();
+
+            if (!routeName) {
+              continue;
+            }
+
+            next[result.value.routeId] = {
+              routeId: result.value.routeId,
+              routeName,
+            };
+          }
+
+          return next;
+        });
+      } catch (nextError) {
+        console.warn("[profile] load route previews failed", {
+          error: nextError instanceof Error ? nextError.message : nextError,
+        });
+      }
+    }
+
+    void loadRoutePreviews();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    visibleRouteIdsToResolve,
+  ]);
 
   if (!authSession.isAuthenticated) {
     return (
@@ -604,15 +1107,10 @@ export default function ProfileScreen() {
       : profile.isPremium
         ? "PRO"
         : null;
-  const approvedPosts = posts.filter(
-    (post) => normalizeProfilePostStatus(post.status) === "APPROVED",
-  );
-  const pendingPosts = posts.filter(
-    (post) => normalizeProfilePostStatus(post.status) === "PENDING",
-  );
-  const visiblePosts = tab === "pending-posts" ? pendingPosts : approvedPosts;
   const postSectionTitle =
-    tab === "pending-posts" ? "Bài viết chờ duyệt" : "Bài viết đã duyệt";
+    tab === "pending-posts"
+      ? "Bài viết riêng tư & chờ duyệt"
+      : "Bài viết đã duyệt";
 
   return (
     <SafeAreaView className="flex-1 bg-[#F7F8FC]" edges={["left", "right"]}>
@@ -709,7 +1207,6 @@ export default function ProfileScreen() {
               badgeLabel={badgeLabel}
               name={resolvedDisplayName}
               size={avatarSize}
-              username={resolvedProfileUsername}
             />
 
             <View className="min-w-0 flex-1 pt-8">
@@ -775,42 +1272,47 @@ export default function ProfileScreen() {
               ) : (
                 <View>
                   <ProfilePostsSectionHeader title={postSectionTitle} />
-                  {visiblePosts.map((post, index) => (
-                    <PostCard
-                      key={post.id}
-                      isLast={index === visiblePosts.length - 1}
-                      pageGutter={gutter}
-                      post={post}
-                      profileAvatar={profile.avatar}
-                      profileName={resolvedDisplayName}
-                      profileUsername={resolvedProfileUsername}
-                    />
-                  ))}
+                  {visiblePosts.map((post, index) => {
+                    const postNumericId = Number.parseInt(post.id, 10);
+                    const isLiked =
+                      normalizeProfilePostStatus(post.status) === "APPROVED" &&
+                      post.visibility.trim().toUpperCase() === "PUBLIC" &&
+                      (post.isLiked === true ||
+                        (Number.isInteger(postNumericId) &&
+                          persistedLikedPostIdsSet.has(postNumericId)));
+                    const isLiking =
+                      Number.isInteger(postNumericId) &&
+                      likingPostIds.includes(postNumericId);
+
+                    return (
+                      <PostCard
+                        key={post.id}
+                        isLast={index === visiblePosts.length - 1}
+                        isLiked={isLiked}
+                        isLiking={isLiking}
+                        onLikePost={handleLikePost}
+                        onOpenHotspot={handleOpenPostHotspot}
+                        onOpenRoute={handleOpenPostRoute}
+                        post={post}
+                        profileAvatar={profile.avatar}
+                        profileName={resolvedDisplayName}
+                        profileUsername={resolvedProfileUsername}
+                        resolvedHotspots={resolvedPostHotspots}
+                        resolvedRoutes={resolvedPostRoutes}
+                      />
+                    );
+                  })}
                 </View>
               )
-            ) : tab === "routes" ? (
-              userRoutes.length === 0 ? (
-                <EmptyRoutes />
-              ) : (
-                <View className="gap-2">
-                  {userRoutes.map((route) => (
-                    <RouteCard
-                      key={route.id}
-                      route={route}
-                      onPress={() => router.push(`/route/${route.id}` as Href)}
-                    />
-                  ))}
-                </View>
-              )
-            ) : likedHotspots.length === 0 ? (
-              <EmptyLikedHotspots />
+            ) : userRoutes.length === 0 ? (
+              <EmptyRoutes />
             ) : (
               <View className="gap-2">
-                {likedHotspots.map((hotspot) => (
-                  <LikedHotspotCard
-                    key={hotspot.slug}
-                    hotspot={hotspot}
-                    onPress={() => handleOpenLikedHotspot(hotspot.slug)}
+                {userRoutes.map((route) => (
+                  <RouteCard
+                    key={route.id}
+                    route={route}
+                    onPress={() => router.push(`/route/${route.id}` as Href)}
                   />
                 ))}
               </View>
@@ -1137,62 +1639,21 @@ function AccountAvatar({
   badgeLabel,
   name,
   size,
-  username,
 }: {
   avatar: string | null;
   badgeLabel: string | null;
   name: string;
   size: number;
-  username: string;
 }) {
-  const [hasError, setHasError] = useState(!avatar);
-  const initials = getProfileInitials(name, username);
-
   return (
     <View className="relative">
-      <View
-        className="overflow-hidden rounded-full bg-white"
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          borderWidth: 4,
-          borderColor: "#F7F8FC",
-        }}
-      >
-        {hasError || !avatar ? (
-          <LinearGradient
-            colors={avatarFallbackColors}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={{
-              width: "100%",
-              height: "100%",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text
-              className="font-black text-white"
-              style={{ fontSize: Math.max(22, size * 0.28) }}
-            >
-              {initials}
-            </Text>
-          </LinearGradient>
-        ) : (
-          <Image
-            source={avatar}
-            contentFit="cover"
-            transition={180}
-            cachePolicy="memory-disk"
-            onError={() => setHasError(true)}
-            style={{
-              width: "100%",
-              height: "100%",
-            }}
-          />
-        )}
-      </View>
+      <UserAvatar
+        borderColor="#F7F8FC"
+        borderWidth={4}
+        displayName={name}
+        size={size}
+        uri={avatar}
+      />
 
       {badgeLabel ? (
         <LinearGradient
@@ -1251,137 +1712,422 @@ function InlineNotice({ message }: { message: string }) {
 function PostAuthorAvatar({
   avatar,
   name,
-  username,
 }: {
   avatar: string | null;
   name: string;
-  username: string;
 }) {
-  const [hasError, setHasError] = useState(!avatar);
-  const initials = getProfileInitials(name, username);
-
   return (
-    <View className="h-11 w-11 overflow-hidden rounded-full bg-[#F3F4F6]">
-      {hasError || !avatar ? (
-        <LinearGradient
-          colors={avatarFallbackColors}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={{
-            width: "100%",
-            height: "100%",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text className="text-[16px] font-black text-white">{initials}</Text>
-        </LinearGradient>
-      ) : (
-        <Image
-          source={avatar}
-          contentFit="cover"
-          transition={180}
-          cachePolicy="memory-disk"
-          onError={() => setHasError(true)}
-          style={{ width: "100%", height: "100%" }}
-        />
-      )}
-    </View>
+    <UserAvatar
+      displayName={name}
+      size={42}
+      uri={avatar}
+    />
   );
 }
 
 function PostAction({
   active = false,
+  disabled = false,
   icon,
+  label,
   onPress,
-  tintColor = "#6B7280",
-  value,
+  tintColor = "#F15C9B",
 }: {
   active?: boolean;
+  disabled?: boolean;
   icon: SymbolName;
+  label: number | string;
   onPress?: () => void;
   tintColor?: string;
-  value?: number;
 }) {
-  const resolvedTintColor = active ? tintColor : "#6B7280";
-  const ActionContainer = onPress ? Pressable : View;
-
   return (
-    <ActionContainer
-      className="flex-row items-center gap-1.5"
+    <Pressable
+      className="flex-row items-center rounded-full pr-2"
+      disabled={disabled || !onPress}
+      hitSlop={8}
       onPress={onPress}
-      style={
-        onPress
-          ? ({ pressed }: { pressed: boolean }) => ({
-              opacity: pressed ? 0.72 : 1,
-            })
-          : undefined
-      }
+      style={({ pressed }) => ({
+        opacity: disabled ? 0.5 : pressed ? 0.72 : 1,
+      })}
     >
-      <SymbolView name={icon} size={17} tintColor={resolvedTintColor} />
-      {typeof value === "number" ? (
-        <Text
-          className="text-[14px] font-medium"
-          style={{ color: active ? resolvedTintColor : "#4B5563" }}
-        >
-          {value}
-        </Text>
-      ) : null}
-    </ActionContainer>
+      <SymbolView
+        name={icon}
+        size={18}
+        tintColor={active ? tintColor : "#7A7380"}
+      />
+      <Text
+        className="ml-1.5 text-[13px] text-[#706775]"
+        style={{ includeFontPadding: false, lineHeight: 12 }}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
-function PostMediaGallery({ sources }: { sources: string[] }) {
-  const visibleSources = sources.slice(0, 4);
-  const hiddenCount = Math.max(sources.length - visibleSources.length, 0);
+function PostMediaGallery({ items }: { items: CommunityFeedMediaItem[] }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [galleryWidth, setGalleryWidth] = useState(240);
+  const safeActiveIndex = Math.max(0, Math.min(items.length - 1, activeIndex));
+  const mediaHeight = Math.min(Math.max(galleryWidth * 0.74, 188), 278);
 
-  if (visibleSources.length === 1) {
-    return (
-      <View className="overflow-hidden bg-[#F3F4F6]">
-        <Image
-          source={visibleSources[0]}
-          contentFit="cover"
-          transition={180}
-          cachePolicy="memory-disk"
-          style={{
-            aspectRatio: 1.08,
-            width: "100%",
-          }}
-        />
-      </View>
-    );
+  if (items.length === 0) {
+    return null;
   }
 
   return (
-    <View className="flex-row gap-0">
-      {visibleSources.map((source, index) => {
-        const isLastVisibleItem = index === visibleSources.length - 1;
+    <View
+      className="overflow-hidden rounded-[18px] bg-[#EEF2F7]"
+      onLayout={(event) => {
+        const nextWidth = event.nativeEvent.layout.width;
 
-        return (
-          <View
-            key={`${source}-${index}`}
-            className="min-w-0 flex-1 overflow-hidden bg-[#F3F4F6]"
-            style={{ height: 238 }}
+        if (Math.abs(nextWidth - galleryWidth) > 1) {
+          setGalleryWidth(nextWidth);
+        }
+      }}
+    >
+      {items.length === 1 ? (
+        <Image
+          source={items[0].source}
+          contentFit="cover"
+          transition={180}
+          cachePolicy="memory-disk"
+          style={{ height: mediaHeight, width: "100%" }}
+        />
+      ) : (
+        <>
+          <ScrollView
+            decelerationRate="fast"
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(event) => {
+              const layoutWidth =
+                galleryWidth ||
+                event.nativeEvent.layoutMeasurement.width ||
+                1;
+              const nextIndex = Math.round(
+                event.nativeEvent.contentOffset.x / layoutWidth,
+              );
+
+              setActiveIndex(Math.max(0, Math.min(items.length - 1, nextIndex)));
+            }}
           >
-            <Image
-              source={source}
-              contentFit="cover"
-              transition={180}
-              cachePolicy="memory-disk"
-              style={{ height: "100%", width: "100%" }}
-            />
+            {items.map((item) => (
+              <Image
+                key={item.key}
+                source={item.source}
+                contentFit="cover"
+                transition={180}
+                cachePolicy="memory-disk"
+                style={{ height: mediaHeight, width: galleryWidth }}
+              />
+            ))}
+          </ScrollView>
 
-            {hiddenCount > 0 && isLastVisibleItem ? (
-              <View className="absolute inset-0 items-center justify-center bg-black/35">
-                <Text className="text-[28px] font-black text-white">
-                  +{hiddenCount}
-                </Text>
-              </View>
-            ) : null}
+          <View className="absolute right-3 top-3 rounded-full bg-black/35 px-2.5 py-1">
+            <Text
+              className="text-[11px] font-semibold text-white"
+              style={{ includeFontPadding: false, lineHeight: 12 }}
+            >
+              {`${safeActiveIndex + 1}/${items.length}`}
+            </Text>
           </View>
-        );
-      })}
+
+          <View className="absolute bottom-3 left-0 right-0 flex-row items-center justify-center">
+            {items.map((item, index) => (
+              <View
+                key={`${item.key}-dot`}
+                className={`mx-1 rounded-full ${index === safeActiveIndex ? "bg-[#F15C9B]" : "bg-white/88"}`}
+                style={{
+                  height: index === safeActiveIndex ? 7 : 6,
+                  width: index === safeActiveIndex ? 7 : 6,
+                }}
+              />
+            ))}
+          </View>
+        </>
+      )}
     </View>
+  );
+}
+
+function ExpandablePostCaption({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const normalizedText = text.trim();
+  const maxLength = 150;
+  const shouldTruncate = normalizedText.length > maxLength;
+  const collapsedText = shouldTruncate
+    ? `${normalizedText.slice(0, maxLength).trimEnd()}...`
+    : normalizedText;
+
+  return (
+    <Text
+      className="text-[13px] text-[#2B232D]"
+      style={{ includeFontPadding: false, lineHeight: 12 }}
+    >
+      {expanded || !shouldTruncate ? normalizedText : collapsedText}
+      {shouldTruncate ? (
+        <Text
+          className="font-medium text-[#D4578F]"
+          onPress={() => {
+            setExpanded((current) => !current);
+          }}
+        >
+          {expanded ? " Rút gọn" : " Xem thêm"}
+        </Text>
+      ) : null}
+    </Text>
+  );
+}
+
+function SharedPostCard({
+  sharedPost,
+  withTopSpacing,
+}: {
+  sharedPost: SharedPostSummary;
+  withTopSpacing: boolean;
+}) {
+  const author =
+    sharedPost.displayName.trim() ||
+    sharedPost.username.trim() ||
+    fallbackPostAuthorName;
+  const content = stripTrailingProfileHashtagBlock(sharedPost.content);
+  const mediaItems: CommunityFeedMediaItem[] = sharedPost.medias
+    .filter(
+      (media) =>
+        media.type.trim().toUpperCase() === "IMAGE" && Boolean(media.url.trim()),
+    )
+    .map((media) => ({
+      key: `shared-${sharedPost.postId}-media-${media.id}`,
+      source: {
+        uri: media.url,
+      },
+    }));
+  const tagLabels = sharedPost.tags
+    .map((tag) => formatProfileTagLabel(tag.name))
+    .filter((tagLabel): tagLabel is string => Boolean(tagLabel));
+
+  return (
+    <View
+      className="overflow-hidden rounded-[20px] border border-[#E9EAF0] bg-[#FBFBFD] px-3 pb-3 pt-2.5"
+      style={{ marginTop: withTopSpacing ? 10 : 4 }}
+    >
+      <View className="flex-row items-center">
+        <UserAvatar displayName={author} size={34} uri={null} />
+
+        <View className="ml-2.5 flex-1 pr-2">
+          <Text
+            className="text-[14px] font-bold text-[#2F2432]"
+            numberOfLines={1}
+            style={{ includeFontPadding: false, lineHeight: 14 }}
+          >
+            {author}
+          </Text>
+
+          <View className="mt-0.5 flex-row items-center gap-1">
+            <Text
+              className="text-[12px] text-[#8A7D86]"
+              style={{ includeFontPadding: false, lineHeight: 11 }}
+            >
+              {formatPostTimestamp(sharedPost.createdAt)}
+            </Text>
+            <SymbolView
+              name={getPostVisibilityIcon(sharedPost.visibility)}
+              size={10}
+              tintColor="#8A7D86"
+            />
+          </View>
+        </View>
+      </View>
+
+      {content ? (
+        <View className="pt-2">
+          <ExpandablePostCaption text={content} />
+        </View>
+      ) : null}
+
+      {mediaItems.length > 0 ? (
+        <View className="mt-2">
+          <PostMediaGallery items={mediaItems} />
+        </View>
+      ) : null}
+
+      {tagLabels.length > 0 ? (
+        <View className="mt-1 flex-row flex-wrap items-center">
+          {tagLabels.map((tagLabel) => (
+            <PostTagChip
+              key={`shared-${sharedPost.postId}-${tagLabel}`}
+              label={tagLabel}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function PostTagChip({ label }: { label: string }) {
+  return (
+    <View className="mr-2 mt-1.5 rounded-full bg-[#F4F1F4] px-3 py-0.5">
+      <Text
+        className="text-[12px] text-[#7D7680]"
+        style={{ includeFontPadding: false, lineHeight: 12 }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function PostRouteCard({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress?: () => void;
+}) {
+  return (
+    <Pressable
+      className="rounded-[16px] bg-[#FFF4F8] px-2.5 py-1.5"
+      disabled={!onPress}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        opacity: onPress && pressed ? 0.72 : 1,
+      })}
+    >
+      <View className="flex-row items-center">
+        <View className="mr-2 h-8 w-8 items-center justify-center rounded-full bg-white/80">
+          <SymbolView
+            name={{
+              ios: "point.topleft.down.curvedto.point.bottomright.up",
+              android: "alt_route",
+              web: "alt_route",
+            }}
+            size={15}
+            tintColor="#F2608E"
+          />
+        </View>
+        <View className="flex-1 pr-2">
+          <Text
+            className="text-[12px] font-semibold text-[#F2608E]"
+            style={{ includeFontPadding: false, lineHeight: 11 }}
+          >
+            Route
+          </Text>
+          <Text
+            className="text-[13px] font-medium text-[#4B414C]"
+            numberOfLines={2}
+            style={{ includeFontPadding: false, lineHeight: 12 }}
+          >
+            {label}
+          </Text>
+        </View>
+        <SymbolView
+          name={{
+            ios: "chevron.right",
+            android: "chevron_right",
+            web: "chevron_right",
+          }}
+          size={16}
+          tintColor="#8A7D86"
+        />
+      </View>
+    </Pressable>
+  );
+}
+
+function PostHotspotCard({
+  count,
+  imageUris,
+  onPress,
+  subtitle,
+}: {
+  count: number;
+  imageUris: string[];
+  onPress?: () => void;
+  subtitle: string;
+}) {
+  const previewImageUris = imageUris.slice(0, 3);
+  const remainingCount = Math.max(imageUris.length - previewImageUris.length, 0);
+
+  return (
+    <Pressable
+      className="rounded-[16px] bg-[#F2FAFB] px-2.5 py-1.5"
+      disabled={!onPress}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        opacity: onPress && pressed ? 0.72 : 1,
+      })}
+    >
+      <View className="flex-row items-start">
+        <View className="mr-2 h-8 w-8 items-center justify-center rounded-full bg-white/80">
+          <SymbolView
+            name={{
+              ios: "mappin.and.ellipse",
+              android: "location_on",
+              web: "location_on",
+            }}
+            size={15}
+            tintColor="#18A7B4"
+          />
+        </View>
+        <View className="flex-1 pr-2">
+          <Text
+            className="text-[12px] font-semibold text-[#18A7B4]"
+            style={{ includeFontPadding: false, lineHeight: 11 }}
+          >
+            {`${count} hotspot`}
+          </Text>
+          <Text
+            className="text-[13px] text-[#6D6671]"
+            numberOfLines={2}
+            style={{ includeFontPadding: false, lineHeight: 11 }}
+          >
+            {subtitle}
+          </Text>
+          {previewImageUris.length > 0 ? (
+            <View className="mt-1 flex-row items-center">
+              {previewImageUris.map((imageUri, index) => (
+                <View
+                  key={`${imageUri}-${index}`}
+                  className={index === 0 ? "h-6 w-6 overflow-hidden rounded-full border-2 border-white" : "-ml-2 h-6 w-6 overflow-hidden rounded-full border-2 border-white"}
+                >
+                  <Image
+                    source={{ uri: imageUri }}
+                    contentFit="cover"
+                    transition={180}
+                    cachePolicy="memory-disk"
+                    style={{ height: "100%", width: "100%" }}
+                  />
+                </View>
+              ))}
+              {remainingCount > 0 ? (
+                <View className="-ml-2 h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#E7EEF2]">
+                  <Text
+                    className="text-[11px] font-semibold text-[#55606C]"
+                    style={{ includeFontPadding: false, lineHeight: 11 }}
+                  >
+                    {`+${remainingCount}`}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+        <SymbolView
+          name={{
+            ios: "chevron.right",
+            android: "chevron_right",
+            web: "chevron_right",
+          }}
+          size={16}
+          tintColor="#8A7D86"
+        />
+      </View>
+    </Pressable>
   );
 }
 
@@ -1482,38 +2228,72 @@ function PostOptionsSheet({
 function PostCard({
   post,
   isLast,
-  pageGutter,
+  isLiked,
+  isLiking,
+  onLikePost,
+  onOpenHotspot,
+  onOpenRoute,
   profileAvatar,
   profileName,
   profileUsername,
+  resolvedHotspots,
+  resolvedRoutes,
 }: {
   post: ProfilePost;
   isLast: boolean;
-  pageGutter: number;
+  isLiked: boolean;
+  isLiking: boolean;
+  onLikePost: (post: ProfilePost) => void;
+  onOpenHotspot: (hotspotId: number) => void;
+  onOpenRoute: (routeId: number) => void;
   profileAvatar: string | null;
   profileName: string;
   profileUsername: string;
+  resolvedHotspots: Record<number, ResolvedProfileHotspotPreview>;
+  resolvedRoutes: Record<number, ResolvedProfileRoutePreview>;
 }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [isPostMenuVisible, setIsPostMenuVisible] = useState(false);
   const authorName =
     post.displayName.trim() || profileName.trim() || fallbackPostAuthorName;
-  const authorUsername = post.username.trim() || profileUsername.trim();
-  const postContent = post.text.trim() || "Chuyến đi hôm nay rất đáng nhớ.";
-  const postMediaSources = resolvePostMediaUris(post);
+  const sharedPost = post.sharedPost;
+  const postContent =
+    stripTrailingProfileHashtagBlock(post.text) ||
+    (sharedPost ? "" : "Chuyến đi hôm nay rất đáng nhớ.");
+  const mediaItems = buildProfilePostMediaItems(post);
   const visibilityIcon = getPostVisibilityIcon(post.visibility);
   const visibilityLabel = getPostVisibilityLabel(post.visibility);
   const statusLabel = getProfilePostStatusLabel(post.status);
   const statusTone = getProfilePostStatusTone(post.status);
   const normalizedStatus = normalizeProfilePostStatus(post.status);
   const normalizedVisibility = post.visibility.trim().toUpperCase();
-  const canHighlightLikeState =
+  const canInteractWithPost =
     normalizedStatus === "APPROVED" && normalizedVisibility === "PUBLIC";
-  const isLiked = canHighlightLikeState && post.isLiked === true;
   const likeCount = post.likeCount ?? 0;
   const commentCount = post.commentCount ?? 0;
   const shareCount = post.shareCount ?? 0;
+  const routeIds = post.routeIds.filter(
+    (routeId) => Number.isInteger(routeId) && routeId > 0,
+  );
+  const hotspotIds = post.hotspotIds.filter(
+    (hotspotId) => Number.isInteger(hotspotId) && hotspotId > 0,
+  );
+  const tagLabels = post.tags
+    .map((tag) => formatProfileTagLabel(tag.name))
+    .filter((tagLabel): tagLabel is string => Boolean(tagLabel));
+  const routeLabel = buildProfileRouteLabel(routeIds, resolvedRoutes);
+  const hotspotSubtitle = buildProfileHotspotSubtitle(
+    hotspotIds,
+    resolvedHotspots,
+  );
+  const hotspotImageUris = buildProfileHotspotImageUris(
+    hotspotIds,
+    resolvedHotspots,
+  );
+  const isPendingPost = normalizedStatus === "PENDING";
+  const statusBadgeLabel =
+    normalizedStatus === "PENDING" ? "Chờ duyệt" : statusLabel;
 
   function handleOpenComments() {
     const cachedPost = mapProfilePostToCommunityFeedPost(post, {
@@ -1533,46 +2313,101 @@ function PostCard({
   }
 
   return (
-    <View className={`px-3 py-3 ${isLast ? "" : "border-b border-[#DEE3EA]"}`}>
-      <View className="flex-row items-start justify-between gap-2">
-        <View className="min-w-0 flex-1 flex-row items-center gap-2.5">
+    <View
+      className={isLast ? "" : "mb-3"}
+      style={{
+        borderColor: "#F0E7ED",
+        borderWidth: 0.8,
+        borderRadius: 24,
+        backgroundColor: "#FFFFFF",
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 10,
+        shadowColor: "rgba(64, 34, 58, 0.08)",
+        shadowOpacity: 1,
+        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 10 },
+        elevation: 4,
+      }}
+    >
+      <View className="flex-row items-start">
+        <View className="min-w-0 flex-1 flex-row items-start">
           <PostAuthorAvatar
             avatar={profileAvatar}
             name={authorName}
-            username={authorUsername}
           />
 
-          <View className="min-w-0 flex-1 gap-0">
-            <Text
-              className="text-[17px] font-extrabold leading-5 text-[#202124]"
-              numberOfLines={1}
-            >
-              {authorName}
-            </Text>
+          <View className="ml-3 flex-1 pr-2">
+            <View className="flex-row items-center gap-2">
+              <Text
+                className="min-w-0 flex-1 text-[15px] font-bold text-[#2F2432]"
+                numberOfLines={1}
+                style={{ includeFontPadding: false, lineHeight: 12 }}
+              >
+                {authorName}
+              </Text>
+              {isPendingPost ? (
+                <View
+                  className="rounded-full border px-2 py-[2px]"
+                  style={{
+                    backgroundColor: statusTone.backgroundColor,
+                    borderColor: statusTone.borderColor,
+                  }}
+                >
+                  <Text
+                    className="text-[10px] font-semibold"
+                    style={{
+                      color: statusTone.textColor,
+                      includeFontPadding: false,
+                      lineHeight: 10,
+                    }}
+                  >
+                    {statusBadgeLabel}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
 
-            <View className="flex-row flex-wrap items-center gap-1.5">
-              <Text className="text-[12px] leading-[14px] text-[#6B7280]">
+            <View className="-mt-0.5 flex-row flex-wrap items-center gap-1">
+              <Text
+                className="text-[12px] text-[#8A7D86]"
+                style={{ includeFontPadding: false, lineHeight: 11 }}
+              >
                 {formatPostTimestamp(post.createdAt)}
               </Text>
-              <Text className="text-[12px] text-[#6B7280]">·</Text>
-              <SymbolView name={visibilityIcon} size={11} tintColor="#6B7280" />
-              <Text className="text-[12px] leading-[14px] text-[#6B7280]">
+              <Text
+                className="text-[12px] text-[#8A7D86]"
+                style={{ includeFontPadding: false, lineHeight: 11 }}
+              >
+                •
+              </Text>
+              <SymbolView name={visibilityIcon} size={10} tintColor="#8A7D86" />
+              <Text
+                className="text-[12px] text-[#8A7D86]"
+                style={{ includeFontPadding: false, lineHeight: 11 }}
+              >
                 {visibilityLabel}
               </Text>
-              <View
-                className="rounded-full border px-2 py-0.5"
-                style={{
-                  backgroundColor: statusTone.backgroundColor,
-                  borderColor: statusTone.borderColor,
-                }}
-              >
-                <Text
-                  className="text-[11px] font-extrabold"
-                  style={{ color: statusTone.textColor }}
+              {normalizedStatus !== "APPROVED" && !isPendingPost ? (
+                <View
+                  className="rounded-full border px-2 py-[2px]"
+                  style={{
+                    backgroundColor: statusTone.backgroundColor,
+                    borderColor: statusTone.borderColor,
+                  }}
                 >
-                  {statusLabel}
-                </Text>
-              </View>
+                  <Text
+                    className="text-[10px] font-semibold"
+                    style={{
+                      color: statusTone.textColor,
+                      includeFontPadding: false,
+                      lineHeight: 10,
+                    }}
+                  >
+                    {statusBadgeLabel}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </View>
         </View>
@@ -1584,27 +2419,74 @@ function PostCard({
           <SymbolView
             name={{ ios: "ellipsis", android: "more_horiz", web: "more_horiz" }}
             size={18}
-            tintColor="#7D7382"
+            tintColor="#554C56"
           />
         </Pressable>
       </View>
 
-      <Text
-        className="text-[15px] leading-[17px] text-[#202124]"
-        style={{ textAlign: "justify" }}
-      >
-        {postContent}
-      </Text>
+      <View className="pt-1.5">
+        {postContent ? <ExpandablePostCaption text={postContent} /> : null}
 
-      <View className="mt-1" style={{ marginHorizontal: -(pageGutter + 12) }}>
-        <PostMediaGallery sources={postMediaSources} />
+        {sharedPost ? (
+          <SharedPostCard
+            sharedPost={sharedPost}
+            withTopSpacing={Boolean(postContent)}
+          />
+        ) : null}
+
+        {tagLabels.length > 0 ? (
+          <View className="mt-1 flex-row flex-wrap items-center">
+            {tagLabels.map((tagLabel) => (
+              <PostTagChip key={`${post.id}-${tagLabel}`} label={tagLabel} />
+            ))}
+          </View>
+        ) : null}
+
+        {routeLabel ? (
+          <View className="mt-1.5">
+            <PostRouteCard
+              label={routeLabel}
+              onPress={
+                routeIds.length > 0
+                  ? () => {
+                      onOpenRoute(routeIds[0] ?? 0);
+                    }
+                  : undefined
+              }
+            />
+          </View>
+        ) : null}
+
+        {hotspotSubtitle ? (
+          <View className="mt-1.5">
+            <PostHotspotCard
+              count={hotspotIds.length}
+              imageUris={hotspotImageUris}
+              onPress={
+                hotspotIds.length > 0
+                  ? () => {
+                      onOpenHotspot(hotspotIds[0] ?? 0);
+                    }
+                  : undefined
+              }
+              subtitle={hotspotSubtitle}
+            />
+          </View>
+        ) : null}
       </View>
 
-      <View className="mt-2 flex-row items-center gap-5">
+      {mediaItems.length > 0 ? (
+        <View className="mt-2">
+          <PostMediaGallery items={mediaItems} />
+        </View>
+      ) : null}
+
+      <View className="mt-1.5 flex-row items-center">
         <PostAction
-          active={isLiked}
+          active={canInteractWithPost && isLiked}
+          disabled={!canInteractWithPost || isLiking}
           icon={
-            isLiked
+            canInteractWithPost && isLiked
               ? {
                   ios: "heart.fill",
                   android: "favorite",
@@ -1616,30 +2498,45 @@ function PostCard({
                   web: "favorite_border",
                 }
           }
-          tintColor="#F43F5E"
-          value={likeCount}
+          label={likeCount}
+          onPress={
+            canInteractWithPost
+              ? () => {
+                  onLikePost(post);
+                }
+              : undefined
+          }
         />
-        <PostAction
-          icon={{
-            ios: "bubble.left",
-            android: "chat_bubble_outline",
-            web: "chat_bubble_outline",
-          }}
-          onPress={handleOpenComments}
-          value={commentCount}
-        />
-        <PostAction
-          icon={{
-            ios: "arrowshape.turn.up.right",
-            android: "reply",
-            web: "reply",
-          }}
-          value={shareCount}
-        />
+        <View className="ml-4">
+          <PostAction
+            disabled={!canInteractWithPost}
+            icon={{
+              ios: "bubble.left",
+              android: "chat_bubble_outline",
+              web: "chat_bubble_outline",
+            }}
+            label={commentCount}
+            onPress={canInteractWithPost ? handleOpenComments : undefined}
+          />
+        </View>
+        <View className="ml-4">
+          <PostAction
+            icon={{
+              ios: "arrowshape.turn.up.right",
+              android: "share",
+              web: "share",
+            }}
+            label={shareCount > 0 ? shareCount : "Chia sẻ"}
+          />
+        </View>
+        <View className="flex-1" />
       </View>
 
       {post.reason ? (
-        <Text className="mt-3 text-[12px] font-semibold text-[#C24F3B]">
+        <Text
+          className="mt-2 text-[12px] font-semibold text-[#C24F3B]"
+          style={{ includeFontPadding: false, lineHeight: 12 }}
+        >
           Lý do: {post.reason}
         </Text>
       ) : null}
@@ -1691,54 +2588,6 @@ function RouteCard({
   );
 }
 
-function LikedHotspotCard({
-  hotspot,
-  onPress,
-}: {
-  hotspot: HotspotDetail;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      className="flex-row gap-3 rounded-2xl bg-white p-2.5"
-      style={cardShadow}
-    >
-      <Image
-        source={hotspot.imageUri}
-        contentFit="cover"
-        transition={180}
-        cachePolicy="memory-disk"
-        style={{ width: 74, height: 74, borderRadius: 14 }}
-      />
-      <View className="min-w-0 flex-1 justify-center">
-        <View className="flex-row items-start justify-between gap-2">
-          <Text
-            className="flex-1 text-[14px] font-semibold text-[#2B2233]"
-            numberOfLines={1}
-          >
-            {hotspot.title}
-          </Text>
-          <SymbolView
-            name={{ ios: "heart.fill", android: "favorite", web: "favorite" }}
-            size={14}
-            tintColor="#EB489B"
-          />
-        </View>
-        <Text className="mt-0.5 text-[11px] text-[#8E869A]">
-          {hotspot.category} · {hotspot.district}
-        </Text>
-        <Text className="mt-1 text-[11px] text-[#8E869A]">
-          {hotspot.distance} · {hotspot.reviews} reviews
-        </Text>
-        <Text className="mt-1 text-[11px] font-extrabold text-[#F58752]">
-          {hotspot.reward}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
-
 function ProfilePostsSectionHeader({ title }: { title: string }) {
   return (
     <View className="mb-3 px-1">
@@ -1761,7 +2610,7 @@ function EmptyPosts({ tab }: { tab: Extract<Tab, "posts" | "pending-posts"> }) {
       />
       <Text className="mt-2 text-[13px] text-[#8E869A]">
         {tab === "pending-posts"
-          ? "Bạn chưa có bài viết nào đang chờ duyệt"
+          ? "Bạn chưa có bài viết riêng tư hoặc đang chờ duyệt"
           : "Bạn chưa có bài viết nào đã được duyệt"}
       </Text>
     </View>
@@ -1783,21 +2632,3 @@ function EmptyRoutes() {
   );
 }
 
-function EmptyLikedHotspots() {
-  return (
-    <View className="items-center py-12">
-      <SymbolView
-        name={{
-          ios: "heart",
-          android: "favorite_border",
-          web: "favorite_border",
-        }}
-        size={30}
-        tintColor="#AA9FB0"
-      />
-      <Text className="mt-2 text-[13px] text-[#8E869A]">
-        Chưa có hotspot đã thích nào
-      </Text>
-    </View>
-  );
-}

@@ -2,24 +2,33 @@ import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
-import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+  type Href,
+} from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentProps,
 } from "react";
 import {
-  Alert,
   ActivityIndicator,
+  Alert,
+  Modal,
   Platform,
   Pressable,
   Text as RNText,
   ScrollView,
+  Share,
   View,
   useWindowDimensions,
+  type GestureResponderEvent,
 } from "react-native";
 import MapView, {
   Marker,
@@ -27,19 +36,13 @@ import MapView, {
   type Region,
 } from "react-native-maps";
 import Animated, {
-  Easing,
   Extrapolation,
-  ReduceMotion,
-  cancelAnimation,
   interpolate,
   runOnJS,
   useAnimatedReaction,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
-  withRepeat,
-  withTiming,
-  type SharedValue,
 } from "react-native-reanimated";
 import {
   SafeAreaView,
@@ -51,6 +54,10 @@ import {
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 import {
+  getRoutesByHotspot,
+  mapRouteToRouteItem,
+} from "@/features/route/api/route-api";
+import {
   addApiCheckin,
   addCheckin,
   mergeApiCheckins,
@@ -58,33 +65,36 @@ import {
   useCheckins,
 } from "@/lib/checkin-store";
 import { type RouteItem } from "@/lib/demo-data";
-import {
-  getRoutesByHotspot,
-  mapRouteToRouteItem,
-} from "@/features/route/api/route-api";
 import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
+import { getHotspotPosts, type HotspotPost } from "../api/get-hotspot-posts";
 import {
-  getHotspotPosts,
-  type HotspotPost,
-} from "../api/get-hotspot-posts";
-import { likePost } from "../api/like-post";
+  getHotspotReviews,
+  getReviewCreatedAtTime,
+  type HotspotReview,
+} from "../api/get-hotspot-reviews";
 import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
-import { HiddenStoryUnlockedContent } from "../components/hidden-story-unlocked-content";
+import { likePost } from "../api/like-post";
+import { likeReview } from "../api/like-review";
+import { deleteReview } from "../api/review-mutations";
+import {
+  HiddenStoryUnlockedContent,
+  hiddenStoryActionForegroundColor,
+  hiddenStoryActionGradientColors,
+} from "../components/hidden-story-unlocked-content";
 import { HotspotGpsCheckinOverlay } from "../components/hotspot-gps-checkin-overlay";
+import { ReviewDeleteDialog } from "../components/review-delete-dialog";
+import { ReviewMediaViewer } from "../components/review-media-viewer";
 import { avatarImageUri } from "../data/home-screen.mock";
 import { cacheHotspotDetail } from "../data/hotspot-detail-cache";
+import { cacheHotspotReviewForEdit } from "../data/hotspot-review-edit-cache";
+import { getCachedHotspotStories } from "../data/hotspot-story-cache";
+import { type HotspotDetail } from "../data/hotspots";
 import {
   addLikedPostId,
   removeLikedPostId,
   useLikedPostIds,
 } from "../data/liked-post-store";
-import {
-  getCachedHotspotStories,
-} from "../data/hotspot-story-cache";
-import {
-  type HotspotDetail,
-} from "../data/hotspots";
 import {
   resolveRouteIdParam,
   resolveSelectedHotspotId,
@@ -100,14 +110,16 @@ type PersonalExperienceMediaItem = {
 };
 type PersonalExperienceItem = {
   avatarUri: string;
+  createdAtTime: number;
   date: string;
   id: string;
   isLiked: boolean;
   isLikePending: boolean;
   likeCount: number;
   media: PersonalExperienceMediaItem[];
-  postId: number;
+  postId: number | null;
   rating: number;
+  review: HotspotReview | null;
   text: string;
   user: string;
 };
@@ -121,11 +133,7 @@ type PersonalExperienceComposerProps = {
   avatarUri: string;
   onPressCompose: () => void;
 };
-type RelatedRoutesSectionStatus =
-  | "idle"
-  | "loading"
-  | "ready"
-  | "empty";
+type RelatedRoutesSectionStatus = "idle" | "loading" | "ready" | "empty";
 
 const loginGradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const screenBackground = "#FFFFFF";
@@ -142,6 +150,8 @@ const mapLoadTimeoutMs = 6000;
 const recentReviewPreviewCount = 2;
 const hotspotPostsPageSize = 10;
 const hotspotPostsSort = ["createdAt,DESC"] as const;
+const hotspotReviewsPageSize = 20;
+const hiddenStoryStatusImage = require("../../../../assets/images/review_post.png");
 
 const heroShadowStyle = {
   shadowColor: "rgba(15, 23, 42, 0.20)",
@@ -191,9 +201,15 @@ const relatedRouteCardImageHeight = 136;
 const relatedRouteCardMinHeight = 172;
 const detailSheetHorizontalPadding = 23;
 const relatedRouteScrollInset = detailSheetHorizontalPadding;
-const reviewAuthorRowHorizontalOffset = -6;
 const reviewMediaGridGap = 6;
 const reviewCardBorderRadius = 14;
+const reviewMediaBorderRadius = 10;
+const reviewTextLineHeight = 16;
+// Tỉ lệ khung ảnh lấy theo mẫu Google review: 1 ảnh ngang, 2 ảnh gần vuông,
+// lưới 4 ảnh thì dẹt lại cho card gọn.
+const singleMediaAspectRatio = 16 / 9;
+const twoMediaAspectRatio = 6 / 5;
+const gridMediaAspectRatio = 16 / 9;
 const sectionEyebrowTextStyle = {
   color: "#7A6F67",
   lineHeight: 18,
@@ -270,9 +286,7 @@ function formatApiTimeWindow(start?: string | null, end?: string | null) {
   return formattedStart ?? formattedEnd;
 }
 
-function resolveRemoteMediaUris(
-  apiHotspot: NearbyHotspotDto,
-) {
+function resolveRemoteMediaUris(apiHotspot: NearbyHotspotDto) {
   const remoteMediaUris = [...apiHotspot.medias]
     .filter((media) => readMeaningfulApiText(media.fileUrl))
     .sort((left, right) => {
@@ -303,10 +317,7 @@ function formatEstimatedDurationLabel(
       ? Math.max(0, Math.round(maximumDuration))
       : null;
 
-  if (
-    resolvedMinimumDuration !== null &&
-    resolvedMaximumDuration !== null
-  ) {
+  if (resolvedMinimumDuration !== null && resolvedMaximumDuration !== null) {
     return resolvedMinimumDuration === resolvedMaximumDuration
       ? `${resolvedMinimumDuration} phút`
       : `${resolvedMinimumDuration} - ${resolvedMaximumDuration} phút`;
@@ -387,6 +398,17 @@ function buildHotspotFromApi({
     formatApiTimeWindow(apiHotspot.openingTime, apiHotspot.closingTime) ??
     formatApiTimeWindow(apiHotspot.startTime, apiHotspot.endTime) ??
     "";
+  const averageRating =
+    typeof apiHotspot.averageRating === "number" &&
+    Number.isFinite(apiHotspot.averageRating)
+      ? clampNumber(apiHotspot.averageRating, 0, 5)
+      : 0;
+  const reviewCount =
+    typeof apiHotspot.totalReviews === "number" &&
+    Number.isFinite(apiHotspot.totalReviews)
+      ? Math.max(0, Math.round(apiHotspot.totalReviews))
+      : 0;
+  const reviewCountLabel = new Intl.NumberFormat("vi-VN").format(reviewCount);
 
   return {
     hotspot: {
@@ -403,8 +425,8 @@ function buildHotspotFromApi({
       highlights: [],
       imageUri,
       overview,
-      rating: 0,
-      reviews: `${Math.max(0, Math.round(apiHotspot.point ?? 0))}`,
+      rating: averageRating,
+      reviews: reviewCountLabel,
       reward: `+${Math.max(0, Math.round(apiHotspot.xp ?? 0))}`,
       routePairing: "",
       scheduleLabel,
@@ -503,10 +525,6 @@ async function openHotspotDirections(params: {
 
 function clampReviewRatingValue(value: number) {
   return Number.isFinite(value) ? clampNumber(value, 0, 5) : 0;
-}
-
-function formatReviewRatingValue(value: number) {
-  return clampReviewRatingValue(value).toFixed(1);
 }
 
 function getRewardValue(reward: string) {
@@ -667,11 +685,16 @@ function getRouteBadgeColors(label: string) {
   return { backgroundColor: "rgba(255,255,255,0.9)", textColor: "#5E7486" };
 }
 
-
 function dedupeRouteItemsById(items: RouteItem[]) {
   return Array.from(
     new Map(items.map((item) => [item.id, item] as const)).values(),
   );
+}
+
+function parsePersonalExperienceTime(isoTimestamp?: string | null) {
+  const parsedTime = new Date(isoTimestamp ?? "").getTime();
+
+  return Number.isNaN(parsedTime) ? 0 : parsedTime;
 }
 
 function formatPersonalExperienceDate(isoTimestamp: string) {
@@ -705,7 +728,9 @@ function formatPersonalExperienceDate(isoTimestamp: string) {
     return `${elapsedDays} ngày trước`;
   }
 
-  return `${parsedDate.getDate().toString().padStart(2, "0")}/${(parsedDate.getMonth() + 1)
+  return `${parsedDate.getDate().toString().padStart(2, "0")}/${(
+    parsedDate.getMonth() + 1
+  )
     .toString()
     .padStart(2, "0")}/${parsedDate.getFullYear()}`;
 }
@@ -716,39 +741,39 @@ function buildApiPersonalExperienceItems(
   likingPostIds: number[],
 ): PersonalExperienceItem[] {
   return posts.map((post) => {
-    const resolvedMedia = (post.medias.length > 0
-      ? post.medias.map((media) => ({
-          duration:
-            media.type.trim().toUpperCase() === "VIDEO" ? "Video" : undefined,
-          type:
-            media.type.trim().toUpperCase() === "VIDEO"
-              ? ("video" as const)
-              : ("image" as const),
-          uri: media.url,
-        }))
-      : post.image
-        ? [
-            {
-              type: "image" as const,
-              uri: post.image,
-            },
-          ]
-        : []
+    const resolvedMedia = (
+      post.medias.length > 0
+        ? post.medias.map((media) => ({
+            duration:
+              media.type.trim().toUpperCase() === "VIDEO" ? "Video" : undefined,
+            type:
+              media.type.trim().toUpperCase() === "VIDEO"
+                ? ("video" as const)
+                : ("image" as const),
+            uri: media.url,
+          }))
+        : post.image
+          ? [
+              {
+                type: "image" as const,
+                uri: post.image,
+              },
+            ]
+          : []
     ).filter((media) => Boolean(readMeaningfulApiText(media.uri)));
 
     return {
       avatarUri: avatarImageUri,
+      createdAtTime: parsePersonalExperienceTime(post.createdAt),
       date: formatPersonalExperienceDate(post.createdAt ?? ""),
-      id: post.id,
-      isLiked:
-        post.isLiked === true ||
-        likedPostIds.includes(post.postId) ||
-        likingPostIds.includes(post.postId),
+      id: `post-${post.postId}`,
+      isLiked: post.isLiked === true || likedPostIds.includes(post.postId),
       isLikePending: likingPostIds.includes(post.postId),
       likeCount: Math.max(0, Math.round(post.likeCount ?? 0)),
       media: resolvedMedia,
       postId: post.postId,
       rating: 0,
+      review: null,
       text: post.text,
       user:
         readMeaningfulApiText(post.displayName) ??
@@ -758,10 +783,55 @@ function buildApiPersonalExperienceItems(
   });
 }
 
+function buildApiReviewPersonalExperienceItems(
+  reviews: HotspotReview[],
+  likingReviewIds: number[],
+): PersonalExperienceItem[] {
+  return reviews.map((review) => ({
+    avatarUri: readMeaningfulApiText(review.avatarUrl) ?? avatarImageUri,
+    createdAtTime: getReviewCreatedAtTime(review),
+    date: formatPersonalExperienceDate(review.createdAt),
+    id: `review-${review.reviewId}`,
+    isLiked: review.isLiked,
+    isLikePending: likingReviewIds.includes(review.reviewId),
+    likeCount: Math.max(0, Math.round(review.likeCount)),
+    media: review.medias.map((media) => ({
+      duration:
+        media.mediaType.trim().toUpperCase() === "VIDEO" ? "Video" : undefined,
+      type:
+        media.mediaType.trim().toUpperCase() === "VIDEO"
+          ? ("video" as const)
+          : ("image" as const),
+      uri: media.url,
+    })),
+    postId: null,
+    rating: clampReviewRatingValue(review.rating),
+    review,
+    text: readMeaningfulApiText(review.comment) ?? "",
+    user:
+      readMeaningfulApiText(review.displayName) ??
+      readMeaningfulApiText(review.username) ??
+      "Người dùng",
+  }));
+}
+
 function dedupePersonalExperienceItems(items: PersonalExperienceItem[]) {
   return Array.from(
     new Map(items.map((item) => [item.id, item] as const)).values(),
   );
+}
+
+/** Bài mới nhất luôn nằm trên cùng, không phụ thuộc thứ tự API trả về. */
+function sortPersonalExperienceItemsByNewest(items: PersonalExperienceItem[]) {
+  return [...items].sort((left, right) => {
+    const createdAtDelta = right.createdAtTime - left.createdAtTime;
+
+    if (createdAtDelta !== 0) {
+      return createdAtDelta;
+    }
+
+    return right.id.localeCompare(left.id, "en", { numeric: true });
+  });
 }
 
 function isApprovedPostStatus(value?: string | null) {
@@ -785,13 +855,22 @@ function HeroGalleryThumb({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress}>
+    <Pressable
+      accessibilityLabel={isActive ? "Ảnh đang hiển thị" : "Hiển thị ảnh này"}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isActive }}
+      hitSlop={4}
+      onPress={onPress}
+    >
       <View
-        className="overflow-hidden rounded-[24px]"
+        className="overflow-hidden"
         style={{
-          backgroundColor: "rgba(255,255,255,0.12)",
-          height: isActive ? 132 : 118,
-          width: isActive ? 104 : 92,
+          backgroundColor: "rgba(255,255,255,0.16)",
+          borderColor: isActive ? "#FFFFFF" : "rgba(255,255,255,0.55)",
+          borderRadius: 12,
+          borderWidth: isActive ? 2 : 1,
+          height: isActive ? 92 : 82,
+          width: isActive ? 72 : 64,
         }}
       >
         <Image
@@ -805,7 +884,7 @@ function HeroGalleryThumb({
           <View
             pointerEvents="none"
             style={{
-              backgroundColor: "rgba(3, 18, 28, 0.26)",
+              backgroundColor: "rgba(3, 18, 28, 0.18)",
               bottom: 0,
               left: 0,
               position: "absolute",
@@ -903,14 +982,14 @@ function SummaryStatsRow({ items }: { items: SummaryStatItem[] }) {
           ))}
         </View>
 
-        {items.map((item, index) => (
+        {items.map((item, index) =>
           index < items.length - 1 ? (
             <SummaryStatDivider
               key={`summary-stat-divider-${item.label}-${index}`}
               leftPercent={((index + 1) / items.length) * 100}
             />
-          ) : null
-        ))}
+          ) : null,
+        )}
       </View>
     </View>
   );
@@ -1021,96 +1100,6 @@ function getAtmosphereTagColors(label: string, index: number) {
   return atmosphereTagPalettes[index % atmosphereTagPalettes.length];
 }
 
-function HeroScrollHint({
-  bottomOffset,
-  scrollY,
-}: {
-  bottomOffset: number;
-  scrollY: SharedValue<number>;
-}) {
-  const arrowOffset = useSharedValue(0);
-
-  useEffect(() => {
-    arrowOffset.set(
-      withRepeat(
-        withTiming(10, {
-          duration: 900,
-          easing: Easing.inOut(Easing.quad),
-          reduceMotion: ReduceMotion.System,
-        }),
-        -1,
-        true,
-        undefined,
-        ReduceMotion.System,
-      ),
-    );
-
-    return () => {
-      cancelAnimation(arrowOffset);
-      arrowOffset.set(0);
-    };
-  }, [arrowOffset]);
-
-  const hintContainerStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      scrollY.value,
-      [0, 48, 110],
-      [1, 0.72, 0],
-      Extrapolation.CLAMP,
-    ),
-    transform: [
-      {
-        translateY: interpolate(
-          scrollY.value,
-          [0, 110],
-          [0, -18],
-          Extrapolation.CLAMP,
-        ),
-      },
-    ],
-  }));
-
-  const arrowAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: arrowOffset.get() }],
-  }));
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        hintContainerStyle,
-        {
-          alignItems: "center",
-          bottom: bottomOffset,
-          left: 20,
-          position: "absolute",
-          right: 20,
-          zIndex: 2,
-        },
-      ]}
-    >
-      <Animated.View style={arrowAnimatedStyle}>
-        <LinearGradient
-          colors={["rgba(255,255,255,0.28)", "rgba(255,255,255,0.12)"]}
-          end={{ x: 0.5, y: 1 }}
-          start={{ x: 0.5, y: 0 }}
-          className="h-12 w-12 items-center justify-center rounded-full border border-white/35"
-        >
-          <SymbolView
-            name={{
-              ios: "chevron.down",
-              android: "keyboard_arrow_down",
-              web: "keyboard_arrow_down",
-            }}
-            size={24}
-            tintColor="#FFFFFF"
-          />
-        </LinearGradient>
-      </Animated.View>
-    </Animated.View>
-  );
-}
-
 function DirectionMapCard({
   address,
   coordinate,
@@ -1184,10 +1173,16 @@ function DirectionMapCard({
             backgroundColor: "rgba(255, 69, 58, 0.92)",
           }}
         >
-          <Text className="text-[12px] font-bold text-white" style={{ lineHeight: 16 }}>
+          <Text
+            className="text-[12px] font-bold text-white"
+            style={{ lineHeight: 16 }}
+          >
             Google Maps error:
           </Text>
-          <Text className="mt-1 text-[12px] text-white" style={{ lineHeight: 16 }}>
+          <Text
+            className="mt-1 text-[12px] text-white"
+            style={{ lineHeight: 16 }}
+          >
             {activeMapError}
           </Text>
         </View>
@@ -1362,7 +1357,7 @@ function DirectionMapCard({
           style={buttonShadowStyle}
         >
           <LinearGradient
-            colors={loginGradientColors}
+            colors={hiddenStoryActionGradientColors}
             end={{ x: 1, y: 0.5 }}
             locations={[0, 0.58, 1]}
             start={{ x: 0, y: 0.5 }}
@@ -1375,9 +1370,12 @@ function DirectionMapCard({
                 web: "near_me",
               }}
               size={14}
-              tintColor="#FFFFFF"
+              tintColor={hiddenStoryActionForegroundColor}
             />
-            <Text className="ml-1.5 text-[15px] font-semibold text-white">
+            <Text
+              className="ml-1.5 text-[15px] font-semibold"
+              style={{ color: hiddenStoryActionForegroundColor }}
+            >
               Chỉ đường
             </Text>
           </LinearGradient>
@@ -1558,7 +1556,10 @@ function HistoricalInfoSection({ text }: { text: string }) {
         Thông tin lịch sử
       </Text>
 
-      <View className="rounded-[16px] bg-[#FFF9F3] px-4 py-4" style={cardShadowStyle}>
+      <View
+        className="rounded-[16px] bg-[#FFF9F3] px-4 py-4"
+        style={cardShadowStyle}
+      >
         <Text
           className="text-[15px]"
           numberOfLines={isExpanded ? undefined : 4}
@@ -1632,45 +1633,41 @@ function HiddenStoryCheckinSection({
     <View className="gap-3">
       <View className="flex-row items-center justify-between gap-3">
         <Text
-          className="text-[14px] font-black uppercase tracking-[1.4px]"
+          className="text-[13px] font-black uppercase tracking-[1.4px]"
           style={sectionEyebrowTextStyle}
         >
           Câu chuyện ẩn
         </Text>
 
-        <View className="flex-row items-center rounded-full bg-[#F6EEE8] px-3 py-2">
-          <SymbolView
-            name={{
-              ios: isCheckedIn
-                ? "checkmark.seal.fill"
-                : isCheckinStatusLoading
-                  ? "clock.fill"
-                  : "lock.fill",
-              android: isCheckedIn
-                ? "verified"
-                : isCheckinStatusLoading
-                  ? "schedule"
-                  : "lock",
-              web: isCheckedIn
-                ? "verified"
-                : isCheckinStatusLoading
-                  ? "schedule"
-                  : "lock",
-            }}
-            size={12}
-            tintColor={
-              isCheckedIn
-                ? "#1F9D7A"
-                : isCheckinStatusLoading
-                  ? "#7C7C93"
-                  : "#8A736A"
-            }
-          />
+        <View
+          className="flex-row items-center rounded-full px-3 py-2"
+          style={{
+            backgroundColor: isCheckedIn ? "#EAF8F1" : "#F6EEE8",
+          }}
+        >
+          {isCheckedIn ? (
+            <Image
+              source={hiddenStoryStatusImage}
+              contentFit="cover"
+              contentPosition="center"
+              style={{ height: 20, width: 20 }}
+            />
+          ) : (
+            <SymbolView
+              name={{
+                ios: isCheckinStatusLoading ? "clock.fill" : "lock.fill",
+                android: isCheckinStatusLoading ? "schedule" : "lock",
+                web: isCheckinStatusLoading ? "schedule" : "lock",
+              }}
+              size={12}
+              tintColor={isCheckinStatusLoading ? "#7C7C93" : "#8A736A"}
+            />
+          )}
           <Text
-            className="ml-1.5 text-[12px] font-black uppercase tracking-[0.8px]"
+            className="ml-1.5 text-[11px] font-black uppercase tracking-[0.8px]"
             style={{
               color: isCheckedIn
-                ? "#1F9D7A"
+                ? "#168A64"
                 : isCheckinStatusLoading
                   ? "#7C7C93"
                   : "#8A736A",
@@ -1726,15 +1723,15 @@ function HiddenStoryCheckinSection({
           </LinearGradient>
 
           <Text
-            className="mt-5 text-center text-[18px] font-semibold text-[#2B2233]"
-            style={{ lineHeight: 22 }}
+            className="mt-4 text-center text-[18px] font-semibold text-[#2B2233]"
+            style={{ lineHeight: 20 }}
           >
             Câu chuyện đang chờ bạn
           </Text>
 
           <Text
-            className="mt-2 max-w-[320px] text-center text-[15px]"
-            style={sectionBodyTextStyle}
+            className="mt-1 max-w-[320px] text-center text-[15px]"
+            style={[sectionBodyTextStyle, { lineHeight: 18 }]}
           >
             {isCheckinStatusLoading
               ? "Đang kiểm tra trạng thái check-in từ hệ thống trước khi mở khóa nội dung."
@@ -1744,7 +1741,7 @@ function HiddenStoryCheckinSection({
           </Text>
 
           <Pressable
-            className="mt-6 overflow-hidden rounded-full"
+            className="mt-4 overflow-hidden rounded-full"
             disabled={isCheckinStatusLoading}
             onPress={onCheckinPress}
             style={buttonShadowStyle}
@@ -1817,7 +1814,7 @@ function HotspotRouteCarouselCard({
             contentFit="cover"
             transition={180}
             cachePolicy="memory-disk"
-           style={{ height: relatedRouteCardImageHeight, width: "100%" }}
+            style={{ height: relatedRouteCardImageHeight, width: "100%" }}
           />
 
           <View className="absolute right-2 top-2 rounded-full bg-[#FFF1F6] px-2 py-[5px]">
@@ -1902,13 +1899,23 @@ function RouteMatchesSectionHeader() {
   );
 }
 
-function PersonalExperienceSectionHeader() {
+function PersonalExperienceSectionHeader({
+  totalReviewLabel,
+}: {
+  totalReviewLabel?: string | null;
+}) {
   return (
     <Text
       className="text-[14px] font-black uppercase tracking-[1.4px]"
       style={sectionEyebrowTextStyle}
     >
       Xếp hạng và đánh giá
+      {totalReviewLabel ? (
+        <Text className="text-[14px] font-black text-[#A39AAB]">
+          {" "}
+          ({totalReviewLabel})
+        </Text>
+      ) : null}
     </Text>
   );
 }
@@ -1917,12 +1924,14 @@ function PersonalExperienceMediaThumb({
   borderRadius = 0,
   height = 104,
   item,
+  onPress,
   overlayLabel,
   width,
 }: {
   borderRadius?: number;
   height?: number;
   item: PersonalExperienceMediaItem;
+  onPress: () => void;
   overlayLabel?: string;
   width: number | `${number}%`;
 }) {
@@ -1930,8 +1939,11 @@ function PersonalExperienceMediaThumb({
     typeof overlayLabel === "string" && overlayLabel.trim().length > 0;
 
   return (
-    <View
+    <Pressable
+      accessibilityLabel="Xem ảnh đánh giá toàn màn hình"
+      accessibilityRole="imagebutton"
       className="overflow-hidden"
+      onPress={onPress}
       style={{
         borderRadius,
         height,
@@ -1984,7 +1996,7 @@ function PersonalExperienceMediaThumb({
           </View>
         </>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -2010,9 +2022,12 @@ function PersonalExperienceComposer({
           onPress={onPressCompose}
           style={buttonShadowStyle}
         >
-          <View
+          <LinearGradient
+            colors={hiddenStoryActionGradientColors}
+            end={{ x: 1, y: 0.5 }}
+            locations={[0, 0.58, 1]}
+            start={{ x: 0, y: 0.5 }}
             className="flex-row items-center justify-center px-5 py-3.5"
-            style={{ backgroundColor: "#D8F2F9" }}
           >
             <SymbolView
               name={{
@@ -2021,12 +2036,15 @@ function PersonalExperienceComposer({
                 web: "photo_camera",
               }}
               size={16}
-              tintColor="#2A6B80"
+              tintColor={hiddenStoryActionForegroundColor}
             />
-            <Text className="ml-2 text-[15px] font-semibold text-[#2A6B80]">
+            <Text
+              className="ml-2 text-[15px] font-semibold"
+              style={{ color: hiddenStoryActionForegroundColor }}
+            >
               Thêm ảnh và video
             </Text>
-          </View>
+          </LinearGradient>
         </Pressable>
       </View>
     </View>
@@ -2046,6 +2064,9 @@ function PersonalExperienceLikeButton({
 }) {
   return (
     <Pressable
+      accessibilityLabel={isLiked ? "Gỡ tim bài viết" : "Thả tim bài viết"}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: isPending, selected: isLiked }}
       className="flex-row items-center gap-1.5 self-start py-0.5"
       disabled={isPending}
       hitSlop={8}
@@ -2056,7 +2077,11 @@ function PersonalExperienceLikeButton({
         name={
           isLiked
             ? { ios: "heart.fill", android: "favorite", web: "favorite" }
-            : { ios: "heart", android: "favorite_border", web: "favorite_border" }
+            : {
+                ios: "heart",
+                android: "favorite_border",
+                web: "favorite_border",
+              }
         }
         size={20}
         tintColor={isLiked ? "#F43F5E" : "#2B2233"}
@@ -2072,49 +2097,135 @@ function PersonalExperienceLikeButton({
 }
 
 function PersonalExperienceCard({
+  isReviewActionPending,
   item,
+  onDeleteReview,
+  onEditReview,
   onPressLike,
+  onPressLikeReview,
 }: {
+  isReviewActionPending: boolean;
   item: PersonalExperienceItem;
+  onDeleteReview: (review: HotspotReview) => void;
+  onEditReview: (review: HotspotReview) => void;
   onPressLike: (postId: number) => void;
+  onPressLikeReview: (reviewId: number) => void;
 }) {
-  const { width: screenWidth } = useWindowDimensions();
-  const reviewCardInnerHorizontalPadding = 14;
+  const insets = useSafeAreaInsets();
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+  const [measuredMediaWidth, setMeasuredMediaWidth] = useState(0);
+  const [reviewMenuAnchor, setReviewMenuAnchor] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
+  const [viewerMediaIndex, setViewerMediaIndex] = useState<number | null>(null);
   const hasSingleMedia = item.media.length === 1;
   const hasTwoMedia = item.media.length === 2;
   const hasThreeMedia = item.media.length === 3;
-  const reviewMediaContentWidth = Math.max(screenWidth, 0);
-  const singleMediaHeight = Math.min(Math.max(screenWidth * 0.64, 220), 280);
-  const multiMediaPreviewItems = hasSingleMedia ? item.media : item.media.slice(0, 4);
-  const hiddenMediaCount = Math.max(item.media.length - multiMediaPreviewItems.length, 0);
-  const twoMediaHeight = Math.min(Math.max(screenWidth * 0.44, 156), 182);
-  const threeMediaHeight = Math.min(Math.max(screenWidth * 0.50, 188), 214);
-  const threeMediaLeadWidth = Math.max(reviewMediaContentWidth * 0.56, 0);
+  // Card không còn padding ngang riêng: ảnh và cụm avatar thẳng hàng với tiêu đề mục.
+  const fallbackMediaContentWidth = Math.max(
+    screenWidth - detailSheetHorizontalPadding * 2,
+    0,
+  );
+  const reviewMediaContentWidth =
+    measuredMediaWidth > 0 ? measuredMediaWidth : fallbackMediaContentWidth;
+  // Làm tròn xuống để 2 ô + gap luôn vừa đúng một hàng, không bị rớt dòng.
+  const halfWidthMediaItemWidth = Math.max(
+    Math.floor((reviewMediaContentWidth - reviewMediaGridGap) / 2),
+    0,
+  );
+  const multiMediaPreviewItems = hasSingleMedia
+    ? item.media
+    : item.media.slice(0, 4);
+  const hiddenMediaCount = Math.max(
+    item.media.length - multiMediaPreviewItems.length,
+    0,
+  );
+  const singleMediaHeight = Math.round(
+    reviewMediaContentWidth / singleMediaAspectRatio,
+  );
+  const twoMediaHeight = Math.round(
+    halfWidthMediaItemWidth / twoMediaAspectRatio,
+  );
+  const gridMediaHeight = Math.round(
+    halfWidthMediaItemWidth / gridMediaAspectRatio,
+  );
+  const threeMediaLeadWidth = Math.max(
+    Math.round(reviewMediaContentWidth * 0.56),
+    0,
+  );
   const threeMediaSideWidth = Math.max(
     reviewMediaContentWidth - threeMediaLeadWidth - reviewMediaGridGap,
     0,
+  );
+  const threeMediaHeight = Math.round(
+    threeMediaLeadWidth / twoMediaAspectRatio,
   );
   const threeMediaStackHeight = Math.max(
     (threeMediaHeight - reviewMediaGridGap) / 2,
     0,
   );
-  const multiMediaHeight = 98;
-  const halfWidthMediaItemWidth = Math.max(
-    (reviewMediaContentWidth - reviewMediaGridGap) / 2,
-    0,
-  );
   const hasText = item.text.trim().length > 0;
   const hasRating = item.rating > 0;
+  // Post và review dùng hai endpoint like khác nhau nhưng chung một nút tim.
+  const likeablePostId = item.postId;
+  const likeableReviewId = item.review?.reviewId ?? null;
+  const canLike = likeablePostId !== null || likeableReviewId !== null;
+  const manageableReview = item.review?.isOwner ? item.review : null;
+
+  const handleOpenReviewMenu = (event: GestureResponderEvent) => {
+    if (isReviewActionPending) {
+      return;
+    }
+
+    const menuWidth = 216;
+    const menuHeight = manageableReview ? 156 : 52;
+    const viewportInset = 12;
+    const pressX = event.nativeEvent.pageX;
+    const pressY = event.nativeEvent.pageY;
+    const maximumLeft = Math.max(
+      viewportInset,
+      screenWidth - menuWidth - viewportInset,
+    );
+    const left = Math.min(
+      Math.max(pressX - menuWidth + 18, viewportInset),
+      maximumLeft,
+    );
+    const preferredTop = pressY + 20;
+    const maximumTop = screenHeight - insets.bottom - menuHeight - 8;
+    const top =
+      preferredTop <= maximumTop
+        ? preferredTop
+        : Math.max(insets.top + 8, pressY - menuHeight - 20);
+
+    setReviewMenuAnchor({ left, top });
+  };
+
+  const handleSharePersonalExperience = async () => {
+    setReviewMenuAnchor(null);
+
+    try {
+      await Share.share({
+        message:
+          [item.user, item.text.trim()].filter(Boolean).join("\n\n") ||
+          "Bài viết trên Culture Quest Lite",
+        title: `Bài viết của ${item.user}`,
+      });
+    } catch (error) {
+      console.warn("[hotspot-detail] share review failed", {
+        error: error instanceof Error ? error.message : error,
+        itemId: item.id,
+      });
+      Alert.alert("Không thể chia sẻ", "Vui lòng thử lại sau.");
+    }
+  };
 
   return (
     <View
-      className="bg-white px-3.5 py-3"
+      className="bg-white py-3"
       style={[cardShadowStyle, { borderRadius: reviewCardBorderRadius }]}
     >
-      <View
-        className="flex-row items-center"
-        style={{ marginHorizontal: reviewAuthorRowHorizontalOffset }}
-      >
+      <View className="flex-row items-center">
         <Image
           source={item.avatarUri}
           contentFit="cover"
@@ -2138,39 +2249,148 @@ function PersonalExperienceCard({
             {item.date}
           </Text>
         </View>
-        <View className="ml-1 h-8 w-8 items-center justify-center rounded-full">
-          <SymbolView
-            name={{
-              ios: "ellipsis",
-              android: "more_horiz",
-              web: "more_horiz",
-            }}
-            size={16}
-            tintColor="#8A7B83"
-          />
-        </View>
+        <Pressable
+          accessibilityLabel="Mở tùy chọn bài viết"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isReviewActionPending }}
+          className="ml-1 h-9 w-9 items-center justify-center rounded-full"
+          disabled={isReviewActionPending}
+          hitSlop={8}
+          onPress={handleOpenReviewMenu}
+          style={{ opacity: isReviewActionPending ? 0.5 : 1 }}
+        >
+          {isReviewActionPending ? (
+            <ActivityIndicator color="#8A7B83" size="small" />
+          ) : (
+            <SymbolView
+              name={{
+                ios: "ellipsis",
+                android: "more_horiz",
+                web: "more_horiz",
+              }}
+              size={19}
+              tintColor="#5F5662"
+            />
+          )}
+        </Pressable>
       </View>
 
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setReviewMenuAnchor(null)}
+        statusBarTranslucent
+        transparent
+        visible={reviewMenuAnchor !== null}
+      >
+        <View className="flex-1">
+          <Pressable
+            accessibilityLabel="Đóng tùy chọn bài đánh giá"
+            className="absolute inset-0"
+            onPress={() => setReviewMenuAnchor(null)}
+          />
+
+          {reviewMenuAnchor ? (
+            <View
+              className="overflow-hidden border border-[#E7E3E8] bg-white"
+              style={[
+                cardShadowStyle,
+                {
+                  borderRadius: 8,
+                  left: reviewMenuAnchor.left,
+                  position: "absolute",
+                  top: reviewMenuAnchor.top,
+                  width: 216,
+                },
+              ]}
+            >
+              {manageableReview ? (
+                <>
+                  <Pressable
+                    accessibilityRole="button"
+                    className="flex-row items-center px-4"
+                    onPress={() => {
+                      setReviewMenuAnchor(null);
+                      onEditReview(manageableReview);
+                    }}
+                    style={{ height: 52 }}
+                  >
+                    <SymbolView
+                      name={{ ios: "pencil", android: "edit", web: "edit" }}
+                      size={19}
+                      tintColor="#2B2233"
+                    />
+                    <Text className="ml-3 flex-1 text-[15px] font-semibold text-[#2B2233]">
+                      Chỉnh sửa bài viết
+                    </Text>
+                  </Pressable>
+
+                  <View className="h-px bg-[#ECE8ED]" />
+
+                  <Pressable
+                    accessibilityRole="button"
+                    className="flex-row items-center px-4"
+                    onPress={() => {
+                      setReviewMenuAnchor(null);
+                      onDeleteReview(manageableReview);
+                    }}
+                    style={{ height: 52 }}
+                  >
+                    <SymbolView
+                      name={{
+                        ios: "trash",
+                        android: "delete_outline",
+                        web: "delete_outline",
+                      }}
+                      size={19}
+                      tintColor="#C24157"
+                    />
+                    <Text className="ml-3 flex-1 text-[15px] font-semibold text-[#C24157]">
+                      Xóa bài viết
+                    </Text>
+                  </Pressable>
+
+                  <View className="h-px bg-[#ECE8ED]" />
+                </>
+              ) : null}
+
+              <Pressable
+                accessibilityRole="button"
+                className="flex-row items-center px-4"
+                onPress={() => {
+                  void handleSharePersonalExperience();
+                }}
+                style={{ height: 52 }}
+              >
+                <SymbolView
+                  name={{
+                    ios: "square.and.arrow.up",
+                    android: "share",
+                    web: "share",
+                  }}
+                  size={19}
+                  tintColor="#2B2233"
+                />
+                <Text className="ml-3 flex-1 text-[15px] font-semibold text-[#2B2233]">
+                  Chia sẻ bài viết
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      </Modal>
+
       {hasRating ? (
-        <View className="mt-1.5 flex-row items-center justify-between gap-2">
+        <View className="mt-1 flex-row items-center">
           <RatingStars rating={item.rating} size={13} />
-          <View className="rounded-full bg-[#FFF3DE] px-2.5 py-1">
-            <Text className="text-[11px] font-black text-[#B86D2A]">
-              {formatReviewRatingValue(item.rating)}/5
-            </Text>
-          </View>
         </View>
       ) : null}
 
       {hasText ? (
         <Text
-          className="mt-1.5 text-[14px] text-[#554751]"
+          className="mt-1 text-[14px] text-[#554751]"
           style={[
             sectionBodyEmphasisTextStyle,
-            {
-              lineHeight: 15,
-              marginHorizontal: reviewAuthorRowHorizontalOffset,
-            },
+            { lineHeight: reviewTextLineHeight },
           ]}
         >
           {item.text}
@@ -2180,16 +2400,20 @@ function PersonalExperienceCard({
       {item.media.length > 0 ? (
         <View
           className="mt-2"
-          style={{
-            marginHorizontal: -(detailSheetHorizontalPadding + reviewCardInnerHorizontalPadding),
-            width: reviewMediaContentWidth,
+          onLayout={(event) => {
+            const nextWidth = Math.round(event.nativeEvent.layout.width);
+
+            setMeasuredMediaWidth((currentWidth) =>
+              currentWidth === nextWidth ? currentWidth : nextWidth,
+            );
           }}
         >
           {hasSingleMedia ? (
             <PersonalExperienceMediaThumb
-              borderRadius={0}
+              borderRadius={reviewMediaBorderRadius}
               height={singleMediaHeight}
               item={item.media[0]}
+              onPress={() => setViewerMediaIndex(0)}
               width="100%"
             />
           ) : hasTwoMedia ? (
@@ -2199,10 +2423,11 @@ function PersonalExperienceCard({
             >
               {item.media.map((media, index) => (
                 <PersonalExperienceMediaThumb
-                  borderRadius={0}
+                  borderRadius={reviewMediaBorderRadius}
                   height={twoMediaHeight}
                   key={`${item.id}-media-${index}`}
                   item={media}
+                  onPress={() => setViewerMediaIndex(index)}
                   width={halfWidthMediaItemWidth}
                 />
               ))}
@@ -2213,73 +2438,87 @@ function PersonalExperienceCard({
               style={{ columnGap: reviewMediaGridGap }}
             >
               <PersonalExperienceMediaThumb
-                borderRadius={0}
+                borderRadius={reviewMediaBorderRadius}
                 height={threeMediaHeight}
                 item={item.media[0]}
+                onPress={() => setViewerMediaIndex(0)}
                 width={threeMediaLeadWidth}
               />
-              <View style={{ rowGap: reviewMediaGridGap, width: threeMediaSideWidth }}>
+              <View
+                style={{
+                  rowGap: reviewMediaGridGap,
+                  width: threeMediaSideWidth,
+                }}
+              >
                 {item.media.slice(1).map((media, index) => (
                   <PersonalExperienceMediaThumb
-                    borderRadius={0}
+                    borderRadius={reviewMediaBorderRadius}
                     height={threeMediaStackHeight}
                     key={`${item.id}-media-stack-${index}`}
                     item={media}
+                    onPress={() => setViewerMediaIndex(index + 1)}
                     width={threeMediaSideWidth}
                   />
                 ))}
               </View>
             </View>
           ) : (
-            <View className="overflow-hidden">
-              <View
-                style={{
-                  columnGap: reviewMediaGridGap,
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  rowGap: reviewMediaGridGap,
-                }}
-              >
-                {multiMediaPreviewItems.map((media, index) => {
-                  const shouldStretchLastItem =
-                    multiMediaPreviewItems.length === 3 && index === 2;
-                  const overlayLabel =
-                    index === multiMediaPreviewItems.length - 1 && hiddenMediaCount > 0
+            <View
+              style={{
+                columnGap: reviewMediaGridGap,
+                flexDirection: "row",
+                flexWrap: "wrap",
+                rowGap: reviewMediaGridGap,
+              }}
+            >
+              {multiMediaPreviewItems.map((media, index) => (
+                <PersonalExperienceMediaThumb
+                  borderRadius={reviewMediaBorderRadius}
+                  height={gridMediaHeight}
+                  key={`${item.id}-media-${index}`}
+                  item={media}
+                  onPress={() => setViewerMediaIndex(index)}
+                  overlayLabel={
+                    index === multiMediaPreviewItems.length - 1 &&
+                    hiddenMediaCount > 0
                       ? `+${hiddenMediaCount}`
-                      : undefined;
-
-                  return (
-                    <PersonalExperienceMediaThumb
-                      borderRadius={0}
-                      height={multiMediaHeight}
-                      key={`${item.id}-media-${index}`}
-                      item={media}
-                      overlayLabel={overlayLabel}
-                      width={
-                        shouldStretchLastItem
-                          ? reviewMediaContentWidth
-                          : halfWidthMediaItemWidth
-                      }
-                    />
-                  );
-                })}
-              </View>
+                      : undefined
+                  }
+                  width={halfWidthMediaItemWidth}
+                />
+              ))}
             </View>
           )}
         </View>
       ) : null}
 
-      <View
-        className="mt-2 flex-row items-center"
-        style={{ marginHorizontal: reviewAuthorRowHorizontalOffset }}
-      >
-        <PersonalExperienceLikeButton
-          isLiked={item.isLiked}
-          isPending={item.isLikePending}
-          onPress={() => onPressLike(item.postId)}
-          value={item.likeCount}
+      {viewerMediaIndex !== null ? (
+        <ReviewMediaViewer
+          initialIndex={viewerMediaIndex}
+          items={item.media}
+          onClose={() => setViewerMediaIndex(null)}
         />
-      </View>
+      ) : null}
+
+      {canLike ? (
+        <View className="mt-2 flex-row items-center">
+          <PersonalExperienceLikeButton
+            isLiked={item.isLiked}
+            isPending={item.isLikePending}
+            onPress={() => {
+              if (likeablePostId !== null) {
+                onPressLike(likeablePostId);
+                return;
+              }
+
+              if (likeableReviewId !== null) {
+                onPressLikeReview(likeableReviewId);
+              }
+            }}
+            value={item.likeCount}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -2294,7 +2533,10 @@ function EmptyPersonalExperienceCard({
       className="bg-white px-5 py-5"
       style={[cardShadowStyle, { borderRadius: reviewCardBorderRadius }]}
     >
-      <Text className="text-[16px] font-semibold text-[#2B2233]" style={{ lineHeight: 20 }}>
+      <Text
+        className="text-[16px] font-semibold text-[#2B2233]"
+        style={{ lineHeight: 20 }}
+      >
         Chưa có bài đánh giá
       </Text>
       <Text className="mt-2 text-[15px]" style={sectionBodyTextStyle}>
@@ -2325,7 +2567,10 @@ function PersonalExperienceErrorCard({ message }: { message: string }) {
       className="border border-[#F9E2EA] bg-[#FFF8FC] px-5 py-5"
       style={[cardShadowStyle, { borderRadius: reviewCardBorderRadius }]}
     >
-      <Text className="text-[14px] font-bold text-[#C2416C]" style={{ lineHeight: 18 }}>
+      <Text
+        className="text-[14px] font-bold text-[#C2416C]"
+        style={{ lineHeight: 18 }}
+      >
         {message}
       </Text>
     </View>
@@ -2334,18 +2579,28 @@ function PersonalExperienceErrorCard({ message }: { message: string }) {
 
 function PersonalExperienceSection({
   composer,
+  deletingReviewId,
   isCheckedIn,
   isLoadingReviews = false,
   items,
+  onDeleteReview,
+  onEditReview,
   onPressLike,
+  onPressLikeReview,
   reviewsErrorMessage,
+  totalReviewLabel,
 }: {
   composer?: PersonalExperienceComposerProps | null;
+  deletingReviewId: number | null;
   isCheckedIn: boolean;
   isLoadingReviews?: boolean;
   items: PersonalExperienceItem[];
+  onDeleteReview: (review: HotspotReview) => void;
+  onEditReview: (review: HotspotReview) => void;
   onPressLike: (postId: number) => void;
+  onPressLikeReview: (reviewId: number) => void;
   reviewsErrorMessage?: string | null;
+  totalReviewLabel?: string | null;
 }) {
   const [isShowingAllReviews, setIsShowingAllReviews] = useState(false);
   const canToggleAllReviews = items.length > recentReviewPreviewCount;
@@ -2356,7 +2611,7 @@ function PersonalExperienceSection({
 
   return (
     <View className="mt-5 gap-3">
-      <PersonalExperienceSectionHeader />
+      <PersonalExperienceSectionHeader totalReviewLabel={totalReviewLabel} />
 
       {reviewsErrorMessage ? (
         <PersonalExperienceErrorCard message={reviewsErrorMessage} />
@@ -2369,8 +2624,12 @@ function PersonalExperienceSection({
           visibleItems.map((item) => (
             <PersonalExperienceCard
               key={item.id}
+              isReviewActionPending={item.review?.reviewId === deletingReviewId}
               item={item}
+              onDeleteReview={onDeleteReview}
+              onEditReview={onEditReview}
               onPressLike={onPressLike}
+              onPressLikeReview={onPressLikeReview}
             />
           ))
         ) : (
@@ -2394,7 +2653,10 @@ function PersonalExperienceSection({
 
       {isCheckedIn && composer ? (
         <View className="gap-2">
-          <Text className="text-[15px] font-semibold text-[#2B2233]" style={{ lineHeight: 16 }}>
+          <Text
+            className="text-[15px] font-semibold text-[#2B2233]"
+            style={{ lineHeight: 16 }}
+          >
             Chia sẻ bài đánh giá của bạn
           </Text>
           <PersonalExperienceComposer
@@ -2547,7 +2809,10 @@ function NotFoundState() {
 function LoadingState() {
   return (
     <View style={{ backgroundColor: screenBackground, flex: 1 }}>
-      <SafeAreaView className="flex-1" edges={["top", "left", "right", "bottom"]}>
+      <SafeAreaView
+        className="flex-1"
+        edges={["top", "left", "right", "bottom"]}
+      >
         <View className="flex-1 items-center justify-center px-6">
           <View className="items-center">
             <ActivityIndicator color="#F58752" size="large" />
@@ -2645,6 +2910,7 @@ export default function HotspotDetailScreen() {
   const [isRemoteHotspotLoading, setIsRemoteHotspotLoading] = useState(false);
   const [apiHotspotPosts, setApiHotspotPosts] = useState<HotspotPost[]>([]);
   const [likingPostIds, setLikingPostIds] = useState<number[]>([]);
+  const [likingReviewIds, setLikingReviewIds] = useState<number[]>([]);
   const [hotspotPostsError, setHotspotPostsError] = useState<string | null>(
     null,
   );
@@ -2652,6 +2918,18 @@ export default function HotspotDetailScreen() {
   const [isHotspotPostsLoading, setIsHotspotPostsLoading] = useState(
     () => resolvedHotspotId !== null,
   );
+  const [apiHotspotReviews, setApiHotspotReviews] = useState<HotspotReview[]>(
+    [],
+  );
+  const [hotspotReviewsError, setHotspotReviewsError] = useState<string | null>(
+    null,
+  );
+  const [isHotspotReviewsLoading, setIsHotspotReviewsLoading] = useState(
+    () => resolvedHotspotId !== null,
+  );
+  const [deletingReviewId, setDeletingReviewId] = useState<number | null>(null);
+  const [reviewPendingDeletion, setReviewPendingDeletion] =
+    useState<HotspotReview | null>(null);
   const cachedStoriesEntry = getCachedHotspotStories({
     hotspotId: resolvedHotspotId,
     routeId: resolvedRouteId,
@@ -2662,57 +2940,12 @@ export default function HotspotDetailScreen() {
     index: 0,
     slugKey: resolvedSlug,
   }));
-  const heroHeightExpanded = clampNumber(
-    screenHeight + insets.bottom + 12,
-    640,
-    960,
+  const [isHeroGalleryVisible, setIsHeroGalleryVisible] = useState(true);
+  const heroTouchStartRef = useRef<{ pageX: number; pageY: number } | null>(
+    null,
   );
-  const heroHeightCollapsed = clampNumber(screenHeight * 0.42, 290, 360);
-  const collapseDistance = Math.max(
-    heroHeightExpanded - heroHeightCollapsed,
-    1,
-  );
-  const contentOverlap = 28;
-  const stickyCheckinRevealOffset = Math.max(
-    heroHeightExpanded - screenHeight + 220,
-    collapseDistance * 0.42,
-    220,
-  );
-
-  const heroContainerStyle = useAnimatedStyle(() => ({
-    height: interpolate(
-      scrollY.value,
-      [0, collapseDistance],
-      [heroHeightExpanded, heroHeightCollapsed],
-      Extrapolation.CLAMP,
-    ),
-  }));
-
-  const heroMediaStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY: interpolate(
-          scrollY.value,
-          [-heroHeightExpanded, 0, collapseDistance],
-          [heroHeightExpanded * 0.08, 0, -24],
-          Extrapolation.CLAMP,
-        ),
-      },
-    ],
-  }));
-
-  const sheetLiftStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY: interpolate(
-          scrollY.value,
-          [0, collapseDistance],
-          [0, -52],
-          Extrapolation.CLAMP,
-        ),
-      },
-    ],
-  }));
+  const heroHeight = clampNumber(screenHeight * 0.4, 280, 360);
+  const stickyCheckinRevealOffset = Math.max(heroHeight * 0.72, 220);
 
   const stickyCheckinBarStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
@@ -2727,43 +2960,6 @@ export default function HotspotDetailScreen() {
           scrollY.value,
           [stickyCheckinRevealOffset, stickyCheckinRevealOffset + 42],
           [28, 0],
-          Extrapolation.CLAMP,
-        ),
-      },
-    ],
-  }));
-  const heroOverlayDismissDistance = Math.min(collapseDistance, 144);
-  const heroHeaderOverlayStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      scrollY.value,
-      [0, heroOverlayDismissDistance * 0.45, heroOverlayDismissDistance],
-      [1, 0.55, 0],
-      Extrapolation.CLAMP,
-    ),
-    transform: [
-      {
-        translateY: interpolate(
-          scrollY.value,
-          [0, heroOverlayDismissDistance],
-          [0, -24],
-          Extrapolation.CLAMP,
-        ),
-      },
-    ],
-  }));
-  const heroFloatingActionStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      scrollY.value,
-      [0, heroOverlayDismissDistance * 0.4, heroOverlayDismissDistance],
-      [1, 0.6, 0],
-      Extrapolation.CLAMP,
-    ),
-    transform: [
-      {
-        translateY: interpolate(
-          scrollY.value,
-          [0, heroOverlayDismissDistance],
-          [0, -36],
           Extrapolation.CLAMP,
         ),
       },
@@ -2853,16 +3049,91 @@ export default function HotspotDetailScreen() {
     return () => {
       isActive = false;
     };
-  }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId, resolvedSlug]);
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    resolvedHotspotId,
+    resolvedSlug,
+  ]);
+
+  // Chạy theo focus để bài đánh giá vừa gửi ở màn review-compose hiện ngay khi quay lại.
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const loadHotspotReviews = async () => {
+        if (resolvedHotspotId === null) {
+          setApiHotspotReviews([]);
+          setHotspotReviewsError(null);
+          setIsHotspotReviewsLoading(false);
+          return;
+        }
+
+        setIsHotspotReviewsLoading(true);
+        setHotspotReviewsError(null);
+
+        try {
+          const accessToken = authSession.isAuthenticated
+            ? await getValidAccessToken()
+            : null;
+          const response = await getHotspotReviews({
+            accessToken,
+            page: 0,
+            size: hotspotReviewsPageSize,
+            targetId: resolvedHotspotId,
+            targetType: "HOTSPOT",
+            tokenType: authSession.tokenType,
+          });
+
+          if (!isActive) {
+            return;
+          }
+
+          setApiHotspotReviews(response.content);
+        } catch (error) {
+          console.warn("[hotspot-detail] load hotspot reviews failed", {
+            error: error instanceof Error ? error.message : error,
+            hotspotId: resolvedHotspotId,
+            slug: resolvedSlug,
+          });
+
+          if (!isActive) {
+            return;
+          }
+
+          setApiHotspotReviews([]);
+          setHotspotReviewsError(
+            error instanceof Error
+              ? error.message
+              : "Không tải được đánh giá theo hotspotId.",
+          );
+        } finally {
+          if (isActive) {
+            setIsHotspotReviewsLoading(false);
+          }
+        }
+      };
+
+      void loadHotspotReviews();
+
+      return () => {
+        isActive = false;
+      };
+    }, [
+      authSession.isAuthenticated,
+      authSession.tokenType,
+      resolvedHotspotId,
+      resolvedSlug,
+      setApiHotspotReviews,
+      setHotspotReviewsError,
+      setIsHotspotReviewsLoading,
+    ]),
+  );
 
   async function handlePressLikeHotspotPost(postId: number) {
     const targetPost = apiHotspotPosts.find((post) => post.postId === postId);
 
-    if (
-      targetPost?.isLiked === true ||
-      persistedLikedPostIds.includes(postId) ||
-      likingPostIds.includes(postId)
-    ) {
+    if (likingPostIds.includes(postId)) {
       return;
     }
 
@@ -2884,6 +3155,17 @@ export default function HotspotDetailScreen() {
       return;
     }
 
+    const currentIsLiked =
+      targetPost?.isLiked === true || persistedLikedPostIds.includes(postId);
+    const currentLikeCount = Math.max(
+      0,
+      Math.round(targetPost?.likeCount ?? 0),
+    );
+    const optimisticIsLiked = !currentIsLiked;
+    const optimisticLikeCount = optimisticIsLiked
+      ? currentLikeCount + 1
+      : Math.max(0, currentLikeCount - 1);
+
     setLikingPostIds((current) =>
       current.includes(postId) ? current : [...current, postId],
     );
@@ -2892,8 +3174,8 @@ export default function HotspotDetailScreen() {
         post.postId === postId
           ? {
               ...post,
-              isLiked: true,
-              likeCount: Math.max(0, Math.round(post.likeCount ?? 0)) + 1,
+              isLiked: optimisticIsLiked,
+              likeCount: optimisticLikeCount,
             }
           : post,
       ),
@@ -2906,25 +3188,27 @@ export default function HotspotDetailScreen() {
         tokenType: authSession.tokenType,
       });
 
-      const resolvedLikeCount = result.likeCount;
+      const resolvedIsLiked = result.isLiked ?? optimisticIsLiked;
+      const resolvedLikeCount = result.likeCount ?? optimisticLikeCount;
 
       setApiHotspotPosts((current) =>
         current.map((post) =>
           post.postId === postId
             ? {
-              ...post,
-              isLiked: true,
-              likeCount:
-                resolvedLikeCount !== null
-                  ? resolvedLikeCount
-                  : post.likeCount,
-            }
+                ...post,
+                isLiked: resolvedIsLiked,
+                likeCount: resolvedLikeCount,
+              }
             : post,
         ),
       );
 
       if (likedPostsAccountKey) {
-        addLikedPostId(likedPostsAccountKey, postId);
+        if (resolvedIsLiked) {
+          addLikedPostId(likedPostsAccountKey, postId);
+        } else {
+          removeLikedPostId(likedPostsAccountKey, postId);
+        }
       }
     } catch (error) {
       setApiHotspotPosts((current) =>
@@ -2932,38 +3216,19 @@ export default function HotspotDetailScreen() {
           post.postId === postId
             ? {
                 ...post,
-                isLiked: false,
-                likeCount: Math.max(0, Math.round(post.likeCount ?? 0) - 1),
+                isLiked: currentIsLiked,
+                likeCount: currentLikeCount,
               }
             : post,
         ),
       );
 
-      const errorMessage = error instanceof Error ? error.message : "";
-      const normalizedErrorMessage = normalizeLookupText(errorMessage);
-      const hasAlreadyLikedError =
-        normalizedErrorMessage.includes("already liked") ||
-        normalizedErrorMessage.includes("already like") ||
-        normalizedErrorMessage.includes("da like") ||
-        normalizedErrorMessage.includes("da thich");
-
-      if (hasAlreadyLikedError && likedPostsAccountKey) {
-        setApiHotspotPosts((current) =>
-          current.map((post) =>
-            post.postId === postId
-              ? {
-                  ...post,
-                  isLiked: true,
-                }
-              : post,
-          ),
-        );
-        addLikedPostId(likedPostsAccountKey, postId);
-        return;
-      }
-
       if (likedPostsAccountKey) {
-        removeLikedPostId(likedPostsAccountKey, postId);
+        if (currentIsLiked) {
+          addLikedPostId(likedPostsAccountKey, postId);
+        } else {
+          removeLikedPostId(likedPostsAccountKey, postId);
+        }
       }
       Alert.alert(
         "Không thể thả tim",
@@ -2973,6 +3238,97 @@ export default function HotspotDetailScreen() {
       );
     } finally {
       setLikingPostIds((current) => current.filter((id) => id !== postId));
+    }
+  }
+
+  async function handlePressLikeHotspotReview(reviewId: number) {
+    if (likingReviewIds.includes(reviewId)) {
+      return;
+    }
+
+    const targetReview = apiHotspotReviews.find(
+      (review) => review.reviewId === reviewId,
+    );
+
+    if (!targetReview) {
+      return;
+    }
+
+    if (!authSession.isAuthenticated) {
+      Alert.alert(
+        "Cần đăng nhập",
+        "Bạn cần đăng nhập để thả tim bài đánh giá này.",
+      );
+      return;
+    }
+
+    const accessToken = await getValidAccessToken();
+
+    if (!accessToken) {
+      Alert.alert(
+        "Phiên đăng nhập hết hạn",
+        "Vui lòng đăng nhập lại trước khi thả tim bài đánh giá.",
+      );
+      return;
+    }
+
+    const currentIsLiked = targetReview.isLiked;
+    const currentLikeCount = Math.max(0, Math.round(targetReview.likeCount));
+    // Bấm lại lần nữa là gỡ tim: đảo trạng thái và giảm số đếm.
+    const optimisticIsLiked = !currentIsLiked;
+    const optimisticLikeCount = optimisticIsLiked
+      ? currentLikeCount + 1
+      : Math.max(0, currentLikeCount - 1);
+
+    const applyReviewLikeState = (isLiked: boolean, likeCount: number) => {
+      setApiHotspotReviews((current) =>
+        current.map((review) =>
+          review.reviewId === reviewId
+            ? { ...review, isLiked, likeCount }
+            : review,
+        ),
+      );
+    };
+
+    setLikingReviewIds((current) =>
+      current.includes(reviewId) ? current : [...current, reviewId],
+    );
+    applyReviewLikeState(optimisticIsLiked, optimisticLikeCount);
+
+    try {
+      const result = await likeReview({
+        accessToken,
+        reviewId,
+        tokenType: authSession.tokenType,
+      });
+
+      // API trả về nguyên review sau khi like nên merge thẳng cho khớp BE.
+      if (result.review) {
+        const likedReview = result.review;
+
+        setApiHotspotReviews((current) =>
+          current.map((review) =>
+            review.reviewId === reviewId
+              ? { ...review, ...likedReview }
+              : review,
+          ),
+        );
+      } else {
+        applyReviewLikeState(
+          result.isLiked ?? optimisticIsLiked,
+          result.likeCount ?? optimisticLikeCount,
+        );
+      }
+    } catch (error) {
+      applyReviewLikeState(currentIsLiked, currentLikeCount);
+      Alert.alert(
+        "Không thể thả tim",
+        error instanceof Error
+          ? error.message
+          : "Đã có lỗi xảy ra khi thả tim bài đánh giá.",
+      );
+    } finally {
+      setLikingReviewIds((current) => current.filter((id) => id !== reviewId));
     }
   }
 
@@ -3201,16 +3557,57 @@ export default function HotspotDetailScreen() {
   }
 
   const galleryPreviewImages = getGalleryPreviewImages(hotspot);
-  const activeGalleryIndex =
-    gallerySelection.slugKey === resolvedSlug ? gallerySelection.index : 0;
+  const activeGalleryIndex = Math.min(
+    gallerySelection.slugKey === resolvedSlug ? gallerySelection.index : 0,
+    Math.max(galleryPreviewImages.length - 1, 0),
+  );
   const activeHeroImageUri =
     galleryPreviewImages[activeGalleryIndex] ?? hotspot.imageUri;
-  const heroGalleryBottomOffset = Math.max(
-    contentOverlap + insets.bottom + 12,
-    42,
-  );
-  const heroScrollHintBottom =
-    galleryPreviewImages.length > 1 ? heroGalleryBottomOffset + 152 : 108;
+  const handleSelectHeroImage = (index: number) => {
+    const selectedIndex = Math.min(
+      Math.max(index, 0),
+      Math.max(galleryPreviewImages.length - 1, 0),
+    );
+
+    setGallerySelection({
+      index: selectedIndex,
+      slugKey: resolvedSlug,
+    });
+    setIsHeroGalleryVisible(true);
+  };
+  const handleHeroTouchStart = (event: GestureResponderEvent) => {
+    heroTouchStartRef.current = {
+      pageX: event.nativeEvent.pageX,
+      pageY: event.nativeEvent.pageY,
+    };
+  };
+  const handleHeroTouchEnd = (event: GestureResponderEvent) => {
+    const touchStart = heroTouchStartRef.current;
+    heroTouchStartRef.current = null;
+
+    if (!touchStart) {
+      return;
+    }
+
+    const deltaX = event.nativeEvent.pageX - touchStart.pageX;
+    const deltaY = event.nativeEvent.pageY - touchStart.pageY;
+    const isHorizontalSwipe =
+      Math.abs(deltaX) >= 28 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2;
+
+    if (isHorizontalSwipe) {
+      const nextIndex =
+        deltaX < 0
+          ? Math.min(activeGalleryIndex + 1, galleryPreviewImages.length - 1)
+          : Math.max(activeGalleryIndex - 1, 0);
+
+      handleSelectHeroImage(nextIndex);
+      return;
+    }
+
+    if (Math.abs(deltaX) <= 8 && Math.abs(deltaY) <= 8) {
+      setIsHeroGalleryVisible(false);
+    }
+  };
   const overviewText =
     readMeaningfulApiText(hotspot.overview) ??
     readMeaningfulApiText(remoteHotspot?.description) ??
@@ -3242,7 +3639,8 @@ export default function HotspotDetailScreen() {
   const hotspotCheckinId = hotspot.slug;
   const isCheckedInFromRemoteHotspot = remoteHotspot?.isCheckedIn === true;
   const isCheckedInFromApiStore =
-    resolvedHotspotId !== null && checkedInApiHotspots.includes(resolvedHotspotId);
+    resolvedHotspotId !== null &&
+    checkedInApiHotspots.includes(resolvedHotspotId);
   const isCheckedIn =
     isCheckedInFromRemoteHotspot ||
     isCheckedInFromApiStore ||
@@ -3253,7 +3651,7 @@ export default function HotspotDetailScreen() {
     !isCheckedIn &&
     (isRemoteHotspotLoading || isRemoteCheckinStatusLoading);
   const detailSheetBottomPadding = isCheckedIn
-    ? Math.max(insets.bottom + 10, 16)
+    ? Math.max(insets.bottom, 8)
     : Math.max(insets.bottom + 100, 120);
   const isStoryAvailabilityLoading =
     resolvedHotspotId !== null &&
@@ -3282,12 +3680,89 @@ export default function HotspotDetailScreen() {
       : (`/hotspot/${hotspot.slug}/stories` as Href);
   const reviewComposeHref = {
     params: {
-      ...(resolvedHotspotId !== null ? { hotspotId: `${resolvedHotspotId}` } : {}),
+      ...(resolvedHotspotId !== null
+        ? { hotspotId: `${resolvedHotspotId}` }
+        : {}),
       slug: hotspot.slug,
       title: hotspot.title,
     },
     pathname: "/hotspot/[slug]/review-compose",
   } as Href;
+
+  const handleEditHotspotReview = (review: HotspotReview) => {
+    if (!review.isOwner || deletingReviewId !== null) {
+      return;
+    }
+
+    cacheHotspotReviewForEdit(review);
+
+    const editHotspotId =
+      resolvedHotspotId ?? (review.targetId > 0 ? review.targetId : null);
+
+    router.push({
+      params: {
+        ...(editHotspotId !== null ? { hotspotId: `${editHotspotId}` } : {}),
+        reviewId: `${review.reviewId}`,
+        slug: hotspot.slug,
+        title: hotspot.title,
+      },
+      pathname: "/hotspot/[slug]/review-compose",
+    } as Href);
+  };
+
+  const confirmDeleteHotspotReview = async (review: HotspotReview) => {
+    if (!review.isOwner || deletingReviewId !== null) {
+      return;
+    }
+
+    if (!authSession.isAuthenticated) {
+      setReviewPendingDeletion(null);
+      Alert.alert("Cần đăng nhập", "Bạn cần đăng nhập để xóa bài đánh giá.");
+      return;
+    }
+
+    setDeletingReviewId(review.reviewId);
+
+    try {
+      const accessToken = await getValidAccessToken();
+
+      if (!accessToken) {
+        setReviewPendingDeletion(null);
+        Alert.alert(
+          "Phiên đăng nhập hết hạn",
+          "Vui lòng đăng nhập lại trước khi xóa bài đánh giá.",
+        );
+        return;
+      }
+
+      await deleteReview({
+        accessToken,
+        reviewId: review.reviewId,
+        tokenType: authSession.tokenType,
+      });
+
+      setApiHotspotReviews((currentReviews) =>
+        currentReviews.filter(
+          (currentReview) => currentReview.reviewId !== review.reviewId,
+        ),
+      );
+      setReviewPendingDeletion(null);
+      Alert.alert("Đã xóa", "Bài đánh giá đã được xóa.");
+    } catch (error) {
+      Alert.alert(
+        "Không thể xóa bài",
+        error instanceof Error
+          ? error.message
+          : "Đã có lỗi xảy ra khi xóa bài đánh giá.",
+      );
+    } finally {
+      setDeletingReviewId(null);
+    }
+  };
+
+  const handleDeleteHotspotReview = (review: HotspotReview) => {
+    setReviewPendingDeletion(review);
+  };
   const hasPersistedRelatedRoutes =
     Array.isArray(apiRelatedRoutes) && apiRelatedRoutes.length > 0;
   const isRelatedRoutesLoading =
@@ -3308,9 +3783,16 @@ export default function HotspotDetailScreen() {
     persistedLikedPostIds,
     likingPostIds,
   );
-  const personalExperienceItems = dedupePersonalExperienceItems(
-    apiPersonalExperienceItems,
+  const apiReviewPersonalExperienceItems =
+    buildApiReviewPersonalExperienceItems(apiHotspotReviews, likingReviewIds);
+  const personalExperienceItems = sortPersonalExperienceItemsByNewest(
+    dedupePersonalExperienceItems([
+      ...apiReviewPersonalExperienceItems,
+      ...apiPersonalExperienceItems,
+    ]),
   );
+  const personalExperienceErrorMessage =
+    hotspotReviewsError ?? hotspotPostsError;
   const summaryStats = buildSummaryStats({
     apiHotspot: remoteHotspot,
     hotspot,
@@ -3321,195 +3803,123 @@ export default function HotspotDetailScreen() {
     <View className="flex-1" style={{ backgroundColor: screenBackground }}>
       <StatusBar style="light" />
 
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          heroShadowStyle,
-          heroContainerStyle,
-          {
-            borderBottomLeftRadius: 36,
-            borderBottomRightRadius: 36,
-            left: 0,
-            overflow: "hidden",
-            position: "absolute",
-            right: 0,
-            top: 0,
-            zIndex: 0,
-          },
-        ]}
-      >
-        <Animated.View
-          style={[
-            heroMediaStyle,
-            {
-              bottom: 0,
-              left: 0,
-              position: "absolute",
-              right: 0,
-              top: 0,
-            },
-          ]}
-        >
-          <Image
-            source={activeHeroImageUri}
-            contentFit="cover"
-            transition={220}
-            cachePolicy="memory-disk"
-            style={{ height: "100%", width: "100%" }}
-          />
-        </Animated.View>
-
-        <LinearGradient
-          colors={[
-            "rgba(0, 0, 0, 0)",
-            "rgba(0, 0, 0, 0.04)",
-            "rgba(5, 16, 28, 0.32)",
-          ]}
-          locations={[0, 0.58, 1]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
-        />
-      </Animated.View>
-
-      <Animated.View
-        pointerEvents="box-none"
-        style={[
-          heroHeaderOverlayStyle,
-          {
-            left: 0,
-            position: "absolute",
-            right: 0,
-            top: 0,
-            zIndex: 3,
-          },
-        ]}
-      >
-        <View className="px-4" style={{ paddingTop: insets.top + 8 }}>
-          <View style={{ alignSelf: "center", maxWidth: 520, width: "100%" }}>
-            <View className="flex-row items-center justify-between">
-              <Pressable
-                className="h-[52px] w-[52px] items-center justify-center rounded-full bg-black/22"
-                hitSlop={8}
-                onPress={() => router.back()}
-              >
-                <SymbolView
-                  name={{
-                    ios: "chevron.left",
-                    android: "arrow_back",
-                    web: "arrow_back",
-                  }}
-                  size={20}
-                  tintColor="#FFFFFF"
-                />
-              </Pressable>
-
-              <View className="flex-1 px-4">
-                <Text
-                  className="text-center text-[14px] font-bold text-white"
-                  numberOfLines={1}
-                >
-                  {hotspot.title}
-                </Text>
-              </View>
-
-              <Pressable
-                className="h-[52px] w-[52px] items-center justify-center rounded-full bg-black/22"
-                hitSlop={8}
-                onPress={() => router.replace("/hotspots")}
-              >
-                <SymbolView
-                  name={{
-                    ios: "list.bullet",
-                    android: "view_list",
-                    web: "view_list",
-                  }}
-                  size={20}
-                  tintColor="#FFFFFF"
-                />
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Animated.View>
-
-      <Animated.View
-        pointerEvents="box-none"
-        style={[
-          heroFloatingActionStyle,
-          {
-            position: "absolute",
-            right: 20,
-            top: heroHeightExpanded - contentOverlap - 22,
-            zIndex: 3,
-          },
-        ]}
-      >
-        <Pressable
-          className="h-12 w-12 items-center justify-center rounded-full"
-          onPress={() => router.replace("/hotspots")}
-          style={buttonShadowStyle}
-        >
-          <LinearGradient
-            colors={loginGradientColors}
-            end={{ x: 1, y: 0.5 }}
-            locations={[0, 0.58, 1]}
-            start={{ x: 0, y: 0.5 }}
-            className="h-12 w-12 items-center justify-center rounded-full"
-          >
-            <SymbolView
-              name={{
-                ios: "paperplane.fill",
-                android: "near_me",
-                web: "near_me",
-              }}
-              size={17}
-              tintColor="#FFFFFF"
-            />
-          </LinearGradient>
-        </Pressable>
-      </Animated.View>
-
-      <HeroScrollHint bottomOffset={heroScrollHintBottom} scrollY={scrollY} />
-
-      <SafeAreaView className="flex-1" edges={["left", "right", "bottom"]}>
+      <SafeAreaView className="flex-1" edges={["left", "right"]}>
         <Animated.ScrollView
           bounces={false}
           overScrollMode="never"
           style={{
-            elevation: Platform.OS === "android" ? 2 : undefined,
             flex: 1,
-            zIndex: 1,
-          }}
-          contentContainerStyle={{
-            paddingTop: heroHeightExpanded - contentOverlap,
           }}
           onScroll={handleScroll}
           scrollEnabled={!isMapInteracting}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
-          {galleryPreviewImages.length > 1 ? (
+          <View
+            className="overflow-hidden bg-[#EEE8EC]"
+            style={[heroShadowStyle, { height: heroHeight }]}
+          >
             <View
-              pointerEvents="box-none"
+              onTouchEnd={handleHeroTouchEnd}
+              onTouchStart={handleHeroTouchStart}
+              style={{ height: heroHeight, width: "100%" }}
+            >
+              <Image
+                key={`${hotspot.slug}-hero-image-${activeGalleryIndex}`}
+                source={activeHeroImageUri}
+                contentFit="cover"
+                transition={180}
+                cachePolicy="memory-disk"
+                style={{ height: "100%", width: "100%" }}
+              />
+            </View>
+
+            <LinearGradient
+              pointerEvents="none"
+              colors={[
+                "rgba(5, 16, 28, 0.34)",
+                "rgba(5, 16, 28, 0)",
+                "rgba(5, 16, 28, 0.24)",
+              ]}
+              locations={[0, 0.35, 1]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
               style={{
+                bottom: 0,
                 left: 0,
-                minHeight: heroHeightExpanded,
                 position: "absolute",
                 right: 0,
                 top: 0,
               }}
+            />
+
+            <View
+              pointerEvents="box-none"
+              style={{
+                left: 0,
+                position: "absolute",
+                right: 0,
+                top: 0,
+                zIndex: 3,
+              }}
             >
+              <View className="px-4" style={{ paddingTop: insets.top + 8 }}>
+                <View
+                  style={{ alignSelf: "center", maxWidth: 520, width: "100%" }}
+                >
+                  <View className="flex-row items-center justify-between">
+                    <Pressable
+                      className="h-11 w-11 items-center justify-center rounded-full bg-black/30"
+                      hitSlop={8}
+                      onPress={() => router.back()}
+                    >
+                      <SymbolView
+                        name={{
+                          ios: "chevron.left",
+                          android: "arrow_back",
+                          web: "arrow_back",
+                        }}
+                        size={19}
+                        tintColor="#FFFFFF"
+                      />
+                    </Pressable>
+
+                    <View className="flex-1" />
+
+                    <Pressable
+                      className="h-11 w-11 items-center justify-center rounded-full bg-black/30"
+                      hitSlop={8}
+                      onPress={() => router.replace("/hotspots")}
+                    >
+                      <SymbolView
+                        name={{
+                          ios: "list.bullet",
+                          android: "view_list",
+                          web: "view_list",
+                        }}
+                        size={19}
+                        tintColor="#FFFFFF"
+                      />
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            {galleryPreviewImages.length > 1 && isHeroGalleryVisible ? (
               <View
+                pointerEvents="box-none"
                 className="absolute inset-x-0"
-                style={{
-                  bottom: Math.max(contentOverlap + insets.bottom + 12, 42),
-                }}
+                style={{ bottom: 34, zIndex: 4 }}
               >
                 <ScrollView
                   horizontal
                   nestedScrollEnabled
-                  contentContainerStyle={{ paddingLeft: 20, paddingRight: 30 }}
+                  contentContainerStyle={{
+                    alignItems: "flex-end",
+                    paddingHorizontal: 18,
+                    paddingVertical: 4,
+                  }}
                   showsHorizontalScrollIndicator={false}
                 >
                   {galleryPreviewImages.map((imageUri, index) => (
@@ -3522,27 +3932,22 @@ export default function HotspotDetailScreen() {
                       <HeroGalleryThumb
                         imageUri={imageUri}
                         isActive={index === activeGalleryIndex}
-                        onPress={() =>
-                          setGallerySelection({
-                            index,
-                            slugKey: resolvedSlug,
-                          })
-                        }
+                        onPress={() => handleSelectHeroImage(index)}
                       />
                     </View>
                   ))}
                 </ScrollView>
               </View>
-            </View>
-          ) : null}
+            ) : null}
+          </View>
 
-          <Animated.View
-            className="rounded-t-[34px] rounded-b-[34px] pt-4"
+          <View
+            className="rounded-t-[30px] pt-4"
             style={[
               sheetShadowStyle,
-              sheetLiftStyle,
               {
                 backgroundColor: panelBackground,
+                marginTop: -24,
                 minHeight: screenHeight,
                 paddingBottom: detailSheetBottomPadding,
                 paddingHorizontal: detailSheetHorizontalPadding,
@@ -3561,13 +3966,38 @@ export default function HotspotDetailScreen() {
                 </Text>
                 <Text
                   className="text-[22px] font-semibold text-[#2B2233]"
-                  style={sectionTitleTextStyle}
+                  style={[sectionTitleTextStyle, { lineHeight: 20 }]}
                 >
                   {hotspot.title}
                 </Text>
+
+                <View className="mt-1 flex-row items-center gap-1.5">
+                  <Text
+                    className="text-[13px] font-semibold text-[#3B4454]"
+                    style={{ includeFontPadding: false, lineHeight: 15 }}
+                  >
+                    {hotspot.rating.toFixed(1).replace(".", ",")}
+                  </Text>
+
+                  <RatingStars
+                    activeTintColor="#FFC93C"
+                    inactiveTintColor="#DFD7E2"
+                    rating={hotspot.rating}
+                    size={13}
+                  />
+
+                  <Text
+                    className="text-[13px] text-[#6F657A]"
+                    style={{ includeFontPadding: false, lineHeight: 15 }}
+                  >
+                    ({hotspot.reviews})
+                  </Text>
+                </View>
               </View>
 
-              {overviewText ? <HotspotOverviewSection text={overviewText} /> : null}
+              {overviewText ? (
+                <HotspotOverviewSection text={overviewText} />
+              ) : null}
 
               <SummaryStatsRow items={summaryStats} />
 
@@ -3618,7 +4048,10 @@ export default function HotspotDetailScreen() {
 
               {relatedRoutesError ? (
                 <View className="rounded-[16px] border border-[#F9E2EA] bg-[#FFF8FC] px-4 py-4">
-                  <Text className="text-[14px] font-bold text-[#C2416C]" style={{ lineHeight: 18 }}>
+                  <Text
+                    className="text-[14px] font-bold text-[#C2416C]"
+                    style={{ lineHeight: 18 }}
+                  >
                     {relatedRoutesError}
                   </Text>
                 </View>
@@ -3658,10 +4091,16 @@ export default function HotspotDetailScreen() {
                   className="rounded-[16px] bg-white px-5 py-5"
                   style={cardShadowStyle}
                 >
-                  <Text className="text-[16px] font-semibold text-[#2B2233]" style={{ lineHeight: 20 }}>
+                  <Text
+                    className="text-[16px] font-semibold text-[#2B2233]"
+                    style={{ lineHeight: 20 }}
+                  >
                     Chưa có route published
                   </Text>
-                  <Text className="mt-2 text-[15px]" style={sectionBodyTextStyle}>
+                  <Text
+                    className="mt-2 text-[15px]"
+                    style={sectionBodyTextStyle}
+                  >
                     {`API route theo hotspot/${resolvedHotspotId} hiện chưa trả về tuyến published nào cho điểm đến này.`}
                   </Text>
                 </View>
@@ -3677,13 +4116,20 @@ export default function HotspotDetailScreen() {
                     }
                   : null
               }
+              deletingReviewId={deletingReviewId}
               isCheckedIn={isCheckedIn}
-              isLoadingReviews={isHotspotPostsLoading}
+              isLoadingReviews={
+                isHotspotReviewsLoading || isHotspotPostsLoading
+              }
               items={personalExperienceItems}
+              onDeleteReview={handleDeleteHotspotReview}
+              onEditReview={handleEditHotspotReview}
               onPressLike={handlePressLikeHotspotPost}
-              reviewsErrorMessage={hotspotPostsError}
+              onPressLikeReview={handlePressLikeHotspotReview}
+              reviewsErrorMessage={personalExperienceErrorMessage}
+              totalReviewLabel={hotspot.reviews}
             />
-          </Animated.View>
+          </View>
         </Animated.ScrollView>
 
         {!isCheckedIn && !isCheckinUiPending ? (
@@ -3719,6 +4165,20 @@ export default function HotspotDetailScreen() {
             }}
           />
         ) : null}
+
+        <ReviewDeleteDialog
+          isDeleting={
+            reviewPendingDeletion !== null &&
+            deletingReviewId === reviewPendingDeletion.reviewId
+          }
+          onCancel={() => setReviewPendingDeletion(null)}
+          onConfirm={() => {
+            if (reviewPendingDeletion) {
+              void confirmDeleteHotspotReview(reviewPendingDeletion);
+            }
+          }}
+          visible={reviewPendingDeletion !== null}
+        />
       </SafeAreaView>
     </View>
   );

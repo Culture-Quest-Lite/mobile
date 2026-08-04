@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import { SymbolView } from '@/components/ui/symbol-view';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -61,17 +62,6 @@ type ExplorerSummary = {
   username: string;
 };
 
-function getProfileInitials(name: string, username: string) {
-  const source = name.trim() || username.replace(/^@+/, '').trim();
-
-  if (!source) return 'ME';
-
-  const parts = source.split(/\s+/).filter(Boolean);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-
-  return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase();
-}
-
 function ExplorerHeaderAvatar({
   avatar,
   level,
@@ -90,21 +80,13 @@ function ExplorerHeaderAvatar({
         start={{ x: 0, y: 0.1 }}
         className="h-16 w-16 rounded-full p-[2px]"
       >
-        <View className="flex-1 rounded-full bg-white p-[3px]">
-          {shouldShowFallback ? (
-            <View className="flex-1 items-center justify-center rounded-full bg-[#FFF1F6]">
-              <Text className="text-[18px] font-black text-[#D9587F]">{initials}</Text>
-            </View>
-          ) : (
-            <Image
-              source={avatar}
-              contentFit="cover"
-              transition={180}
-              cachePolicy="memory-disk"
-              onError={() => setFailedAvatar(avatar)}
-              style={{ flex: 1, borderRadius: 999 }}
-            />
-          )}
+        <View className="flex-1 items-center justify-center rounded-full bg-white p-[3px]">
+          <UserAvatar
+            displayName={name}
+            size={54}
+            uri={avatar}
+            username={username}
+          />
         </View>
       </LinearGradient>
 
@@ -554,7 +536,7 @@ export default function ExploreScreen() {
                 accessibilityLabel="Mở thông báo"
                 className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
                 hitSlop={8}
-                onPress={() => router.push('/notifications')}
+                onPress={() => router.push('/notifications' as Href)}
               >
                 <SymbolView
                   name={{ ios: 'bell', android: 'notifications', web: 'notifications' }}

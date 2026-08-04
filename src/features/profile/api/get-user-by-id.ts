@@ -28,6 +28,7 @@ type GetUserProfileByIdResponse = {
   totalFollowers: number;
   totalFollowing: number;
   totalPosts: number;
+  isFollowing?: boolean | null;
 };
 
 const meaninglessTextValues = new Set(["", "string", "null", "undefined"]);
@@ -220,6 +221,7 @@ function mapGetUserProfileByIdResponseToProfile(
     totalPosts: response.totalPosts,
     username: normalizedUsername,
     xpToNext: null,
+    isFollowing: response.isFollowing ?? null,
   };
 }
 

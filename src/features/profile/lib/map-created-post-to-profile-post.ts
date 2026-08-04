@@ -77,6 +77,6 @@ export function mapCreatedPostToProfilePost(
     pointRemaining: createdPost.pointRemaining,
     replyCount: 0,
     shareCount: createdPost.shareCount,
-    sharedPost: null,
+    sharedPost: createdPost.sharedPost,
   };
 }

@@ -1,5 +1,7 @@
 import type { ImageSourcePropType } from "react-native";
 
+import type { SharedPostSummary } from "@/lib/shared-post";
+
 import type { CommunityPost } from "./community-demo";
 
 export type CommunityFeedMediaItem = {
@@ -12,6 +14,7 @@ export type CommunityFeedPost = Omit<CommunityPost, "image"> & {
   canLike?: boolean;
   canOpenProfile?: boolean;
   commentCountValue?: number | null;
+  createdAt?: string | null;
   hotspotIds?: number[];
   image?: ImageSourcePropType | null;
   isLiked?: boolean;
@@ -22,7 +25,8 @@ export type CommunityFeedPost = Omit<CommunityPost, "image"> & {
   replyCountValue?: number | null;
   routeIds?: number[];
   shareCountValue?: number | null;
-  sharedText?: string | null;
+  sharedPost?: SharedPostSummary | null;
+  status?: string;
   visibility?: string;
 };
 
@@ -70,6 +74,20 @@ export function getCachedCommunityPost(postId?: number | null) {
 
 export function getCachedCommunityPosts() {
   return Array.from(postsById.values());
+}
+
+export function clearCommunityPostCache() {
+  postsById.clear();
+}
+
+export function removeCachedCommunityPost(postId?: number | null) {
+  const resolvedPostId = normalizePostId(postId);
+
+  if (resolvedPostId === null) {
+    return false;
+  }
+
+  return postsById.delete(resolvedPostId);
 }
 
 export function updateCachedCommunityPost(
