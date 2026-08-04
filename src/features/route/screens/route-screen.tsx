@@ -14,6 +14,7 @@ import { SymbolView } from "expo-symbols";
 import {
   type ComponentProps,
   useCallback,
+  useEffect,
   useMemo,
   useState
 } from "react";
@@ -50,6 +51,10 @@ import {
   type UserRouteProgressDto,
 } from "@/features/route/api/route-api";
 import { getMyUserPlans, type UserPlan } from "@/features/route/api/user-plan-api";
+import {
+  myRouteGroupsDemo,
+  type RouteGroupDemo,
+} from "@/features/route/data/route-group-demo";
 import { usePremiumStatus } from "@/features/profile/hooks/use-premium-status";
 
 type Tab =
@@ -248,6 +253,14 @@ export default function RouteScreen() {
   const [myPlans, setMyPlans] = useState<UserPlan[]>([]);
   const [planError, setPlanError] = useState<string | null>(null);
   const [myRecordJourneys, setMyRecordJourneys] = useState<RecordRouteDto[]>([]);
+  const { ensureLoaded: ensurePremiumLoaded } = usePremiumStatus();
+
+  // Màn này có nhiều nút gọi `requirePremium()`. Nếu store isPremium chưa được
+  // nạp (VD user mở thẳng tab Tuyến sau khi khởi động, chưa qua Home/Explore)
+  // thì mặc định là false -> user Premium thật sẽ bị chặn oan. Nạp sẵn ở đây.
+  useEffect(() => {
+    void ensurePremiumLoaded();
+  }, [ensurePremiumLoaded]);
 
   useFocusEffect(
     useCallback(() => {

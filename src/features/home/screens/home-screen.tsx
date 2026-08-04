@@ -1483,10 +1483,6 @@ function ExplorerHeaderAvatar({
   name,
   username,
 }: Omit<ExplorerSummary, "isPremium">) {
-  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
-  const initials = getProfileInitials(name, username);
-  const shouldShowFallback = !avatar || failedAvatar === avatar;
-
   return (
     <View className="relative">
       <LinearGradient

@@ -133,6 +133,8 @@ export default function RecordJourneyScreen() {
       longitude: hotspot.longitude ?? DEFAULT_COORDINATE.longitude,
       openingTime: hotspot.openingTime ?? "",
       closingTime: hotspot.closingTime ?? "",
+      averageRating: null,
+      totalReviews: null,
       createByUserId: null, createdAt: "", description: "", endTime: "",
       estimatedDurationMax: null, estimatedDurationMin: null, historyInformation: "",
       isCheckedIn: true, medias: [], point: null, startTime: "",

@@ -29,16 +29,16 @@ import { routeSystemAlert } from "@/features/route/components/route-system-alert
 /**
  * CÔNG TẮC BẬT/TẮT TOÀN BỘ VIỆC CHẶN TÍNH NĂNG PREMIUM.
  *
- * - `false` (hiện tại): `requirePremium()` luôn trả về `true`, mọi tính năng
- *   Premium (record journey, user plan...) mở cho tất cả user. Toàn bộ code
- *   chặn vẫn được giữ nguyên tại chỗ, không xoá.
- * - `true`: khôi phục lại việc chặn — alert + điều hướng sang trang gói đăng ký
- *   cho user chưa Premium.
+ * - `true` (hiện tại): chặn thật — user chưa Premium sẽ thấy alert + bị điều
+ *   hướng sang trang gói đăng ký khi chạm vào tính năng Premium.
+ * - `false`: `requirePremium()` luôn trả về `true`, mọi tính năng Premium
+ *   (record journey, user plan...) mở cho tất cả user. Toàn bộ code chặn vẫn
+ *   được giữ nguyên tại chỗ, không xoá.
  *
- * Chỉ cần đổi đúng 1 dòng này để bật lại, không phải sửa lại từng màn hình.
+ * Chỉ cần đổi đúng 1 dòng này để bật/tắt, không phải sửa lại từng màn hình.
  * Lưu ý: đây chỉ là lớp UX phía client, backend vẫn nên tự kiểm tra quyền.
  */
-export const PREMIUM_GATE_ENABLED = false;
+export const PREMIUM_GATE_ENABLED = true;
 
 export type PremiumStatusState = {
   isPremium: boolean;
