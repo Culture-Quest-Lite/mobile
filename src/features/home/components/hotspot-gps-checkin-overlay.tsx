@@ -890,17 +890,17 @@ function VerificationMapPreview({
 
 function SuccessRing() {
   return (
-    <View className="items-center justify-center" style={{ height: 168 }}>
+    <View className="items-center justify-center" style={{ height: 124 }}>
       <View
         className="items-center justify-center overflow-hidden rounded-full"
-        style={{ height: 168, width: 168 }}
+        style={{ height: 124, width: 124 }}
       >
         <Image
           source={SUCCESS_ILLUSTRATION}
           contentFit="cover"
           cachePolicy="memory-disk"
           transition={220}
-          style={{ height: 168, width: 168 }}
+          style={{ height: 124, width: 124 }}
         />
       </View>
     </View>
@@ -1203,14 +1203,7 @@ export function HotspotGpsCheckinOverlay({
     : (checkInResult?.totalPointEarned ?? null);
   const checkInMetaLabel = isExistingCheckIn
     ? "Hệ thống xác nhận bạn đã check-in hotspot này trước đó."
-    : checkInResult
-      ? [
-          `Progress #${checkInResult.userProgressId}`,
-          `Hotspot #${checkInResult.hotspotId}`,
-        ]
-          .filter(Boolean)
-          .join(" · ")
-      : null;
+    : null;
   const isSuccessStage = checkinStage === "success";
   const verifyButtonColors = verificationCopy.primaryDisabled
     ? VERIFY_BUTTON_DISABLED_COLORS
@@ -1357,9 +1350,9 @@ export function HotspotGpsCheckinOverlay({
             <ScrollView
               className="flex-1"
               contentContainerStyle={{
-                paddingBottom: insets.bottom + 20,
+                paddingBottom: insets.bottom + 12,
                 paddingHorizontal: 20,
-                paddingTop: 8,
+                paddingTop: 4,
               }}
               showsVerticalScrollIndicator={false}
             >
@@ -1382,11 +1375,11 @@ export function HotspotGpsCheckinOverlay({
                 />
               </Pressable>
 
-              <View className="mt-2 items-center">
+              <View className="items-center">
                 <SuccessRing />
 
                 <Text
-                  className="mt-2 text-center text-[24px] font-extrabold leading-[28px]"
+                  className="mt-1 text-center text-[22px] font-extrabold leading-[26px]"
                   style={{ color: SUCCESS_TITLE_COLOR }}
                 >
                   {isExistingCheckIn
@@ -1394,7 +1387,7 @@ export function HotspotGpsCheckinOverlay({
                     : "Check-in thành công!"}
                 </Text>
                 <Text
-                  className="mt-1.5 text-center text-[13px] font-medium leading-[18px]"
+                  className="mt-1.5 text-center text-[12px] font-medium leading-[12px]"
                   style={{ color: SUCCESS_SUBTITLE_COLOR }}
                 >
                   {isExistingCheckIn
@@ -1402,7 +1395,7 @@ export function HotspotGpsCheckinOverlay({
                     : "Cảm ơn bạn đã khám phá địa điểm này.\nHẹn gặp lại bạn ở những điểm đến tiếp theo!"}
                 </Text>
                 <Text
-                  className="mt-1 text-center text-[13px] font-semibold leading-[17px]"
+                  className="mt-1 text-center text-[13px] font-semibold leading-[15px]"
                   style={{ color: SUCCESS_TITLE_COLOR }}
                 >
                   {hotspot.title}
@@ -1410,7 +1403,7 @@ export function HotspotGpsCheckinOverlay({
               </View>
 
               <View
-                className="mt-5 rounded-[28px] border px-4 py-4"
+                className="mt-3 rounded-[24px] border px-4 py-3"
                 style={[
                   panelShadowStyle,
                   {
@@ -1427,29 +1420,29 @@ export function HotspotGpsCheckinOverlay({
                     className={
                       index === successRows.length - 1
                         ? "flex-row items-center"
-                        : "mb-2.5 flex-row items-center"
+                        : "mb-1.5 flex-row items-center"
                     }
                   >
                     <View
-                      className="h-10 w-10 items-center justify-center rounded-full"
+                      className="h-8 w-8 items-center justify-center rounded-full"
                       style={{ backgroundColor: item.iconBackground }}
                     >
                       <SymbolView
                         name={item.icon}
-                        size={17}
+                        size={15}
                         tintColor="#FFFFFF"
                       />
                     </View>
 
                     <View className="ml-3 flex-1">
                       <Text
-                        className="text-[11px] font-medium uppercase leading-[14px] tracking-[0.8px]"
+                        className="text-[12px] font-medium uppercase leading-[12px] tracking-[0.8px]"
                         style={{ color: SUCCESS_CARD_LABEL }}
                       >
                         {item.label}
                       </Text>
                       <Text
-                        className="text-[15px] font-semibold leading-[19px]"
+                        className="mt-0.5 text-[11px] font-normal leading-[12px]"
                         style={{ color: SUCCESS_CARD_VALUE }}
                       >
                         {item.value}
@@ -1476,10 +1469,10 @@ export function HotspotGpsCheckinOverlay({
                 colors={SUCCESS_PRAISE_CARD_COLORS}
                 end={{ x: 1, y: 1 }}
                 start={{ x: 0, y: 0 }}
-                className="mt-4 flex-row items-center rounded-[24px] px-4 py-3.5"
+                className="mt-2.5 flex-row items-center rounded-[20px] px-3.5 py-2.5"
               >
                 <View
-                  className="h-11 w-11 items-center justify-center rounded-full"
+                  className="h-9 w-9 items-center justify-center rounded-full"
                   style={{ backgroundColor: SUCCESS_TITLE_COLOR }}
                 >
                   <SymbolView
@@ -1490,20 +1483,20 @@ export function HotspotGpsCheckinOverlay({
                         web: "workspace_premium",
                       } as SymbolName
                     }
-                    size={20}
+                    size={18}
                     tintColor="#FFFFFF"
                   />
                 </View>
 
                 <View className="ml-3 flex-1">
                   <Text
-                    className="text-[14px] font-bold leading-[18px]"
+                    className="text-[13px] font-bold leading-[16px]"
                     style={{ color: SUCCESS_TITLE_COLOR }}
                   >
                     Bạn thật tuyệt vời!
                   </Text>
                   <Text
-                    className="text-[12px] font-medium leading-[16px]"
+                    className="text-[11px] font-medium leading-[14px]"
                     style={{ color: SUCCESS_SUBTITLE_COLOR }}
                   >
                     Hành trình khám phá của bạn ngày càng thú vị hơn đấy!
@@ -1524,25 +1517,25 @@ export function HotspotGpsCheckinOverlay({
               </LinearGradient>
 
               {isStoryAvailable && isStoryPrefetching ? (
-                <View className="mt-3 items-center">
+                <View className="mt-2 items-center">
                   <ActivityIndicator color={SUCCESS_TITLE_COLOR} size="small" />
                 </View>
               ) : null}
 
               {isStoryAvailable && storyPrefetchError ? (
-                <Text className="mt-3 text-center text-[13px] leading-[17px] text-[#D97706]">
+                <Text className="mt-2 text-center text-[12px] leading-[15px] text-[#D97706]">
                   {storyPrefetchError}
                 </Text>
               ) : null}
 
               {checkInMetaLabel ? (
-                <Text className="mt-3 text-center text-[12px] leading-[16px] text-[#8E869A]">
+                <Text className="mt-2 text-center text-[11px] leading-[14px] text-[#8E869A]">
                   {checkInMetaLabel}
                 </Text>
               ) : null}
 
               <Pressable
-                className="mt-4 overflow-hidden rounded-full"
+                className="mt-3 overflow-hidden rounded-full"
                 onPress={onClose}
                 style={buttonShadowStyle}
               >
@@ -1551,9 +1544,9 @@ export function HotspotGpsCheckinOverlay({
                   end={{ x: 1, y: 0.5 }}
                   locations={[0, 0.58, 1]}
                   start={{ x: 0, y: 0.5 }}
-                  className="flex-row items-center justify-center px-5 py-4"
+                  className="flex-row items-center justify-center px-5 py-3.5"
                 >
-                  <Text className="text-[16px] font-bold text-white">
+                  <Text className="text-[15px] font-bold text-white">
                     Tiếp tục khám phá
                   </Text>
                   <View className="absolute right-4">
@@ -1574,12 +1567,12 @@ export function HotspotGpsCheckinOverlay({
 
               {isStoryAvailable ? (
                 <Pressable
-                  className="mt-3 items-center py-1"
+                  className="mt-2 items-center py-1"
                   hitSlop={8}
                   onPress={() => router.push(storiesHref)}
                 >
                   <Text
-                    className="text-[14px] font-semibold leading-[18px]"
+                    className="text-[13px] font-semibold leading-[16px]"
                     style={{ color: SUCCESS_TITLE_COLOR }}
                   >
                     Xem story hotspot
