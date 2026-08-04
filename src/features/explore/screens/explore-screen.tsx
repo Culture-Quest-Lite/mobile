@@ -21,6 +21,7 @@ import { getValidAccessToken, useAuthSession } from '@/features/auth/hooks/use-a
 import { AppMap } from '@/features/map/components/app-map';
 import { getGamificationLevels } from '@/features/profile/api/get-levels';
 import { getMyProfile } from '@/features/profile/api/get-me';
+import { setPremiumStatusFromProfile, usePremiumStatus } from '@/features/profile/hooks/use-premium-status';
 import { applyLevelProgressToProfile } from '@/features/profile/lib/level-progress';
 import {
   type NearbyHotspotDto,
@@ -55,12 +56,18 @@ type SymbolName = ComponentProps<typeof SymbolView>['name'];
 
 type ExplorerSummary = {
   avatar: string | null;
+  isPremium: boolean;
   level: number | null;
   name: string;
   username: string;
 };
 
-function ExplorerHeaderAvatar({ avatar, level, name, username }: ExplorerSummary) {
+function ExplorerHeaderAvatar({
+  avatar,
+  level,
+  name,
+  username,
+}: Omit<ExplorerSummary, 'isPremium'>) {
   return (
     <View className="relative">
       <LinearGradient
@@ -249,6 +256,7 @@ function ExploreMap({
 export default function ExploreScreen() {
   const router = useRouter();
   const session = useAuthSession();
+  const { requirePremium } = usePremiumStatus();
   const { width } = useWindowDimensions();
   const [activeCategory, setActiveCategory] = useState<string>('Tất cả');
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
@@ -314,8 +322,13 @@ export default function ExploreScreen() {
           if (!isActive) return;
 
           const resolvedName = profile.name.trim() || profile.username.trim();
+          // Đẩy isPremium vào store dùng chung để các màn/hành động Premium
+          // khác trong app (VD nút "Ghi hành trình") đọc được giá trị mới
+          // nhất mà không phải tự gọi lại getMyProfile().
+          setPremiumStatusFromProfile(profile.isPremium);
           setExplorerSummary({
             avatar: profile.avatar?.trim() || null,
+            isPremium: profile.isPremium,
             level: profile.level,
             name: resolvedName || 'Ngọc',
             username: profile.username.trim(),
@@ -456,6 +469,7 @@ export default function ExploreScreen() {
     explorerSummary?.username.trim() || session.username?.trim() || explorerName;
   const explorerAvatar = explorerSummary?.avatar ?? null;
   const explorerLevel = explorerSummary?.level ?? null;
+  const isPremiumExplorer = explorerSummary?.isPremium ?? false;
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['top', 'left', 'right']}>
@@ -571,7 +585,10 @@ export default function ExploreScreen() {
           {/* Quick Actions Toolbar */}
           <View className="flex-row items-center justify-between rounded-2xl border border-[#FCDDEC] bg-[#FFF8FC] p-3 shadow-sm">
             <Pressable
-              onPress={() => router.push('/route/custom/plan')}
+              onPress={() => {
+                if (!requirePremium("Tạo kế hoạch hành trình (User Plan)")) return;
+                router.push('/route/custom/plan');
+              }}
               className="flex-1 items-center gap-1.5"
             >
               <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#7C3AED]">
@@ -594,7 +611,10 @@ export default function ExploreScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => router.push('/route/custom/record')}
+              onPress={() => {
+                if (!requirePremium('Ghi hành trình cá nhân (Record Journey)')) return;
+                router.push('/route/custom/record');
+              }}
               className="flex-1 items-center gap-1.5"
             >
               <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#EB489B]">
@@ -638,64 +658,112 @@ export default function ExploreScreen() {
 
           </View>
 
-          {/* Compact Premium introduction */}
-          <Pressable
-            onPress={() => router.push('/subscription')}
-            className="overflow-hidden rounded-[28px] border border-[#E9D5FF] bg-[#FAF5FF] p-5"
-            style={heroShadowStyle}
-          >
-            <View className="absolute -right-5 -top-6 h-24 w-24 rounded-full bg-[#E9D5FF]/70" />
-            <View className="absolute -bottom-8 right-14 h-20 w-20 rounded-full bg-[#FBCFE8]/60" />
+          {/* Premium status / upsell card (driven by real subscription data) */}
+          {isPremiumExplorer ? (
+            <View
+              className="overflow-hidden rounded-[28px] border border-[#E9D5FF] bg-[#FAF5FF] p-5"
+              style={heroShadowStyle}
+            >
+              <View className="absolute -right-5 -top-6 h-24 w-24 rounded-full bg-[#E9D5FF]/70" />
+              <View className="absolute -bottom-8 right-14 h-20 w-20 rounded-full bg-[#FBCFE8]/60" />
 
-            <View className="flex-row items-start justify-between gap-4">
-              <View className="flex-1">
-                <View className="mb-3 flex-row items-center gap-2 self-start rounded-full bg-white px-3 py-1.5">
+              <View className="flex-row items-start justify-between gap-4">
+                <View className="flex-1">
+                  <View className="mb-3 flex-row items-center gap-2 self-start rounded-full bg-white px-3 py-1.5">
+                    <SymbolView
+                      name={{
+                        ios: 'crown.fill',
+                        android: 'workspace_premium',
+                        web: 'workspace_premium',
+                      }}
+                      size={13}
+                      tintColor="#7C3AED"
+                    />
+                    <Text className="text-[10px] font-extrabold uppercase tracking-[1px] text-[#7C3AED]">
+                      Premium Explorer
+                    </Text>
+                  </View>
+
+                  <Text className="text-[22px] font-black leading-7 text-[#2B2233]">
+                    Tài khoản của bạn đã là Premium
+                  </Text>
+                  <Text className="mt-2 text-[13px] leading-5 text-[#6F6678]">
+                    Hành trình độc quyền, AI lập kế hoạch, ghi hành trình Live và trải nghiệm không quảng cáo đã được mở khóa.
+                  </Text>
+                </View>
+
+                <View className="mt-2 h-16 w-16 items-center justify-center rounded-[22px] bg-white">
                   <SymbolView
                     name={{
-                      ios: 'sparkles',
-                      android: 'auto_awesome',
-                      web: 'auto_awesome',
+                      ios: 'crown.fill',
+                      android: 'workspace_premium',
+                      web: 'workspace_premium',
                     }}
-                    size={13}
+                    size={30}
                     tintColor="#7C3AED"
                   />
-                  <Text className="text-[10px] font-extrabold uppercase tracking-[1px] text-[#7C3AED]">
-                    CultureQuest Premium
+                </View>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => router.push('/subscription/premium')}
+              className="overflow-hidden rounded-[28px] border border-[#E9D5FF] bg-[#FAF5FF] p-5"
+              style={heroShadowStyle}
+            >
+              <View className="absolute -right-5 -top-6 h-24 w-24 rounded-full bg-[#E9D5FF]/70" />
+              <View className="absolute -bottom-8 right-14 h-20 w-20 rounded-full bg-[#FBCFE8]/60" />
+
+              <View className="flex-row items-start justify-between gap-4">
+                <View className="flex-1">
+                  <View className="mb-3 flex-row items-center gap-2 self-start rounded-full bg-white px-3 py-1.5">
+                    <SymbolView
+                      name={{
+                        ios: 'sparkles',
+                        android: 'auto_awesome',
+                        web: 'auto_awesome',
+                      }}
+                      size={13}
+                      tintColor="#7C3AED"
+                    />
+                    <Text className="text-[10px] font-extrabold uppercase tracking-[1px] text-[#7C3AED]">
+                      CultureQuest Premium
+                    </Text>
+                  </View>
+
+                  <Text className="text-[22px] font-black leading-7 text-[#2B2233]">
+                    Khám phá nhiều hơn
                   </Text>
+                  <Text className="mt-2 text-[13px] leading-5 text-[#6F6678]">
+                    Mở khóa hành trình độc quyền, nhận thêm XP và tận hưởng trải nghiệm không quảng cáo.
+                  </Text>
+
+                  <View className="mt-4 flex-row items-center gap-2 self-start rounded-full bg-[#7C3AED] px-4 py-2.5">
+                    <Text className="text-[12px] font-extrabold text-white">
+                      Xem quyền lợi Premium
+                    </Text>
+                    <SymbolView
+                      name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                      size={14}
+                      tintColor="#FFFFFF"
+                    />
+                  </View>
                 </View>
 
-                <Text className="text-[22px] font-black leading-7 text-[#2B2233]">
-                  Khám phá nhiều hơn
-                </Text>
-                <Text className="mt-2 text-[13px] leading-5 text-[#6F6678]">
-                  Mở khóa hành trình độc quyền, nhận thêm XP và tận hưởng trải nghiệm không quảng cáo.
-                </Text>
-
-                <View className="mt-4 flex-row items-center gap-2 self-start rounded-full bg-[#7C3AED] px-4 py-2.5">
-                  <Text className="text-[12px] font-extrabold text-white">
-                    Xem quyền lợi Premium
-                  </Text>
+                <View className="mt-2 h-16 w-16 items-center justify-center rounded-[22px] bg-white">
                   <SymbolView
-                    name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                    size={14}
-                    tintColor="#FFFFFF"
+                    name={{
+                      ios: 'crown.fill',
+                      android: 'workspace_premium',
+                      web: 'workspace_premium',
+                    }}
+                    size={30}
+                    tintColor="#7C3AED"
                   />
                 </View>
               </View>
-
-              <View className="mt-2 h-16 w-16 items-center justify-center rounded-[22px] bg-white">
-                <SymbolView
-                  name={{
-                    ios: 'crown.fill',
-                    android: 'workspace_premium',
-                    web: 'workspace_premium',
-                  }}
-                  size={30}
-                  tintColor="#7C3AED"
-                />
-              </View>
-            </View>
-          </Pressable>
+            </Pressable>
+          )}
 
           {/* Daily Featured Banner */}
           <View className="rounded-[28px] bg-[#F7F3EA] p-4 border border-[#EBE3D5]">

@@ -25,6 +25,7 @@ import {
 import { searchHotspots } from "@/features/home/api/search-hotspots";
 import { AppMap, type AppMapPoint } from "@/features/map/components/app-map";
 import { getMyProfile } from "@/features/profile/api/get-me";
+import { setPremiumStatusFromProfile, usePremiumStatus } from "@/features/profile/hooks/use-premium-status";
 import {
   createUserPlan,
   optimizeUserPlan,
@@ -108,6 +109,7 @@ function toBrowseStop(
 export default function UserPlanScreen() {
   const router = useRouter();
   const session = useAuthSession();
+  const { canUsePremiumFeatures, isLoaded: isPremiumLoaded, requirePremium } = usePremiumStatus();
   const [systemQuery, setSystemQuery] = useState("");
   const [browseMode, setBrowseMode] = useState<HotspotBrowseMode>("NEARBY");
   const [browseHotspots, setBrowseHotspots] = useState<PlannedStop[]>([]);
@@ -386,6 +388,7 @@ export default function UserPlanScreen() {
         });
         if (cancelled) return;
         setUserAvatarUri(profile.avatar);
+        setPremiumStatusFromProfile(profile.isPremium);
         setUserPoint((current) => ({
           ...current,
           isCurrentUser: true,
@@ -401,6 +404,17 @@ export default function UserPlanScreen() {
       cancelled = true;
     };
   }, [session.isAuthenticated, session.tokenType]);
+
+  /**
+   * Defense-in-depth: "Tạo kế hoạch hành trình" (User Plan, có AI gợi ý/tối
+   * ưu lộ trình) là tính năng Premium. Các entry point (route-screen,
+   * explore-screen) đã chặn trước khi điều hướng vào đây, nhưng nếu user vào
+   * thẳng màn này bằng deep link/back thì vẫn cần chặn lại ở chính màn này.
+   */
+  useEffect(() => {
+    if (!isPremiumLoaded || canUsePremiumFeatures) return;
+    requirePremium("Tạo kế hoạch hành trình (User Plan)");
+  }, [canUsePremiumFeatures, isPremiumLoaded, requirePremium]);
 
   useEffect(() => {
     void locateUser(false);
