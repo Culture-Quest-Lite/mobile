@@ -1,29 +1,55 @@
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 
-export type RecordRouteStatus = "RECORDING" | "DRAFT" | "TRIAL" | string;
+export type RecordRouteStatus =
+  | "RECORDING"
+  | "DRAFT"
+  | "PUBLISHED"
+  | "TRIAL"
+  | string;
 
+/**
+ * Khớp `HotspotResponse` của backend. BE trả nguyên hotspot đầy đủ (kèm
+ * stories/medias) chứ không phải bản rút gọn, và KHÔNG có `orderIndex` —
+ * thứ tự điểm dừng chính là thứ tự phần tử trong mảng `hotspots`.
+ */
 export type RecordRouteHotspotDto = {
   hotspotId: number;
   hotspotName?: string;
   address?: string;
   latitude?: number | null;
   longitude?: number | null;
-  orderIndex?: number | null;
+  openingTime?: string | null;
+  closingTime?: string | null;
+  isCheckIn?: boolean | null;
 };
 
+/** Khớp `RouteResponse` của backend (module content). */
 export type RecordRouteDto = {
   routeId: number;
   routeName?: string;
   description?: string;
+  imageUrl?: string | null;
   status: RecordRouteStatus;
-  type?: "CUSTOM" | string;
+  difficulty?: string | null;
+  estimateTime?: number | null;
+  totalDistance?: number | null;
+  xp?: number | null;
+  point?: number | null;
   tag?: {
     tagId: number;
     tagName: string;
   } | null;
   hotspots?: RecordRouteHotspotDto[];
-  medias?: unknown[];
+  averageRating?: number | null;
+  totalReviews?: number | null;
 };
+
+/**
+ * `finishRecordJourney` phía backend chặn cứng route có dưới 4 story:
+ * "Hành trình cá nhân phải có ít nhất 4 điểm dừng (Hotspot)".
+ * Client chặn trước bằng cùng ngưỡng để user không bấm rồi ăn lỗi 400.
+ */
+export const MIN_RECORD_HOTSPOTS = 4;
 
 export type AuthRequest = {
   accessToken: string;
@@ -54,6 +80,17 @@ function getErrorMessage(body: unknown, status: number) {
   }
   if (typeof body === "string" && body.trim()) return body.trim();
   return `API ghi hành trình lỗi ${status}.`;
+}
+
+/** Error kèm HTTP status để nơi gọi phân biệt được "rỗng" với "hỏng thật". */
+class RecordRouteApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "RecordRouteApiError";
+    this.status = status;
+  }
 }
 
 
@@ -87,7 +124,12 @@ async function requestJson(path: string, { accessToken, tokenType }: AuthRequest
   if (text) {
     try { body = JSON.parse(text) as unknown; } catch { body = text; }
   }
-  if (!response.ok) throw new Error(getErrorMessage(body, response.status));
+  if (!response.ok) {
+    throw new RecordRouteApiError(
+      getErrorMessage(body, response.status),
+      response.status,
+    );
+  }
   return unwrapPayload(body);
 }
 
@@ -122,7 +164,12 @@ async function requestRecordRoute(
     }
   }
 
-  if (!response.ok) throw new Error(getErrorMessage(body, response.status));
+  if (!response.ok) {
+    throw new RecordRouteApiError(
+      getErrorMessage(body, response.status),
+      response.status,
+    );
+  }
 
   const payload = unwrapPayload(body);
   if (!parseRecordRoute(payload)) {
@@ -137,7 +184,10 @@ export function startRecordRoute(auth: AuthRequest) {
   return requestRecordRoute("/api/v1/routes/record", auth, "POST");
 }
 
-/** B3: kết thúc route RECORDING hiện tại và chuyển sang DRAFT. */
+/**
+ * B3: kết thúc route RECORDING hiện tại và chuyển sang DRAFT.
+ * Backend từ chối nếu route có ít hơn {@link MIN_RECORD_HOTSPOTS} điểm dừng.
+ */
 export function finishRecordRoute(auth: AuthRequest) {
   return requestRecordRoute("/api/v1/routes/record/finish", auth, "PUT");
 }
@@ -161,9 +211,36 @@ export function finalizeRecordRoute({ accessToken, routeId, description, tokenTy
 }
 
 
-/** Lấy toàn bộ hành trình CUSTOM của Explorer, gồm RECORDING, DRAFT, TRIAL... */
-export async function getMyRecordJourneys(auth: AuthRequest): Promise<RecordRouteDto[]> {
-  const payload = await requestJson("/api/v1/routes/my-journey", auth);
+/**
+ * Lấy hành trình CUSTOM của Explorer (RECORDING, DRAFT, PUBLISHED, TRIAL...).
+ *
+ * LƯU Ý: `RouteServiceImpl#getMyJourney` KHÔNG trả mảng rỗng mà ném
+ * BusinessException 400 "Không tìm thấy hành trình cá nhân nào" khi user chưa
+ * có route nào. Nếu để lỗi đó nổi lên, mọi user mới vào màn record đều ăn alert
+ * "Không thể tải hành trình" dù chẳng có gì sai. Vì vậy quy 400-rỗng về `[]`,
+ * chỉ ném tiếp các lỗi thật (401, 5xx, mất mạng...).
+ */
+export async function getMyRecordJourneys(
+  auth: AuthRequest,
+  routeStatus?: RecordRouteStatus,
+): Promise<RecordRouteDto[]> {
+  const path = routeStatus
+    ? `/api/v1/routes/my-journey?routeStatus=${encodeURIComponent(routeStatus)}`
+    : "/api/v1/routes/my-journey";
+
+  let payload: unknown;
+  try {
+    payload = await requestJson(path, auth);
+  } catch (error) {
+    if (
+      error instanceof RecordRouteApiError &&
+      error.status === 400 &&
+      /không tìm thấy hành trình cá nhân/i.test(error.message)
+    ) {
+      return [];
+    }
+    throw error;
+  }
 
   const candidates = Array.isArray(payload)
     ? payload

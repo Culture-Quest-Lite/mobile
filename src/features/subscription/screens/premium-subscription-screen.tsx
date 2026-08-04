@@ -1,8 +1,10 @@
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import * as ExpoLinking from "expo-linking";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Image,
   Linking,
   Pressable,
@@ -15,17 +17,76 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { SymbolView } from "@/components/ui/symbol-view";
 import { getValidAccessToken } from "@/features/auth/hooks/use-auth-session";
+import { refreshPremiumStatus } from "@/features/profile/hooks/use-premium-status";
 import {
   type BillingCycle,
   type PremiumPaymentInitResponse,
   type PremiumPlan,
   type PremiumSubscriptionRecord,
+  confirmPremiumPayment,
   getMyPremiumSubscriptions,
   getPremiumPlans,
   subscribePremium,
 } from "../api/premium-subscription-api";
+import {
+  clearPendingPremiumInvoice,
+  readPendingPremiumInvoiceId,
+  savePendingPremiumInvoice,
+} from "../lib/pending-premium-invoice";
 
-const PAYOS_REDIRECT_URL = "culturequest://premium-subscription/payment-result";
+/**
+ * Deep link PayOS gọi lại sau khi thanh toán xong.
+ *
+ * PHẢI dựng bằng `ExpoLinking.createURL` chứ không hardcode: scheme thật của app
+ * là `culturequestlitemobile` (app.json), trước đây hardcode "culturequest://..."
+ * nên OS không resolve được -> app không bao giờ nhận callback -> không refetch
+ * -> isPremium kẹt ở false dù đã thanh toán thành công.
+ *
+ * Path trỏ về đúng route đang tồn tại (`src/app/subscription/premium.tsx`).
+ */
+const PAYOS_REDIRECT_URL = ExpoLinking.createURL("/subscription/premium");
+
+/**
+ * Trong Expo Go, `createURL` trả về `exp://<ip>:8081/--/...` — gửi URL đó lên
+ * PayOS có thể làm bước tạo link thanh toán fail. Khi đó bỏ hẳn redirectUrl để
+ * backend dùng `payos.return-url` mặc định; user vẫn quay về app bằng nút Back
+ * và fallback focus/AppState bên dưới vẫn bắt được.
+ */
+const PAYOS_SAFE_REDIRECT_URL = PAYOS_REDIRECT_URL.startsWith("exp://")
+  ? undefined
+  : PAYOS_REDIRECT_URL;
+
+/**
+ * Sau khi user quay lại app, app gọi `POST /api/user/premium/{invoiceId}/confirm`
+ * để backend đối soát trực tiếp với PayOS (không chờ webhook). Nhưng "quay lại
+ * app" không có nghĩa là "đã trả tiền xong": rất nhiều user bấm Back khi đang
+ * chờ app ngân hàng xử lý, lúc đó PayOS vẫn báo PENDING. Vì vậy vẫn cần gọi
+ * lại vài lần thay vì kết luận ngay sau lần đầu.
+ *
+ * Lịch chờ: dày lúc đầu rồi thưa dần để không spam PayOS. Tổng ~74s mỗi lượt
+ * sync; hết lượt mà vẫn PENDING thì invoice vẫn được giữ lại trên đĩa nên lần
+ * focus / mở lại app sau đó sẽ tự đối soát tiếp.
+ */
+const PAYMENT_POLL_BACKOFF_MS = [
+  2000, 3000, 3000, 5000, 5000, 8000, 8000, 10000, 15000, 15000,
+];
+
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+/** PayOS báo PAID -> backend set invoice ACTIVE + paymentStatus PAID + isPremium. */
+const isActivatedRecord = (record: PremiumSubscriptionRecord) =>
+  record.status === "ACTIVE" && record.paymentStatus === "PAID";
+
+/**
+ * PayOS báo CANCELLED/EXPIRED/FAILED -> backend set paymentStatus FAILED. Đây
+ * là trạng thái kết thúc, phải dừng đối soát ngay thay vì chờ hết 74s rồi báo
+ * "chưa nhận được xác nhận" — user sẽ tưởng mạng chậm và ngồi đợi vô ích.
+ */
+const isRejectedRecord = (record: PremiumSubscriptionRecord) =>
+  record.paymentStatus === "FAILED" || record.status === "CANCELLED";
 
 const formatCurrency = (value?: number | null) => {
   if (!value) return "Liên hệ";
@@ -71,6 +132,21 @@ const getPaymentStatusLabel = (status?: string) => {
     default:
       return status ?? "—";
   }
+};
+
+/**
+ * `qrCode` PayOS trả về là chuỗi VietQR thô (dạng "00020101021238..."), KHÔNG
+ * phải URL ảnh, nên chỉ render bằng <Image> được khi backend đổi sang trả
+ * URL / data-URI. Guard này để không nhồi chuỗi thô vào <Image> (ra ô trắng) và
+ * để không hứa với user là "có QR bên dưới" khi thực tế chẳng có gì hiện ra.
+ */
+const resolveQrImageUri = (qrCode?: string | null) => {
+  if (!qrCode) return null;
+  return qrCode.startsWith("http://") ||
+    qrCode.startsWith("https://") ||
+    qrCode.startsWith("data:image/")
+    ? qrCode
+    : null;
 };
 
 const getPlanPrice = (plan: PremiumPlan, cycle: BillingCycle) =>
@@ -123,22 +199,64 @@ export default function PremiumSubscriptionScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  /**
+   * Invoice đang chờ webhook PayOS xác nhận. null = không có gì để poll.
+   *
+   * Khởi tạo từ ổ đĩa để hồi phục được trường hợp app bị OS kill trong lúc user
+   * đang ở app ngân hàng: quay lại là cold start, nhưng vẫn biết phải chờ
+   * invoice nào. State dùng để render banner, ref dùng để đọc trong vòng poll
+   * async (tránh đọc giá trị cũ qua closure).
+   */
+  const [pendingInvoiceId, setPendingInvoiceId] = useState<number | null>(() =>
+    readPendingPremiumInvoiceId(),
+  );
+  const pendingInvoiceIdRef = useRef<number | null>(pendingInvoiceId);
+
+  /**
+   * Trạng thái thô của invoice đang chờ, lấy từ lần poll gần nhất. Dùng để
+   * chẩn đoán webhook ngay trên máy: PENDING/PENDING đứng yên = PayOS chưa gọi
+   * `POST /api/payment/payos/webhook` về backend.
+   */
+  const [pendingProbe, setPendingProbe] = useState<{
+    checkedTimes: number;
+    status: string | null;
+    paymentStatus: string | null;
+  } | null>(null);
+  /** Chặn 2 nguồn trigger (focus + AppState + deep link) chạy chồng nhau. */
+  const isSyncingRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  /** Cập nhật đồng thời ref + state + ổ đĩa để 3 nguồn không bao giờ lệch nhau. */
+  const updatePendingInvoice = useCallback((invoiceId: number | null) => {
+    pendingInvoiceIdRef.current = invoiceId;
+    if (invoiceId === null) {
+      clearPendingPremiumInvoice();
+    } else {
+      savePendingPremiumInvoice(invoiceId);
+    }
+    setPendingInvoiceId(invoiceId);
+    setPendingProbe(null);
+  }, []);
 
   const selectedAmount = useMemo(
     () => (selectedPlan ? getPlanPrice(selectedPlan, billingCycle) : null),
     [selectedPlan, billingCycle],
   );
 
-  const qrImageUri = useMemo(() => {
-    const candidate = payment?.qrCodeUrl || payment?.qrCode;
-    if (!candidate) return null;
-    return candidate.startsWith("http://") ||
-      candidate.startsWith("https://") ||
-      candidate.startsWith("data:image/")
-      ? candidate
-      : null;
-  }, [payment]);
+  const qrImageUri = useMemo(
+    () => resolveQrImageUri(payment?.qrCode),
+    [payment],
+  );
 
   const loadData = useCallback(async () => {
     const accessToken = await getValidAccessToken();
@@ -181,10 +299,141 @@ export default function PremiumSubscriptionScreen() {
     };
   }, [loadData]);
 
+  /**
+   * Đồng bộ trạng thái Premium sau khi user quay lại app.
+   *
+   * - Luôn gọi `refreshPremiumStatus()` để đẩy isPremium mới nhất vào store
+   *   dùng chung (`use-premium-status`). Trước đây màn này KHÔNG hề đụng tới
+   *   store đó, mà `ensureLoaded()` lại return sớm khi cache đã `isLoaded`,
+   *   nên các màn home/explore/record-journey/user-plan vẫn thấy isPremium=false
+   *   cho tới khi kill app.
+   * - Nếu vừa tạo invoice (`pendingInvoiceIdRef`), gọi API confirm để backend
+   *   đối soát với PayOS cho tới khi ĐÚNG invoice đó chuyển ACTIVE/PAID. Bám
+   *   theo invoiceId thay vì "có invoice ACTIVE nào đó" để trường hợp gia hạn
+   *   (user đang còn hạn) không báo thành công nhầm.
+   */
+  const syncPremiumStatus = useCallback(async () => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
+
+    // Invoice quá hạn chờ (TTL trong pending-premium-invoice) sẽ được
+    // read... trả về null, đồng bộ lại state để banner "đang chờ" biến mất.
+    if (
+      pendingInvoiceIdRef.current !== null &&
+      readPendingPremiumInvoiceId() === null
+    ) {
+      updatePendingInvoice(null);
+    }
+
+    const invoiceId = pendingInvoiceIdRef.current;
+    if (invoiceId !== null && isMountedRef.current) {
+      setIsConfirmingPayment(true);
+    }
+
+    const refreshHistory = async (accessToken: string) => {
+      const records = await getMyPremiumSubscriptions(accessToken).catch(
+        () => null,
+      );
+      if (records && isMountedRef.current) setHistory(records);
+      return records;
+    };
+
+    try {
+      const accessToken = await getValidAccessToken();
+      if (!accessToken) return;
+
+      // Không có invoice đang chờ -> chỉ cần làm tươi lịch sử + store rồi thoát.
+      if (invoiceId === null) {
+        await refreshHistory(accessToken);
+        await refreshPremiumStatus().catch(() => false);
+        return;
+      }
+
+      const totalChecks = PAYMENT_POLL_BACKOFF_MS.length + 1;
+
+      for (let attempt = 0; attempt < totalChecks; attempt += 1) {
+        if (!isMountedRef.current) return;
+
+        /**
+         * Nguồn sự thật: BE hỏi thẳng PayOS rồi tự kích hoạt/huỷ invoice và
+         * trả về invoice sau đối soát. Nếu confirm lỗi (mất mạng, PayOS timeout,
+         * invoice chưa có payosOrderCode...) thì lùi về đọc `/my` — vẫn bắt được
+         * trường hợp webhook PayOS đã tự cập nhật invoice trước đó.
+         */
+        let record = await confirmPremiumPayment(accessToken, invoiceId).catch(
+          () => null,
+        );
+        if (!record) {
+          const records = await refreshHistory(accessToken);
+          record = records?.find((item) => item.invoiceId === invoiceId) ?? null;
+        }
+
+        // Ghi lại trạng thái thô của invoice để hiển thị trên banner — cách duy
+        // nhất chẩn đoán được trên máy thật / bản release (không có console).
+        // Đứng yên PENDING/PENDING nghĩa là PayOS vẫn chưa thấy tiền về.
+        if (isMountedRef.current) {
+          setPendingProbe({
+            checkedTimes: attempt + 1,
+            paymentStatus: record?.paymentStatus ?? null,
+            status: record?.status ?? null,
+          });
+        }
+
+        if (record && isActivatedRecord(record)) {
+          updatePendingInvoice(null);
+          await refreshHistory(accessToken);
+          await refreshPremiumStatus().catch(() => false);
+          if (!isMountedRef.current) return;
+          setPayment(null);
+          setErrorMessage(null);
+          Alert.alert(
+            "Kích hoạt Premium thành công",
+            "Tài khoản của bạn đã được nâng cấp. Toàn bộ tính năng Premium đã sẵn sàng.",
+          );
+          return;
+        }
+
+        // PayOS chốt là thất bại -> dừng hẳn, không đối soát tiếp.
+        if (record && isRejectedRecord(record)) {
+          updatePendingInvoice(null);
+          await refreshHistory(accessToken);
+          if (!isMountedRef.current) return;
+          setPayment(null);
+          setErrorMessage(
+            "PayOS báo giao dịch không thành công. Vui lòng đăng ký lại nếu bạn vẫn muốn nâng cấp Premium.",
+          );
+          Alert.alert(
+            "Thanh toán không thành công",
+            "Giao dịch đã bị huỷ hoặc thất bại. Tài khoản của bạn chưa bị trừ tiền cho gói này.",
+          );
+          return;
+        }
+
+        if (attempt < totalChecks - 1) {
+          await delay(PAYMENT_POLL_BACKOFF_MS[attempt]);
+        }
+      }
+
+      // Hết lượt mà PayOS vẫn báo chưa thanh toán. Giữ nguyên invoice đang chờ
+      // để lần focus / mở lại app sau đó tự đối soát tiếp.
+      if (isMountedRef.current && pendingInvoiceIdRef.current !== null) {
+        await refreshHistory(accessToken);
+        await refreshPremiumStatus().catch(() => false);
+        setErrorMessage(
+          "PayOS vẫn chưa ghi nhận giao dịch này. Nếu bạn đã thanh toán, hãy bấm Kiểm tra lại sau ít phút.",
+        );
+      }
+    } finally {
+      isSyncingRef.current = false;
+      if (isMountedRef.current) setIsConfirmingPayment(false);
+    }
+  }, [updatePendingInvoice]);
+
   async function handleRefresh() {
     setIsRefreshing(true);
     try {
       await loadData();
+      await syncPremiumStatus();
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : "Không tải được dữ liệu.",
@@ -194,24 +443,41 @@ export default function PremiumSubscriptionScreen() {
     }
   }
 
+  /**
+   * Đường về phổ biến nhất KHÔNG phải deep link mà là user tự bấm Back từ trình
+   * duyệt PayOS — lúc đó không có event `url` nào cả. `useFocusEffect` +
+   * `AppState` bắt được cả hai trường hợp này.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      void syncPremiumStatus();
+    }, [syncPremiumStatus]),
+  );
 
   useEffect(() => {
-    const subscription = Linking.addEventListener("url", ({ url }) => {
-      if (url.startsWith(PAYOS_REDIRECT_URL)) {
-        void handleRefresh();
-      }
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") void syncPremiumStatus();
     });
 
     return () => subscription.remove();
-  }, [loadData]);
+  }, [syncPremiumStatus]);
+
+  /**
+   * `useURL()` trả về cả URL khởi chạy app (cold start sau khi bị OS kill) lẫn
+   * các URL đến sau, nên thay được cho `addEventListener` + `getInitialURL`.
+   */
+  const incomingUrl = ExpoLinking.useURL();
+
+  useEffect(() => {
+    if (!incomingUrl) return;
+    if (!incomingUrl.includes("subscription/premium")) return;
+    void syncPremiumStatus();
+  }, [incomingUrl, syncPremiumStatus]);
 
   async function openPayOs(paymentResponse = payment) {
     if (!paymentResponse) return;
-    const targetUrl =
-      paymentResponse.checkoutUrl ||
-      paymentResponse.paymentUrl ||
-      paymentResponse.payUrl ||
-      paymentResponse.deeplink;
+    // Backend chỉ trả duy nhất `checkoutUrl` cho PayOS.
+    const targetUrl = paymentResponse.checkoutUrl;
     if (targetUrl) {
       try {
         const canOpen = await Linking.canOpenURL(targetUrl);
@@ -223,7 +489,7 @@ export default function PremiumSubscriptionScreen() {
         // fallback sang QR
       }
     }
-    if (paymentResponse.qrCodeUrl || paymentResponse.qrCode) {
+    if (resolveQrImageUri(paymentResponse.qrCode)) {
       Alert.alert(
         "Không mở được trang thanh toán",
         "Bạn có thể quét mã QR bên dưới để thanh toán.",
@@ -232,7 +498,7 @@ export default function PremiumSubscriptionScreen() {
     }
     Alert.alert(
       "Không mở được trang thanh toán",
-      "Hệ thống chưa trả liên kết hoặc mã QR để thanh toán.",
+      "Hệ thống chưa trả liên kết thanh toán hợp lệ. Vui lòng thử đăng ký lại.",
     );
   }
 
@@ -250,17 +516,22 @@ export default function PremiumSubscriptionScreen() {
     setIsSubmitting(true);
     setErrorMessage(null);
     setPayment(null);
+    updatePendingInvoice(null);
 
     try {
       const result = await subscribePremium({
         accessToken,
         subscriptionPlanId: selectedPlan.subscriptionPlanId,
         billingCycle,
-        redirectUrl: PAYOS_REDIRECT_URL,
+        redirectUrl: PAYOS_SAFE_REDIRECT_URL,
       });
       setPayment(result);
+      // Backend trả invoiceId qua field `subscriptionId` (PaymentInitResponse).
+      // Ghi lại để biết phải đối soát ĐÚNG invoice nào qua API confirm.
+      updatePendingInvoice(result.subscriptionId ?? null);
       await openPayOs(result);
     } catch (err) {
+      updatePendingInvoice(null);
       setErrorMessage(
         err instanceof Error ? err.message : "Đăng ký gói Premium thất bại.",
       );
@@ -350,6 +621,62 @@ export default function PremiumSubscriptionScreen() {
               <Text className="text-[13px] font-bold text-red-600">
                 {errorMessage}
               </Text>
+            </View>
+          ) : null}
+
+          {/* Đang chờ webhook PayOS xác nhận invoice vừa thanh toán.
+              Render ở ngoài khối `payment` để vẫn hiện sau khi app bị kill và
+              mở lại (lúc đó `payment` đã mất, chỉ còn invoice lưu trên đĩa). */}
+          {pendingInvoiceId !== null ? (
+            <View className="mb-4 rounded-2xl border border-[#E5D9FF] bg-[#F5F0FF] p-4">
+              <View className="flex-row items-center gap-3">
+                {isConfirmingPayment ? (
+                  <ActivityIndicator color="#7C3AED" />
+                ) : (
+                  <SymbolView
+                    name={{ ios: "clock.fill", android: "schedule", web: "schedule" }}
+                    size={18}
+                    tintColor="#7C3AED"
+                  />
+                )}
+                <Text className="flex-1 text-[13px] font-bold text-[#7C3AED]">
+                  {isConfirmingPayment
+                    ? "Đang đối soát giao dịch với PayOS..."
+                    : "Đơn hàng chưa được PayOS xác nhận."}
+                </Text>
+              </View>
+              <Text className="mt-2 text-[12px] leading-4 text-[#8E869A]">
+                Premium sẽ tự bật ngay khi PayOS ghi nhận thanh toán. Bạn có thể
+                để màn hình này mở hoặc bấm kiểm tra lại.
+              </Text>
+
+              {/* Trạng thái thô của invoice sau đối soát. Đứng yên "Chờ kích
+                  hoạt / Chờ thanh toán" sau nhiều lần kiểm tra nghĩa là PayOS
+                  vẫn chưa thấy tiền về cho đơn này. */}
+              {pendingProbe ? (
+                <View className="mt-3 rounded-xl bg-white/70 p-3">
+                  <Text className="text-[11px] font-bold text-[#5B5266]">
+                    Hoá đơn #{pendingInvoiceId} · đã kiểm tra{" "}
+                    {pendingProbe.checkedTimes} lần
+                  </Text>
+                  <Text className="mt-1 text-[11px] text-[#8E869A]">
+                    Kích hoạt: {getInvoiceStatusLabel(pendingProbe.status ?? undefined)}
+                    {"  ·  "}
+                    Thanh toán:{" "}
+                    {getPaymentStatusLabel(pendingProbe.paymentStatus ?? undefined)}
+                  </Text>
+                </View>
+              ) : null}
+              {!isConfirmingPayment ? (
+                <Pressable
+                  onPress={() => void syncPremiumStatus()}
+                  className="mt-3 self-start rounded-xl bg-[#7C3AED] px-4 py-2"
+                >
+                  <Text className="text-[12px] font-extrabold text-white">
+                    Kiểm tra lại
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
 
@@ -548,6 +875,14 @@ export default function PremiumSubscriptionScreen() {
                 Mở trang thanh toán an toàn để hoàn tất. Nếu trình duyệt không mở
                 được, hãy quét mã QR bên dưới.
               </Text>
+              {isConfirmingPayment ? (
+                <View className="mt-3 flex-row items-center gap-3 rounded-xl bg-[#F5F0FF] p-3">
+                  <ActivityIndicator color="#7C3AED" />
+                  <Text className="flex-1 text-[12px] font-bold text-[#7C3AED]">
+                    Đang đối soát giao dịch với PayOS...
+                  </Text>
+                </View>
+              ) : null}
               <Pressable
                 onPress={() => openPayOs()}
                 className="mt-4 rounded-xl bg-[#7C3AED] px-4 py-3"

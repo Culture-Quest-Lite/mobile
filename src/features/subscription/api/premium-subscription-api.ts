@@ -15,16 +15,22 @@ export type PremiumPlan = {
   updatedAt?: string | null;
 };
 
+/**
+ * Khớp `PaymentInitResponse` của backend.
+ *
+ * LƯU Ý hai điểm dễ sai:
+ * - KHÔNG có field `invoiceId`. Backend nhét invoiceId vào `subscriptionId`
+ *   (xem `PayOsInvoicePaymentServiceImpl#initiatePayOsPayment`), và đó chính là
+ *   id phải truyền vào `POST /api/user/premium/{invoiceId}/confirm`.
+ * - Chỉ có `checkoutUrl` để mở trang thanh toán; không có `paymentUrl`,
+ *   `payUrl`, `deeplink` hay `qrCodeUrl`. `qrCode` là chuỗi VietQR thô do PayOS
+ *   trả về (không phải URL ảnh), nên không hiển thị trực tiếp bằng <Image>.
+ */
 export type PremiumPaymentInitResponse = {
   subscriptionId?: number | null;
-  invoiceId?: number | null;
   gateway: string;
   checkoutUrl?: string | null;
-  paymentUrl?: string | null;
   qrCode?: string | null;
-  payUrl?: string | null;
-  deeplink?: string | null;
-  qrCodeUrl?: string | null;
   amount?: number | null;
   orderInfo?: string | null;
 };
@@ -317,15 +323,10 @@ export async function subscribePremium(
     );
 
     console.group(`${PREMIUM_LOG_PREFIX} PAYOS PAYMENT RESULT`);
-    console.log("subscriptionId:", result.subscriptionId);
-    console.log("invoiceId:", result.invoiceId);
+    console.log("subscriptionId (= invoiceId):", result.subscriptionId);
     console.log("gateway:", result.gateway);
     console.log("amount:", result.amount);
     console.log("checkoutUrl:", result.checkoutUrl);
-    console.log("paymentUrl:", result.paymentUrl);
-    console.log("payUrl:", result.payUrl);
-    console.log("deeplink:", result.deeplink);
-    console.log("qrCodeUrl:", result.qrCodeUrl);
     console.log("Has qrCode:", Boolean(result.qrCode));
     console.log("orderInfo:", result.orderInfo);
     console.groupEnd();
@@ -381,6 +382,58 @@ export async function getMyPremiumSubscriptions(
         endDate: item.endDate,
       })),
     );
+
+    return result;
+  } catch (error) {
+    logApiError(requestName, error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/user/premium/{invoiceId}/confirm
+ *
+ * API mới của backend (`PremiumSubscriptionController#confirmPayment`). Khác
+ * hẳn việc poll `GET /my`: ở đây backend CHỦ ĐỘNG gọi sang PayOS
+ * (`paymentRequests().get(orderCode)`) để đối soát, rồi tự
+ * - PAID -> đánh dấu invoice ACTIVE + set `user.isPremium = true`
+ * - CANCELLED / EXPIRED / FAILED -> đánh dấu invoice FAILED
+ * và trả về invoice sau đối soát.
+ *
+ * Nhờ vậy app không còn phụ thuộc vào việc webhook PayOS có về kịp hay không —
+ * vốn là lý do màn hình phải poll `/my` cả phút mà vẫn hay lỡ.
+ *
+ * Chỉ dùng được cho invoice của chính user đang đăng nhập và đã khởi tạo thanh
+ * toán; BE ném 400 "Hóa đơn chưa được khởi tạo thanh toán" nếu chưa có
+ * payosOrderCode, và 400 "Hóa đơn không tồn tại" nếu invoice không thuộc user.
+ */
+export async function confirmPremiumPayment(
+  accessToken: string,
+  invoiceId: number,
+): Promise<PremiumSubscriptionRecord> {
+  const requestName = "CONFIRM PREMIUM PAYMENT";
+  const url = resolveApiUrl(`/api/user/premium/${invoiceId}/confirm`);
+  const startedAt = Date.now();
+
+  logRequest(requestName, { method: "POST", url, accessToken });
+
+  try {
+    const result = await ensureOk<PremiumSubscriptionRecord>(
+      await fetch(url, {
+        method: "POST",
+        headers: getAuthHeaders(accessToken),
+      }),
+      "Không xác nhận được thanh toán Premium",
+      requestName,
+      startedAt,
+    );
+
+    console.log(`${PREMIUM_LOG_PREFIX} Confirm result:`, {
+      endDate: result.endDate,
+      invoiceId: result.invoiceId,
+      paymentStatus: result.paymentStatus,
+      status: result.status,
+    });
 
     return result;
   } catch (error) {

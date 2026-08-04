@@ -109,7 +109,7 @@ function toBrowseStop(
 export default function UserPlanScreen() {
   const router = useRouter();
   const session = useAuthSession();
-  const { isPremium, isLoaded: isPremiumLoaded, requirePremium } = usePremiumStatus();
+  const { canUsePremiumFeatures, isLoaded: isPremiumLoaded, requirePremium } = usePremiumStatus();
   const [systemQuery, setSystemQuery] = useState("");
   const [browseMode, setBrowseMode] = useState<HotspotBrowseMode>("NEARBY");
   const [browseHotspots, setBrowseHotspots] = useState<PlannedStop[]>([]);
@@ -412,9 +412,9 @@ export default function UserPlanScreen() {
    * thẳng màn này bằng deep link/back thì vẫn cần chặn lại ở chính màn này.
    */
   useEffect(() => {
-    if (!isPremiumLoaded || isPremium) return;
+    if (!isPremiumLoaded || canUsePremiumFeatures) return;
     requirePremium("Tạo kế hoạch hành trình (User Plan)");
-  }, [isPremium, isPremiumLoaded, requirePremium]);
+  }, [canUsePremiumFeatures, isPremiumLoaded, requirePremium]);
 
   useEffect(() => {
     void locateUser(false);

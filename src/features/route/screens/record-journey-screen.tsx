@@ -2,7 +2,7 @@ import * as Location from "expo-location";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -27,6 +27,7 @@ import { AppMap, type AppMapPoint } from "@/features/map/components/app-map";
 import { getMyProfile } from "@/features/profile/api/get-me";
 import { usePremiumStatus, setPremiumStatusFromProfile } from "@/features/profile/hooks/use-premium-status";
 import {
+  MIN_RECORD_HOTSPOTS,
   finalizeRecordRoute,
   finishRecordRoute,
   getMyRecordJourneys,
@@ -82,7 +83,11 @@ export default function RecordJourneyScreen() {
   const [currentCoordinate, setCurrentCoordinate] = useState<Coordinate>(DEFAULT_COORDINATE);
   const [userAvatarUri, setUserAvatarUri] = useState<string | null>(null);
   const [finalizeDescription, setFinalizeDescription] = useState("");
-  const { isPremium, isLoaded: isPremiumLoaded, requirePremium: requirePremiumStatus } = usePremiumStatus();
+  const {
+    canUsePremiumFeatures,
+    isLoaded: isPremiumLoaded,
+    requirePremium: requirePremiumStatus,
+  } = usePremiumStatus();
   const [nearbyHotspots, setNearbyHotspots] = useState<NearbyHotspotDto[]>([]);
   const [searchResults, setSearchResults] = useState<NearbyHotspotDto[]>([]);
   const [checkedInHotspots, setCheckedInHotspots] = useState<NearbyHotspotDto[]>([]);
@@ -94,6 +99,8 @@ export default function RecordJourneyScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [checkingInId, setCheckingInId] = useState<number | null>(null);
   const [nearbyError, setNearbyError] = useState<string | null>(null);
+  /** Route đang được hiển thị, dùng để biết lần apply sau có cùng route không. */
+  const appliedRouteIdRef = useRef<number | null>(null);
 
   const getAuth = useCallback(async () => {
     if (!session.isAuthenticated) throw new Error("Vui lòng đăng nhập để ghi hành trình.");
@@ -106,6 +113,7 @@ export default function RecordJourneyScreen() {
   const applyRouteRecord = useCallback((route: RecordRouteDto | null) => {
     setRouteRecord(route);
     if (!route) {
+      appliedRouteIdRef.current = null;
       setStatus("READY");
       setCheckedInHotspots([]);
       return;
@@ -116,19 +124,38 @@ export default function RecordJourneyScreen() {
         ? route.status
         : "READY";
     setStatus(normalizedStatus);
-    setCheckedInHotspots(
-      (route.hotspots ?? []).map((hotspot) => ({
-        hotspotId: hotspot.hotspotId,
-        hotspotName: hotspot.hotspotName ?? `Hotspot #${hotspot.hotspotId}`,
-        address: hotspot.address ?? "",
-        latitude: hotspot.latitude ?? DEFAULT_COORDINATE.latitude,
-        longitude: hotspot.longitude ?? DEFAULT_COORDINATE.longitude,
-        closingTime: "", createByUserId: null, createdAt: "", description: "", endTime: "",
-        estimatedDurationMax: null, estimatedDurationMin: null, historyInformation: "",
-        isCheckedIn: true, medias: [], openingTime: "", point: null, startTime: "",
-        status: "", stories: [], tags: [], updatedAt: "", xp: null,
-      })),
-    );
+
+    const serverHotspots: NearbyHotspotDto[] = (route.hotspots ?? []).map((hotspot) => ({
+      hotspotId: hotspot.hotspotId,
+      hotspotName: hotspot.hotspotName ?? `Hotspot #${hotspot.hotspotId}`,
+      address: hotspot.address ?? "",
+      latitude: hotspot.latitude ?? DEFAULT_COORDINATE.latitude,
+      longitude: hotspot.longitude ?? DEFAULT_COORDINATE.longitude,
+      openingTime: hotspot.openingTime ?? "",
+      closingTime: hotspot.closingTime ?? "",
+      createByUserId: null, createdAt: "", description: "", endTime: "",
+      estimatedDurationMax: null, estimatedDurationMin: null, historyInformation: "",
+      isCheckedIn: true, medias: [], point: null, startTime: "",
+      status: "", stories: [], tags: [], updatedAt: "", xp: null,
+    }));
+
+    /**
+     * Backend thêm hotspot vào route qua `CustomRouteEventListener` —
+     * `@Async` + `AFTER_COMMIT`, tức là chạy SAU khi API check-in đã trả 201.
+     * Refetch ngay sau check-in vì thế rất hay đọc trúng lúc route chưa kịp có
+     * hotspot vừa thêm; nếu ghi đè thẳng thì hotspot user vừa check-in sẽ biến
+     * mất khỏi UI rồi vài giây sau mới hiện lại. Giữ lại các mục local chưa
+     * thấy trên server (chỉ trong cùng một route) để danh sách không nhấp nháy.
+     */
+    const isSameRoute = appliedRouteIdRef.current === route.routeId;
+    appliedRouteIdRef.current = route.routeId;
+
+    setCheckedInHotspots((current) => {
+      if (!isSameRoute) return serverHotspots;
+      const serverIds = new Set(serverHotspots.map((item) => item.hotspotId));
+      const pending = current.filter((item) => !serverIds.has(item.hotspotId));
+      return [...serverHotspots, ...pending];
+    });
   }, []);
 
   const loadMyJourneys = useCallback(async () => {
@@ -373,8 +400,14 @@ export default function RecordJourneyScreen() {
 
   async function handleFinish() {
     if (!requirePremium()) return;
-    if (!checkedInHotspots.length) {
-      routeSystemAlert.alert("Chưa có check-in", "Hãy check-in ít nhất một hotspot trước khi kết thúc.");
+    // Backend (`finishRecordJourney`) từ chối route có dưới 4 story, nên chặn
+    // trước ở client với thông báo rõ số điểm còn thiếu thay vì để user bấm
+    // xong mới ăn lỗi 400.
+    if (checkedInHotspots.length < MIN_RECORD_HOTSPOTS) {
+      routeSystemAlert.alert(
+        "Chưa đủ điểm dừng",
+        `Hành trình cá nhân phải có ít nhất ${MIN_RECORD_HOTSPOTS} điểm dừng. Bạn đã check-in ${checkedInHotspots.length}, cần thêm ${MIN_RECORD_HOTSPOTS - checkedInHotspots.length} địa điểm nữa.`,
+      );
       return;
     }
     setIsFinishing(true);
@@ -426,7 +459,7 @@ export default function RecordJourneyScreen() {
         </View>
         <Pressable
           className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
-          onPress={() => routeSystemAlert.alert("Luồng sử dụng", "B1 bắt đầu record (yêu cầu Premium) → B2 tìm hotspot gần bạn hoặc search toàn hệ thống và check-in → B3 finish thành DRAFT → chỉnh sửa route/story → B4 finalize routeId thành PUBLISHED.")}
+          onPress={() => routeSystemAlert.alert("Luồng sử dụng", `B1 bắt đầu record (yêu cầu Premium) → B2 tìm hotspot gần bạn hoặc search toàn hệ thống và check-in (cần tối thiểu ${MIN_RECORD_HOTSPOTS} điểm dừng) → B3 finish thành DRAFT → chỉnh sửa route/story → B4 finalize routeId thành PUBLISHED.`)}
         >
           <Text className="text-[16px] font-extrabold text-[#F15B45]">?</Text>
         </Pressable>
@@ -466,7 +499,7 @@ export default function RecordJourneyScreen() {
               {status === "READY"
                 ? "Mỗi Explorer chỉ có thể ghi một hành trình tại một thời điểm."
                 : status === "RECORDING"
-                  ? `${checkedInHotspots.length} địa điểm đã check-in · Route ID ${routeRecord?.routeId ?? "-"}`
+                  ? `${checkedInHotspots.length}/${MIN_RECORD_HOTSPOTS} điểm dừng tối thiểu · Route ID ${routeRecord?.routeId ?? "-"}`
                   : status === "DRAFT"
                     ? "Bản nháp đã sẵn sàng để cập nhật route và các story mặc định."
                     : "Route đã được gửi lên hệ thống với trạng thái PUBLISHED."}
@@ -474,7 +507,7 @@ export default function RecordJourneyScreen() {
           </LinearGradient>
         </View>
 
-        {isPremiumLoaded && !isPremium ? (
+        {isPremiumLoaded && !canUsePremiumFeatures ? (
           <View className="mt-4 px-4">
             <Pressable
               onPress={() => router.push("/subscription/premium" as any)}
@@ -495,16 +528,16 @@ export default function RecordJourneyScreen() {
         {status === "READY" ? (
           <View className="mt-4 px-4">
             <Pressable
-              disabled={isStarting || !isPremium}
+              disabled={isStarting || !canUsePremiumFeatures}
               onPress={() => void handleStart()}
-              className={`flex-row items-center justify-center gap-2 rounded-2xl py-4 ${isPremium ? "bg-[#F15B45]" : "bg-[#D9DDE7]"}`}
+              className={`flex-row items-center justify-center gap-2 rounded-2xl py-4 ${canUsePremiumFeatures ? "bg-[#F15B45]" : "bg-[#D9DDE7]"}`}
             >
               {isStarting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <>
-                  {!isPremium ? <SymbolView name={{ ios: "lock.fill", android: "lock", web: "lock" }} size={13} tintColor="#8E869A" /> : null}
-                  <Text className={`text-center text-[13px] font-extrabold ${isPremium ? "text-white" : "text-[#8E869A]"}`}>Bắt đầu ghi hành trình</Text>
+                  {!canUsePremiumFeatures ? <SymbolView name={{ ios: "lock.fill", android: "lock", web: "lock" }} size={13} tintColor="#8E869A" /> : null}
+                  <Text className={`text-center text-[13px] font-extrabold ${canUsePremiumFeatures ? "text-white" : "text-[#8E869A]"}`}>Bắt đầu ghi hành trình</Text>
                 </>
               )}
             </Pressable>
@@ -635,9 +668,16 @@ export default function RecordJourneyScreen() {
 
         <View className="mt-4 gap-2 px-4">
           {status === "RECORDING" ? (
-            <Pressable disabled={isFinishing} onPress={() => void handleFinish()} className="rounded-2xl bg-[#2B2233] py-4">
-              {isFinishing ? <ActivityIndicator color="#fff" /> : <Text className="text-center text-[13px] font-extrabold text-white">Kết thúc và tạo bản nháp</Text>}
-            </Pressable>
+            <>
+              <Pressable disabled={isFinishing} onPress={() => void handleFinish()} className={`rounded-2xl py-4 ${checkedInHotspots.length >= MIN_RECORD_HOTSPOTS ? "bg-[#2B2233]" : "bg-[#D9DDE7]"}`}>
+                {isFinishing ? <ActivityIndicator color="#fff" /> : <Text className={`text-center text-[13px] font-extrabold ${checkedInHotspots.length >= MIN_RECORD_HOTSPOTS ? "text-white" : "text-[#8E869A]"}`}>Kết thúc và tạo bản nháp</Text>}
+              </Pressable>
+              {checkedInHotspots.length < MIN_RECORD_HOTSPOTS ? (
+                <Text className="text-center text-[10px] font-bold text-[#8E869A]">
+                  Cần thêm {MIN_RECORD_HOTSPOTS - checkedInHotspots.length} điểm dừng nữa mới kết thúc được hành trình
+                </Text>
+              ) : null}
+            </>
           ) : null}
 
           {status === "DRAFT" ? (
