@@ -59,21 +59,22 @@ export async function ensureForegroundLocationPermission(): Promise<ForegroundLo
   return foregroundPermissionRequestPromise;
 }
 
-export async function requestForegroundLocationPermissionOnAppLaunch() {
-  if (Platform.OS === "web" || getDevelopmentLocationOverride()) {
-    return;
+export async function getForegroundLocationPermission(): Promise<ForegroundLocationPermissionResult> {
+  if (Platform.OS === "web") {
+    return {
+      canAskAgain: false,
+      granted: false,
+      status: Location.PermissionStatus.DENIED,
+    };
   }
 
   const currentPermission = await Location.getForegroundPermissionsAsync();
 
-  if (
-    currentPermission.granted ||
-    currentPermission.status !== Location.PermissionStatus.UNDETERMINED
-  ) {
-    return;
-  }
-
-  await ensureForegroundLocationPermission();
+  return {
+    canAskAgain: currentPermission.canAskAgain,
+    granted: currentPermission.granted,
+    status: currentPermission.status,
+  };
 }
 
 type DeviceCoordinateOptions = {

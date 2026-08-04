@@ -36,7 +36,9 @@ export type HotspotReview = {
   comment: string;
   createdAt: string;
   displayName: string;
+  isLiked: boolean;
   isOwner: boolean;
+  likeCount: number;
   medias: HotspotReviewMedia[];
   rating: number;
   reviewId: number;
@@ -155,7 +157,7 @@ function parseReviewMedia(value: unknown): HotspotReviewMedia | null {
   };
 }
 
-function parseReview(value: unknown): HotspotReview | null {
+export function parseHotspotReview(value: unknown): HotspotReview | null {
   if (!isObject(value)) {
     return null;
   }
@@ -186,7 +188,9 @@ function parseReview(value: unknown): HotspotReview | null {
     comment: readString(value.comment),
     createdAt: readString(value.createdAt),
     displayName: readString(value.displayName),
+    isLiked: readBoolean(value.isLiked),
     isOwner: readBoolean(value.isOwner),
+    likeCount: Math.max(0, Math.round(readNumber(value.likeCount) ?? 0)),
     medias,
     rating: readNumber(value.rating) ?? 0,
     reviewId,
@@ -227,7 +231,7 @@ function parseReviewsResponse(value: unknown): HotspotReviewsPage | null {
     return null;
   }
 
-  const reviews = unwrappedValue.content.map(parseReview).filter(isNonNull);
+  const reviews = unwrappedValue.content.map(parseHotspotReview).filter(isNonNull);
   // Response mới dùng `page: { size, number, totalElements, totalPages }`,
   // response Spring cũ để phẳng các field này ở ngoài.
   const pageMetadata = isObject(unwrappedValue.page)
