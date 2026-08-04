@@ -1,5 +1,3 @@
-import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import {
@@ -10,6 +8,7 @@ import {
   getUserLeaderboard,
   type UserLeaderboardEntryDto,
 } from "@/features/home/api/get-user-leaderboard";
+import { LeaderRankingCard } from "@/features/home/components/leader-ranking-card";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -30,7 +29,6 @@ const leaderboardCardShadow = {
   shadowOffset: { width: 0, height: 6 },
   elevation: 3,
 } as const;
-const leaderboardCupImage = require("../../../../assets/images/cup.png");
 
 const leaderboardRankRingColors = ["#F7B500", "#C9D4E5", "#FF8A00"] as const;
 const leaderboardRankBadgeColors = ["#F7B500", "#9AACBF", "#FF8A00"] as const;
@@ -82,11 +80,14 @@ function buildSummaryContent(entries: UserLeaderboardEntryDto[]) {
       note: "Bảng xếp hạng sẽ hiển thị khi có hoạt động cộng đồng.",
       rankLabel: "#--",
       title: "Chưa có dữ liệu bảng xếp hạng",
+      totalXp: 0,
       totalXpLabel: "0 XP",
     };
   }
 
-  const sortedEntries = [...entries].sort((left, right) => left.rank - right.rank);
+  const sortedEntries = [...entries].sort(
+    (left, right) => left.rank - right.rank,
+  );
   const currentUserEntry =
     sortedEntries.find((entry) => entry.isCurrentUser) ?? null;
   const summaryEntry = currentUserEntry ?? sortedEntries[0];
@@ -95,9 +96,10 @@ function buildSummaryContent(entries: UserLeaderboardEntryDto[]) {
   if (currentUserEntry) {
     if (currentUserEntry.rank === 1) {
       return {
-        note: `Tổng ${totalXpLabel}. Tiếp tục giữ phong độ hôm nay!`,
+        note: `Tiếp tục giữ phong độ hôm nay!`,
         rankLabel: `#${currentUserEntry.rank}`,
         title: "Bạn đang dẫn đầu bảng xếp hạng",
+        totalXp: summaryEntry.totalXp,
         totalXpLabel,
       };
     }
@@ -117,6 +119,7 @@ function buildSummaryContent(entries: UserLeaderboardEntryDto[]) {
         : `Bạn hiện có ${totalXpLabel}.`,
       rankLabel: `#${currentUserEntry.rank}`,
       title: "Thứ hạng hiện tại của bạn",
+      totalXp: summaryEntry.totalXp,
       totalXpLabel,
     };
   }
@@ -125,6 +128,7 @@ function buildSummaryContent(entries: UserLeaderboardEntryDto[]) {
     note: `${getCommunityLeaderboardDisplayName(summaryEntry)} đang dẫn đầu với ${totalXpLabel}.`,
     rankLabel: `#${summaryEntry.rank}`,
     title: "Người dẫn đầu cộng đồng hôm nay",
+    totalXp: summaryEntry.totalXp,
     totalXpLabel,
   };
 }
@@ -192,7 +196,10 @@ export default function CommunityLeaderboardScreen() {
   const summaryContent = useMemo(() => buildSummaryContent(entries), [entries]);
 
   return (
-    <SafeAreaView className="flex-1 bg-[#FCF7FA]" edges={["top", "left", "right"]}>
+    <SafeAreaView
+      className="flex-1 bg-[#FCF7FA]"
+      edges={["top", "left", "right"]}
+    >
       <View className="flex-row items-center justify-between px-4 pb-3 pt-2">
         <Pressable
           className="h-10 w-10 items-center justify-center rounded-full bg-white"
@@ -262,148 +269,159 @@ export default function CommunityLeaderboardScreen() {
           contentContainerStyle={{ paddingBottom: 28, paddingHorizontal: 16 }}
           showsVerticalScrollIndicator={false}
         >
-          <LinearGradient
-            colors={["#FFF6F9", "#FFF1F5"]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            className="relative min-h-[132px] overflow-hidden rounded-[28px] border border-[#F9E2EA] px-4 py-4"
-            style={leaderboardCardShadow}
-          >
-            <View
-              className="min-w-0 justify-center"
-              style={{ maxWidth: "56%", zIndex: 1 }}
-            >
-              <View className="min-w-0 flex-1 py-px">
-                <Text
-                  className="text-[13px] font-semibold leading-[14px] text-[#1F2940]"
-                  numberOfLines={3}
-                >
-                  {summaryContent.title}
-                </Text>
-                <Text
-                  className="mt-1 text-[11px] font-medium leading-[13px] text-[#7E7482]"
-                  numberOfLines={4}
-                >
-                  {summaryContent.note}
-                </Text>
-              </View>
-            </View>
-
-            <View className="absolute bottom-3 right-3 top-3 w-[140px] items-end justify-center">
-              <Image
-                source={leaderboardCupImage}
-                contentFit="contain"
-                transition={180}
-                style={{
-                  height: 152,
-                  marginRight: -12,
-                  marginTop: -12,
-                  width: 152,
-                }}
-              />
-
-              <View
-                className="absolute bottom-1 right-0 flex-row items-center rounded-full border border-[#F8D8E3] bg-white px-4 py-2"
-                style={leaderboardCardShadow}
-              >
-                <SymbolView
-                  name={{
-                    ios: "star.fill",
-                    android: "star",
-                    web: "star",
-                  }}
-                  size={14}
-                  tintColor="#FF5F87"
-                />
-                <Text className="ml-2 text-[14px] font-semibold text-[#1F2940]">
-                  {summaryContent.totalXpLabel}
-                </Text>
-              </View>
-            </View>
-          </LinearGradient>
+          {/* LeaderRankingCard tự chứa padding 16px hai bên nên bù lại bằng
+              margin âm để khớp với padding của ScrollView */}
+          <View style={{ marginHorizontal: -16 }}>
+            <LeaderRankingCard
+              description={summaryContent.note}
+              title={summaryContent.title}
+              xp={summaryContent.totalXp}
+            />
+          </View>
 
           <View className="mt-4 gap-2.5">
-              {entries.map((entry) => {
-                const isCurrentUserEntry = entry.isCurrentUser;
+            {entries.map((entry) => {
+              const isCurrentUserEntry = entry.isCurrentUser;
+              const isChampion = entry.rank === 1;
+              const badgeColor = getCommunityLeaderboardBadgeColor(entry.rank);
 
-                return (
-                  <Pressable
-                    key={`entry-${entry.userId}`}
-                    className="flex-row items-center rounded-[22px] px-3 py-2.5"
-                    onPress={() => {
-                      router.push(
-                        `/community/profile/${encodeURIComponent(String(entry.userId))}` as Href,
-                      );
-                    }}
-                    style={[
-                      leaderboardCardShadow,
-                      {
-                        backgroundColor: isCurrentUserEntry ? "#FFF7FA" : "#FFFFFF",
-                        borderColor: isCurrentUserEntry ? "#F8D8E3" : "#EEF1F4",
-                        borderWidth: 1,
-                      },
-                    ]}
-                  >
-                    <View className="mr-2.5 w-6 items-center justify-center">
-                      <View
-                        className="h-5 w-5 items-center justify-center rounded-full"
-                        style={{
-                          backgroundColor: isTopCommunityLeaderboardRank(entry.rank)
-                            ? getCommunityLeaderboardBadgeColor(entry.rank)
-                            : "#EEF2F7",
-                        }}
-                      >
-                        <Text
-                          className="text-[11px] font-medium"
-                          style={{
-                            color: getCommunityLeaderboardBadgeTextColor(entry.rank),
-                          }}
-                        >
-                          {entry.rank}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View className="mr-3 h-10 w-10 items-center justify-center">
-                      <UserAvatar
-                        borderColor={getCommunityLeaderboardRingColor(entry.rank)}
-                        borderWidth={isTopCommunityLeaderboardRank(entry.rank) ? 2.5 : 1.5}
-                        displayName={getCommunityLeaderboardDisplayName(entry)}
-                        size={38}
-                        textSize={13}
-                        uri={readMeaningfulText(entry.avatarUrl) ?? null}
-                        username={entry.username}
-                      />
-                    </View>
-
-                    <View className="flex-1 pr-3">
-                      <Text className="text-[12px] font-semibold leading-[15px] text-[#1F2940]">
-                        {getCommunityLeaderboardDisplayName(entry)}
-                      </Text>
-                      <Text className="mt-0.5 text-[9px] leading-[12px] text-[#8F8290]">
-                        {getCommunityLeaderboardSubtitle(entry)}
-                      </Text>
-                    </View>
-
-                    <View className="items-end">
-                      <View className="flex-row items-center rounded-full border border-[#F4DCE5] bg-white px-2.5 py-1.5">
+              return (
+                <Pressable
+                  key={`entry-${entry.userId}`}
+                  className="flex-row items-center rounded-[18px] px-3 py-2.5"
+                  onPress={() => {
+                    router.push(
+                      `/community/profile/${encodeURIComponent(String(entry.userId))}` as Href,
+                    );
+                  }}
+                  style={[
+                    leaderboardCardShadow,
+                    {
+                      backgroundColor: isChampion
+                        ? "#FFF9EC"
+                        : isCurrentUserEntry
+                          ? "#FFF7FA"
+                          : "#FFFFFF",
+                      borderColor: isChampion
+                        ? "#F4D493"
+                        : isCurrentUserEntry
+                          ? "#F8D8E3"
+                          : "#EEF1F4",
+                      borderWidth: 1,
+                    },
+                  ]}
+                >
+                  <View className="mr-2.5 w-7 items-center justify-center">
+                    {isChampion ? (
+                      <View className="absolute -top-3">
                         <SymbolView
                           name={{
-                            ios: "star.fill",
-                            android: "star",
-                            web: "star",
+                            ios: "crown.fill",
+                            android: "workspace_premium",
+                            web: "workspace_premium",
                           }}
-                          size={10}
-                          tintColor="#FF5F87"
+                          size={14}
+                          tintColor="#F7B500"
                         />
-                        <Text className="ml-1 text-[10px] font-semibold text-[#1F2940]">
-                          {formatCommunityXp(entry.totalXp)} XP
-                        </Text>
                       </View>
+                    ) : null}
+
+                    {entry.rank === 2 || entry.rank === 3 ? (
+                      <View className="absolute -bottom-1 flex-row gap-[3px]">
+                        <View
+                          style={{
+                            backgroundColor: badgeColor,
+                            borderBottomLeftRadius: 2,
+                            borderBottomRightRadius: 2,
+                            height: 10,
+                            transform: [{ rotate: "10deg" }],
+                            width: 5,
+                          }}
+                        />
+                        <View
+                          style={{
+                            backgroundColor: badgeColor,
+                            borderBottomLeftRadius: 2,
+                            borderBottomRightRadius: 2,
+                            height: 10,
+                            transform: [{ rotate: "-10deg" }],
+                            width: 5,
+                          }}
+                        />
+                      </View>
+                    ) : null}
+
+                    <View
+                      className="h-6 w-6 items-center justify-center rounded-full"
+                      style={{
+                        backgroundColor: isTopCommunityLeaderboardRank(
+                          entry.rank,
+                        )
+                          ? badgeColor
+                          : "#EEF2F7",
+                        borderColor: "#FFFFFF",
+                        borderWidth: 2,
+                      }}
+                    >
+                      <Text
+                        className="text-[11px] font-medium leading-[13px]"
+                        style={{
+                          color: getCommunityLeaderboardBadgeTextColor(
+                            entry.rank,
+                          ),
+                        }}
+                      >
+                        {entry.rank}
+                      </Text>
                     </View>
-                  </Pressable>
-                );
-              })}
+                  </View>
+
+                  <View className="mr-2.5 h-10 w-10 items-center justify-center">
+                    <UserAvatar
+                      borderColor={getCommunityLeaderboardRingColor(entry.rank)}
+                      borderWidth={
+                        isTopCommunityLeaderboardRank(entry.rank) ? 2 : 1.5
+                      }
+                      displayName={getCommunityLeaderboardDisplayName(entry)}
+                      size={38}
+                      textSize={12}
+                      uri={readMeaningfulText(entry.avatarUrl) ?? null}
+                      username={entry.username}
+                    />
+                  </View>
+
+                  <View className="flex-1 pr-2">
+                    <Text
+                      className="text-[12px] font-medium leading-[14px] text-[#2B2233]"
+                      numberOfLines={1}
+                    >
+                      {getCommunityLeaderboardDisplayName(entry)}
+                    </Text>
+                    <Text
+                      className="text-[10px] font-normal leading-[12px] text-[#9A93A5]"
+                      numberOfLines={1}
+                    >
+                      {getCommunityLeaderboardSubtitle(entry)}
+                    </Text>
+                  </View>
+
+                  <View className="flex-row items-center rounded-full bg-[#FFF0F5] px-2.5 py-1.5">
+                    <SymbolView
+                      name={{
+                        ios: "star.fill",
+                        android: "star",
+                        web: "star",
+                      }}
+                      size={10}
+                      tintColor="#FF5F87"
+                    />
+                    <Text className="ml-1 text-[10px] font-medium leading-[13px] text-[#2B2233]">
+                      {formatCommunityXp(entry.totalXp)} XP
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         </ScrollView>
       )}

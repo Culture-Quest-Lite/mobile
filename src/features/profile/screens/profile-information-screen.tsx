@@ -362,7 +362,7 @@ export default function ProfileInformationScreen() {
               />
             </Pressable>
 
-            <Text className="flex-1 px-3 text-center text-[21px] font-black text-white">
+            <Text className="flex-1 px-3 text-center text-[18px] font-black text-white">
               Thông tin cá nhân
             </Text>
 
@@ -439,7 +439,7 @@ export default function ProfileInformationScreen() {
                         onPress={handleCancelEdit}
                         style={{ opacity: isSubmitting ? 0.72 : 1 }}
                       >
-                        <Text className="text-[17px] font-extrabold text-[#6E667C]">
+                        <Text className="text-[15px] font-extrabold text-[#6E667C]">
                           Hủy
                         </Text>
                       </Pressable>
@@ -479,7 +479,7 @@ export default function ProfileInformationScreen() {
                           tintColor="#2B2233"
                         />
                       )}
-                      <Text className="text-[17px] font-extrabold text-[#2B2233]">
+                      <Text className="text-[15px] font-extrabold text-[#2B2233]">
                         {isSubmitting
                           ? "Đang lưu..."
                           : isEditing
@@ -516,12 +516,12 @@ function StateCard({
       <View className="items-center">
         {children}
         {title ? (
-          <Text className="mt-3 text-center text-[19px] font-black text-[#27233A]">
+          <Text className="mt-3 text-center text-[16px] font-black text-[#27233A]">
             {title}
           </Text>
         ) : null}
         {description ? (
-          <Text className="mt-2 text-center text-[14px] leading-5 text-[#8E869A]">
+          <Text className="mt-2 text-center text-[13px] leading-5 text-[#8E869A]">
             {description}
           </Text>
         ) : null}
@@ -532,7 +532,7 @@ function StateCard({
           className="mt-5 items-center justify-center rounded-full bg-[#F3F5F7] px-4 py-3.5"
           onPress={onPress}
         >
-          <Text className="text-[16px] font-extrabold text-[#2B2233]">
+          <Text className="text-[14px] font-extrabold text-[#2B2233]">
             {actionLabel}
           </Text>
         </Pressable>
@@ -570,7 +570,7 @@ function InlineNotice({
       }}
     >
       <Text
-        className="text-[13px] font-semibold leading-5"
+        className="text-[12px] font-semibold leading-4"
         style={{ color: palette.textColor }}
       >
         {message}
@@ -613,8 +613,8 @@ function InformationDetailRow({
       }
     >
       <Text
-        className="pt-0.5 text-[17px] text-[#8E869A]"
-        style={{ width: 122 }}
+        className="pt-0.5 text-[14px] text-[#8E869A]"
+        style={{ width: 110 }}
       >
         {row.label}
       </Text>
@@ -622,7 +622,7 @@ function InformationDetailRow({
       <View className="min-w-0 flex-1">
         {isDisplayNameEditable ? (
           <TextInput
-            className="rounded-[20px] border border-[#E2E7EC] bg-[#F7F9FB] px-4 py-3.5 text-[18px] font-semibold text-[#27233A]"
+            className="rounded-[20px] border border-[#E2E7EC] bg-[#F7F9FB] px-4 py-3 text-[15px] font-semibold text-[#27233A]"
             onChangeText={onChangeDisplayName}
             placeholder="Nhập tên hiển thị"
             placeholderTextColor="#A39CAF"
@@ -630,8 +630,8 @@ function InformationDetailRow({
             value={draftDisplayName}
           />
         ) : isAutoPlayAudioEditable ? (
-          <View className="flex-row items-center justify-between rounded-[20px] border border-[#E2E7EC] bg-[#F7F9FB] px-4 py-3.5">
-            <Text className="pr-3 text-[17px] font-semibold text-[#27233A]">
+          <View className="flex-row items-center justify-between rounded-[20px] border border-[#E2E7EC] bg-[#F7F9FB] px-4 py-3">
+            <Text className="pr-3 text-[15px] font-semibold text-[#27233A]">
               {draftAutoPlayAudio ? "Bật" : "Tắt"}
             </Text>
             <Switch
@@ -643,18 +643,18 @@ function InformationDetailRow({
           </View>
         ) : isSuccessValue ? (
           <View className="self-start rounded-full bg-[#E6F7EC] px-3 py-1.5">
-            <Text className="text-[17px] font-extrabold text-[#1E8E5A]">
+            <Text className="text-[14px] font-extrabold text-[#1E8E5A]">
               {row.value}
             </Text>
           </View>
         ) : (
-          <Text className="text-[18px] font-semibold leading-7 text-[#27233A]">
+          <Text className="text-[15px] font-semibold leading-5 text-[#27233A]">
             {row.value}
           </Text>
         )}
 
         {row.helperText ? (
-          <Text className="mt-1.5 text-[14px] leading-6 text-[#8E869A]">
+          <Text className="mt-1.5 text-[12px] leading-4 text-[#8E869A]">
             {row.helperText}
           </Text>
         ) : null}

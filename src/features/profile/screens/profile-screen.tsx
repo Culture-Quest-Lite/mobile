@@ -42,11 +42,9 @@ import {
   removeLikedPostId,
   useLikedPostIds,
 } from "@/features/home/data/liked-post-store";
-import { getCachedHotspotDetail } from "@/features/home/data/hotspot-detail-cache";
 import {
   getApiHotspotRouteSlug,
   getHotspotHref,
-  type HotspotDetail,
 } from "@/features/home/data/hotspots";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import type { RouteItem } from "@/lib/demo-data";
@@ -65,7 +63,7 @@ import {
 } from "../data/profile-post-cache";
 import type { ProfilePost, ProfilePostStatus } from "../types";
 
-type Tab = "posts" | "pending-posts" | "routes" | "liked-hotspots";
+type Tab = "posts" | "pending-posts" | "routes";
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type ResolvedProfileHotspotPreview = {
   hotspotId: number;
@@ -141,11 +139,6 @@ const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
     key: "routes",
     label: "Tuyến đường",
     icon: { ios: "map", android: "route", web: "route" },
-  },
-  {
-    key: "liked-hotspots",
-    label: "Hotspot đã thích",
-    icon: { ios: "heart", android: "favorite_border", web: "favorite_border" },
   },
 ];
 const fallbackPostAuthorName = "Minh Anh";
@@ -657,7 +650,6 @@ export default function ProfileScreen() {
     : null;
   const hasFocusedProfileRef = useRef(false);
   const {
-    likedHotspots,
     profile,
     posts,
     userRoutes,
@@ -735,10 +727,6 @@ export default function ProfileScreen() {
   };
   const handleBackToHome = () => {
     router.replace("/home");
-  };
-  const handleOpenLikedHotspot = (slug: string) => {
-    const cachedHotspotId = getCachedHotspotDetail({ slug })?.hotspotId ?? null;
-    router.push(getHotspotHref(slug, cachedHotspotId));
   };
   const handleOpenPostHotspot = useCallback(
     (hotspotId: number) => {
@@ -1316,29 +1304,15 @@ export default function ProfileScreen() {
                   })}
                 </View>
               )
-            ) : tab === "routes" ? (
-              userRoutes.length === 0 ? (
-                <EmptyRoutes />
-              ) : (
-                <View className="gap-2">
-                  {userRoutes.map((route) => (
-                    <RouteCard
-                      key={route.id}
-                      route={route}
-                      onPress={() => router.push(`/route/${route.id}` as Href)}
-                    />
-                  ))}
-                </View>
-              )
-            ) : likedHotspots.length === 0 ? (
-              <EmptyLikedHotspots />
+            ) : userRoutes.length === 0 ? (
+              <EmptyRoutes />
             ) : (
               <View className="gap-2">
-                {likedHotspots.map((hotspot) => (
-                  <LikedHotspotCard
-                    key={hotspot.slug}
-                    hotspot={hotspot}
-                    onPress={() => handleOpenLikedHotspot(hotspot.slug)}
+                {userRoutes.map((route) => (
+                  <RouteCard
+                    key={route.id}
+                    route={route}
+                    onPress={() => router.push(`/route/${route.id}` as Href)}
                   />
                 ))}
               </View>
@@ -2556,17 +2530,6 @@ function PostCard({
           />
         </View>
         <View className="flex-1" />
-        <View className="h-9 w-9 items-center justify-center rounded-full">
-          <SymbolView
-            name={{
-              ios: "bookmark",
-              android: "bookmark_border",
-              web: "bookmark_border",
-            }}
-            size={18}
-            tintColor="#706775"
-          />
-        </View>
       </View>
 
       {post.reason ? (
@@ -2625,54 +2588,6 @@ function RouteCard({
   );
 }
 
-function LikedHotspotCard({
-  hotspot,
-  onPress,
-}: {
-  hotspot: HotspotDetail;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      className="flex-row gap-3 rounded-2xl bg-white p-2.5"
-      style={cardShadow}
-    >
-      <Image
-        source={hotspot.imageUri}
-        contentFit="cover"
-        transition={180}
-        cachePolicy="memory-disk"
-        style={{ width: 74, height: 74, borderRadius: 14 }}
-      />
-      <View className="min-w-0 flex-1 justify-center">
-        <View className="flex-row items-start justify-between gap-2">
-          <Text
-            className="flex-1 text-[14px] font-semibold text-[#2B2233]"
-            numberOfLines={1}
-          >
-            {hotspot.title}
-          </Text>
-          <SymbolView
-            name={{ ios: "heart.fill", android: "favorite", web: "favorite" }}
-            size={14}
-            tintColor="#EB489B"
-          />
-        </View>
-        <Text className="mt-0.5 text-[11px] text-[#8E869A]">
-          {hotspot.category} · {hotspot.district}
-        </Text>
-        <Text className="mt-1 text-[11px] text-[#8E869A]">
-          {hotspot.distance} · {hotspot.reviews} reviews
-        </Text>
-        <Text className="mt-1 text-[11px] font-extrabold text-[#F58752]">
-          {hotspot.reward}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
-
 function ProfilePostsSectionHeader({ title }: { title: string }) {
   return (
     <View className="mb-3 px-1">
@@ -2717,21 +2632,3 @@ function EmptyRoutes() {
   );
 }
 
-function EmptyLikedHotspots() {
-  return (
-    <View className="items-center py-12">
-      <SymbolView
-        name={{
-          ios: "heart",
-          android: "favorite_border",
-          web: "favorite_border",
-        }}
-        size={30}
-        tintColor="#AA9FB0"
-      />
-      <Text className="mt-2 text-[13px] text-[#8E869A]">
-        Chưa có hotspot đã thích nào
-      </Text>
-    </View>
-  );
-}
