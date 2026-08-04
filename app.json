@@ -65,7 +65,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Cho phép Culture Quest truy cập vị trí của bạn để xác minh check-in gần hotspot."
+          "locationWhenInUsePermission": "Xác định vị trí hiện tại được sử dụng để gợi ý địa điểm gần bạn, đề xuất tuyến đường phù hợp và xác minh check-in."
         }
       ],
       [
@@ -74,6 +74,13 @@
           "cameraPermission": false,
           "microphonePermission": false,
           "photosPermission": "Cho phép Culture Quest truy cập thư viện của bạn để thêm ảnh và video vào bài viết cộng đồng và bài đánh giá hotspot."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#F7F6F2",
+          "defaultChannel": "default"
         }
       ],
       "expo-audio",

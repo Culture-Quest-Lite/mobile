@@ -46,9 +46,7 @@ import {
 } from "@/features/home/api/get-post-comments";
 import { likePost } from "@/features/home/api/like-post";
 import { sharePost } from "@/features/home/api/share-post";
-import {
-  ReviewDeleteDialog,
-} from "@/features/home/components/review-delete-dialog";
+import { ReviewDeleteDialog } from "@/features/home/components/review-delete-dialog";
 import {
   getApiHotspotRouteSlug,
   getHotspotHref,
@@ -484,19 +482,19 @@ function buildNewsfeedLocation(post: {
   routeIds: number[];
 }) {
   if (post.hotspotIds.length === 1) {
-    return "1 hotspot được gắn";
+    return "1 địa điểm được gắn";
   }
 
   if (post.hotspotIds.length > 1) {
-    return `${post.hotspotIds.length} hotspot được gắn`;
+    return `${post.hotspotIds.length} địa điểm được gắn`;
   }
 
   if (post.routeIds.length === 1) {
-    return "1 route được gắn";
+    return "1 tuyến đường được gắn";
   }
 
   if (post.routeIds.length > 1) {
-    return `${post.routeIds.length} route được gắn`;
+    return `${post.routeIds.length} tuyến đường được gắn`;
   }
 
   return "";
@@ -523,14 +521,14 @@ function buildNewsfeedBadge(post: {
   isTaggedRoute: boolean;
 }) {
   if (post.isTaggedHotspot) {
-    return "Hotspot";
+    return "Địa điểm";
   }
 
   if (post.isTaggedRoute) {
-    return "Route";
+    return "Tuyến đường";
   }
 
-  return "Newsfeed";
+  return "Bảng tin";
 }
 
 function replaceCommunityFeedPostLikeState(
@@ -761,7 +759,7 @@ function mapNewsfeedPostToCommunityFeedPost(
     initials: getNameInitials(author),
     role: readMeaningfulText(post.username)
       ? `@${post.username.trim()}`
-      : "Explorer community",
+      : "Cộng đồng khám phá",
     time: formatCommunityTime(post.createdAt),
     caption:
       readMeaningfulText(stripTrailingHashtagBlock(post.text)) ??
@@ -836,7 +834,7 @@ function mapSharedPostToCommunityFeedPost(
     initials: getNameInitials(author),
     role: readMeaningfulText(sharedPost.username)
       ? `@${sharedPost.username.trim()}`
-      : "Explorer community",
+      : "Cộng đồng khám phá",
     time: formatCommunityTime(sharedPost.createdAt),
     caption:
       readMeaningfulText(stripTrailingHashtagBlock(sharedPost.content)) ?? "",
@@ -1060,7 +1058,7 @@ export default function CommunityScreen() {
         setCommunityFeedError(
           error instanceof Error
             ? error.message
-            : "Không tải được newsfeed cộng đồng.",
+            : "Không tải được bản tin cộng đồng.",
         );
         setCommunityFeedStatus("error");
       }
@@ -1324,7 +1322,7 @@ export default function CommunityScreen() {
         setCommunityFeedError(
           error instanceof Error
             ? error.message
-            : "Không tải được newsfeed cộng đồng.",
+            : "Không tải được bản tin cộng đồng.",
         );
         setCommunityFeedStatus("error");
       } else {
@@ -1332,7 +1330,7 @@ export default function CommunityScreen() {
           "Không thể làm mới",
           error instanceof Error
             ? error.message
-            : "Không thể làm mới newsfeed cộng đồng.",
+            : "Không thể làm mới bản tin cộng đồng.",
         );
       }
     } finally {
@@ -1382,7 +1380,7 @@ export default function CommunityScreen() {
             setCommunityFeedError(
               error instanceof Error
                 ? error.message
-                : "Không tải được newsfeed cộng đồng.",
+                : "Không tải được bảng tin cộng đồng.",
             );
             setCommunityFeedStatus("error");
             return;
@@ -1391,7 +1389,7 @@ export default function CommunityScreen() {
           setCommunityFeedError(
             error instanceof Error
               ? error.message
-              : "Không thể làm mới newsfeed cộng đồng.",
+              : "Không thể làm mới bảng tin cộng đồng.",
           );
           setCommunityFeedStatus("ready");
         }
@@ -2301,10 +2299,10 @@ export default function CommunityScreen() {
                   }}
                 >
                   <Text className="text-[15px] font-bold text-[#C2416C]">
-                    {communityFeedError ?? "Không tải được newsfeed cộng đồng."}
+                    {communityFeedError ?? "Không tải được bảng tin cộng đồng."}
                   </Text>
                   <Text className="mt-1 text-[14px] leading-[17px] text-[#8E869A]">
-                    Đang hiển thị feed mẫu tạm thời để màn hình không bị trống.
+                    Đang hiển thị bảng tin mẫu tạm thời để màn hình không bị trống.
                   </Text>
                 </View>
               ) : null}
@@ -2752,7 +2750,7 @@ function CommunityPostRouteCard({
             className="text-[12px] font-semibold text-[#F2608E]"
             style={{ includeFontPadding: false, lineHeight: 11 }}
           >
-            Route
+            Tuyến đường
           </Text>
           <Text
             className="text-[13px] font-medium text-[#4B414C]"
@@ -2820,7 +2818,7 @@ function CommunityPostHotspotCard({
             className="text-[12px] font-semibold text-[#18A7B4]"
             style={{ includeFontPadding: false, lineHeight: 11 }}
           >
-            {`${count} hotspot`}
+            {`${count} địa điểm`}
           </Text>
           <Text
             className="text-[13px] text-[#6D6671]"
@@ -2932,7 +2930,9 @@ function CommunitySharedPostCard({
     .filter((routeId) => Number.isInteger(routeId) && routeId > 0)
     .map((routeId) => ({
       id: routeId,
-      label: resolvedRoutes[routeId]?.routeName?.trim() || `Route #${routeId}`,
+      label:
+        resolvedRoutes[routeId]?.routeName?.trim() ||
+        `Tuyến đường #${routeId}`,
     }));
   const hotspotItems = sharedPost.hotspotIds
     .filter((hotspotId) => Number.isInteger(hotspotId) && hotspotId > 0)
@@ -2941,12 +2941,12 @@ function CommunitySharedPostCard({
       imageUri: resolvedHotspots[hotspotId]?.imageUri ?? null,
       label:
         resolvedHotspots[hotspotId]?.hotspotName?.trim() ||
-        `Hotspot #${hotspotId}`,
+        `Địa điểm #${hotspotId}`,
     }));
   const primaryRouteLabel =
     routeItems.length <= 1
       ? (routeItems[0]?.label ?? null)
-      : `${routeItems[0]?.label ?? "Route"} +${routeItems.length - 1}`;
+      : `${routeItems[0]?.label ?? "Tuyến đường"} +${routeItems.length - 1}`;
   const hotspotSubtitle =
     hotspotItems.length === 0
       ? null
@@ -3119,7 +3119,8 @@ function CommunityPostCard({
   const routeItems = routeIds.map((routeId) => ({
     id: routeId,
     hotspotCount: resolvedRoutes[routeId]?.hotspotCount ?? 0,
-    label: resolvedRoutes[routeId]?.routeName?.trim() || `Route #${routeId}`,
+    label:
+      resolvedRoutes[routeId]?.routeName?.trim() || `Tuyến đường #${routeId}`,
     routeDurationLabel: resolvedRoutes[routeId]?.routeDurationLabel ?? null,
   }));
   const hotspotItems = hotspotIds.map((hotspotId) => ({
@@ -3127,12 +3128,12 @@ function CommunityPostCard({
     imageUri: resolvedHotspots[hotspotId]?.imageUri ?? null,
     label:
       resolvedHotspots[hotspotId]?.hotspotName?.trim() ||
-      `Hotspot #${hotspotId}`,
+      `Địa điểm #${hotspotId}`,
   }));
   const primaryRouteLabel =
     routeItems.length <= 1
       ? (routeItems[0]?.label ?? null)
-      : `${routeItems[0]?.label ?? "Route"} +${routeItems.length - 1}`;
+      : `${routeItems[0]?.label ?? "Tuyến đường"} +${routeItems.length - 1}`;
   const hotspotSubtitle =
     hotspotItems.length === 0
       ? null

@@ -77,6 +77,7 @@ import {
   voucherMerchants,
 } from "../data/home-screen.mock";
 import { getApiHotspotRouteSlug, getHotspotHref } from "../data/hotspots";
+import { getThemeDetailHref } from "../lib/theme-detail";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const guestPreviewLogo = require("../../../../assets/images/logo3.png");
@@ -209,6 +210,7 @@ function mapActiveTagsToNearbyCategories(tags: ActiveTagDto[]) {
     ...resolveThemeCategoryPreset(tag.tagName, index),
     imageUrl: readMeaningfulThemeImageUrl(tag.imageUrl),
     label: tag.tagName,
+    tagId: tag.tagId,
   }));
 }
 
@@ -1955,6 +1957,17 @@ export default function HomeScreen() {
   const handleOpenHotspots = () => {
     router.push("/hotspots");
   };
+  const handleOpenThemeCategory = (item: NearbyCategoryCard) => {
+    router.push(
+      getThemeDetailHref({
+        accent: item.accent,
+        background: item.background,
+        imageUrl: item.imageUrl,
+        tagId: item.tagId,
+        title: item.label,
+      }),
+    );
+  };
   const handleOpenRoutes = () => {
     router.push("/route");
   };
@@ -3156,7 +3169,7 @@ export default function HomeScreen() {
                   <Pressable
                     key={`${item.label}-${index}`}
                     className={`items-center ${index === themeCategories.length - 1 ? "" : "mr-4"}`}
-                    onPress={handleOpenHotspots}
+                    onPress={() => handleOpenThemeCategory(item)}
                     style={{ width: themeCategoryItemWidth }}
                   >
                     <View

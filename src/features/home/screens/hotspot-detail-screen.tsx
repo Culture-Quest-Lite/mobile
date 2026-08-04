@@ -75,6 +75,7 @@ import {
 } from "../api/get-hotspot-reviews";
 import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
 import { likePost } from "../api/like-post";
+import { likeReview } from "../api/like-review";
 import { deleteReview } from "../api/review-mutations";
 import {
   HiddenStoryUnlockedContent,
@@ -784,15 +785,16 @@ function buildApiPersonalExperienceItems(
 
 function buildApiReviewPersonalExperienceItems(
   reviews: HotspotReview[],
+  likingReviewIds: number[],
 ): PersonalExperienceItem[] {
   return reviews.map((review) => ({
     avatarUri: readMeaningfulApiText(review.avatarUrl) ?? avatarImageUri,
     createdAtTime: getReviewCreatedAtTime(review),
     date: formatPersonalExperienceDate(review.createdAt),
     id: `review-${review.reviewId}`,
-    isLiked: false,
-    isLikePending: false,
-    likeCount: 0,
+    isLiked: review.isLiked,
+    isLikePending: likingReviewIds.includes(review.reviewId),
+    likeCount: Math.max(0, Math.round(review.likeCount)),
     media: review.medias.map((media) => ({
       duration:
         media.mediaType.trim().toUpperCase() === "VIDEO" ? "Video" : undefined,
@@ -1897,13 +1899,23 @@ function RouteMatchesSectionHeader() {
   );
 }
 
-function PersonalExperienceSectionHeader() {
+function PersonalExperienceSectionHeader({
+  totalReviewLabel,
+}: {
+  totalReviewLabel?: string | null;
+}) {
   return (
     <Text
       className="text-[14px] font-black uppercase tracking-[1.4px]"
       style={sectionEyebrowTextStyle}
     >
       Xếp hạng và đánh giá
+      {totalReviewLabel ? (
+        <Text className="text-[14px] font-black text-[#A39AAB]">
+          {" "}
+          ({totalReviewLabel})
+        </Text>
+      ) : null}
     </Text>
   );
 }
@@ -2052,6 +2064,9 @@ function PersonalExperienceLikeButton({
 }) {
   return (
     <Pressable
+      accessibilityLabel={isLiked ? "Gỡ tim bài viết" : "Thả tim bài viết"}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: isPending, selected: isLiked }}
       className="flex-row items-center gap-1.5 self-start py-0.5"
       disabled={isPending}
       hitSlop={8}
@@ -2087,12 +2102,14 @@ function PersonalExperienceCard({
   onDeleteReview,
   onEditReview,
   onPressLike,
+  onPressLikeReview,
 }: {
   isReviewActionPending: boolean;
   item: PersonalExperienceItem;
   onDeleteReview: (review: HotspotReview) => void;
   onEditReview: (review: HotspotReview) => void;
   onPressLike: (postId: number) => void;
+  onPressLikeReview: (reviewId: number) => void;
 }) {
   const insets = useSafeAreaInsets();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
@@ -2150,8 +2167,10 @@ function PersonalExperienceCard({
   );
   const hasText = item.text.trim().length > 0;
   const hasRating = item.rating > 0;
-  // Chỉ bài post mới có endpoint like; review chưa hỗ trợ thả tim.
+  // Post và review dùng hai endpoint like khác nhau nhưng chung một nút tim.
   const likeablePostId = item.postId;
+  const likeableReviewId = item.review?.reviewId ?? null;
+  const canLike = likeablePostId !== null || likeableReviewId !== null;
   const manageableReview = item.review?.isOwner ? item.review : null;
 
   const handleOpenReviewMenu = (event: GestureResponderEvent) => {
@@ -2481,12 +2500,21 @@ function PersonalExperienceCard({
         />
       ) : null}
 
-      {likeablePostId !== null ? (
+      {canLike ? (
         <View className="mt-2 flex-row items-center">
           <PersonalExperienceLikeButton
             isLiked={item.isLiked}
             isPending={item.isLikePending}
-            onPress={() => onPressLike(likeablePostId)}
+            onPress={() => {
+              if (likeablePostId !== null) {
+                onPressLike(likeablePostId);
+                return;
+              }
+
+              if (likeableReviewId !== null) {
+                onPressLikeReview(likeableReviewId);
+              }
+            }}
             value={item.likeCount}
           />
         </View>
@@ -2558,7 +2586,9 @@ function PersonalExperienceSection({
   onDeleteReview,
   onEditReview,
   onPressLike,
+  onPressLikeReview,
   reviewsErrorMessage,
+  totalReviewLabel,
 }: {
   composer?: PersonalExperienceComposerProps | null;
   deletingReviewId: number | null;
@@ -2568,7 +2598,9 @@ function PersonalExperienceSection({
   onDeleteReview: (review: HotspotReview) => void;
   onEditReview: (review: HotspotReview) => void;
   onPressLike: (postId: number) => void;
+  onPressLikeReview: (reviewId: number) => void;
   reviewsErrorMessage?: string | null;
+  totalReviewLabel?: string | null;
 }) {
   const [isShowingAllReviews, setIsShowingAllReviews] = useState(false);
   const canToggleAllReviews = items.length > recentReviewPreviewCount;
@@ -2579,7 +2611,7 @@ function PersonalExperienceSection({
 
   return (
     <View className="mt-5 gap-3">
-      <PersonalExperienceSectionHeader />
+      <PersonalExperienceSectionHeader totalReviewLabel={totalReviewLabel} />
 
       {reviewsErrorMessage ? (
         <PersonalExperienceErrorCard message={reviewsErrorMessage} />
@@ -2597,6 +2629,7 @@ function PersonalExperienceSection({
               onDeleteReview={onDeleteReview}
               onEditReview={onEditReview}
               onPressLike={onPressLike}
+              onPressLikeReview={onPressLikeReview}
             />
           ))
         ) : (
@@ -2877,6 +2910,7 @@ export default function HotspotDetailScreen() {
   const [isRemoteHotspotLoading, setIsRemoteHotspotLoading] = useState(false);
   const [apiHotspotPosts, setApiHotspotPosts] = useState<HotspotPost[]>([]);
   const [likingPostIds, setLikingPostIds] = useState<number[]>([]);
+  const [likingReviewIds, setLikingReviewIds] = useState<number[]>([]);
   const [hotspotPostsError, setHotspotPostsError] = useState<string | null>(
     null,
   );
@@ -3204,6 +3238,97 @@ export default function HotspotDetailScreen() {
       );
     } finally {
       setLikingPostIds((current) => current.filter((id) => id !== postId));
+    }
+  }
+
+  async function handlePressLikeHotspotReview(reviewId: number) {
+    if (likingReviewIds.includes(reviewId)) {
+      return;
+    }
+
+    const targetReview = apiHotspotReviews.find(
+      (review) => review.reviewId === reviewId,
+    );
+
+    if (!targetReview) {
+      return;
+    }
+
+    if (!authSession.isAuthenticated) {
+      Alert.alert(
+        "Cần đăng nhập",
+        "Bạn cần đăng nhập để thả tim bài đánh giá này.",
+      );
+      return;
+    }
+
+    const accessToken = await getValidAccessToken();
+
+    if (!accessToken) {
+      Alert.alert(
+        "Phiên đăng nhập hết hạn",
+        "Vui lòng đăng nhập lại trước khi thả tim bài đánh giá.",
+      );
+      return;
+    }
+
+    const currentIsLiked = targetReview.isLiked;
+    const currentLikeCount = Math.max(0, Math.round(targetReview.likeCount));
+    // Bấm lại lần nữa là gỡ tim: đảo trạng thái và giảm số đếm.
+    const optimisticIsLiked = !currentIsLiked;
+    const optimisticLikeCount = optimisticIsLiked
+      ? currentLikeCount + 1
+      : Math.max(0, currentLikeCount - 1);
+
+    const applyReviewLikeState = (isLiked: boolean, likeCount: number) => {
+      setApiHotspotReviews((current) =>
+        current.map((review) =>
+          review.reviewId === reviewId
+            ? { ...review, isLiked, likeCount }
+            : review,
+        ),
+      );
+    };
+
+    setLikingReviewIds((current) =>
+      current.includes(reviewId) ? current : [...current, reviewId],
+    );
+    applyReviewLikeState(optimisticIsLiked, optimisticLikeCount);
+
+    try {
+      const result = await likeReview({
+        accessToken,
+        reviewId,
+        tokenType: authSession.tokenType,
+      });
+
+      // API trả về nguyên review sau khi like nên merge thẳng cho khớp BE.
+      if (result.review) {
+        const likedReview = result.review;
+
+        setApiHotspotReviews((current) =>
+          current.map((review) =>
+            review.reviewId === reviewId
+              ? { ...review, ...likedReview }
+              : review,
+          ),
+        );
+      } else {
+        applyReviewLikeState(
+          result.isLiked ?? optimisticIsLiked,
+          result.likeCount ?? optimisticLikeCount,
+        );
+      }
+    } catch (error) {
+      applyReviewLikeState(currentIsLiked, currentLikeCount);
+      Alert.alert(
+        "Không thể thả tim",
+        error instanceof Error
+          ? error.message
+          : "Đã có lỗi xảy ra khi thả tim bài đánh giá.",
+      );
+    } finally {
+      setLikingReviewIds((current) => current.filter((id) => id !== reviewId));
     }
   }
 
@@ -3659,7 +3784,7 @@ export default function HotspotDetailScreen() {
     likingPostIds,
   );
   const apiReviewPersonalExperienceItems =
-    buildApiReviewPersonalExperienceItems(apiHotspotReviews);
+    buildApiReviewPersonalExperienceItems(apiHotspotReviews, likingReviewIds);
   const personalExperienceItems = sortPersonalExperienceItemsByNewest(
     dedupePersonalExperienceItems([
       ...apiReviewPersonalExperienceItems,
@@ -3846,48 +3971,27 @@ export default function HotspotDetailScreen() {
                   {hotspot.title}
                 </Text>
 
-                <View className="mt-0.5 flex-row flex-wrap items-center gap-2">
-                  <View className="flex-row items-center gap-1.5 rounded-full bg-[#FFF7FA] px-2.5 py-1">
-                    <SymbolView
-                      name={{
-                        ios: "star.fill",
-                        android: "star",
-                        web: "star",
-                      }}
-                      size={12}
-                      tintColor="#F58752"
-                    />
-                    <Text
-                      className="text-[12px] font-bold text-[#F58752]"
-                      style={{ lineHeight: 14 }}
-                    >
-                      {hotspot.rating.toFixed(1)}
-                    </Text>
-                    <Text
-                      className="text-[12px] text-[#A39AAB]"
-                      style={{ lineHeight: 14 }}
-                    >
-                      ({hotspot.reviews} đánh giá)
-                    </Text>
-                  </View>
+                <View className="mt-1 flex-row items-center gap-1.5">
+                  <Text
+                    className="text-[13px] font-semibold text-[#3B4454]"
+                    style={{ includeFontPadding: false, lineHeight: 15 }}
+                  >
+                    {hotspot.rating.toFixed(1).replace(".", ",")}
+                  </Text>
 
-                  <View className="flex-row items-center gap-1.5 rounded-full bg-[#F7F7FB] px-2.5 py-1">
-                    <SymbolView
-                      name={{
-                        ios: "text.bubble.fill",
-                        android: "chat_bubble",
-                        web: "chat_bubble",
-                      }}
-                      size={12}
-                      tintColor="#8E869A"
-                    />
-                    <Text
-                      className="text-[12px] font-semibold text-[#6F657A]"
-                      style={{ lineHeight: 14 }}
-                    >
-                      Total review: {hotspot.reviews}
-                    </Text>
-                  </View>
+                  <RatingStars
+                    activeTintColor="#FFC93C"
+                    inactiveTintColor="#DFD7E2"
+                    rating={hotspot.rating}
+                    size={13}
+                  />
+
+                  <Text
+                    className="text-[13px] text-[#6F657A]"
+                    style={{ includeFontPadding: false, lineHeight: 15 }}
+                  >
+                    ({hotspot.reviews})
+                  </Text>
                 </View>
               </View>
 
@@ -4021,7 +4125,9 @@ export default function HotspotDetailScreen() {
               onDeleteReview={handleDeleteHotspotReview}
               onEditReview={handleEditHotspotReview}
               onPressLike={handlePressLikeHotspotPost}
+              onPressLikeReview={handlePressLikeHotspotReview}
               reviewsErrorMessage={personalExperienceErrorMessage}
+              totalReviewLabel={hotspot.reviews}
             />
           </View>
         </Animated.ScrollView>

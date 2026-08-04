@@ -24,6 +24,8 @@ import { ensureForegroundLocationPermission } from "@/lib/location";
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Stage = 'idle' | 'scanning' | 'success';
 
+const SUCCESS_ILLUSTRATION = require('../../../../assets/images/success.png');
+
 // ─── Shadow styles ────────────────────────────────────────────────────────────
 const glowShadow = {
   shadowColor: 'rgba(235, 72, 155, 0.45)',
@@ -225,10 +227,10 @@ function RewardRow({
         {icon}
       </LinearGradient>
       <View className="flex-1">
-        <Text className="text-[11px] font-bold uppercase tracking-wider text-white/60">
+        <Text className="text-[11px] font-bold uppercase leading-[14px] tracking-wider text-white/60">
           {label}
         </Text>
-        <Text className="text-[15px] font-bold text-white">{value}</Text>
+        <Text className="text-[15px] font-bold leading-[19px] text-white">{value}</Text>
       </View>
       {badge && (
         <Text className="text-[15px] font-bold text-[#22C55E]">{badge}</Text>
@@ -500,32 +502,27 @@ export default function CheckinScreen() {
           {stage === 'success' && (
             <View className="flex-1 items-center justify-center px-6 gap-0">
               {/* Success icon + confetti */}
-              <View className="mb-6 items-center justify-center" style={{ width: 160, height: 160 }}>
-                <LinearGradient
-                  colors={['#22C55E', '#16A34A']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  className="h-32 w-32 items-center justify-center rounded-full"
-                  style={glowShadow}
-                >
-                  <SymbolView
-                    name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
-                    size={64}
-                    tintColor="#fff"
+              <View className="mb-4 items-center justify-center" style={{ width: 160, height: 160 }}>
+                <View className="h-40 w-40 overflow-hidden rounded-full">
+                  <Image
+                    source={SUCCESS_ILLUSTRATION}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    style={{ height: 160, width: 160 }}
                   />
-                </LinearGradient>
+                </View>
                 <ConfettiDots />
               </View>
 
               {/* Title */}
-              <Text className="text-[30px] font-extrabold text-white">
+              <Text className="text-[26px] font-extrabold leading-[30px] text-white">
                 Check-in thành công!
               </Text>
-              <Text className="mt-1 text-[14px] text-white/80">{h.name}</Text>
+              <Text className="text-[14px] leading-[18px] text-white/80">{h.name}</Text>
 
               {/* Reward card */}
               <View
-                className="mt-6 w-full max-w-xs gap-4 rounded-[28px] bg-white/10 p-4"
+                className="mt-5 w-full max-w-xs gap-3 rounded-[28px] bg-white/10 p-4"
                 style={cardShadow}
               >
                 <RewardRow

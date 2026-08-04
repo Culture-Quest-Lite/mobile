@@ -46,6 +46,7 @@ export type NearbyCategoryCard = {
   imageUrl?: string | null;
   icon: SymbolName;
   label: string;
+  tagId?: number | null;
 };
 
 export type RouteDifficulty = "Dễ" | "Trung bình" | "Khó";
