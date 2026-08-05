@@ -394,8 +394,9 @@ function VerificationMapPreview({
     }
 
     try {
-      const nextPoint =
-        await mapRef.current.pointForCoordinate(resolvedCurrentCoordinate);
+      const nextPoint = await mapRef.current.pointForCoordinate(
+        resolvedCurrentCoordinate,
+      );
 
       if (Number.isFinite(nextPoint.x) && Number.isFinite(nextPoint.y)) {
         setCurrentScreenPoint({
@@ -655,7 +656,6 @@ function VerificationMapPreview({
               </View>
             </Marker>
           ) : null}
-
         </MapView>
       )}
 
@@ -1051,8 +1051,7 @@ export function HotspotGpsCheckinOverlay({
         return;
       }
 
-      const permissionResponse =
-        await ensureForegroundLocationPermission();
+      const permissionResponse = await ensureForegroundLocationPermission();
 
       if (permissionResponse.status !== "granted") {
         setVerificationStatus("permission-denied");
@@ -1099,7 +1098,7 @@ export function HotspotGpsCheckinOverlay({
 
   const hotspotCoordinate = getHotspotCoordinate(hotspot);
   const userAvatarUri = authSession.isAuthenticated
-    ? profile?.avatar ?? null
+    ? (profile?.avatar ?? null)
     : null;
 
   const submitCheckIn = useCallback(async () => {
@@ -1194,10 +1193,9 @@ export function HotspotGpsCheckinOverlay({
         .filter(Boolean),
     ),
   );
-  const totalXpEarned =
-    isExistingCheckIn
-      ? 0
-      : (checkInResult?.totalXpEarned ?? 0);
+  const totalXpEarned = isExistingCheckIn
+    ? 0
+    : (checkInResult?.totalXpEarned ?? 0);
   const totalPointEarned = isExistingCheckIn
     ? null
     : (checkInResult?.totalPointEarned ?? null);
@@ -1453,8 +1451,7 @@ export function HotspotGpsCheckinOverlay({
                       className="text-[15px] font-medium"
                       style={{
                         color:
-                          item.label === "Tổng XP" ||
-                          item.label === "Tổng điểm"
+                          item.label === "Tổng XP" || item.label === "Tổng điểm"
                             ? "#F58752"
                             : SUCCESS_CHECK_ICON_COLOR,
                       }}
@@ -1575,7 +1572,7 @@ export function HotspotGpsCheckinOverlay({
                     className="text-[13px] font-semibold leading-[16px]"
                     style={{ color: SUCCESS_TITLE_COLOR }}
                   >
-                    Xem story hotspot
+                    Xem câu chuyện địa điểm trên
                   </Text>
                 </Pressable>
               ) : null}
