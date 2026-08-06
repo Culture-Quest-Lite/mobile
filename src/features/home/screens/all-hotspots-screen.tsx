@@ -1,4 +1,5 @@
 import { SymbolView } from "@/components/ui/symbol-view";
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
@@ -607,7 +608,10 @@ export default function AllHotspotsScreen() {
           locations={[0, 0.55, 1]}
           style={{ paddingBottom: 22 }}
         >
-          <View className="px-5 pb-1 pt-2">
+          <View
+            className="pb-1 pt-2"
+            style={{ paddingHorizontal: ScreenHorizontalPadding }}
+          >
             <View className="flex-row items-center justify-between">
               <Pressable
                 className="h-11 w-11 items-center justify-center rounded-full border border-[#F0E8F4] bg-white"
@@ -653,7 +657,10 @@ export default function AllHotspotsScreen() {
           </View>
         </LinearGradient>
 
-        <View className="px-5 pt-5">
+        <View
+          className="pt-5"
+          style={{ paddingHorizontal: ScreenHorizontalPadding }}
+        >
           {nearbyHotspotsStatus === "loading" ? (
             <View className="min-h-[520px] items-center justify-center bg-white px-6 py-10">
               <ActivityIndicator color="#E56A2C" size="large" />

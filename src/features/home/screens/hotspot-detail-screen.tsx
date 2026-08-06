@@ -1,4 +1,5 @@
 import { SymbolView } from "@/components/ui/symbol-view";
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
@@ -25,7 +26,6 @@ import {
   Pressable,
   Text as RNText,
   ScrollView,
-  Share,
   View,
   useWindowDimensions,
   type GestureResponderEvent,
@@ -67,14 +67,12 @@ import {
 import { type RouteItem } from "@/lib/demo-data";
 import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
-import { getHotspotPosts, type HotspotPost } from "../api/get-hotspot-posts";
 import {
   getHotspotReviews,
   getReviewCreatedAtTime,
   type HotspotReview,
 } from "../api/get-hotspot-reviews";
 import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
-import { likePost } from "../api/like-post";
 import { likeReview } from "../api/like-review";
 import { deleteReview } from "../api/review-mutations";
 import {
@@ -90,11 +88,6 @@ import { cacheHotspotDetail } from "../data/hotspot-detail-cache";
 import { cacheHotspotReviewForEdit } from "../data/hotspot-review-edit-cache";
 import { getCachedHotspotStories } from "../data/hotspot-story-cache";
 import { type HotspotDetail } from "../data/hotspots";
-import {
-  addLikedPostId,
-  removeLikedPostId,
-  useLikedPostIds,
-} from "../data/liked-post-store";
 import {
   resolveRouteIdParam,
   resolveSelectedHotspotId,
@@ -148,8 +141,6 @@ const defaultRemoteHotspotImageUri =
 const meaninglessApiTextValues = new Set(["", "string", "null", "undefined"]);
 const mapLoadTimeoutMs = 6000;
 const recentReviewPreviewCount = 2;
-const hotspotPostsPageSize = 10;
-const hotspotPostsSort = ["createdAt,DESC"] as const;
 const hotspotReviewsPageSize = 20;
 const hiddenStoryStatusImage = require("../../../../assets/images/review_post.png");
 
@@ -198,8 +189,8 @@ const buttonShadowStyle = {
 } as const;
 
 const relatedRouteCardImageHeight = 136;
-const relatedRouteCardMinHeight = 172;
-const detailSheetHorizontalPadding = 23;
+const relatedRouteCardHeight = 292;
+const detailSheetHorizontalPadding = ScreenHorizontalPadding;
 const relatedRouteScrollInset = detailSheetHorizontalPadding;
 const reviewMediaGridGap = 6;
 const reviewCardBorderRadius = 14;
@@ -395,9 +386,9 @@ function buildHotspotFromApi({
     "";
   const story = readMeaningfulApiText(apiHotspot.historyInformation) ?? "";
   const scheduleLabel =
-    formatApiTimeWindow(apiHotspot.openingTime, apiHotspot.closingTime) ??
-    formatApiTimeWindow(apiHotspot.startTime, apiHotspot.endTime) ??
-    "";
+    formatApiTimeWindow(apiHotspot.openingTime, apiHotspot.closingTime) ?? "";
+  const bestTimeLabel =
+    formatApiTimeWindow(apiHotspot.startTime, apiHotspot.endTime) ?? "";
   const averageRating =
     typeof apiHotspot.averageRating === "number" &&
     Number.isFinite(apiHotspot.averageRating)
@@ -413,7 +404,7 @@ function buildHotspotFromApi({
   return {
     hotspot: {
       address,
-      bestTimeLabel: "",
+      bestTimeLabel,
       category: tagNames[0] ?? "",
       coordinate: {
         latitude: apiHotspot.latitude,
@@ -436,7 +427,7 @@ function buildHotspotFromApi({
       tips: [],
       title:
         readMeaningfulApiText(apiHotspot.hotspotName) ??
-        `Hotspot #${apiHotspot.hotspotId}`,
+        `Địa điểm #${apiHotspot.hotspotId}`,
       vibeTags: tagNames,
     } satisfies HotspotDetail,
   };
@@ -480,7 +471,7 @@ function buildHotspotDirectionsUrls({
   title: string;
 }) {
   const hasCoordinate = isValidHotspotCoordinate(coordinate);
-  const searchTerm = address.trim() || title.trim() || "Hotspot";
+  const searchTerm = address.trim() || title.trim() || "Địa điểm";
   const encodedSearchTerm = encodeURIComponent(searchTerm);
   const coordinateQuery = hasCoordinate
     ? `${coordinate.latitude},${coordinate.longitude}`
@@ -544,9 +535,10 @@ function getSummaryOpenTimeValue({
   apiHotspot: NearbyHotspotDto | null;
   hotspot: HotspotDetail;
 }) {
-  const remoteScheduleValue =
-    formatApiTimeWindow(apiHotspot?.openingTime, apiHotspot?.closingTime) ??
-    formatApiTimeWindow(apiHotspot?.startTime, apiHotspot?.endTime);
+  const remoteScheduleValue = formatApiTimeWindow(
+    apiHotspot?.openingTime,
+    apiHotspot?.closingTime,
+  );
 
   if (remoteScheduleValue) {
     return remoteScheduleValue;
@@ -570,6 +562,25 @@ function getSummaryOpenTimeValue({
   }
 
   return scheduleValue;
+}
+
+function getBestVisitTimeValue({
+  apiHotspot,
+  hotspot,
+}: {
+  apiHotspot: NearbyHotspotDto | null;
+  hotspot: HotspotDetail;
+}) {
+  const remoteBestVisitTimeValue = formatApiTimeWindow(
+    apiHotspot?.startTime,
+    apiHotspot?.endTime,
+  );
+
+  if (remoteBestVisitTimeValue) {
+    return remoteBestVisitTimeValue;
+  }
+
+  return readMeaningfulApiText(hotspot.bestTimeLabel);
 }
 
 function buildSummaryStats({
@@ -596,7 +607,7 @@ function buildSummaryStats({
         android: "star",
         web: "star",
       } as SymbolName,
-      label: "Điểm",
+      label: "Điểm thưởng",
       value: scoreValue,
     },
   ];
@@ -691,128 +702,114 @@ function dedupeRouteItemsById(items: RouteItem[]) {
   );
 }
 
-function parsePersonalExperienceTime(isoTimestamp?: string | null) {
-  const parsedTime = new Date(isoTimestamp ?? "").getTime();
+function getElapsedCalendarMonths(fromTime: number, toTime: number) {
+  const fromDate = new Date(fromTime);
+  const toDate = new Date(toTime);
+  let monthDelta =
+    (toDate.getFullYear() - fromDate.getFullYear()) * 12 +
+    (toDate.getMonth() - fromDate.getMonth());
 
-  return Number.isNaN(parsedTime) ? 0 : parsedTime;
+  if (toDate.getDate() < fromDate.getDate()) {
+    monthDelta -= 1;
+  }
+
+  return Math.max(monthDelta, 0);
 }
 
-function formatPersonalExperienceDate(isoTimestamp: string) {
-  const parsedDate = new Date(isoTimestamp);
-
-  if (Number.isNaN(parsedDate.getTime())) {
+function formatPersonalExperienceDate(
+  createdAtTime: number,
+  currentTime: number,
+) {
+  if (!Number.isFinite(createdAtTime) || createdAtTime <= 0) {
     return "Vừa xong";
   }
 
-  const elapsedMilliseconds = Date.now() - parsedDate.getTime();
+  const elapsedMilliseconds = currentTime - createdAtTime;
 
-  if (elapsedMilliseconds < 60 * 1000) {
+  if (elapsedMilliseconds <= 0) {
     return "Vừa xong";
   }
 
-  const elapsedMinutes = Math.floor(elapsedMilliseconds / (60 * 1000));
+  const minuteInMilliseconds = 60 * 1000;
+  const hourInMilliseconds = 60 * minuteInMilliseconds;
+  const dayInMilliseconds = 24 * hourInMilliseconds;
+
+  if (elapsedMilliseconds < minuteInMilliseconds) {
+    return "Vừa xong";
+  }
+
+  function formatElapsedValue(value: number, unit: string) {
+    return `${value} ${unit}`;
+  }
+
+  const elapsedMinutes = Math.floor(elapsedMilliseconds / minuteInMilliseconds);
 
   if (elapsedMinutes < 60) {
-    return `${elapsedMinutes} phút trước`;
+    return formatElapsedValue(elapsedMinutes, "phút");
   }
 
   const elapsedHours = Math.floor(elapsedMinutes / 60);
 
   if (elapsedHours < 24) {
-    return `${elapsedHours} giờ trước`;
+    return formatElapsedValue(elapsedHours, "giờ");
   }
 
-  const elapsedDays = Math.floor(elapsedHours / 24);
+  const elapsedDays = Math.floor(elapsedMilliseconds / dayInMilliseconds);
 
   if (elapsedDays < 7) {
-    return `${elapsedDays} ngày trước`;
+    return formatElapsedValue(elapsedDays, "ngày");
   }
 
-  return `${parsedDate.getDate().toString().padStart(2, "0")}/${(
-    parsedDate.getMonth() + 1
-  )
-    .toString()
-    .padStart(2, "0")}/${parsedDate.getFullYear()}`;
-}
+  if (elapsedDays <= 30) {
+    return formatElapsedValue(Math.floor(elapsedDays / 7), "tuần");
+  }
 
-function buildApiPersonalExperienceItems(
-  posts: HotspotPost[],
-  likedPostIds: number[],
-  likingPostIds: number[],
-): PersonalExperienceItem[] {
-  return posts.map((post) => {
-    const resolvedMedia = (
-      post.medias.length > 0
-        ? post.medias.map((media) => ({
-            duration:
-              media.type.trim().toUpperCase() === "VIDEO" ? "Video" : undefined,
-            type:
-              media.type.trim().toUpperCase() === "VIDEO"
-                ? ("video" as const)
-                : ("image" as const),
-            uri: media.url,
-          }))
-        : post.image
-          ? [
-              {
-                type: "image" as const,
-                uri: post.image,
-              },
-            ]
-          : []
-    ).filter((media) => Boolean(readMeaningfulApiText(media.uri)));
+  const elapsedMonths = getElapsedCalendarMonths(createdAtTime, currentTime);
 
-    return {
-      avatarUri: avatarImageUri,
-      createdAtTime: parsePersonalExperienceTime(post.createdAt),
-      date: formatPersonalExperienceDate(post.createdAt ?? ""),
-      id: `post-${post.postId}`,
-      isLiked: post.isLiked === true || likedPostIds.includes(post.postId),
-      isLikePending: likingPostIds.includes(post.postId),
-      likeCount: Math.max(0, Math.round(post.likeCount ?? 0)),
-      media: resolvedMedia,
-      postId: post.postId,
-      rating: 0,
-      review: null,
-      text: post.text,
-      user:
-        readMeaningfulApiText(post.displayName) ??
-        readMeaningfulApiText(post.username) ??
-        "Người dùng",
-    };
-  });
+  if (elapsedMonths < 12) {
+    return formatElapsedValue(Math.max(elapsedMonths, 1), "tháng");
+  }
+
+  return formatElapsedValue(Math.floor(elapsedMonths / 12), "năm");
 }
 
 function buildApiReviewPersonalExperienceItems(
   reviews: HotspotReview[],
   likingReviewIds: number[],
+  currentTime: number,
 ): PersonalExperienceItem[] {
-  return reviews.map((review) => ({
-    avatarUri: readMeaningfulApiText(review.avatarUrl) ?? avatarImageUri,
-    createdAtTime: getReviewCreatedAtTime(review),
-    date: formatPersonalExperienceDate(review.createdAt),
-    id: `review-${review.reviewId}`,
-    isLiked: review.isLiked,
-    isLikePending: likingReviewIds.includes(review.reviewId),
-    likeCount: Math.max(0, Math.round(review.likeCount)),
-    media: review.medias.map((media) => ({
-      duration:
-        media.mediaType.trim().toUpperCase() === "VIDEO" ? "Video" : undefined,
-      type:
-        media.mediaType.trim().toUpperCase() === "VIDEO"
-          ? ("video" as const)
-          : ("image" as const),
-      uri: media.url,
-    })),
-    postId: null,
-    rating: clampReviewRatingValue(review.rating),
-    review,
-    text: readMeaningfulApiText(review.comment) ?? "",
-    user:
-      readMeaningfulApiText(review.displayName) ??
-      readMeaningfulApiText(review.username) ??
-      "Người dùng",
-  }));
+  return reviews.map((review) => {
+    const createdAtTime = getReviewCreatedAtTime(review);
+
+    return {
+      avatarUri: readMeaningfulApiText(review.avatarUrl) ?? avatarImageUri,
+      createdAtTime,
+      date: formatPersonalExperienceDate(createdAtTime, currentTime),
+      id: `review-${review.reviewId}`,
+      isLiked: review.isLiked,
+      isLikePending: likingReviewIds.includes(review.reviewId),
+      likeCount: Math.max(0, Math.round(review.likeCount)),
+      media: review.medias.map((media) => ({
+        duration:
+          media.mediaType.trim().toUpperCase() === "VIDEO"
+            ? "Video"
+            : undefined,
+        type:
+          media.mediaType.trim().toUpperCase() === "VIDEO"
+            ? ("video" as const)
+            : ("image" as const),
+        uri: media.url,
+      })),
+      postId: null,
+      rating: clampReviewRatingValue(review.rating),
+      review,
+      text: readMeaningfulApiText(review.comment) ?? "",
+      user:
+        readMeaningfulApiText(review.displayName) ??
+        readMeaningfulApiText(review.username) ??
+        "Người dùng",
+    };
+  });
 }
 
 function dedupePersonalExperienceItems(items: PersonalExperienceItem[]) {
@@ -832,10 +829,6 @@ function sortPersonalExperienceItemsByNewest(items: PersonalExperienceItem[]) {
 
     return right.id.localeCompare(left.id, "en", { numeric: true });
   });
-}
-
-function isApprovedPostStatus(value?: string | null) {
-  return value?.trim().toUpperCase() === "APPROVED";
 }
 
 function getAudioStoryDurationLabel(story: string) {
@@ -1134,7 +1127,7 @@ function DirectionMapCard({
       ? "Preview bản đồ tạm ẩn"
       : "Bản đồ tương tác";
   const mapGestureHint = !hasCoordinate
-    ? "Địa chỉ hotspot"
+    ? "Địa chỉ địa điểm"
     : showMapFallback
       ? "Vẫn có thể mở chỉ đường"
       : "Pinch để zoom";
@@ -1387,11 +1380,13 @@ function DirectionMapCard({
 
 function LocationInformationSection({
   address,
+  bestVisitTime,
   openingHours,
   tagLabels,
   visitDuration,
 }: {
   address: string;
+  bestVisitTime?: string | null;
   openingHours?: string | null;
   tagLabels: string[];
   visitDuration?: string | null;
@@ -1415,6 +1410,17 @@ function LocationInformationSection({
           } as SymbolName,
           label: "Thời gian tham quan",
           value: visitDuration,
+        }
+      : null,
+    bestVisitTime
+      ? {
+          icon: {
+            ios: "sun.max.fill",
+            android: "wb_sunny",
+            web: "wb_sunny",
+          } as SymbolName,
+          label: "Khung giờ đẹp để tham quan",
+          value: bestVisitTime,
         }
       : null,
     openingHours
@@ -1620,11 +1626,11 @@ function HiddenStoryCheckinSection({
       style={cardShadowStyle}
     >
       <Text className="text-[16px] font-black text-[#2F242C]">
-        Story chuyên đề đang cập nhật
+        Câu chuyện chuyên đề đang cập nhật
       </Text>
       <Text className="mt-2 text-[14px] leading-5 text-[#5E7486]">
-        Hotspot này đã check-in thành công. Nội dung story riêng cho điểm đến
-        này sẽ được bổ sung sau.
+        Địa điểm này đã check-in thành công. Nội dung câu chuyện riêng cho điểm
+        đến này sẽ được bổ sung sau.
       </Text>
     </View>
   );
@@ -1693,7 +1699,7 @@ function HiddenStoryCheckinSection({
             Đang kiểm tra trạng thái check-in
           </Text>
           <Text className="mt-2 text-[14px] leading-5 text-[#5E7486]">
-            Hệ thống đang xác nhận từ backend xem bạn đã check-in hotspot này
+            Hệ thống đang xác nhận từ backend xem bạn đã check-in địa điểm này
             trước đó hay chưa.
           </Text>
         </View>
@@ -1736,8 +1742,8 @@ function HiddenStoryCheckinSection({
             {isCheckinStatusLoading
               ? "Đang kiểm tra trạng thái check-in từ hệ thống trước khi mở khóa nội dung."
               : isStoryAvailable
-                ? "Check-in tại đây để mở khóa story hotspot và bản kể chuyện độc quyền."
-                : "Check-in tại đây để ghi nhận điểm đến. Story chuyên đề cho hotspot này đang được cập nhật."}
+                ? "Check-in tại đây để mở khóa câu chuyện của địa điểm và bản kể chuyện độc quyền."
+                : "Check-in tại đây để ghi nhận điểm đến. Câu chuyện chuyên đề cho địa điểm này đang được cập nhật."}
           </Text>
 
           <Pressable
@@ -1804,7 +1810,7 @@ function HotspotRouteCarouselCard({
           cardShadowStyle,
           {
             borderRadius: 16,
-            minHeight: relatedRouteCardMinHeight,
+            height: relatedRouteCardHeight,
           },
         ]}
       >
@@ -1824,48 +1830,53 @@ function HotspotRouteCarouselCard({
           </View>
         </View>
 
-        <View className="px-3 pb-3 pt-2" style={{ gap: 1 }}>
-          <View className="flex-row flex-wrap items-center gap-1.5">
-            <View className="rounded-full bg-[#FFF1F6] px-2 py-[5px]">
-              <Text className="text-[10px] font-extrabold text-[#EB489B]">
-                {route.distance}
-              </Text>
-            </View>
-            <View className="rounded-full bg-[#FFF4EF] px-2 py-[5px]">
-              <Text className="text-[10px] font-extrabold text-[#F58752]">
-                {route.duration}
-              </Text>
-            </View>
-            <View
-              className="rounded-full px-2 py-[5px]"
-              style={{ backgroundColor: difficultyBadgeColors.backgroundColor }}
-            >
-              <Text
-                className="text-[10px] font-extrabold"
-                style={{ color: difficultyBadgeColors.textColor }}
+        <View
+          className="flex-1 px-3 pb-3 pt-2"
+          style={{ justifyContent: "space-between" }}
+        >
+          <View style={{ gap: 1 }}>
+            <View className="flex-row flex-wrap items-center gap-1.5">
+              <View className="rounded-full bg-[#FFF1F6] px-2 py-[5px]">
+                <Text className="text-[10px] font-extrabold text-[#EB489B]">
+                  {route.distance}
+                </Text>
+              </View>
+              <View className="rounded-full bg-[#FFF4EF] px-2 py-[5px]">
+                <Text className="text-[10px] font-extrabold text-[#F58752]">
+                  {route.duration}
+                </Text>
+              </View>
+              <View
+                className="rounded-full px-2 py-[5px]"
+                style={{ backgroundColor: difficultyBadgeColors.backgroundColor }}
               >
-                {route.difficulty}
-              </Text>
+                <Text
+                  className="text-[10px] font-extrabold"
+                  style={{ color: difficultyBadgeColors.textColor }}
+                >
+                  {route.difficulty}
+                </Text>
+              </View>
             </View>
+
+            <Text
+              className="text-[14px] font-semibold text-[#2B2233]"
+              numberOfLines={2}
+              ellipsizeMode="tail"
+              style={{ lineHeight: 16 }}
+            >
+              {route.title}
+            </Text>
+
+            <Text
+              className="text-[12px] text-[#7A6F67]"
+              numberOfLines={2}
+              ellipsizeMode="tail"
+              style={{ lineHeight: 13 }}
+            >
+              {routeDescription}
+            </Text>
           </View>
-
-          <Text
-            className="text-[14px] font-semibold text-[#2B2233]"
-            numberOfLines={2}
-            ellipsizeMode="tail"
-            style={{ lineHeight: 16 }}
-          >
-            {route.title}
-          </Text>
-
-          <Text
-            className="text-[12px] text-[#7A6F67]"
-            numberOfLines={2}
-            ellipsizeMode="tail"
-            style={{ lineHeight: 13 }}
-          >
-            {routeDescription}
-          </Text>
 
           <View className="flex-row flex-wrap items-center justify-end gap-1.5 pt-0.5">
             {routeTagLabel ? (
@@ -1900,20 +1911,22 @@ function RouteMatchesSectionHeader() {
 }
 
 function PersonalExperienceSectionHeader({
-  totalReviewLabel,
+  title,
+  totalLabel,
 }: {
-  totalReviewLabel?: string | null;
+  title: string;
+  totalLabel?: string | null;
 }) {
   return (
     <Text
       className="text-[14px] font-black uppercase tracking-[1.4px]"
       style={sectionEyebrowTextStyle}
     >
-      Xếp hạng và đánh giá
-      {totalReviewLabel ? (
+      {title}
+      {totalLabel ? (
         <Text className="text-[14px] font-black text-[#A39AAB]">
           {" "}
-          ({totalReviewLabel})
+          ({totalLabel})
         </Text>
       ) : null}
     </Text>
@@ -2006,7 +2019,7 @@ function PersonalExperienceComposer({
 }: PersonalExperienceComposerProps) {
   return (
     <View
-      className="bg-white px-4 py-4"
+      className="bg-white px-4 pb-4 pt-3"
       style={[cardShadowStyle, { borderRadius: reviewCardBorderRadius }]}
     >
       <View className="flex-row items-center gap-3">
@@ -2027,7 +2040,7 @@ function PersonalExperienceComposer({
             end={{ x: 1, y: 0.5 }}
             locations={[0, 0.58, 1]}
             start={{ x: 0, y: 0.5 }}
-            className="flex-row items-center justify-center px-5 py-3.5"
+            className="flex-row items-center justify-center px-5 py-3"
           >
             <SymbolView
               name={{
@@ -2040,7 +2053,7 @@ function PersonalExperienceComposer({
             />
             <Text
               className="ml-2 text-[15px] font-semibold"
-              style={{ color: hiddenStoryActionForegroundColor }}
+              style={{ color: hiddenStoryActionForegroundColor, lineHeight: 16 }}
             >
               Thêm ảnh và video
             </Text>
@@ -2172,14 +2185,15 @@ function PersonalExperienceCard({
   const likeableReviewId = item.review?.reviewId ?? null;
   const canLike = likeablePostId !== null || likeableReviewId !== null;
   const manageableReview = item.review?.isOwner ? item.review : null;
+  const reportableReview = item.review ?? null;
 
   const handleOpenReviewMenu = (event: GestureResponderEvent) => {
-    if (isReviewActionPending) {
+    if (isReviewActionPending || reportableReview === null) {
       return;
     }
 
     const menuWidth = 216;
-    const menuHeight = manageableReview ? 156 : 52;
+    const menuHeight = manageableReview ? 104 : 52;
     const viewportInset = 12;
     const pressX = event.nativeEvent.pageX;
     const pressY = event.nativeEvent.pageY;
@@ -2201,23 +2215,13 @@ function PersonalExperienceCard({
     setReviewMenuAnchor({ left, top });
   };
 
-  const handleSharePersonalExperience = async () => {
+  const handleReportReview = () => {
     setReviewMenuAnchor(null);
 
-    try {
-      await Share.share({
-        message:
-          [item.user, item.text.trim()].filter(Boolean).join("\n\n") ||
-          "Bài viết trên Culture Quest Lite",
-        title: `Bài viết của ${item.user}`,
-      });
-    } catch (error) {
-      console.warn("[hotspot-detail] share review failed", {
-        error: error instanceof Error ? error.message : error,
-        itemId: item.id,
-      });
-      Alert.alert("Không thể chia sẻ", "Vui lòng thử lại sau.");
-    }
+    Alert.alert(
+      "Đã ghi nhận báo cáo",
+      "Cảm ơn bạn. Chúng tôi sẽ xem xét bài đánh giá này sớm nhất có thể.",
+    );
   };
 
   return (
@@ -2237,42 +2241,44 @@ function PersonalExperienceCard({
           <Text
             className="text-[14px] font-semibold text-[#2B2233]"
             numberOfLines={1}
-            style={{ lineHeight: 15 }}
+            style={{ lineHeight: 14 }}
           >
             {item.user}
           </Text>
           <Text
             className="text-[12px] text-[#8A7B83]"
             numberOfLines={1}
-            style={{ lineHeight: 12, marginTop: -1 }}
+            style={{ lineHeight: 11, marginTop: -3 }}
           >
             {item.date}
           </Text>
         </View>
-        <Pressable
-          accessibilityLabel="Mở tùy chọn bài viết"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: isReviewActionPending }}
-          className="ml-1 h-9 w-9 items-center justify-center rounded-full"
-          disabled={isReviewActionPending}
-          hitSlop={8}
-          onPress={handleOpenReviewMenu}
-          style={{ opacity: isReviewActionPending ? 0.5 : 1 }}
-        >
-          {isReviewActionPending ? (
-            <ActivityIndicator color="#8A7B83" size="small" />
-          ) : (
-            <SymbolView
-              name={{
-                ios: "ellipsis",
-                android: "more_horiz",
-                web: "more_horiz",
-              }}
-              size={19}
-              tintColor="#5F5662"
-            />
-          )}
-        </Pressable>
+        {reportableReview ? (
+          <Pressable
+            accessibilityLabel="Mở tùy chọn bài đánh giá"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isReviewActionPending }}
+            className="ml-1 h-9 w-9 items-center justify-center rounded-full"
+            disabled={isReviewActionPending}
+            hitSlop={8}
+            onPress={handleOpenReviewMenu}
+            style={{ opacity: isReviewActionPending ? 0.5 : 1 }}
+          >
+            {isReviewActionPending ? (
+              <ActivityIndicator color="#8A7B83" size="small" />
+            ) : (
+              <SymbolView
+                name={{
+                  ios: "ellipsis",
+                  android: "more_horiz",
+                  web: "more_horiz",
+                }}
+                size={19}
+                tintColor="#5F5662"
+              />
+            )}
+          </Pressable>
+        ) : null}
       </View>
 
       <Modal
@@ -2319,8 +2325,8 @@ function PersonalExperienceCard({
                       size={19}
                       tintColor="#2B2233"
                     />
-                    <Text className="ml-3 flex-1 text-[15px] font-semibold text-[#2B2233]">
-                      Chỉnh sửa bài viết
+                    <Text className="ml-3 flex-1 text-[15px] font-normal text-[#2B2233]">
+                      Chỉnh sửa bài đánh giá
                     </Text>
                   </Pressable>
 
@@ -2344,36 +2350,34 @@ function PersonalExperienceCard({
                       size={19}
                       tintColor="#C24157"
                     />
-                    <Text className="ml-3 flex-1 text-[15px] font-semibold text-[#C24157]">
-                      Xóa bài viết
+                    <Text className="ml-3 flex-1 text-[15px] font-normal text-[#C24157]">
+                      Xóa bài đánh giá
                     </Text>
                   </Pressable>
-
-                  <View className="h-px bg-[#ECE8ED]" />
                 </>
               ) : null}
 
-              <Pressable
-                accessibilityRole="button"
-                className="flex-row items-center px-4"
-                onPress={() => {
-                  void handleSharePersonalExperience();
-                }}
-                style={{ height: 52 }}
-              >
-                <SymbolView
-                  name={{
-                    ios: "square.and.arrow.up",
-                    android: "share",
-                    web: "share",
-                  }}
-                  size={19}
-                  tintColor="#2B2233"
-                />
-                <Text className="ml-3 flex-1 text-[15px] font-semibold text-[#2B2233]">
-                  Chia sẻ bài viết
-                </Text>
-              </Pressable>
+              {!manageableReview && reportableReview ? (
+                <Pressable
+                  accessibilityRole="button"
+                  className="flex-row items-center px-4"
+                  onPress={handleReportReview}
+                  style={{ height: 52 }}
+                >
+                  <SymbolView
+                    name={{
+                      ios: "exclamationmark.bubble",
+                      android: "report_problem",
+                      web: "report_problem",
+                    }}
+                    size={19}
+                    tintColor="#2B2233"
+                  />
+                  <Text className="ml-3 flex-1 text-[15px] font-semibold text-[#2B2233]">
+                    Báo cáo đánh giá vi phạm
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -2524,25 +2528,45 @@ function PersonalExperienceCard({
 }
 
 function EmptyPersonalExperienceCard({
-  isCheckedIn,
+  description,
+  iconName,
+  title,
 }: {
-  isCheckedIn: boolean;
+  description: string;
+  iconName?: Parameters<typeof SymbolView>[0]["name"];
+  title: string;
 }) {
   return (
     <View
-      className="bg-white px-5 py-5"
+      className="items-center bg-white px-5 py-6"
       style={[cardShadowStyle, { borderRadius: reviewCardBorderRadius }]}
     >
+      <View className="h-16 w-16 items-center justify-center rounded-full bg-[#FFF1F6]">
+        <SymbolView
+          name={
+            iconName ?? {
+              ios: "star.bubble.fill",
+              android: "rate_review",
+              web: "rate_review",
+            }
+          }
+          size={28}
+          tintColor="#EB489B"
+        />
+      </View>
       <Text
-        className="text-[16px] font-semibold text-[#2B2233]"
-        style={{ lineHeight: 20 }}
+        className="mt-4 text-center text-[16px] font-semibold text-[#2B2233]"
+        style={{ lineHeight: 17 }}
       >
-        Chưa có bài đánh giá
+        {title}
       </Text>
-      <Text className="mt-2 text-[15px]" style={sectionBodyTextStyle}>
-        {isCheckedIn
-          ? "Bạn là người đầu tiên có thể để lại cảm nhận cho hotspot này."
-          : "Check-in tại hotspot để mở quyền chia sẻ bài đánh giá của bạn."}
+      <Text
+        adjustsFontSizeToFit
+        className="mt-1.5 text-center text-[13px]"
+        numberOfLines={1}
+        style={[sectionBodyTextStyle, { lineHeight: 15, width: "100%" }]}
+      >
+        {description}
       </Text>
     </View>
   );
@@ -2580,27 +2604,37 @@ function PersonalExperienceErrorCard({ message }: { message: string }) {
 function PersonalExperienceSection({
   composer,
   deletingReviewId,
-  isCheckedIn,
-  isLoadingReviews = false,
+  composerTitle,
+  emptyDescription,
+  emptyTitle,
+  errorMessage,
+  isLoading = false,
   items,
   onDeleteReview,
   onEditReview,
   onPressLike,
   onPressLikeReview,
-  reviewsErrorMessage,
-  totalReviewLabel,
+  sectionTitle,
+  showLessLabel = "Ẩn bớt bài",
+  showMoreLabel = "Xem tất cả bài",
+  totalLabel,
 }: {
   composer?: PersonalExperienceComposerProps | null;
   deletingReviewId: number | null;
-  isCheckedIn: boolean;
-  isLoadingReviews?: boolean;
+  composerTitle?: string | null;
+  emptyDescription: string;
+  emptyTitle: string;
+  errorMessage?: string | null;
+  isLoading?: boolean;
   items: PersonalExperienceItem[];
   onDeleteReview: (review: HotspotReview) => void;
   onEditReview: (review: HotspotReview) => void;
   onPressLike: (postId: number) => void;
   onPressLikeReview: (reviewId: number) => void;
-  reviewsErrorMessage?: string | null;
-  totalReviewLabel?: string | null;
+  sectionTitle: string;
+  showLessLabel?: string;
+  showMoreLabel?: string;
+  totalLabel?: string | null;
 }) {
   const [isShowingAllReviews, setIsShowingAllReviews] = useState(false);
   const canToggleAllReviews = items.length > recentReviewPreviewCount;
@@ -2611,14 +2645,17 @@ function PersonalExperienceSection({
 
   return (
     <View className="mt-5 gap-3">
-      <PersonalExperienceSectionHeader totalReviewLabel={totalReviewLabel} />
+      <PersonalExperienceSectionHeader
+        title={sectionTitle}
+        totalLabel={totalLabel}
+      />
 
-      {reviewsErrorMessage ? (
-        <PersonalExperienceErrorCard message={reviewsErrorMessage} />
+      {errorMessage ? (
+        <PersonalExperienceErrorCard message={errorMessage} />
       ) : null}
 
       <View className="gap-3">
-        {isLoadingReviews && items.length === 0 ? (
+        {isLoading && items.length === 0 ? (
           <PersonalExperienceLoadingCard />
         ) : items.length > 0 ? (
           visibleItems.map((item) => (
@@ -2633,7 +2670,10 @@ function PersonalExperienceSection({
             />
           ))
         ) : (
-          <EmptyPersonalExperienceCard isCheckedIn={isCheckedIn} />
+          <EmptyPersonalExperienceCard
+            description={emptyDescription}
+            title={emptyTitle}
+          />
         )}
       </View>
 
@@ -2644,20 +2684,18 @@ function PersonalExperienceSection({
           style={cardShadowStyle}
         >
           <Text className="text-[14px] font-semibold text-[#2A6B80]">
-            {isShowingAllReviews
-              ? "Ẩn bớt bài đánh giá"
-              : "Xem tất cả bài đánh giá"}
+            {isShowingAllReviews ? showLessLabel : showMoreLabel}
           </Text>
         </Pressable>
       ) : null}
 
-      {isCheckedIn && composer ? (
-        <View className="gap-2">
+      {composer ? (
+        <View className="gap-1">
           <Text
             className="text-[15px] font-semibold text-[#2B2233]"
-            style={{ lineHeight: 16 }}
+            style={{ lineHeight: 15 }}
           >
-            Chia sẻ bài đánh giá của bạn
+            {composerTitle ?? "Chia sẻ bài của bạn"}
           </Text>
           <PersonalExperienceComposer
             avatarUri={composer.avatarUri}
@@ -2681,10 +2719,12 @@ function StickyCheckinBar({
   onPress: () => void;
 }) {
   return (
-    <View
-      className="px-5"
-      style={{ paddingBottom: Math.max(bottomInset + 10, 18) }}
-    >
+      <View
+        style={{
+          paddingBottom: Math.max(bottomInset + 10, 18),
+          paddingHorizontal: ScreenHorizontalPadding,
+        }}
+      >
       <View
         className="rounded-[30px] bg-white/96 p-3"
         style={[
@@ -2775,11 +2815,11 @@ function NotFoundState() {
             style={[cardShadowStyle, { maxWidth: 360 }]}
           >
             <Text className="text-center text-[24px] font-black text-[#1E3245]">
-              Hotspot khong ton tai
+              Địa điểm không tồn tại
             </Text>
             <Text className="mt-3 text-center text-[15px] leading-6 text-[#5E7486]">
-              Dia diem nay khong con trong danh sach hien tai. Ban co the quay
-              lai hoac mo danh sach hotspot de chon diem khac.
+              Địa điểm này không còn trong danh sách hiện tại. Bạn có thể quay
+              lại hoặc mở danh sách địa điểm để chọn điểm khác.
             </Text>
             <View className="mt-6 flex-row gap-3">
               <Pressable
@@ -2838,7 +2878,7 @@ function LoadFailedState({ message }: { message: string }) {
             style={[cardShadowStyle, { maxWidth: 360 }]}
           >
             <Text className="text-center text-[24px] font-black text-[#7F1D1D]">
-              Không tải được hotspot
+              Không tải được địa điểm
             </Text>
             <Text className="mt-3 text-center text-[15px] leading-6 text-[#7F1D1D]">
               {message}
@@ -2886,8 +2926,6 @@ export default function HotspotDetailScreen() {
     slug: resolvedSlug,
   });
   const resolvedRouteId = resolveRouteIdParam(routeId);
-  const likedPostsAccountKey =
-    authSession.username?.trim() || authSession.displayName.trim() || null;
   const scrollY = useSharedValue(0);
   const [isCheckinOverlayVisible, setIsCheckinOverlayVisible] = useState(false);
   const [isStickyCheckinVisible, setIsStickyCheckinVisible] = useState(false);
@@ -2908,16 +2946,7 @@ export default function HotspotDetailScreen() {
   const [isRemoteCheckinStatusLoading, setIsRemoteCheckinStatusLoading] =
     useState(false);
   const [isRemoteHotspotLoading, setIsRemoteHotspotLoading] = useState(false);
-  const [apiHotspotPosts, setApiHotspotPosts] = useState<HotspotPost[]>([]);
-  const [likingPostIds, setLikingPostIds] = useState<number[]>([]);
   const [likingReviewIds, setLikingReviewIds] = useState<number[]>([]);
-  const [hotspotPostsError, setHotspotPostsError] = useState<string | null>(
-    null,
-  );
-  const persistedLikedPostIds = useLikedPostIds(likedPostsAccountKey);
-  const [isHotspotPostsLoading, setIsHotspotPostsLoading] = useState(
-    () => resolvedHotspotId !== null,
-  );
   const [apiHotspotReviews, setApiHotspotReviews] = useState<HotspotReview[]>(
     [],
   );
@@ -2930,6 +2959,7 @@ export default function HotspotDetailScreen() {
   const [deletingReviewId, setDeletingReviewId] = useState<number | null>(null);
   const [reviewPendingDeletion, setReviewPendingDeletion] =
     useState<HotspotReview | null>(null);
+  const [relativeTimeNow, setRelativeTimeNow] = useState(() => Date.now());
   const cachedStoriesEntry = getCachedHotspotStories({
     hotspotId: resolvedHotspotId,
     routeId: resolvedRouteId,
@@ -2983,80 +3013,20 @@ export default function HotspotDetailScreen() {
     },
   });
 
-  useEffect(() => {
-    let isActive = true;
-
-    const loadHotspotPosts = async () => {
-      if (resolvedHotspotId === null) {
-        setApiHotspotPosts([]);
-        setLikingPostIds([]);
-        setHotspotPostsError(null);
-        setIsHotspotPostsLoading(false);
-        return;
-      }
-
-      setIsHotspotPostsLoading(true);
-      setApiHotspotPosts([]);
-      setLikingPostIds([]);
-      setHotspotPostsError(null);
-
-      try {
-        const accessToken = authSession.isAuthenticated
-          ? await getValidAccessToken()
-          : null;
-        const response = await getHotspotPosts({
-          accessToken,
-          hotspotId: resolvedHotspotId,
-          page: 0,
-          size: hotspotPostsPageSize,
-          sort: [...hotspotPostsSort],
-          tokenType: authSession.tokenType,
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        setApiHotspotPosts(
-          response.content.filter((post) => isApprovedPostStatus(post.status)),
-        );
-      } catch (error) {
-        console.warn("[hotspot-detail] load hotspot posts failed", {
-          error: error instanceof Error ? error.message : error,
-          hotspotId: resolvedHotspotId,
-          slug: resolvedSlug,
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        setApiHotspotPosts([]);
-        setHotspotPostsError(
-          error instanceof Error
-            ? error.message
-            : "Không tải được bài đánh giá theo hotspotId.",
-        );
-      } finally {
-        if (isActive) {
-          setIsHotspotPostsLoading(false);
-        }
-      }
-    };
-
-    void loadHotspotPosts();
-
-    return () => {
-      isActive = false;
-    };
-  }, [
-    authSession.isAuthenticated,
-    authSession.tokenType,
-    resolvedHotspotId,
-    resolvedSlug,
-  ]);
-
   // Chạy theo focus để bài đánh giá vừa gửi ở màn review-compose hiện ngay khi quay lại.
+  useFocusEffect(
+    useCallback(() => {
+      setRelativeTimeNow(Date.now());
+      const relativeTimeTimer = setInterval(() => {
+        setRelativeTimeNow(Date.now());
+      }, 30 * 1000);
+
+      return () => {
+        clearInterval(relativeTimeTimer);
+      };
+    }, [setRelativeTimeNow]),
+  );
+
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
@@ -3105,7 +3075,7 @@ export default function HotspotDetailScreen() {
           setHotspotReviewsError(
             error instanceof Error
               ? error.message
-              : "Không tải được đánh giá theo hotspotId.",
+              : "Không tải được đánh giá của địa điểm.",
           );
         } finally {
           if (isActive) {
@@ -3129,117 +3099,6 @@ export default function HotspotDetailScreen() {
       setIsHotspotReviewsLoading,
     ]),
   );
-
-  async function handlePressLikeHotspotPost(postId: number) {
-    const targetPost = apiHotspotPosts.find((post) => post.postId === postId);
-
-    if (likingPostIds.includes(postId)) {
-      return;
-    }
-
-    if (!authSession.isAuthenticated) {
-      Alert.alert(
-        "Cần đăng nhập",
-        "Bạn cần đăng nhập để thả tim bài đánh giá này.",
-      );
-      return;
-    }
-
-    const accessToken = await getValidAccessToken();
-
-    if (!accessToken) {
-      Alert.alert(
-        "Phiên đăng nhập hết hạn",
-        "Vui lòng đăng nhập lại trước khi thả tim bài đánh giá.",
-      );
-      return;
-    }
-
-    const currentIsLiked =
-      targetPost?.isLiked === true || persistedLikedPostIds.includes(postId);
-    const currentLikeCount = Math.max(
-      0,
-      Math.round(targetPost?.likeCount ?? 0),
-    );
-    const optimisticIsLiked = !currentIsLiked;
-    const optimisticLikeCount = optimisticIsLiked
-      ? currentLikeCount + 1
-      : Math.max(0, currentLikeCount - 1);
-
-    setLikingPostIds((current) =>
-      current.includes(postId) ? current : [...current, postId],
-    );
-    setApiHotspotPosts((current) =>
-      current.map((post) =>
-        post.postId === postId
-          ? {
-              ...post,
-              isLiked: optimisticIsLiked,
-              likeCount: optimisticLikeCount,
-            }
-          : post,
-      ),
-    );
-
-    try {
-      const result = await likePost({
-        accessToken,
-        postId,
-        tokenType: authSession.tokenType,
-      });
-
-      const resolvedIsLiked = result.isLiked ?? optimisticIsLiked;
-      const resolvedLikeCount = result.likeCount ?? optimisticLikeCount;
-
-      setApiHotspotPosts((current) =>
-        current.map((post) =>
-          post.postId === postId
-            ? {
-                ...post,
-                isLiked: resolvedIsLiked,
-                likeCount: resolvedLikeCount,
-              }
-            : post,
-        ),
-      );
-
-      if (likedPostsAccountKey) {
-        if (resolvedIsLiked) {
-          addLikedPostId(likedPostsAccountKey, postId);
-        } else {
-          removeLikedPostId(likedPostsAccountKey, postId);
-        }
-      }
-    } catch (error) {
-      setApiHotspotPosts((current) =>
-        current.map((post) =>
-          post.postId === postId
-            ? {
-                ...post,
-                isLiked: currentIsLiked,
-                likeCount: currentLikeCount,
-              }
-            : post,
-        ),
-      );
-
-      if (likedPostsAccountKey) {
-        if (currentIsLiked) {
-          addLikedPostId(likedPostsAccountKey, postId);
-        } else {
-          removeLikedPostId(likedPostsAccountKey, postId);
-        }
-      }
-      Alert.alert(
-        "Không thể thả tim",
-        error instanceof Error
-          ? error.message
-          : "Đã có lỗi xảy ra khi thả tim bài đánh giá.",
-      );
-    } finally {
-      setLikingPostIds((current) => current.filter((id) => id !== postId));
-    }
-  }
 
   async function handlePressLikeHotspotReview(reviewId: number) {
     if (likingReviewIds.includes(reviewId)) {
@@ -3332,60 +3191,71 @@ export default function HotspotDetailScreen() {
     }
   }
 
-  useEffect(() => {
-    let isActive = true;
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
 
-    async function loadRemoteHotspot() {
-      if (resolvedHotspotId === null) {
-        setRemoteHotspot(null);
-        setRemoteHotspotError(null);
-        setIsRemoteHotspotLoading(false);
-        return;
-      }
-
-      setIsRemoteHotspotLoading(true);
-      setRemoteHotspotError(null);
-      setRemoteHotspot(null);
-
-      try {
-        const accessToken = authSession.isAuthenticated
-          ? await getValidAccessToken()
-          : null;
-        const nextRemoteHotspot = await getHotspotByIdApi({
-          accessToken,
-          hotspotId: resolvedHotspotId,
-          tokenType: authSession.tokenType,
-        });
-
-        if (!isActive) {
-          return;
-        }
-
-        setRemoteHotspot(nextRemoteHotspot);
-      } catch (error) {
-        if (!isActive) {
-          return;
-        }
-
-        setRemoteHotspot(null);
-        setRemoteHotspotError(
-          error instanceof Error
-            ? error.message
-            : "Không tải được chi tiết hotspot từ API.",
-        );
-      } finally {
-        if (isActive) {
+      async function loadRemoteHotspot() {
+        if (resolvedHotspotId === null) {
+          setRemoteHotspot(null);
+          setRemoteHotspotError(null);
           setIsRemoteHotspotLoading(false);
+          return;
+        }
+
+        setIsRemoteHotspotLoading(true);
+        setRemoteHotspotError(null);
+        setRemoteHotspot((currentHotspot) =>
+          currentHotspot?.hotspotId === resolvedHotspotId ? currentHotspot : null,
+        );
+
+        try {
+          const accessToken = authSession.isAuthenticated
+            ? await getValidAccessToken()
+            : null;
+          const nextRemoteHotspot = await getHotspotByIdApi({
+            accessToken,
+            hotspotId: resolvedHotspotId,
+            tokenType: authSession.tokenType,
+          });
+
+          if (!isActive) {
+            return;
+          }
+
+          setRemoteHotspot(nextRemoteHotspot);
+        } catch (error) {
+          if (!isActive) {
+            return;
+          }
+
+          setRemoteHotspot(null);
+          setRemoteHotspotError(
+            error instanceof Error
+              ? error.message
+              : "Không tải được chi tiết địa điểm từ API.",
+          );
+        } finally {
+          if (isActive) {
+            setIsRemoteHotspotLoading(false);
+          }
         }
       }
-    }
 
-    void loadRemoteHotspot();
+      void loadRemoteHotspot();
 
-    return () => {
-      isActive = false;
-    };
-  }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId]);
+      return () => {
+        isActive = false;
+      };
+    }, [
+      authSession.isAuthenticated,
+      authSession.tokenType,
+      resolvedHotspotId,
+      setIsRemoteHotspotLoading,
+      setRemoteHotspot,
+      setRemoteHotspotError,
+    ]),
+  );
 
   useEffect(() => {
     if (resolvedHotspotId === null || remoteHotspot?.isCheckedIn !== true) {
@@ -3526,7 +3396,7 @@ export default function HotspotDetailScreen() {
         setRelatedRoutesError(
           error instanceof Error
             ? error.message
-            : "Không tải được tuyến theo hotspotId.",
+            : "Không tải được tuyến đường của địa điểm.",
         );
         setRelatedRoutesStatus("empty");
       }
@@ -3621,11 +3491,15 @@ export default function HotspotDetailScreen() {
     apiHotspot: remoteHotspot,
     hotspot,
   });
+  const bestVisitTimeLabel = getBestVisitTimeValue({
+    apiHotspot: remoteHotspot,
+    hotspot,
+  });
   const visitDurationLabel =
     formatEstimatedDurationLabel(
       remoteHotspot?.estimatedDurationMin,
       remoteHotspot?.estimatedDurationMax,
-    ) ?? readMeaningfulApiText(hotspot.bestTimeLabel);
+    ) ?? null;
   const hotspotTagLabels =
     remoteHotspot !== null
       ? getRemoteHotspotTagNames(remoteHotspot)
@@ -3688,7 +3562,6 @@ export default function HotspotDetailScreen() {
     },
     pathname: "/hotspot/[slug]/review-compose",
   } as Href;
-
   const handleEditHotspotReview = (review: HotspotReview) => {
     if (!review.isOwner || deletingReviewId !== null) {
       return;
@@ -3778,21 +3651,15 @@ export default function HotspotDetailScreen() {
     Math.max((screenWidth - relatedRouteScrollInset * 2) * 0.62, 208),
     232,
   );
-  const apiPersonalExperienceItems = buildApiPersonalExperienceItems(
-    apiHotspotPosts,
-    persistedLikedPostIds,
-    likingPostIds,
-  );
   const apiReviewPersonalExperienceItems =
-    buildApiReviewPersonalExperienceItems(apiHotspotReviews, likingReviewIds);
-  const personalExperienceItems = sortPersonalExperienceItemsByNewest(
-    dedupePersonalExperienceItems([
-      ...apiReviewPersonalExperienceItems,
-      ...apiPersonalExperienceItems,
-    ]),
+    buildApiReviewPersonalExperienceItems(
+      apiHotspotReviews,
+      likingReviewIds,
+      relativeTimeNow,
+    );
+  const reviewExperienceItems = sortPersonalExperienceItemsByNewest(
+    dedupePersonalExperienceItems(apiReviewPersonalExperienceItems),
   );
-  const personalExperienceErrorMessage =
-    hotspotReviewsError ?? hotspotPostsError;
   const summaryStats = buildSummaryStats({
     apiHotspot: remoteHotspot,
     hotspot,
@@ -4013,6 +3880,7 @@ export default function HotspotDetailScreen() {
 
               <LocationInformationSection
                 address={hotspot.address}
+                bestVisitTime={bestVisitTimeLabel}
                 openingHours={openingHoursLabel}
                 tagLabels={hotspotTagLabels}
                 visitDuration={visitDurationLabel}
@@ -4087,23 +3955,15 @@ export default function HotspotDetailScreen() {
                   ))}
                 </ScrollView>
               ) : !isRelatedRoutesLoading ? (
-                <View
-                  className="rounded-[16px] bg-white px-5 py-5"
-                  style={cardShadowStyle}
-                >
-                  <Text
-                    className="text-[16px] font-semibold text-[#2B2233]"
-                    style={{ lineHeight: 20 }}
-                  >
-                    Chưa có route published
-                  </Text>
-                  <Text
-                    className="mt-2 text-[15px]"
-                    style={sectionBodyTextStyle}
-                  >
-                    {`API route theo hotspot/${resolvedHotspotId} hiện chưa trả về tuyến published nào cho điểm đến này.`}
-                  </Text>
-                </View>
+                <EmptyPersonalExperienceCard
+                  description="Địa điểm này chưa có tuyến đường khám phá nào được xuất bản."
+                  iconName={{
+                    ios: "map.fill",
+                    android: "alt-route",
+                    web: "alt-route",
+                  }}
+                  title="Chưa có tuyến đường nào"
+                />
               ) : null}
             </View>
 
@@ -4117,17 +3977,24 @@ export default function HotspotDetailScreen() {
                   : null
               }
               deletingReviewId={deletingReviewId}
-              isCheckedIn={isCheckedIn}
-              isLoadingReviews={
-                isHotspotReviewsLoading || isHotspotPostsLoading
+              composerTitle="Chia sẻ bài đánh giá của bạn"
+              emptyDescription={
+                isCheckedIn
+                  ? "Hãy là người đầu tiên chia sẻ trải nghiệm về địa điểm này."
+                  : "Check-in tại địa điểm để mở quyền chia sẻ bài đánh giá của bạn."
               }
-              items={personalExperienceItems}
+              emptyTitle="Chưa có đánh giá nào"
+              errorMessage={hotspotReviewsError}
+              isLoading={isHotspotReviewsLoading}
+              items={reviewExperienceItems}
               onDeleteReview={handleDeleteHotspotReview}
               onEditReview={handleEditHotspotReview}
-              onPressLike={handlePressLikeHotspotPost}
+              onPressLike={() => undefined}
               onPressLikeReview={handlePressLikeHotspotReview}
-              reviewsErrorMessage={personalExperienceErrorMessage}
-              totalReviewLabel={hotspot.reviews}
+              sectionTitle="Xếp hạng và đánh giá"
+              showLessLabel="Ẩn bớt bài đánh giá"
+              showMoreLabel="Xem tất cả bài đánh giá"
+              totalLabel={hotspot.reviews}
             />
           </View>
         </Animated.ScrollView>

@@ -1,4 +1,5 @@
 import { SymbolView } from "@/components/ui/symbol-view";
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import {
@@ -430,7 +431,10 @@ export default function HotspotSearchScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right", "bottom"]}>
-      <View className="border-b border-[#EEF2F6] bg-white px-5 pb-4 pt-3">
+      <View
+        className="border-b border-[#EEF2F6] bg-white pb-4 pt-3"
+        style={{ paddingHorizontal: ScreenHorizontalPadding }}
+      >
         <View className="flex-row items-center">
           <View
             className="mr-2 h-10 flex-row items-center rounded-[14px] bg-[#F4F6F8] px-3.5"
@@ -490,7 +494,10 @@ export default function HotspotSearchScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View className="px-5 pt-3">
+        <View
+          className="pt-3"
+          style={{ paddingHorizontal: ScreenHorizontalPadding }}
+        >
           {isAdvancedPanelVisible ? (
             <View
               className="rounded-[28px] border border-[#EDF1F5] bg-white p-4"

@@ -1,6 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { SymbolView } from "@/components/ui/symbol-view";
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import { type ReactNode, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -341,7 +342,7 @@ export default function ProfileInformationScreen() {
           start={{ x: 0, y: 0.5 }}
           style={{
             paddingBottom: 18,
-            paddingHorizontal: 12,
+            paddingHorizontal: ScreenHorizontalPadding,
             paddingTop: insets.top + 12,
           }}
         >

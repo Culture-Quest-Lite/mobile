@@ -4,6 +4,7 @@
     "slug": "Culture_quest_lite_mobile",
     "version": "1.0.0",
     "orientation": "portrait",
+    "backgroundColor": "#FFFFFF",
     "icon": "./assets/images/logo2-app-icon-v2.png",
     "scheme": ["culturequestlitemobile", "culturequest"],
     "userInterfaceStyle": "automatic",
@@ -48,7 +49,12 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "splash": {
+        "backgroundColor": "#FFFFFF",
+        "image": "./assets/images/logo2-app-icon-v2.png",
+        "resizeMode": "contain"
+      }
     },
     "plugins": [
       "expo-router",
@@ -56,9 +62,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F7F6F2",
-          "image": "./assets/images/logo2-splash-card.png",
-          "imageWidth": 250,
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/images/logo2-app-icon-v2.png",
+          "imageWidth": 180,
           "resizeMode": "contain"
         }
       ],

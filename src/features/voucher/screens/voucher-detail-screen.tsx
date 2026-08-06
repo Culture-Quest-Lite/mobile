@@ -11,6 +11,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import { SymbolView } from "@/components/ui/symbol-view";
 import {
   getValidAccessToken,
@@ -193,8 +194,9 @@ export default function VoucherDetailScreen() {
   if (error || !voucher) {
     return (
       <SafeAreaView
-        className="flex-1 bg-[#FFF9F6] px-5"
+        className="flex-1 bg-[#FFF9F6]"
         edges={["left", "right", "bottom"]}
+        style={{ paddingHorizontal: ScreenHorizontalPadding }}
       >
         <View style={{ paddingTop: insets.top + 10 }}>
           <Pressable
@@ -273,7 +275,10 @@ export default function VoucherDetailScreen() {
           </Pressable>
         </View>
 
-        <View className="-mt-6 rounded-t-[30px] bg-[#FFF9F6] px-5 pt-6">
+        <View
+          className="-mt-6 rounded-t-[30px] bg-[#FFF9F6] pt-6"
+          style={{ paddingHorizontal: ScreenHorizontalPadding }}
+        >
           <Text className="text-[13px] font-bold uppercase tracking-wide text-[#EB489B]">
             {voucher.partnerName}
           </Text>
@@ -348,8 +353,11 @@ export default function VoucherDetailScreen() {
       </ScrollView>
 
       <View
-        className="absolute bottom-0 left-0 right-0 border-t border-[#EEE8EF] bg-white px-5 pt-3"
-        style={{ paddingBottom: Math.max(insets.bottom, 14) }}
+        className="absolute bottom-0 left-0 right-0 border-t border-[#EEE8EF] bg-white pt-3"
+        style={{
+          paddingBottom: Math.max(insets.bottom, 14),
+          paddingHorizontal: ScreenHorizontalPadding,
+        }}
       >
         <Pressable
           disabled={redeeming || !!usage || voucher.quantityRemaining <= 0}

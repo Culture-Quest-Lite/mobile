@@ -39,6 +39,7 @@ export type NearbyHotspotStoryDto = {
   audioScript: string;
   content: string;
   distanceToNext: number | null;
+  imageUrls: string[];
   medias: NearbyHotspotMediaDto[];
   orderIndex: number | null;
   status: string;
@@ -113,6 +114,46 @@ function readString(value: unknown) {
 
 function readNullableString(value: unknown) {
   return typeof value === "string" ? value : null;
+}
+
+function readImageUrlList(value: unknown): string[] {
+  const imageUrls: string[] = [];
+
+  const appendImageUrl = (candidate: unknown) => {
+    if (typeof candidate === "string") {
+      const normalizedValue = candidate.trim();
+
+      if (normalizedValue) {
+        imageUrls.push(normalizedValue);
+      }
+
+      return;
+    }
+
+    if (Array.isArray(candidate)) {
+      candidate.forEach(appendImageUrl);
+      return;
+    }
+
+    if (!isObject(candidate)) {
+      return;
+    }
+
+    for (const key of ["fileUrl", "url", "imageUrl", "image", "src"]) {
+      const nestedValue = candidate[key];
+
+      if (typeof nestedValue === "string" && nestedValue.trim()) {
+        imageUrls.push(nestedValue.trim());
+        return;
+      }
+    }
+  };
+
+  appendImageUrl(value);
+
+  return imageUrls.filter(
+    (imageUrl, index, collection) => collection.indexOf(imageUrl) === index,
+  );
 }
 
 function readNullableBoolean(value: unknown) {
@@ -201,11 +242,18 @@ function parseStory(value: unknown): NearbyHotspotStoryDto | null {
     return null;
   }
 
+  const imageUrls = [
+    ...readImageUrlList(value.image),
+    ...readImageUrlList(value.images),
+    ...readImageUrlList(value.imageUrl),
+  ].filter((imageUrl, index, collection) => collection.indexOf(imageUrl) === index);
+
   return {
     audioScript:
       readString(value.audioScript) || readString(value.audio_script),
     content: readString(value.content),
     distanceToNext: readNumber(value.distanceToNext),
+    imageUrls,
     medias: Array.isArray(value.medias)
       ? value.medias.map(parseMedia).filter(isNonNull)
       : [],

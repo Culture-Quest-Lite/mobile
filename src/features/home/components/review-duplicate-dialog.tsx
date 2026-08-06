@@ -69,7 +69,7 @@ export function ReviewDuplicateDialog({
       />
 
       <View
-        className="w-full items-center rounded-[24px] bg-white px-5 pb-2 pt-4"
+        className="w-full items-center rounded-[24px] bg-white px-5 pb-5 pt-4"
         style={{
           elevation: 12,
           maxWidth: 330,
@@ -79,18 +79,36 @@ export function ReviewDuplicateDialog({
           shadowRadius: 28,
         }}
       >
+        <Pressable
+          accessibilityLabel="Đóng thông báo"
+          accessibilityRole="button"
+          className="absolute right-3 top-3 z-10 h-8 w-8 items-center justify-center rounded-full"
+          hitSlop={8}
+          onPress={onClose}
+          style={({ pressed }) => ({
+            backgroundColor: "#FFF3F7",
+            opacity: pressed ? 0.72 : 1,
+          })}
+        >
+          <SymbolView
+            name={{ ios: "xmark", android: "close", web: "close" }}
+            size={16}
+            tintColor="#8C4A63"
+          />
+        </Pressable>
+
         <DuplicateReviewIllustration />
 
         <Text
           className="text-center text-[19px] font-black"
-          style={{ color: titleColor, lineHeight: 23 }}
+          style={{ color: titleColor, lineHeight: 21 }}
         >
           Không thể đăng bài
         </Text>
 
         <Text
           className="mt-0.5 text-center text-[13px]"
-          style={{ color: bodyColor, lineHeight: 17 }}
+          style={{ color: bodyColor, lineHeight: 15 }}
         >
           Bạn đã đánh giá địa điểm này trước đó. Vui lòng chỉnh sửa bài đánh giá
           cũ thay vì tạo bài đăng mới.
@@ -114,7 +132,7 @@ export function ReviewDuplicateDialog({
           />
           <Text
             className="ml-2 flex-1 text-[12px]"
-            style={{ color: bodyColor, lineHeight: 14 }}
+            style={{ color: bodyColor, lineHeight: 13 }}
           >
             Điều này giúp giữ cho thông tin trên hệ thống luôn chính xác và nhất
             quán.
@@ -161,21 +179,6 @@ export function ReviewDuplicateDialog({
               Chỉnh sửa đánh giá
             </Text>
           </LinearGradient>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          className="w-full items-center py-2"
-          hitSlop={6}
-          onPress={onClose}
-          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-        >
-          <Text
-            className="text-[14px] font-bold"
-            style={{ color: accentColor, lineHeight: 18 }}
-          >
-            Đóng
-          </Text>
         </Pressable>
       </View>
     </View>

@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { getValidAccessToken } from "@/features/auth/hooks/use-auth-session";
 import { refreshPremiumStatus } from "@/features/profile/hooks/use-premium-status";
@@ -549,7 +550,10 @@ export default function PremiumSubscriptionScreen() {
         }
       >
         {/* Header */}
-        <View className="bg-[#7C3AED] px-5 pb-8 pt-5">
+        <View
+          className="bg-[#7C3AED] pb-8 pt-5"
+          style={{ paddingHorizontal: ScreenHorizontalPadding }}
+        >
           <View className="mb-4 flex-row items-center justify-between">
             <Pressable
               onPress={() => {
@@ -614,7 +618,10 @@ export default function PremiumSubscriptionScreen() {
           </View>
         </View>
 
-        <View className="px-5 pt-5">
+        <View
+          className="pt-5"
+          style={{ paddingHorizontal: ScreenHorizontalPadding }}
+        >
           {/* Error */}
           {errorMessage ? (
             <View className="mb-4 rounded-2xl border border-red-100 bg-red-50 p-4">

@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import { routeSystemAlert } from "@/features/route/components/route-system-alert";
 
 import { SymbolView } from "@/components/ui/symbol-view";
@@ -275,7 +276,10 @@ export default function UserPlanDetailScreen() {
 
   if (!plan || error) {
     return (
-      <SafeAreaView className="flex-1 bg-[#FAF8FC] px-5">
+      <SafeAreaView
+        className="flex-1 bg-[#FAF8FC]"
+        style={{ paddingHorizontal: ScreenHorizontalPadding }}
+      >
         <Pressable className="mt-3 h-11 w-11 items-center justify-center rounded-full bg-white" onPress={() => router.back()} style={cardShadow}>
           <SymbolView name="chevron.left" size={22} tintColor="#2B2233" />
         </Pressable>

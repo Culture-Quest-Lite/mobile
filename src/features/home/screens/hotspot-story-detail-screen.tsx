@@ -1,4 +1,5 @@
 import { SymbolView } from "@/components/ui/symbol-view";
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import { useEvent, useEventListener } from "expo";
 import {
   setAudioModeAsync,
@@ -38,6 +39,7 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 
 import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
+import { ReviewMediaViewer } from "../components/review-media-viewer";
 import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
 import {
   cacheHotspotStories,
@@ -102,6 +104,15 @@ function clampNumber(value: number, minimum: number, maximum: number) {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
+function getStoryGalleryImages(story: HotspotThemeStory) {
+  return [...story.heroGallery, ...story.gallery, story.videoPoster]
+    .map((imageUri) => imageUri.trim())
+    .filter(
+      (imageUri, index, collection) =>
+        isHttpUrl(imageUri) && collection.indexOf(imageUri) === index,
+    );
+}
+
 function formatPlaybackTime(totalSeconds: number) {
   if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
     return "0:00";
@@ -120,6 +131,39 @@ function formatPlaybackTime(totalSeconds: number) {
   return `${minutes}:${paddedSeconds}`;
 }
 
+function formatAudioDurationFallback(label?: string | null) {
+  const normalizedLabel = label?.trim();
+
+  if (!normalizedLabel) {
+    return "0:00";
+  }
+
+  if (/^\d+:\d{2}(?::\d{2})?$/.test(normalizedLabel)) {
+    return normalizedLabel;
+  }
+
+  const minutesMatch = normalizedLabel.match(/(\d+)\s*(?:min|phut|phút)/i);
+
+  if (minutesMatch) {
+    const minutes = Number(minutesMatch[1]);
+    return Number.isFinite(minutes) ? `${minutes}:00` : "0:00";
+  }
+
+  const secondsMatch = normalizedLabel.match(
+    /(\d+)\s*(?:s(?:\b|[^a-z])|sec|giay|giây)/i,
+  );
+
+  if (secondsMatch) {
+    const seconds = Number(secondsMatch[1]);
+
+    if (Number.isFinite(seconds)) {
+      return `0:${`${seconds}`.padStart(2, "0")}`;
+    }
+  }
+
+  return "0:00";
+}
+
 function NotFoundState() {
   const router = useRouter();
 
@@ -135,14 +179,14 @@ function NotFoundState() {
             style={[screenShadowStyle, { maxWidth: 360 }]}
           >
             <Text className="text-center text-[24px] font-black text-[#2B2233]">
-              Không tìm thấy detail story
+              Không tìm thấy câu chuyện
             </Text>
             <Text
               className="mt-2 text-center text-[15px] text-[#6F657A]"
               style={{ lineHeight: 18 }}
             >
-              Story này không còn trong dữ liệu hiện tại hoặc đường dẫn chưa
-              đúng.
+              Câu chuyện này không còn trong dữ liệu hiện tại hoặc đường dẫn
+              chưa đúng.
             </Text>
             <Pressable
               className="mt-6 items-center rounded-full bg-[#FFF0F6] px-6 py-4"
@@ -297,6 +341,223 @@ function VinylRecord({
   );
 }
 
+function StoryAlbumTile({
+  imageUri,
+  onPress,
+  overlayLabel,
+  style,
+}: {
+  imageUri: string;
+  onPress: () => void;
+  overlayLabel?: string | null;
+  style?: ComponentProps<typeof View>["style"];
+}) {
+  return (
+    <Pressable
+      accessibilityLabel="Mở ảnh chi tiết"
+      accessibilityRole="button"
+      hitSlop={6}
+      onPress={onPress}
+      style={style}
+    >
+      <View
+        className="h-full w-full overflow-hidden rounded-[16px]"
+        style={{
+          borderColor: "rgba(249,115,174,0.12)",
+          borderWidth: 1,
+        }}
+      >
+        <Image
+          source={imageUri}
+          contentFit="cover"
+          contentPosition="center"
+          transition={180}
+          cachePolicy="memory-disk"
+          style={{ height: "100%", width: "100%" }}
+        />
+
+        {overlayLabel ? (
+          <View className="absolute inset-0 items-center justify-center bg-black/40">
+            <Text className="text-[24px] font-black text-white">
+              {overlayLabel}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+function StoryPhotoAlbum({
+  images,
+  onSelectImage,
+}: {
+  images: string[];
+  onSelectImage: (index: number) => void;
+}) {
+  if (images.length === 0) {
+    return null;
+  }
+
+  const firstImage = images[0] ?? null;
+  const secondImage = images[1] ?? null;
+  const thirdImage = images[2] ?? null;
+  const extraImageCount = Math.max(images.length - 3, 0);
+
+  return (
+    <View className="mt-3">
+      {firstImage && !secondImage ? (
+        <StoryAlbumTile
+          imageUri={firstImage}
+          onPress={() => onSelectImage(0)}
+          style={{ height: 224 }}
+        />
+      ) : null}
+
+      {firstImage && secondImage ? (
+        <View className="flex-row" style={{ columnGap: 8 }}>
+          <StoryAlbumTile
+            imageUri={firstImage}
+            onPress={() => onSelectImage(0)}
+            style={{ flex: 1, height: 192 }}
+          />
+
+          <View style={{ flex: 1, rowGap: 8 }}>
+            <StoryAlbumTile
+              imageUri={secondImage}
+              onPress={() => onSelectImage(1)}
+              style={{
+                flex: thirdImage ? undefined : 1,
+                height: thirdImage ? 92 : 192,
+              }}
+            />
+
+            {thirdImage ? (
+              <StoryAlbumTile
+                imageUri={thirdImage}
+                onPress={() => onSelectImage(2)}
+                overlayLabel={
+                  extraImageCount > 0 ? `+${extraImageCount}` : null
+                }
+                style={{ height: 92 }}
+              />
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function AudioMetadataChip({
+  icon,
+  label,
+}: {
+  icon: SymbolName;
+  label: string;
+}) {
+  return (
+    <View
+      className="flex-row items-center rounded-full px-2.5 py-1"
+      style={{ backgroundColor: "#F8EFE8" }}
+    >
+      <SymbolView name={icon} size={12} tintColor="#9C6B3D" />
+      <Text
+        className="ml-1 text-[12px] font-semibold"
+        style={{ color: "#6D563D", lineHeight: 12 }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function StoryAudioOverviewCard({
+  durationLabel,
+  hotspotName,
+  tagLabel,
+}: {
+  durationLabel: string;
+  hotspotName: string;
+  tagLabel?: string | null;
+}) {
+  const normalizedTagLabel = tagLabel?.trim();
+  const normalizedHotspotName = hotspotName.trim() || "Hotspot";
+
+  return (
+    <View className="px-1 py-1">
+      <View className="flex-row items-start">
+        <View
+          className="h-10 w-10 items-center justify-center rounded-full"
+          style={{ backgroundColor: "#FFF3E9" }}
+        >
+          <SymbolView
+            name={
+              {
+                ios: "headphones",
+                android: "headset",
+                web: "headset",
+              } as SymbolName
+            }
+            size={18}
+            tintColor="#C77B30"
+          />
+        </View>
+
+        <View className="ml-3 flex-1">
+          <Text
+            className="text-[18px] font-semibold text-[#2D241D]"
+            style={{ lineHeight: 16 }}
+          >
+            Nghe câu chuyện
+          </Text>
+          <Text
+            className="mt-[-1px] text-[13px]"
+            style={{ color: "#7A6F67", lineHeight: 14 }}
+          >
+            Nghe thuyết minh để hiểu hơn về câu chuyện.
+          </Text>
+        </View>
+      </View>
+
+      <View className="mt-2 flex-row flex-wrap justify-center gap-2">
+        {normalizedTagLabel ? (
+          <AudioMetadataChip
+            icon={
+              {
+                ios: "book.closed",
+                android: "history_edu",
+                web: "history_edu",
+              } as SymbolName
+            }
+            label={normalizedTagLabel}
+          />
+        ) : null}
+        <AudioMetadataChip
+          icon={
+            {
+              ios: "clock",
+              android: "schedule",
+              web: "schedule",
+            } as SymbolName
+          }
+          label={durationLabel}
+        />
+        <AudioMetadataChip
+          icon={
+            {
+              ios: "mappin.and.ellipse",
+              android: "place",
+              web: "place",
+            } as SymbolName
+          }
+          label={normalizedHotspotName}
+        />
+      </View>
+    </View>
+  );
+}
+
 export default function HotspotStoryDetailScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
@@ -345,6 +606,15 @@ export default function HotspotStoryDetailScreen() {
     storyId: string;
   }>({
     index: 0,
+    storyId: resolvedStoryId,
+  });
+  const [imageViewerState, setImageViewerState] = useState<{
+    initialIndex: number;
+    isVisible: boolean;
+    storyId: string;
+  }>({
+    initialIndex: 0,
+    isVisible: false,
     storyId: resolvedStoryId,
   });
 
@@ -475,7 +745,7 @@ export default function HotspotStoryDetailScreen() {
   const audioDurationTimeLabel =
     audioStatus.duration > 0
       ? formatPlaybackTime(audioStatus.duration)
-      : (story?.audioDurationLabel ?? "0:00");
+      : formatAudioDurationFallback(story?.audioDurationLabel);
   const videoErrorMessage = videoStatusEvent.error?.message ?? null;
 
   useEffect(() => {
@@ -534,27 +804,19 @@ export default function HotspotStoryDetailScreen() {
     await audioPlayer.seekTo(nextProgress * audioStatus.duration);
   };
 
-  const gallery = story
-    ? story.heroGallery.length > 0
-      ? story.heroGallery
-      : story.gallery.length > 0
-        ? story.gallery
-        : story.videoPoster
-          ? [story.videoPoster]
-          : []
-    : [];
+  const gallery = story ? getStoryGalleryImages(story) : [];
   const safeTotalImages = Math.max(gallery.length, 1);
   const audioStatusLabel = !hasAudioUrl
-    ? "Story này chưa có file audio."
+    ? "Câu chuyện này chưa có bản ghi âm."
     : audioStatus.isBuffering
       ? null
       : audioStatus.playing
-        ? "Audio đang phát"
+        ? "Đang phát bản ghi âm"
         : audioStatus.didJustFinish
-          ? "Audio đã phát xong"
-          : "Nhấn để phát audio";
+          ? "Bản ghi âm đã phát xong"
+          : "Nhấn để nghe";
   const videoStatusLabel = !hasVideoUrl
-    ? "Story này chưa có file video."
+    ? "Câu chuyện này chưa có video."
     : undefined;
 
   useEffect(() => {
@@ -595,12 +857,16 @@ export default function HotspotStoryDetailScreen() {
       : 0;
   const heroImageSource =
     gallery[activeIndex] ?? resolveStoryImageSource(story);
+  const imageViewerItems = gallery.map((imageUri) => ({
+    type: "image" as const,
+    uri: imageUri,
+  }));
   const storyContentText = story.scriptParagraphs
     .map((paragraph) => paragraph.trim())
     .filter(Boolean)
     .join("\n");
   const storyDescription =
-    storyContentText || story.summary.trim() || "Story này chưa có mô tả.";
+    storyContentText || story.summary.trim() || "Câu chuyện này chưa có mô tả.";
   const shouldShowDescriptionToggle =
     story.scriptParagraphs.length > 1 || storyDescription.length > 220;
   const isDescriptionExpanded = descriptionExpandedStoryId === resolvedStoryId;
@@ -610,6 +876,28 @@ export default function HotspotStoryDetailScreen() {
   const isAudioScriptExpanded = audioScriptExpandedStoryId === resolvedStoryId;
   const vinylImageSource = resolveStoryImageSource(story);
   const isAudioDiscSpinning = audioStatus.playing || audioStatus.isBuffering;
+  const rawAudioDurationChipLabel = story.audioDurationLabel.trim();
+  const audioMetaDurationLabel =
+    audioStatus.duration > 0
+      ? formatPlaybackTime(audioStatus.duration)
+      : rawAudioDurationChipLabel && rawAudioDurationChipLabel !== "Audio API"
+        ? rawAudioDurationChipLabel
+        : hasAudioUrl
+          ? "Đang tải"
+          : "Chưa có audio";
+  const handleOpenImageViewer = (index: number) => {
+    const nextIndex = clampNumber(index, 0, Math.max(gallery.length - 1, 0));
+
+    setGallerySelection({
+      index: nextIndex,
+      storyId: resolvedStoryId,
+    });
+    setImageViewerState({
+      initialIndex: nextIndex,
+      isVisible: gallery.length > 0,
+      storyId: resolvedStoryId,
+    });
+  };
 
   return (
     <View className="flex-1" style={{ backgroundColor: pageBackground }}>
@@ -633,14 +921,22 @@ export default function HotspotStoryDetailScreen() {
             className="overflow-hidden bg-[#EFDDE8]"
             style={{ height: heroHeight }}
           >
-            <Image
-              source={heroImageSource}
-              contentFit="cover"
-              contentPosition="center"
-              transition={520}
-              cachePolicy="memory-disk"
+            <Pressable
+              accessibilityLabel="Mở ảnh toàn màn hình"
+              accessibilityRole="button"
+              disabled={gallery.length === 0}
+              onPress={() => handleOpenImageViewer(activeIndex)}
               style={{ height: "100%", width: "100%" }}
-            />
+            >
+              <Image
+                source={heroImageSource}
+                contentFit="cover"
+                contentPosition="center"
+                transition={520}
+                cachePolicy="memory-disk"
+                style={{ height: "100%", width: "100%" }}
+              />
+            </Pressable>
 
             <Pressable
               className="absolute left-3 h-11 w-11 items-center justify-center"
@@ -669,19 +965,21 @@ export default function HotspotStoryDetailScreen() {
 
           <View
             style={{
-              paddingHorizontal: 23,
+              paddingHorizontal: ScreenHorizontalPadding,
               paddingTop: 6,
             }}
           >
             <View>
               <View className="mt-2 flex-row flex-wrap items-center gap-1">
                 {story.tagLabel ? (
-                  <Text
-                    className="text-[15px] font-semibold"
-                    style={{ color: "#EB489B", lineHeight: 16 }}
-                  >
-                    {story.tagLabel}
-                  </Text>
+                  <View className="rounded-full bg-[#FFF0F6] px-3 py-1.5">
+                    <Text
+                      className="text-[13px] font-semibold"
+                      style={{ color: "#D9468B", lineHeight: 14 }}
+                    >
+                      {story.tagLabel}
+                    </Text>
+                  </View>
                 ) : null}
               </View>
 
@@ -694,15 +992,8 @@ export default function HotspotStoryDetailScreen() {
 
               <View className="mt-1">
                 <Text
-                  className="text-[14px] font-black uppercase tracking-[1.4px]"
-                  style={{ color: palette.mutedText, lineHeight: 16 }}
-                >
-                  Thông tin về câu chuyện
-                </Text>
-
-                <Text
-                  className="mt-1 text-[15px] text-[#6F657A]"
-                  numberOfLines={isDescriptionExpanded ? undefined : 4}
+                  className="text-[15px] text-[#6F657A]"
+                  numberOfLines={isDescriptionExpanded ? undefined : 8}
                   style={{
                     lineHeight: 17,
                     textAlign: "left",
@@ -733,16 +1024,24 @@ export default function HotspotStoryDetailScreen() {
               </View>
             </View>
 
-            <View className="mt-2">
-              <Text
-                className="text-[14px] font-black uppercase tracking-[1.4px]"
-                style={{ color: palette.mutedText, lineHeight: 17 }}
-              >
-                Đoạn audio
-              </Text>
+            <View className="mt-4">
+              <StoryPhotoAlbum
+                images={gallery}
+                onSelectImage={handleOpenImageViewer}
+              />
+            </View>
 
+            <View className="mt-8">
+              <StoryAudioOverviewCard
+                durationLabel={audioMetaDurationLabel}
+                hotspotName={hotspot.title}
+                tagLabel={story.tagLabel}
+              />
+            </View>
+
+            <View className="mt-8">
               <View
-                className="mt-2 rounded-[16px] px-4 py-3"
+                className="rounded-[16px] px-4 py-3"
                 style={{ backgroundColor: pageBackground }}
               >
                 <View className="items-center">
@@ -922,29 +1221,33 @@ export default function HotspotStoryDetailScreen() {
             </View>
 
             {audioScript ? (
-              <View className="mt-2">
+              <View className="mt-3">
                 <Text
-                  className="text-[14px] font-black uppercase tracking-[1.4px]"
-                  style={{ color: palette.mutedText, lineHeight: 16 }}
+                  className="text-[18px] font-semibold text-[#201B18]"
+                  style={{ lineHeight: 20 }}
                 >
-                  Kịch bản audio
+                  Nội dung audio
                 </Text>
 
                 <View
-                  className="mt-2 rounded-[16px] px-4 py-3"
+                  className="mt-1 rounded-[16px] px-4 py-3"
                   style={{ backgroundColor: pageBackground }}
                 >
                   <Text
                     className="text-[15px] text-[#6F657A]"
-                    numberOfLines={isAudioScriptExpanded ? undefined : 4}
-                    style={{ lineHeight: 17, paddingBottom: 4, textAlign: "left" }}
+                    numberOfLines={isAudioScriptExpanded ? undefined : 10}
+                    style={{
+                      lineHeight: 17,
+                      paddingBottom: 2,
+                      textAlign: "left",
+                    }}
                   >
                     {audioScript}
                   </Text>
 
                   {shouldShowAudioScriptToggle ? (
                     <Pressable
-                      className="mt-2 self-end"
+                      className="mt-1 self-end"
                       hitSlop={8}
                       onPress={() =>
                         setAudioScriptExpandedStoryId((current) =>
@@ -964,18 +1267,9 @@ export default function HotspotStoryDetailScreen() {
               </View>
             ) : null}
 
-            <View className="mt-2">
-              <View className="flex-row items-center justify-between gap-3">
-                <Text
-                  className="text-[14px] font-black uppercase tracking-[1.4px]"
-                  style={{ color: palette.mutedText, lineHeight: 16 }}
-                >
-                  Video
-                </Text>
-              </View>
-
+            <View className="mt-6">
               <View
-                className="mt-0 overflow-hidden rounded-[8px]"
+                className="overflow-hidden rounded-[8px]"
                 style={{ backgroundColor: palette.surfaceStrong }}
               >
                 {hasVideoUrl ? (
@@ -986,31 +1280,38 @@ export default function HotspotStoryDetailScreen() {
                     style={{ height: 200, width: "100%" }}
                   />
                 ) : (
-                  <View>
-                    <Image
-                      source={heroImageSource}
-                      contentFit="cover"
-                      contentPosition="center"
-                      transition={150}
-                      cachePolicy="memory-disk"
-                      style={{ height: 190, width: "100%" }}
-                    />
-                    <View className="absolute inset-0 items-center justify-center bg-black/28">
-                      <View className="h-14 w-14 items-center justify-center rounded-full bg-white/90">
-                        <SymbolView
-                          name={
-                            {
-                              ios: "play.slash.fill",
-                              android: "block",
-                              web: "block",
-                            } as SymbolName
-                          }
-                          size={22}
-                          tintColor={palette.accent}
-                        />
+                  <Pressable
+                    accessibilityLabel="Mở ảnh toàn màn hình"
+                    accessibilityRole="button"
+                    disabled={gallery.length === 0}
+                    onPress={() => handleOpenImageViewer(activeIndex)}
+                  >
+                    <View>
+                      <Image
+                        source={heroImageSource}
+                        contentFit="cover"
+                        contentPosition="center"
+                        transition={150}
+                        cachePolicy="memory-disk"
+                        style={{ height: 190, width: "100%" }}
+                      />
+                      <View className="absolute inset-0 items-center justify-center bg-black/28">
+                        <View className="h-14 w-14 items-center justify-center rounded-full bg-white/90">
+                          <SymbolView
+                            name={
+                              {
+                                ios: "arrow.up.left.and.arrow.down.right",
+                                android: "zoom_out_map",
+                                web: "zoom_out_map",
+                              } as SymbolName
+                            }
+                            size={22}
+                            tintColor={palette.accent}
+                          />
+                        </View>
                       </View>
                     </View>
-                  </View>
+                  </Pressable>
                 )}
               </View>
 
@@ -1035,6 +1336,21 @@ export default function HotspotStoryDetailScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      {imageViewerState.isVisible &&
+      imageViewerState.storyId === resolvedStoryId &&
+      imageViewerItems.length > 0 ? (
+        <ReviewMediaViewer
+          initialIndex={imageViewerState.initialIndex}
+          items={imageViewerItems}
+          onClose={() =>
+            setImageViewerState((current) => ({
+              ...current,
+              isVisible: false,
+            }))
+          }
+        />
+      ) : null}
     </View>
   );
 }

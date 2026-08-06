@@ -1,5 +1,6 @@
 import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import {
   getValidAccessToken,
   useAuthSession,
@@ -293,7 +294,7 @@ export default function CommunityGroupCreateScreen() {
   const [selectedInviteIds, setSelectedInviteIds] = useState<string[]>([]);
 
   const isCompactScreen = width < 380;
-  const contentHorizontalPadding = isCompactScreen ? 14 : 16;
+  const contentHorizontalPadding = ScreenHorizontalPadding;
   const trimmedGroupName = groupName.trim();
   const isSubmitInactive = trimmedGroupName.length === 0;
   const isSubmitDisabled = isSubmitting || isSubmitInactive;
