@@ -2,13 +2,11 @@ import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import * as Linking from "expo-linking";
 import * as Location from "expo-location";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -17,11 +15,6 @@ import {
   Text,
   View,
 } from "react-native";
-import MapView, {
-  Marker,
-  PROVIDER_GOOGLE,
-  type Region,
-} from "react-native-maps";
 import Animated, {
   Easing,
   ReduceMotion,
@@ -66,7 +59,7 @@ import {
   type NearbyHotspotDto,
   getNearbyHotspots,
 } from "../api/get-nearby-hotspots";
-import { type ActiveTagDto, getActiveTags } from "../api/get-tags";
+import { getActiveTags } from "../api/get-tags";
 import {
   type UserLeaderboardEntryDto,
   getUserLeaderboard,
@@ -76,145 +69,15 @@ import {
   type NearbyCategoryCard,
   activeJourney,
   featuredRoutes,
-  nearbyCategories,
   voucherMerchants,
 } from "../data/home-screen.mock";
 import { getApiHotspotRouteSlug, getHotspotHref } from "../data/hotspots";
+import { mapActiveTagsToThemeCategories } from "../lib/theme-categories";
 import { getThemeDetailHref } from "../lib/theme-detail";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const guestPreviewLogo = require("../../../../assets/images/logo3.png");
 const nearbyShowcaseMascot = require("../../../../assets/images/hotspot_nearby.png");
-
-const themeCategoryPresets: Record<
-  string,
-  Omit<NearbyCategoryCard, "label">
-> = {
-  am_thuc: {
-    accent: "#C96A00",
-    background: "#FFE7CC",
-    icon: { ios: "fork.knife", android: "restaurant", web: "restaurant" },
-  },
-  check_in: {
-    accent: "#2563EB",
-    background: "#DCEBFF",
-    icon: { ios: "camera.fill", android: "photo_camera", web: "photo_camera" },
-  },
-  di_san: {
-    accent: "#7C3AED",
-    background: "#EEE4FF",
-    icon: {
-      ios: "building.columns.fill",
-      android: "account_balance",
-      web: "account_balance",
-    },
-  },
-  giao_duc: {
-    accent: "#2563EB",
-    background: "#DCEBFF",
-    icon: { ios: "book.closed.fill", android: "menu_book", web: "menu_book" },
-  },
-  kien_truc: {
-    accent: "#B83280",
-    background: "#FFD7EA",
-    icon: {
-      ios: "building.2.fill",
-      android: "architecture",
-      web: "architecture",
-    },
-  },
-  lich_su: {
-    accent: "#D95C22",
-    background: "#FFE4D3",
-    icon: { ios: "clock.arrow.circlepath", android: "history", web: "history" },
-  },
-  nghe_thuat: {
-    accent: "#0D8C7D",
-    background: "#D9F7F1",
-    icon: { ios: "paintpalette.fill", android: "palette", web: "palette" },
-  },
-  thien_nhien: {
-    accent: "#2F855A",
-    background: "#DCFCE7",
-    icon: { ios: "leaf.fill", android: "park", web: "park" },
-  },
-  van_hoa: {
-    accent: "#B45309",
-    background: "#FFF1D6",
-    icon: {
-      ios: "theatermasks.fill",
-      android: "theater_comedy",
-      web: "theater_comedy",
-    },
-  },
-};
-
-function normalizeTagName(tagName: string) {
-  return tagName
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function resolveThemeCategoryPreset(
-  tagName: string,
-  index: number,
-): Omit<NearbyCategoryCard, "label"> {
-  const normalizedTagName = normalizeTagName(tagName);
-
-  if (normalizedTagName.includes("di san")) {
-    return themeCategoryPresets.di_san;
-  }
-
-  if (normalizedTagName.includes("van hoa")) {
-    return themeCategoryPresets.van_hoa;
-  }
-
-  if (normalizedTagName.includes("lich su")) {
-    return themeCategoryPresets.lich_su;
-  }
-
-  if (normalizedTagName.includes("kien truc")) {
-    return themeCategoryPresets.kien_truc;
-  }
-
-  if (normalizedTagName.includes("thien nhien")) {
-    return themeCategoryPresets.thien_nhien;
-  }
-
-  if (normalizedTagName.includes("nghe thuat")) {
-    return themeCategoryPresets.nghe_thuat;
-  }
-
-  if (normalizedTagName.includes("am thuc")) {
-    return themeCategoryPresets.am_thuc;
-  }
-
-  if (normalizedTagName.includes("giao duc")) {
-    return themeCategoryPresets.giao_duc;
-  }
-
-  if (normalizedTagName.includes("check in")) {
-    return themeCategoryPresets.check_in;
-  }
-
-  return nearbyCategories[index % nearbyCategories.length];
-}
-
-function readMeaningfulThemeImageUrl(value?: string | null) {
-  const trimmedValue = value?.trim();
-  return trimmedValue ? trimmedValue : null;
-}
-
-function mapActiveTagsToNearbyCategories(tags: ActiveTagDto[]) {
-  return tags.map((tag, index) => ({
-    ...resolveThemeCategoryPreset(tag.tagName, index),
-    imageUrl: readMeaningfulThemeImageUrl(tag.imageUrl),
-    label: tag.tagName,
-    tagId: tag.tagId,
-  }));
-}
 
 const heroShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.26)",
@@ -436,9 +299,6 @@ type CommunityBoardViewModel = {
 };
 
 const defaultNearbySearchDistanceMeters = 10000;
-const nearbyDistanceSliderMinimumMeters = 10000;
-const nearbyDistanceSliderMaximumMeters = 50000;
-const nearbyDistanceSliderStepMeters = 20;
 const suggestedRouteCardImageHeight = 136;
 const suggestedRouteCardHeight = 248;
 const nearbyPlaceTitleHeight = 22;
@@ -448,31 +308,9 @@ const nearbyPlaceContentHeight = 132;
 const nearbyPlaceFallbackImageUri =
   "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
 const nearbyPlaceFallbackRating = "4.9";
-const defaultLocationPreviewRegion: Region = {
-  latitude: 10.8414,
-  longitude: 106.8288,
-  latitudeDelta: 0.015,
-  longitudeDelta: 0.015,
-};
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
-}
-
-function clampDistanceMeters(value: number) {
-  return clamp(
-    Math.round(value),
-    nearbyDistanceSliderMinimumMeters,
-    nearbyDistanceSliderMaximumMeters,
-  );
-}
-
-function snapDistanceMeters(value: number) {
-  const snappedValue =
-    Math.round(value / nearbyDistanceSliderStepMeters) *
-    nearbyDistanceSliderStepMeters;
-
-  return clampDistanceMeters(snappedValue);
 }
 
 function toRadians(value: number) {
@@ -842,21 +680,6 @@ function isNearbyPlaceCheckedIn(
   return false;
 }
 
-function getLocationPreviewRegion(
-  coordinate: Pick<AppCoordinate, "latitude" | "longitude"> | null,
-): Region {
-  if (!coordinate) {
-    return defaultLocationPreviewRegion;
-  }
-
-  return {
-    latitude: coordinate.latitude,
-    longitude: coordinate.longitude,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
-  };
-}
-
 async function resolveNearbyRequestCoordinate(): Promise<{
   coordinate: AppCoordinate | null;
   fallbackMessage: string | null;
@@ -1091,233 +914,6 @@ function SectionEmptyState({
   );
 }
 
-type NearbyDistanceSliderProps = {
-  max: number;
-  min: number;
-  onChange: (nextValue: number) => void;
-  value: number;
-};
-
-function NearbyDistanceSlider({
-  max,
-  min,
-  onChange,
-  value,
-}: NearbyDistanceSliderProps) {
-  const [trackWidth, setTrackWidth] = useState(0);
-  const progress = (value - min) / Math.max(1, max - min);
-  const thumbSize = 24;
-  const fillWidth = trackWidth * progress;
-  const thumbLeft = clamp(
-    fillWidth - thumbSize / 2,
-    0,
-    Math.max(0, trackWidth - thumbSize),
-  );
-
-  const updateValueFromTrackPosition = (locationX: number) => {
-    if (trackWidth <= 0) {
-      return;
-    }
-
-    const nextProgress = clamp(locationX / trackWidth, 0, 1);
-    const nextValue = min + nextProgress * (max - min);
-    onChange(snapDistanceMeters(nextValue));
-  };
-
-  return (
-    <View className="gap-1">
-      <View
-        className="relative h-7 justify-center"
-        onLayout={(event) => {
-          setTrackWidth(event.nativeEvent.layout.width);
-        }}
-        onMoveShouldSetResponder={() => true}
-        onStartShouldSetResponder={() => true}
-        onResponderGrant={(event) => {
-          updateValueFromTrackPosition(event.nativeEvent.locationX);
-        }}
-        onResponderMove={(event) => {
-          updateValueFromTrackPosition(event.nativeEvent.locationX);
-        }}
-      >
-        <View className="h-1.5 rounded-full bg-[#E6ECF2]" />
-        <View
-          className="absolute left-0 top-1/2 h-1.5 rounded-full bg-[#FF6F7D]"
-          style={{
-            transform: [{ translateY: -3 }],
-            width: fillWidth,
-          }}
-        />
-        <View
-          className="absolute top-1/2 rounded-full border-[3px] border-white bg-[#EB489B]"
-          style={{
-            height: thumbSize,
-            left: thumbLeft,
-            shadowColor: "rgba(235, 72, 155, 0.28)",
-            shadowOpacity: 1,
-            shadowRadius: 12,
-            shadowOffset: {
-              width: 0,
-              height: 4,
-            },
-            elevation: 6,
-            transform: [{ translateY: -(thumbSize / 2) }],
-            width: thumbSize,
-          }}
-        />
-      </View>
-
-      <View className="flex-row items-center justify-between">
-        <Text className="text-[10px] font-medium text-[#A29AA8]">
-          {formatDistanceMeters(min)}
-        </Text>
-        <Text className="text-[10px] font-medium text-[#A29AA8]">
-          {formatDistanceMeters(max)}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-function NearbyDistanceDropdown({
-  currentDistanceMeters,
-  draftDistanceMeters,
-  isLoading,
-  onApply,
-  onChangeDistance,
-  onOpenMap,
-}: {
-  currentDistanceMeters: number;
-  draftDistanceMeters: number;
-  isLoading: boolean;
-  onApply: () => void;
-  onChangeDistance: (nextDistanceMeters: number) => void;
-  onOpenMap: () => void;
-}) {
-  return (
-    <View
-      className="overflow-hidden rounded-[24px] border border-[#F6DDD0] bg-white px-3.5 py-2.5"
-      style={cardShadowStyle}
-    >
-      <LinearGradient
-        colors={["#FFFFFF", "#FFF7FB", "#FFF7F1"]}
-        end={{ x: 1, y: 1 }}
-        start={{ x: 0, y: 0 }}
-        className="absolute inset-0"
-      />
-
-      <View className="flex-row items-start gap-2">
-        <LinearGradient
-          colors={["#FF8A50", "#FF5F87"]}
-          end={{ x: 1, y: 1 }}
-          start={{ x: 0, y: 0 }}
-          className="h-8 w-8 items-center justify-center rounded-full"
-        >
-          <SymbolView
-            name={{
-              ios: "flame.fill",
-              android: "local_fire_department",
-              web: "local_fire_department",
-            }}
-            size={14}
-            tintColor="#FFFFFF"
-          />
-        </LinearGradient>
-
-        <View className="flex-1">
-          <Text className="text-[15px] font-medium tracking-[-0.1px] text-[#2B2233]">
-            Địa điểm gần bạn
-          </Text>
-          <Text className="mt-0.5 text-[11px] font-medium text-[#9C94A5]">
-            Bán kính tìm kiếm
-          </Text>
-        </View>
-
-        <LinearGradient
-          colors={gradientColors}
-          end={{ x: 1, y: 0.5 }}
-          locations={[0, 0.58, 1]}
-          start={{ x: 0, y: 0.5 }}
-          className="rounded-full px-2 py-[5px]"
-        >
-          <Text className="text-[11px] font-semibold text-white">
-            {formatDistanceMeters(draftDistanceMeters)}
-          </Text>
-        </LinearGradient>
-      </View>
-
-      <View className="mt-3">
-        <NearbyDistanceSlider
-          max={nearbyDistanceSliderMaximumMeters}
-          min={nearbyDistanceSliderMinimumMeters}
-          onChange={onChangeDistance}
-          value={draftDistanceMeters}
-        />
-      </View>
-
-      <View className="mt-3 flex-row gap-2">
-        <Pressable
-          className="flex-1 flex-row items-center justify-center rounded-[14px] border border-[#E3E7EF] bg-white px-3 py-2.5"
-          onPress={onOpenMap}
-        >
-          <SymbolView
-            name={{ ios: "map.fill", android: "map", web: "map" }}
-            size={13}
-            tintColor="#374151"
-          />
-          <Text className="ml-1.5 text-[12px] font-semibold text-[#2F3947]">
-            Xem bản đồ
-          </Text>
-        </Pressable>
-
-        <Pressable
-          className={`flex-1 overflow-hidden rounded-[12px] ${
-            isLoading ? "opacity-70" : ""
-          }`}
-          disabled={isLoading}
-          onPress={onApply}
-        >
-          <LinearGradient
-            colors={gradientColors}
-            end={{ x: 1, y: 0.5 }}
-            start={{ x: 0, y: 0.5 }}
-            locations={[0, 0.58, 1]}
-            className="flex-row items-center justify-center rounded-[14px] px-3 py-2.5"
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <>
-                <SymbolView
-                  name={{
-                    ios: "checkmark",
-                    android: "check",
-                    web: "check",
-                  }}
-                  size={13}
-                  tintColor="#FFFFFF"
-                />
-                <Text className="ml-1.5 text-[12px] font-semibold text-white">
-                  Áp dụng
-                </Text>
-              </>
-            )}
-          </LinearGradient>
-        </Pressable>
-      </View>
-
-      <View className="mt-2 flex-row items-center justify-end">
-        <Text className="text-[10px] font-medium text-[#B3A6AF]">
-          Đang áp dụng:{" "}
-        </Text>
-        <Text className="text-[10px] font-bold text-[#8E869A]">
-          {formatDistanceMeters(currentDistanceMeters)}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 function NearbyPlacesShowcaseCard({
   cardHeight,
   cardWidth,
@@ -1360,16 +956,10 @@ function NearbyPlacesShowcaseCard({
 
 function GuestWelcomeHeader({
   onGreetingPress,
-  isDistanceDropdownVisible,
-  onLocationPress,
   onSearchPress,
-  isLocationLoading,
 }: {
   onGreetingPress: () => void;
-  isDistanceDropdownVisible: boolean;
-  onLocationPress: () => void;
   onSearchPress: () => void;
-  isLocationLoading: boolean;
 }) {
   const logoOffset = useSharedValue(0);
 
@@ -1422,28 +1012,6 @@ function GuestWelcomeHeader({
           </Pressable>
 
           <View className="flex-row items-center gap-2.5">
-            <Pressable
-              accessibilityLabel="Mở bộ lọc nearby"
-              className={`h-10 w-10 items-center justify-center rounded-full border ${
-                isDistanceDropdownVisible
-                  ? "border-[#EB489B] bg-[#FFF1F6]"
-                  : "border-[#F5D7C7] bg-white"
-              } ${isLocationLoading ? "opacity-70" : ""}`}
-              disabled={isLocationLoading}
-              hitSlop={8}
-              onPress={onLocationPress}
-            >
-              <SymbolView
-                name={{
-                  ios: "location",
-                  android: "my_location",
-                  web: "my_location",
-                }}
-                size={16}
-                tintColor={isDistanceDropdownVisible ? "#EB489B" : "#F58752"}
-              />
-            </Pressable>
-
             <Pressable
               accessibilityLabel="Mở danh sách địa danh"
               className="h-10 w-10 items-center justify-center rounded-full border border-[#ECE1E9] bg-[#FAF7FC]"
@@ -1518,40 +1086,14 @@ function ExplorerHeaderAvatar({
 }
 
 function ExplorerHeaderActions({
-  isDistanceDropdownVisible,
-  isLocationLoading,
-  onLocationPress,
   onSearchPress,
   onNotificationPress,
 }: {
-  isDistanceDropdownVisible: boolean;
-  isLocationLoading: boolean;
-  onLocationPress: () => void;
   onSearchPress: () => void;
   onNotificationPress: () => void;
 }) {
   return (
     <View className="flex-row items-center gap-2.5">
-      <Pressable
-        accessibilityLabel="Mở bộ lọc gần đây"
-        className={`h-10 w-10 items-center justify-center rounded-full ${
-          isDistanceDropdownVisible ? "bg-[#FFF1F6]" : "bg-[#FFF4EF]"
-        } ${isLocationLoading ? "opacity-70" : ""}`}
-        disabled={isLocationLoading}
-        hitSlop={8}
-        onPress={onLocationPress}
-      >
-        <SymbolView
-          name={{
-            ios: "location",
-            android: "my_location",
-            web: "my_location",
-          }}
-          size={16}
-          tintColor={isDistanceDropdownVisible ? "#EB489B" : "#F58752"}
-        />
-      </Pressable>
-
       <Pressable
         accessibilityLabel="Mở danh sách địa danh"
         className="h-10 w-10 items-center justify-center rounded-full bg-[#FAF7FC]"
@@ -1589,233 +1131,6 @@ function ExplorerHeaderActions({
   );
 }
 
-function LocationMapModal({
-  coordinate,
-  errorMessage,
-  isLocationLoading,
-  onClose,
-  onOpenSettings,
-  onRetry,
-  visible,
-}: {
-  coordinate: AppCoordinate | null;
-  errorMessage: string | null;
-  isLocationLoading: boolean;
-  onClose: () => void;
-  onOpenSettings: () => void;
-  onRetry: () => void;
-  visible: boolean;
-}) {
-  const mapRef = useRef<MapView | null>(null);
-  const previewRegion = getLocationPreviewRegion(coordinate);
-
-  useEffect(() => {
-    if (!visible || !coordinate || Platform.OS === "web") {
-      return;
-    }
-
-    const timerId = setTimeout(() => {
-      mapRef.current?.animateToRegion(
-        getLocationPreviewRegion(coordinate),
-        260,
-      );
-    }, 60);
-
-    return () => {
-      clearTimeout(timerId);
-    };
-  }, [coordinate, visible]);
-
-  return (
-    <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
-      <View className="flex-1 bg-[#F7F6F2]">
-        {Platform.OS === "web" ? (
-          <View className="flex-1 items-center justify-center bg-[#E8F0FE] px-8">
-            <View className="w-full max-w-[320px] rounded-[28px] bg-white px-5 py-6">
-              <Text className="text-center text-[17px] font-extrabold text-[#2B2233]">
-                Bản đồ chỉ hỗ trợ trên Android
-              </Text>
-              <Text className="mt-2 text-center text-[13px] leading-5 text-[#8E869A]">
-                Hãy mở app trên điện thoại để xem bản đồ vị trí hiện tại full
-                màn hình.
-              </Text>
-            </View>
-          </View>
-        ) : (
-          <MapView
-            key={
-              coordinate
-                ? `${coordinate.latitude.toFixed(5)}-${coordinate.longitude.toFixed(5)}`
-                : "home-location-preview"
-            }
-            ref={mapRef}
-            provider={PROVIDER_GOOGLE}
-            initialRegion={previewRegion}
-            loadingEnabled
-            loadingBackgroundColor="#E8F0FE"
-            loadingIndicatorColor="#EB489B"
-            mapType="standard"
-            showsBuildings
-            showsCompass
-            showsMyLocationButton={false}
-            showsUserLocation={Boolean(coordinate)}
-            style={{ flex: 1 }}
-          >
-            {coordinate ? (
-              <Marker
-                anchor={{ x: 0.5, y: 0.5 }}
-                coordinate={{
-                  latitude: coordinate.latitude,
-                  longitude: coordinate.longitude,
-                }}
-              >
-                <View className="h-5 w-5 rounded-full border-4 border-white bg-[#2563EB]" />
-              </Marker>
-            ) : null}
-          </MapView>
-        )}
-
-        <SafeAreaView
-          pointerEvents="box-none"
-          className="absolute inset-0"
-          edges={["top", "left", "right", "bottom"]}
-        >
-          <View
-            className="flex-1 justify-between px-4 pb-6 pt-2"
-            pointerEvents="box-none"
-          >
-            <View
-              className="flex-row items-center justify-between"
-              pointerEvents="box-none"
-            >
-              <Pressable
-                className="h-11 w-11 items-center justify-center rounded-full bg-white"
-                onPress={onClose}
-                style={cardShadowStyle}
-              >
-                <SymbolView
-                  name={{
-                    ios: "chevron.left",
-                    android: "arrow_back",
-                    web: "arrow_back",
-                  }}
-                  size={18}
-                  tintColor="#2B2233"
-                />
-              </Pressable>
-
-              <View
-                className="rounded-full bg-white px-4 py-2"
-                style={cardShadowStyle}
-              >
-                <Text className="text-[13px] font-bold text-[#2B2233]">
-                  Vị trí hiện tại
-                </Text>
-              </View>
-
-              <View className="w-11" />
-            </View>
-
-            <View className="items-end" pointerEvents="box-none">
-              {coordinate ? (
-                <Pressable
-                  className="h-12 w-12 items-center justify-center rounded-full bg-white"
-                  onPress={() => {
-                    mapRef.current?.animateToRegion(
-                      getLocationPreviewRegion(coordinate),
-                      260,
-                    );
-                  }}
-                  style={cardShadowStyle}
-                >
-                  <SymbolView
-                    name={{
-                      ios: "location.fill",
-                      android: "my_location",
-                      web: "my_location",
-                    }}
-                    size={18}
-                    tintColor="#0F8A83"
-                  />
-                </Pressable>
-              ) : null}
-            </View>
-          </View>
-        </SafeAreaView>
-
-        {isLocationLoading ? (
-          <View className="absolute inset-0 items-center justify-center bg-[#F7F6F2]/92 px-7">
-            <View className="w-full max-w-[300px] rounded-[28px] bg-white px-5 py-6">
-              <View className="items-center">
-                <ActivityIndicator color="#EB489B" size="small" />
-              </View>
-              <Text className="mt-4 text-center text-[18px] font-extrabold text-[#2B2233]">
-                Đang lấy vị trí GPS
-              </Text>
-              <Text className="mt-2 text-center text-[13px] leading-5 text-[#8E869A]">
-                Bản đồ sẽ tự mở đúng vị trí bạn đang đứng ngay khi định vị xong.
-              </Text>
-            </View>
-          </View>
-        ) : errorMessage ? (
-          <View className="absolute inset-0 items-center justify-center bg-[#F7F6F2]/94 px-7">
-            <View className="w-full max-w-[320px] rounded-[28px] bg-white px-5 py-6">
-              <View className="items-center">
-                <View className="h-12 w-12 items-center justify-center rounded-full bg-[#FFF4EF]">
-                  <SymbolView
-                    name={{
-                      ios: "location.slash.fill",
-                      android: "location_off",
-                      web: "location_off",
-                    }}
-                    size={18}
-                    tintColor="#F58752"
-                  />
-                </View>
-              </View>
-
-              <Text className="mt-4 text-center text-[18px] font-extrabold text-[#2B2233]">
-                Chưa mở được bản đồ vị trí
-              </Text>
-              <Text className="mt-2 text-center text-[13px] leading-5 text-[#8E869A]">
-                {errorMessage}
-              </Text>
-
-              <View className="mt-5 flex-row gap-3">
-                <Pressable
-                  className="flex-1 rounded-[18px] border border-[#F4DCCF] bg-white px-4 py-3.5"
-                  onPress={onOpenSettings}
-                >
-                  <Text className="text-center text-[14px] font-bold text-[#8E869A]">
-                    Mở cài đặt
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  className="flex-1 overflow-hidden rounded-[18px]"
-                  onPress={onRetry}
-                >
-                  <LinearGradient
-                    colors={gradientColors}
-                    end={{ x: 1, y: 0.5 }}
-                    start={{ x: 0, y: 0.5 }}
-                    locations={[0, 0.58, 1]}
-                    className="items-center justify-center px-4 py-3.5"
-                  >
-                    <Text className="text-[14px] font-extrabold text-white">
-                      Thử lại
-                    </Text>
-                  </LinearGradient>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        ) : null}
-      </View>
-    </Modal>
-  );
-}
-
 export default function HomeScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
@@ -1832,22 +1147,7 @@ export default function HomeScreen() {
   const [nearbyPlacesNote, setNearbyPlacesNote] = useState<string | null>(null);
   const [nearbyPlacesStatus, setNearbyPlacesStatus] =
     useState<NearbyPlacesSectionStatus>("loading");
-  const [isNearbyDistanceDropdownVisible, setIsNearbyDistanceDropdownVisible] =
-    useState(false);
-  const [isLocationMapVisible, setIsLocationMapVisible] = useState(false);
-  const [isLocationMapLoading, setIsLocationMapLoading] = useState(false);
-  const [locationMapCoordinate, setLocationMapCoordinate] =
-    useState<AppCoordinate | null>(null);
-  const [locationMapErrorMessage, setLocationMapErrorMessage] = useState<
-    string | null
-  >(null);
-  const [nearbySearchDistanceMeters, setNearbySearchDistanceMeters] = useState(
-    defaultNearbySearchDistanceMeters,
-  );
-  const [
-    pendingNearbySearchDistanceMeters,
-    setPendingNearbySearchDistanceMeters,
-  ] = useState(defaultNearbySearchDistanceMeters);
+  const nearbySearchDistanceMeters = defaultNearbySearchDistanceMeters;
   const [resolvedNearbyPlaces, setResolvedNearbyPlaces] = useState<
     NearbyPlaceListItem[]
   >([]);
@@ -1963,11 +1263,11 @@ export default function HomeScreen() {
     explorerSummary?.username.trim() ||
     authSession.username?.trim() ||
     explorerName;
-  const handleOpenHotspots = () => {
-    router.push("/hotspots");
+  const handleOpenAllThemes = () => {
+    router.push("/theme" as Href);
   };
   const handleOpenNearbyHotspots = () => {
-    router.push(`/hotspots?distance=${nearbySearchDistanceMeters}`);
+    router.push("/hotspots");
   };
   const handleOpenThemeCategory = (item: NearbyCategoryCard) => {
     router.push(
@@ -1992,61 +1292,6 @@ export default function HomeScreen() {
   const handleOpenRegister = () => {
     router.push("/login?entry=home");
   };
-  const handleToggleNearbyDistanceDropdown = useCallback(() => {
-    setIsNearbyDistanceDropdownVisible((currentValue) => {
-      if (!currentValue) {
-        setPendingNearbySearchDistanceMeters(nearbySearchDistanceMeters);
-      }
-
-      return !currentValue;
-    });
-  }, [nearbySearchDistanceMeters]);
-  const handleApplyNearbyDistance = useCallback(
-    (nextDistanceMeters: number) => {
-      setNearbySearchDistanceMeters(nextDistanceMeters);
-      setPendingNearbySearchDistanceMeters(nextDistanceMeters);
-      setIsNearbyDistanceDropdownVisible(false);
-    },
-    [],
-  );
-  const handleCloseLocationMap = useCallback(() => {
-    setIsLocationMapVisible(false);
-  }, []);
-  const handleOpenLocationSettings = useCallback(() => {
-    void Linking.openSettings();
-  }, []);
-  const handleOpenLocationMap = useCallback(async () => {
-    setIsLocationMapVisible(true);
-    setIsLocationMapLoading(true);
-    setLocationMapErrorMessage(null);
-
-    try {
-      const { coordinate, fallbackMessage } =
-        await resolveNearbyRequestCoordinate();
-
-      setLocationMapCoordinate(coordinate);
-      setLocationMapErrorMessage(
-        coordinate
-          ? null
-          : (fallbackMessage ?? "Không xác định được vị trí hiện tại."),
-      );
-    } catch (error) {
-      setLocationMapCoordinate(null);
-      setLocationMapErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Không thể mở bản đồ vị trí hiện tại.",
-      );
-    } finally {
-      setIsLocationMapLoading(false);
-    }
-  }, []);
-  const handleOpenLocationMapFromDropdown = useCallback(() => {
-    setNearbySearchDistanceMeters(pendingNearbySearchDistanceMeters);
-    setPendingNearbySearchDistanceMeters(pendingNearbySearchDistanceMeters);
-    setIsNearbyDistanceDropdownVisible(false);
-    void handleOpenLocationMap();
-  }, [handleOpenLocationMap, pendingNearbySearchDistanceMeters]);
 
   useEffect(() => {
     if (featuredRoutes.length <= 1) {
@@ -2272,7 +1517,7 @@ export default function HomeScreen() {
         return;
       }
 
-      setThemeCategories(mapActiveTagsToNearbyCategories(tags));
+      setThemeCategories(mapActiveTagsToThemeCategories(tags));
     } catch (error) {
       console.warn("[home] load theme categories failed", {
         error: error instanceof Error ? error.message : error,
@@ -2507,10 +1752,7 @@ export default function HomeScreen() {
           {isGuest ? (
             <GuestWelcomeHeader
               onGreetingPress={handleOpenRegister}
-              isDistanceDropdownVisible={isNearbyDistanceDropdownVisible}
-              isLocationLoading={isLocationMapLoading}
-              onLocationPress={handleToggleNearbyDistanceDropdown}
-              onSearchPress={handleOpenHotspots}
+              onSearchPress={handleOpenNearbyHotspots}
             />
           ) : (
             <View className="flex-row items-center justify-between">
@@ -2535,27 +1777,11 @@ export default function HomeScreen() {
               </View>
 
               <ExplorerHeaderActions
-                isDistanceDropdownVisible={isNearbyDistanceDropdownVisible}
-                isLocationLoading={isLocationMapLoading}
-                onLocationPress={handleToggleNearbyDistanceDropdown}
-                onSearchPress={handleOpenHotspots}
+                onSearchPress={handleOpenNearbyHotspots}
                 onNotificationPress={handleOpenNotifications}
               />
             </View>
           )}
-
-          {isNearbyDistanceDropdownVisible ? (
-            <NearbyDistanceDropdown
-              currentDistanceMeters={nearbySearchDistanceMeters}
-              draftDistanceMeters={pendingNearbySearchDistanceMeters}
-              isLoading={nearbyPlacesStatus === "loading"}
-              onApply={() => {
-                handleApplyNearbyDistance(pendingNearbySearchDistanceMeters);
-              }}
-              onChangeDistance={setPendingNearbySearchDistanceMeters}
-              onOpenMap={handleOpenLocationMapFromDropdown}
-            />
-          ) : null}
 
           {/* Premium status / upsell banner (driven by real subscription data) */}
           {isPremiumExplorer ? (
@@ -3213,11 +2439,11 @@ export default function HomeScreen() {
                 Chủ đề
               </Text>
 
-              <Pressable
-                className="flex-row items-center"
-                hitSlop={8}
-                onPress={handleOpenHotspots}
-              >
+                <Pressable
+                  className="flex-row items-center"
+                  hitSlop={8}
+                  onPress={handleOpenAllThemes}
+                >
                 <Text className={homeSectionActionTextClassName}>
                   Xem tất cả
                 </Text>
@@ -3795,19 +3021,6 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
-
-      <LocationMapModal
-        key={`location-map-${isLocationMapVisible ? "open" : "closed"}`}
-        coordinate={locationMapCoordinate}
-        errorMessage={locationMapErrorMessage}
-        isLocationLoading={isLocationMapLoading}
-        onClose={handleCloseLocationMap}
-        onOpenSettings={handleOpenLocationSettings}
-        onRetry={() => {
-          void handleOpenLocationMap();
-        }}
-        visible={isLocationMapVisible}
-      />
     </SafeAreaView>
   );
 }
