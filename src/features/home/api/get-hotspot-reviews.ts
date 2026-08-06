@@ -311,10 +311,21 @@ function getConnectionErrorMessage(url: string) {
   return "Không thể kết nối đến máy chủ đánh giá.";
 }
 
-export function getReviewCreatedAtTime(review: Pick<HotspotReview, "createdAt">) {
-  const parsedTime = new Date(review.createdAt).getTime();
+function parseApiTimestamp(value: string) {
+  const normalized = value.trim().replace(" ", "T");
 
-  return Number.isNaN(parsedTime) ? 0 : parsedTime;
+  if (!normalized) {
+    return null;
+  }
+
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+  const date = new Date(hasTimezone ? normalized : `${normalized}Z`);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function getReviewCreatedAtTime(review: Pick<HotspotReview, "createdAt">) {
+  return parseApiTimestamp(review.createdAt)?.getTime() ?? 0;
 }
 
 /** Sắp xếp mới nhất lên đầu, phòng khi BE bỏ qua `sortBy`/`sortDir`. */

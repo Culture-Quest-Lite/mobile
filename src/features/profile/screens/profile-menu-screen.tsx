@@ -1,6 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { type Href, useRouter } from "expo-router";
 import { SymbolView } from "@/components/ui/symbol-view";
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import {
   Pressable,
   ScrollView,
@@ -156,7 +157,7 @@ export default function ProfileMenuScreen() {
           start={{ x: 0, y: 0.5 }}
           style={{
             paddingBottom: 12,
-            paddingHorizontal: 12,
+            paddingHorizontal: ScreenHorizontalPadding,
             paddingTop: insets.top + 8,
           }}
         >

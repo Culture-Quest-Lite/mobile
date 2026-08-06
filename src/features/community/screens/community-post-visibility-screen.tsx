@@ -1,4 +1,5 @@
 import { SymbolView } from "@/components/ui/symbol-view";
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import {
   getValidAccessToken,
   useAuthSession,
@@ -325,7 +326,10 @@ export default function CommunityPostVisibilityScreen() {
         </View>
 
         <View className="flex-1">
-          <View className="px-5 pb-2 pt-3">
+          <View
+            className="pb-2 pt-3"
+            style={{ paddingHorizontal: ScreenHorizontalPadding }}
+          >
             <Text
               className="text-[16px] font-semibold text-[#2B2233]"
               style={{ lineHeight: 18 }}

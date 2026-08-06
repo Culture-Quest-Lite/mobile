@@ -4,6 +4,7 @@ import * as Location from 'expo-location';
 import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import { SymbolView } from '@/components/ui/symbol-view';
 import { UserAvatar } from '@/components/ui/user-avatar';
+import { ScreenHorizontalPadding } from '@/constants/theme';
 import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -271,7 +272,7 @@ export default function ExploreScreen() {
   const activeRouteIndexRef = useRef(0);
 
   const safeWidth = Math.max(width, 320);
-  const gutter = 20;
+  const gutter = ScreenHorizontalPadding;
   const contentWidth = Math.max(safeWidth - gutter * 2, 280);
   const snapInterval = safeWidth;
   const routeCardWidth = Math.max(contentWidth, 280);
@@ -478,7 +479,7 @@ export default function ExploreScreen() {
         contentContainerStyle={{ paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-6 px-5 pb-2 pt-4">
+        <View className="gap-6 px-4 pb-2 pt-4">
           <View className="flex-row items-center justify-between">
             <View className="flex-1 flex-row items-center gap-3.5 pr-3">
               <ExplorerHeaderAvatar
@@ -834,11 +835,11 @@ export default function ExploreScreen() {
             onRoutePress={openRoute}
           />
           {placeError ? (
-            <Text className="mx-5 mt-2 text-[11px] text-[#B86D2A]">{placeError}</Text>
+            <Text className="mx-4 mt-2 text-[11px] text-[#B86D2A]">{placeError}</Text>
           ) : null}
         </View>
 
-        <View className="gap-6 px-5">
+        <View className="gap-6 px-4">
           <View className="gap-4">
             <View className="flex-row items-center justify-between">
               <Text className="text-[22px] font-bold text-[#2B2233]">Tuyến gợi ý</Text>

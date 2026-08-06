@@ -1,4 +1,5 @@
 import { SymbolView } from "@/components/ui/symbol-view";
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -833,7 +834,10 @@ export default function RouteDetailScreen() {
         onTouchEnd={handleContentTouchEnd}
         onTouchCancel={handleContentTouchEnd}
       >
-        <View className="relative px-5">
+        <View
+          className="relative"
+          style={{ paddingHorizontal: ScreenHorizontalPadding }}
+        >
           <View className="items-center pb-2 pt-1">
             <View className="h-1.5 w-12 rounded-full bg-[#D9DCE5]" />
             <Text className="mt-1 text-[10px] text-[#8E869A]">
@@ -1280,7 +1284,10 @@ export default function RouteDetailScreen() {
         </View>
       </ScrollView>
 
-      <View className="absolute inset-x-0 bottom-0 px-5 pb-6 pt-2">
+      <View
+        className="absolute inset-x-0 bottom-0 pb-6 pt-2"
+        style={{ paddingHorizontal: ScreenHorizontalPadding }}
+      >
         <View
           className="flex-row gap-2 rounded-2xl border border-[#F0DEE7] bg-[#FFF8FB]/95 p-2.5"
           style={cardShadow}

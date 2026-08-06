@@ -41,7 +41,7 @@ const bodyColor = "#6B7280";
 const subtleTextColor = "#9CA3AF";
 const closeBorderColor = "#F0E3EB";
 const secondaryBorderColor = "#F6D9E7";
-const buttonGradientColors = ["#F7BDD7", "#F09EC3", "#E786B1"] as const;
+const primaryButtonColor = "#F062A6";
 const pageGradientColors = ["#FFF1F7", "#FFF8FB", "#FFFFFF"] as const;
 const haloGradientColors = [
   "rgba(247,189,215,0.55)",
@@ -470,20 +470,18 @@ export function SuccessOverlay({
           className="overflow-hidden rounded-[20px]"
           onPress={onPrimaryAction}
           style={({ pressed }) => ({
-            elevation: 7,
+            elevation: 3,
             opacity: pressed ? 0.92 : 1,
-            shadowColor: "rgba(231,134,177,0.45)",
-            shadowOffset: { width: 0, height: 12 },
+            shadowColor: "rgba(240,98,166,0.16)",
+            shadowOffset: { width: 0, height: 6 },
             shadowOpacity: 1,
-            shadowRadius: 20,
+            shadowRadius: 12,
           })}
         >
-          <LinearGradient
-            colors={buttonGradientColors}
-            end={{ x: 1, y: 0.5 }}
-            start={{ x: 0, y: 0.5 }}
+          <View
             style={{
               alignItems: "center",
+              backgroundColor: primaryButtonColor,
               height: 50,
               justifyContent: "center",
             }}
@@ -504,7 +502,7 @@ export function SuccessOverlay({
                 />
               </View>
             ) : null}
-          </LinearGradient>
+          </View>
         </Pressable>
 
         {showSecondaryAction ? (

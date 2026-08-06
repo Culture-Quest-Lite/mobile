@@ -1,4 +1,4 @@
-import { MaxContentWidth } from "@/constants/theme";
+import { MaxContentWidth, ScreenHorizontalPadding } from "@/constants/theme";
 import { useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -13,7 +13,7 @@ export function useScreenLayout(options: UseScreenLayoutOptions = {}) {
   const { height, width } = useWindowDimensions();
   const safeWidth = Math.max(width - insets.left - insets.right, 0);
   const isCompactWidth = safeWidth <= compactWidthBreakpoint;
-  const gutter = safeWidth < 360 ? 10 : safeWidth < 428 ? 12 : safeWidth < 768 ? 16 : 20;
+  const gutter = ScreenHorizontalPadding;
   const contentMaxWidth = Math.min(maxContentWidth, safeWidth);
   const contentWidth = Math.min(Math.max(safeWidth - gutter * 2, 0), contentMaxWidth);
   const scrollContentMinHeight = height + insets.top + insets.bottom;

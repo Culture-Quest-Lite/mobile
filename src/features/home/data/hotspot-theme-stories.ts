@@ -156,11 +156,11 @@ function getAudioStoryDurationLabel(story: string) {
   const wordCount = story.trim().split(/\s+/).filter(Boolean).length;
   const minutes = Math.max(1, Math.ceil(wordCount / 110));
 
-  return `${minutes} min nghe`;
+  return `${minutes} phút`;
 }
 
 function getTagLabel(tag: StoryThemeTag) {
-  return storyThemeTabs.find((tab) => tab.id === tag)?.label ?? "Story";
+  return storyThemeTabs.find((tab) => tab.id === tag)?.label ?? "Câu chuyện";
 }
 
 function rotateGallery(gallery: string[], offset: number) {
@@ -213,11 +213,11 @@ function buildScriptParagraphs(hotspot: HotspotDetail, tag: StoryThemeTag) {
       ];
     case "food":
       return [
-        `Sau khi check-in ${hotspot.title}, trải nghiệm ẩm thực là cách tốt nhất để nối tiếp hành trình và giữ năng lượng cho route tiếp theo.`,
+        `Sau khi check-in ${hotspot.title}, trải nghiệm ẩm thực là cách tốt nhất để nối tiếp hành trình và giữ năng lượng cho tuyến đường tiếp theo.`,
         hotspot.routePairing,
         hotspot.tips[0]
           ? `Gợi ý nhanh: ${hotspot.tips[0]}`
-          : `Ưu tiên một điểm ăn uống gần ${hotspot.address} để route không bị đứt mạch.`,
+          : `Ưu tiên một điểm ăn uống gần ${hotspot.address} để tuyến đường không bị đứt mạch.`,
       ];
     case "education":
       return [
@@ -325,6 +325,13 @@ function getSortedMediaUrlsByKind(story: ApiStory, mediaKind: StoryMediaKind) {
     .map((media) => media.fileUrl.trim());
 }
 
+function dedupeImageUrls(imageUrls: readonly string[]) {
+  return imageUrls.filter((imageUrl, index, collection) => {
+    const normalizedUrl = imageUrl.trim();
+    return Boolean(normalizedUrl) && collection.indexOf(imageUrl) === index;
+  });
+}
+
 export function buildHotspotThemeStories(
   hotspot: HotspotDetail,
 ): HotspotThemeStory[] {
@@ -355,16 +362,16 @@ export function buildHotspotThemeStories(
       tagLabel: getTagLabel("history"),
       title: `Lịch sử của ${hotspot.title}`,
       videoDescription:
-        "Một đoạn visual ngắn cho thấy khung cảnh tổng thể và các góc nhìn đặc trưng của hotspot.",
+        "Một đoạn hình ảnh ngắn cho thấy khung cảnh tổng thể và các góc nhìn đặc trưng của địa điểm.",
       videoDurationLabel: "45s video",
       videoPoster: historyGallery[0] ?? hotspot.imageUri,
-      videoTitle: `Visual story tại ${hotspot.title}`,
+      videoTitle: `Video hình ảnh tại ${hotspot.title}`,
       ...storyCardBaseLayout,
     },
     {
       audioDescription:
         "Nghe nhanh về không khí địa phương, vibe xung quanh và cách người ta trải nghiệm nơi này.",
-      audioDurationLabel: "1 min khám phá",
+      audioDurationLabel: "1 phút khám phá",
       audioScript: "",
       audioTitle: "Audio về không khí và văn hóa",
       cardColors: ["#F8D1DE", "#F2C2D3"],
@@ -374,13 +381,13 @@ export function buildHotspotThemeStories(
       imageSource: storyImageByTag.culture,
       scriptParagraphs: buildScriptParagraphs(hotspot, "culture"),
       summary:
-        "Khám phá không khí, nhịp sống và sắc thái văn hóa quanh hotspot.",
+        "Khám phá không khí, nhịp sống và sắc thái văn hóa quanh địa điểm.",
       tag: "culture",
       tagImageSource: tagImageByTag.culture,
       tagLabel: getTagLabel("culture"),
       title: `Văn hóa quanh ${hotspot.title}`,
       videoDescription:
-        "Một đoạn dựng nhanh để nhìn ra cách hotspot hòa vào bối cảnh khu vực và cộng đồng xung quanh.",
+        "Một đoạn dựng nhanh để nhìn ra cách địa điểm hòa vào bối cảnh khu vực và cộng đồng xung quanh.",
       videoDurationLabel: "52s video",
       videoPoster: cultureGallery[0] ?? hotspot.imageUri,
       videoTitle: "Khoảnh khắc văn hóa",
@@ -388,8 +395,8 @@ export function buildHotspotThemeStories(
     },
     {
       audioDescription:
-        "Track ngắn gợi ý mạch trải nghiệm ăn uống sau check-in, phù hợp để bạn lên route tiếp.",
-      audioDurationLabel: "58s audio",
+        "Đoạn ghi âm ngắn gợi ý mạch trải nghiệm ăn uống sau check-in, phù hợp để bạn lên tuyến đường tiếp theo.",
+      audioDurationLabel: "58 giây",
       audioScript: "",
       audioTitle: "Gợi ý ẩm thực sau check-in",
       cardColors: ["#F8D5C0", "#F3C2A4"],
@@ -399,22 +406,22 @@ export function buildHotspotThemeStories(
       imageSource: storyImageByTag.food,
       scriptParagraphs: buildScriptParagraphs(hotspot, "food"),
       summary:
-        "Nối hotspot với mạch trải nghiệm ăn uống, nghỉ chân và khám phá lân cận.",
+        "Nối địa điểm với mạch trải nghiệm ăn uống, nghỉ chân và khám phá lân cận.",
       tag: "food",
       tagImageSource: tagImageByTag.food,
       tagLabel: getTagLabel("food"),
       title: "Ẩm thực nên thử sau khi ghé",
       videoDescription:
-        "Video teaser ngắn để hình dung mạch di chuyển và những điểm dừng ẩm thực phù hợp sau khi rời hotspot.",
+        "Video ngắn để hình dung mạch di chuyển và những điểm dừng ẩm thực phù hợp sau khi rời địa điểm.",
       videoDurationLabel: "41s video",
       videoPoster: foodGallery[0] ?? hotspot.imageUri,
-      videoTitle: "Route ăn uống gợi ý",
+      videoTitle: "Tuyến ăn uống gợi ý",
       ...storyCardBaseLayout,
     },
     {
       audioDescription:
-        "Một đoạn audio tóm tắt lưu ý, thời điểm phù hợp và mẹo nhỏ để bạn tiếp tục route hiệu quả hơn.",
-      audioDurationLabel: "47s audio",
+        "Một đoạn ghi âm tóm tắt lưu ý, thời điểm phù hợp và mẹo nhỏ để bạn tiếp tục tuyến đường hiệu quả hơn.",
+      audioDurationLabel: "47 giây",
       audioScript: "",
       audioTitle: "Ghi chú nhanh trước khi đi tiếp",
       cardColors: ["#DDD6FF", "#CEC6FF"],
@@ -463,8 +470,11 @@ export function buildHotspotThemeStoriesFromApi(
     const imageGallery = getSortedMediaUrlsByKind(story, "image");
     const audioUrl = getSortedMediaUrlsByKind(story, "audio")[0] ?? null;
     const videoUrl = getSortedMediaUrlsByKind(story, "video")[0] ?? null;
-    const nextGallery =
-      imageGallery.length > 0 ? imageGallery : fallbackStory.heroGallery;
+    const nextGallery = dedupeImageUrls([
+      ...story.imageUrls,
+      ...imageGallery,
+      ...fallbackStory.heroGallery,
+    ]);
     const nextParagraphs = splitApiStoryParagraphs(story.content);
     const nextTitle = story.title.trim() || fallbackStory.title;
     const nextTagLabel = story.tag?.tagName.trim() || fallbackStory.tagLabel;

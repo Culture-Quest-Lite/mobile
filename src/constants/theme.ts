@@ -65,6 +65,8 @@ export const Spacing = {
   six: 64,
 } as const;
 
+export const ScreenHorizontalPadding = Spacing.three;
+
 export const Radius = {
   small: 8,
   medium: 14,

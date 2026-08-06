@@ -18,6 +18,7 @@ import {
 import MapView, { Marker, PROVIDER_GOOGLE, type Region } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { getValidAccessToken } from "@/features/auth/hooks/use-auth-session";
 import {
@@ -575,7 +576,10 @@ export default function PartnerSubscriptionScreen() {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
       >
         {/* Header */}
-        <View className="bg-[#EB489B] px-5 pb-8 pt-5">
+        <View
+          className="bg-[#EB489B] pb-8 pt-5"
+          style={{ paddingHorizontal: ScreenHorizontalPadding }}
+        >
           <View className="mb-4 flex-row items-center justify-between">
             <Pressable
               onPress={() => {
@@ -691,7 +695,10 @@ export default function PartnerSubscriptionScreen() {
           </View>
         </View>
 
-        <View className="px-5 pt-5">
+        <View
+          className="pt-5"
+          style={{ paddingHorizontal: ScreenHorizontalPadding }}
+        >
           {/* Loading / Error */}
           {isLoading ? (
             <View className="mb-4 items-center rounded-2xl bg-[#FFF8FC] p-6">

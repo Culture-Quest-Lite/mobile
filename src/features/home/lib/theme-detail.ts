@@ -18,6 +18,9 @@ type ThemePreset = {
   summary: string;
 };
 
+const unifiedThemeDetailBackground = "#FFE5F0";
+const unifiedThemeDetailSoftBackground = "#FFF8FB";
+
 export type ThemeDetailRouteItem = {
   cover: string | null;
   description: string;
@@ -270,12 +273,12 @@ export function resolveThemeDetailModel({
 
   return {
     accent: readMeaningfulText(accent) ?? preset.accent,
-    background: readMeaningfulText(background) ?? preset.background,
+    background: unifiedThemeDetailBackground,
     heroImageUrl: readMeaningfulText(tag?.imageUrl) ?? readMeaningfulText(imageUrl),
     hotspotCount: tag?.hotspotCount ?? 0,
     icon: preset.icon,
     routeCount: tag?.routeCount ?? 0,
-    softBackground: preset.softBackground,
+    softBackground: unifiedThemeDetailSoftBackground,
     storyCount: tag?.storyCount ?? 0,
     summary: preset.summary,
     title: resolvedTitle,
