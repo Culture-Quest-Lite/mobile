@@ -35,9 +35,16 @@ import { getMyProfile } from "@/features/profile/api/get-me";
 import { setPremiumStatusFromProfile } from "@/features/profile/hooks/use-premium-status";
 import { applyLevelProgressToProfile } from "@/features/profile/lib/level-progress";
 import {
+  type HotspotProgressDto,
   type RouteDto,
+  type RouteHotspotDto,
+  type UserRouteProgressDto,
+  getRouteById,
+  getRouteCoverUrl,
   getRoutesByHotspot,
+  getUserRouteProgressList,
   mapRouteToRouteItem,
+  searchRoutes,
 } from "@/features/route/api/route-api";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import {
@@ -158,6 +165,265 @@ const activeJourneyCardBackground = "#FFF8FC";
 const journeyProgressSegmentRadius =
   journeyProgressRingSize / 2 - journeyProgressRingStrokeWidth / 2 - 1;
 
+const featuredRouteHighlightLimit = 5;
+
+// Ảnh minh hoạ cũ chỉ còn dùng làm fallback khi route/tiến độ từ API không
+// đính kèm media nào, để phần hình không bị vỡ layout.
+const activeJourneyFallbackImageUri =
+  activeJourney?.imageUri ?? featuredRoutes[0].imageUri;
+
+type FeaturedRouteCard = {
+  coverUri: string;
+  difficultyLabel: string;
+  distanceLabel: string;
+  durationLabel: string;
+  routeId: number;
+  stopsLabel: string;
+  tagLabel: string;
+  title: string;
+  xpLabel: string | null;
+};
+
+type ActiveJourneyView = {
+  coverUri: string;
+  currentCheckpoint: number;
+  distanceToNextLabel: string | null;
+  nextStopName: string | null;
+  progress: number;
+  remainingStopsLabel: string;
+  remainingTimeLabel: string | null;
+  rewardLabel: string | null;
+  routeId: number;
+  title: string;
+  totalCheckpoints: number;
+};
+
+function getFeaturedRouteFallbackImageUri(index: number) {
+  return featuredRoutes[index % featuredRoutes.length].imageUri;
+}
+
+function getRouteDifficultyLabel(difficulty?: string | null) {
+  switch (difficulty?.trim().toUpperCase()) {
+    case "EASY":
+      return "Dễ";
+    case "MEDIUM":
+      return "Vừa";
+    case "HARD":
+      return "Khó";
+    default:
+      return difficulty?.trim() || "Dễ";
+  }
+}
+
+function formatRouteDistanceLabel(totalDistanceKm: number) {
+  if (!Number.isFinite(totalDistanceKm) || totalDistanceKm <= 0) {
+    return "Đang cập nhật";
+  }
+
+  if (totalDistanceKm < 1) {
+    return `${Math.round(totalDistanceKm * 1000)} m`;
+  }
+
+  return `${Number.isInteger(totalDistanceKm) ? totalDistanceKm : totalDistanceKm.toFixed(1)} km`;
+}
+
+function formatRouteDurationLabel(estimateMinutes: number) {
+  if (!Number.isFinite(estimateMinutes) || estimateMinutes <= 0) {
+    return "Đang cập nhật";
+  }
+
+  const roundedMinutes = Math.round(estimateMinutes);
+
+  if (roundedMinutes < 60) {
+    return `${roundedMinutes} phút`;
+  }
+
+  const hours = Math.floor(roundedMinutes / 60);
+  const minutes = roundedMinutes % 60;
+
+  return minutes > 0 ? `${hours} giờ ${minutes} phút` : `${hours} giờ`;
+}
+
+function formatRouteStopsLabel(stopCount: number) {
+  if (stopCount <= 0) {
+    return "Đang cập nhật";
+  }
+
+  return `${String(stopCount).padStart(2, "0")} điểm dừng`;
+}
+
+function isPublishedRoute(route: RouteDto) {
+  return route.status.trim().toUpperCase() === "PUBLISHED";
+}
+
+function getHighlightRoutes(routes: RouteDto[]) {
+  return [...routes]
+    .sort((left, right) => {
+      const xpGap = (right.xp || 0) - (left.xp || 0);
+
+      if (xpGap !== 0) {
+        return xpGap;
+      }
+
+      const stopGap = right.hotspots.length - left.hotspots.length;
+
+      return stopGap !== 0 ? stopGap : right.routeId - left.routeId;
+    })
+    .slice(0, featuredRouteHighlightLimit);
+}
+
+function mapRouteToFeaturedRouteCard(
+  route: RouteDto,
+  index: number,
+): FeaturedRouteCard {
+  // Ưu tiên media của chính route (hoặc media hotspot đầu tiên trong route).
+  // Chỉ khi API không có hình nào mới quay lại ảnh mặc định của màn hình.
+  const apiCoverUri = getRouteCoverUrl(route)?.trim();
+
+  return {
+    coverUri: apiCoverUri || getFeaturedRouteFallbackImageUri(index),
+    difficultyLabel: getRouteDifficultyLabel(route.difficulty),
+    distanceLabel: formatRouteDistanceLabel(route.totalDistance),
+    durationLabel: formatRouteDurationLabel(route.estimateTime),
+    routeId: route.routeId,
+    stopsLabel: formatRouteStopsLabel(route.hotspots.length),
+    tagLabel: route.tags[0]?.tagName.trim() || "Khám phá",
+    title: route.routeName.trim() || `Tuyến #${route.routeId}`,
+    xpLabel: route.xp > 0 ? `+${route.xp} XP` : null,
+  };
+}
+
+function normalizeProgressStatus(status?: string | null) {
+  return (status ?? "").trim().toUpperCase();
+}
+
+function isActiveRouteProgress(progress: UserRouteProgressDto) {
+  return normalizeProgressStatus(progress.status) === "IN_PROGRESS";
+}
+
+function getRouteHotspotOrder(hotspot: RouteHotspotDto) {
+  return (
+    hotspot.orderIndex ??
+    hotspot.sequenceNumber ??
+    hotspot.index ??
+    Number.MAX_SAFE_INTEGER
+  );
+}
+
+function getOrderedRouteHotspots(route: RouteDto | null) {
+  if (!route) {
+    return [];
+  }
+
+  return [...route.hotspots].sort(
+    (left, right) => getRouteHotspotOrder(left) - getRouteHotspotOrder(right),
+  );
+}
+
+function getOrderedHotspotProgressList(progress: UserRouteProgressDto) {
+  return [...progress.hotspotProgressList].sort(
+    (left, right) =>
+      (left.index ?? Number.MAX_SAFE_INTEGER) -
+      (right.index ?? Number.MAX_SAFE_INTEGER),
+  );
+}
+
+function readStopCoordinate(
+  stop?: HotspotProgressDto | RouteHotspotDto | null,
+): Pick<AppCoordinate, "latitude" | "longitude"> | null {
+  if (
+    typeof stop?.latitude !== "number" ||
+    typeof stop?.longitude !== "number"
+  ) {
+    return null;
+  }
+
+  return { latitude: stop.latitude, longitude: stop.longitude };
+}
+
+function buildActiveJourneyView(
+  progress: UserRouteProgressDto,
+  route: RouteDto | null,
+): ActiveJourneyView {
+  const orderedProgressStops = getOrderedHotspotProgressList(progress);
+  const orderedRouteHotspots = getOrderedRouteHotspots(route);
+  const totalCheckpoints = Math.max(
+    progress.totalStops,
+    orderedProgressStops.length,
+    orderedRouteHotspots.length,
+    1,
+  );
+  const checkedInStops = orderedProgressStops.filter(
+    (stop) => stop.isCheckedIn,
+  );
+  const currentCheckpoint = clamp(
+    Math.max(progress.completedStops, checkedInStops.length),
+    0,
+    totalCheckpoints,
+  );
+  const progressPercentage = Math.round(
+    clamp(
+      progress.progressPercentage > 0
+        ? progress.progressPercentage
+        : (currentCheckpoint / totalCheckpoints) * 100,
+      0,
+      100,
+    ),
+  );
+  const nextStopProgress =
+    orderedProgressStops.find((stop) => !stop.isCheckedIn) ?? null;
+  const nextRouteHotspot = nextStopProgress
+    ? (orderedRouteHotspots.find(
+        (hotspot) => hotspot.hotspotId === nextStopProgress.hotspotId,
+      ) ?? null)
+    : (orderedRouteHotspots[currentCheckpoint] ?? null);
+  const previousStop = checkedInStops[checkedInStops.length - 1] ?? null;
+  const previousCoordinate =
+    readStopCoordinate(previousStop) ??
+    readStopCoordinate(
+      previousStop
+        ? (orderedRouteHotspots.find(
+            (hotspot) => hotspot.hotspotId === previousStop.hotspotId,
+          ) ?? null)
+        : null,
+    );
+  const nextCoordinate =
+    readStopCoordinate(nextStopProgress) ?? readStopCoordinate(nextRouteHotspot);
+  const remainingStops = Math.max(totalCheckpoints - currentCheckpoint, 0);
+  const remainingMinutes =
+    route && route.estimateTime > 0 && totalCheckpoints > 0
+      ? Math.round((route.estimateTime * remainingStops) / totalCheckpoints)
+      : 0;
+  const routeCoverUri = route ? getRouteCoverUrl(route)?.trim() : null;
+
+  return {
+    // Hình lấy từ media của route/hotspot; không có mới dùng ảnh mặc định cũ.
+    coverUri: routeCoverUri || activeJourneyFallbackImageUri,
+    currentCheckpoint,
+    distanceToNextLabel:
+      previousCoordinate && nextCoordinate
+        ? formatDistanceMeters(
+            getDistanceMeters(previousCoordinate, nextCoordinate),
+          )
+        : null,
+    nextStopName:
+      readMeaningfulNearbyText(nextStopProgress?.hotspotName) ??
+      readMeaningfulNearbyText(nextRouteHotspot?.hotspotName),
+    progress: progressPercentage,
+    remainingStopsLabel:
+      remainingStops > 0
+        ? `Còn ${remainingStops} điểm dừng`
+        : "Đã đi hết điểm dừng",
+    remainingTimeLabel:
+      remainingMinutes > 0 ? `${formatRouteDurationLabel(remainingMinutes)} nữa` : null,
+    rewardLabel: route && route.xp > 0 ? `+${route.xp} XP` : null,
+    routeId: progress.routeId,
+    title:
+      readMeaningfulNearbyText(route?.routeName) ?? `Tuyến #${progress.routeId}`,
+    totalCheckpoints,
+  };
+}
+
 function JourneyProgressRing({ progress }: { progress: number }) {
   const boundedProgress = Math.min(Math.max(progress, 0), 100);
   const activeSegments = Math.round(
@@ -277,6 +543,8 @@ type NearbyPlaceListItem = {
 };
 
 type CommunityLeaderboardStatus = "empty" | "error" | "loading" | "ready";
+type FeaturedRoutesSectionStatus = "empty" | "loading" | "ready";
+type ActiveJourneySectionStatus = "empty" | "loading" | "ready";
 type NearbyPlacesSectionStatus = "empty" | "loading" | "ready";
 type SuggestedRoutesSectionStatus = "empty" | "loading" | "ready";
 type SuggestedRouteCard = RouteItem;
@@ -1170,6 +1438,18 @@ export default function HomeScreen() {
   const [themeCategories, setThemeCategories] = useState<NearbyCategoryCard[]>(
     [],
   );
+  const [featuredRouteCards, setFeaturedRouteCards] = useState<
+    FeaturedRouteCard[]
+  >([]);
+  const [featuredRoutesStatus, setFeaturedRoutesStatus] =
+    useState<FeaturedRoutesSectionStatus>("loading");
+  const [featuredRoutesNote, setFeaturedRoutesNote] = useState<string | null>(
+    null,
+  );
+  const [activeJourneyView, setActiveJourneyView] =
+    useState<ActiveJourneyView | null>(null);
+  const [activeJourneyStatus, setActiveJourneyStatus] =
+    useState<ActiveJourneySectionStatus>("loading");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const nearbyPlacesRequestRef = useRef(0);
   const themeCategoriesRequestRef = useRef(0);
@@ -1238,19 +1518,21 @@ export default function HomeScreen() {
   const themeCategoryImageSize = Math.round(themeCategoryCircleSize * 0.74);
   const voucherMerchantLogoSize = Math.round(voucherMerchantCircleSize * 0.88);
   const voucherMerchantItemWidth = voucherMerchantCircleSize + 14;
-  const currentJourney =
-    !isGuest && activeJourney && !activeJourney.completed
-      ? activeJourney
-      : null;
+  const currentJourney = !isGuest ? activeJourneyView : null;
   const activeJourneyProgress = currentJourney
     ? Math.min(Math.max(currentJourney.progress, 0), 100)
     : 0;
+  const isActiveJourneyLoading =
+    !isGuest && activeJourneyStatus === "loading" && !activeJourneyView;
   const activeCommunityBoard = buildCommunityBoardViewModelFromLeaderboard({
     entries: communityLeaderboardEntries,
     errorMessage: communityLeaderboardErrorMessage,
     status: communityLeaderboardStatus,
   });
-  const activeFeaturedRoute = featuredRoutes[activeRouteIndex];
+  const activeFeaturedRoute =
+    featuredRouteCards[
+      Math.min(activeRouteIndex, Math.max(featuredRouteCards.length - 1, 0))
+    ] ?? null;
   const explorerName =
     explorerSummary?.name.trim() ||
     authSession.displayName.trim() ||
@@ -1283,6 +1565,9 @@ export default function HomeScreen() {
   const handleOpenRoutes = () => {
     router.push("/route");
   };
+  const handleOpenRouteDetail = (routeId: number) => {
+    router.push(`/route/${routeId}` as Href);
+  };
   const handleOpenCommunityLeaderboard = () => {
     router.push("/community/leaderboard" as Href);
   };
@@ -1294,14 +1579,14 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    if (featuredRoutes.length <= 1) {
+    if (featuredRouteCards.length <= 1) {
       activeRouteIndexRef.current = 0;
       return;
     }
 
     const intervalId = setInterval(() => {
       const nextIndex =
-        (activeRouteIndexRef.current + 1) % featuredRoutes.length;
+        (activeRouteIndexRef.current + 1) % featuredRouteCards.length;
 
       activeRouteIndexRef.current = nextIndex;
       setActiveRouteIndex(nextIndex);
@@ -1310,7 +1595,175 @@ export default function HomeScreen() {
     return () => {
       clearInterval(intervalId);
     };
-  }, []);
+  }, [featuredRouteCards.length]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadFeaturedRoutes() {
+      setFeaturedRoutesStatus("loading");
+      setFeaturedRoutesNote(null);
+
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+
+        if (!isActive) {
+          return;
+        }
+
+        const routePage = await searchRoutes({
+          accessToken,
+          page: 0,
+          size: 20,
+          sortDirection: "DESC",
+          status: "PUBLISHED",
+          tokenType: authSession.tokenType,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        // Backend có thể chưa lọc status theo filter động nên lọc thêm ở client.
+        const publishedRoutes = routePage.content.filter(isPublishedRoute);
+        const highlightRoutes = getHighlightRoutes(
+          publishedRoutes.length > 0 ? publishedRoutes : routePage.content,
+        );
+
+        activeRouteIndexRef.current = 0;
+        setActiveRouteIndex(0);
+        setFeaturedRouteCards(highlightRoutes.map(mapRouteToFeaturedRouteCard));
+        setFeaturedRoutesStatus(highlightRoutes.length > 0 ? "ready" : "empty");
+        setFeaturedRoutesNote(
+          highlightRoutes.length > 0
+            ? null
+            : "Chưa có tuyến nào được xuất bản trên hệ thống.",
+        );
+      } catch (error) {
+        console.warn("[home] load featured routes failed", {
+          error: error instanceof Error ? error.message : error,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setFeaturedRouteCards([]);
+        setFeaturedRoutesNote(
+          error instanceof Error
+            ? error.message
+            : "Không tải được tuyến nổi bật.",
+        );
+        setFeaturedRoutesStatus("empty");
+      }
+    }
+
+    void loadFeaturedRoutes();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.isAuthenticated, authSession.tokenType]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      async function loadActiveJourney() {
+        if (!authSession.isAuthenticated) {
+          setActiveJourneyView(null);
+          setActiveJourneyStatus("empty");
+          return;
+        }
+
+        setActiveJourneyStatus("loading");
+
+        try {
+          const accessToken = await getValidAccessToken();
+
+          if (!isActive) {
+            return;
+          }
+
+          if (!accessToken) {
+            setActiveJourneyView(null);
+            setActiveJourneyStatus("empty");
+            return;
+          }
+
+          const progressPage = await getUserRouteProgressList({
+            accessToken,
+            page: 0,
+            size: 20,
+            sortBy: "startedAt",
+            sortDirection: "DESC",
+            tokenType: authSession.tokenType,
+          });
+
+          if (!isActive) {
+            return;
+          }
+
+          const activeProgress =
+            progressPage.content.find(isActiveRouteProgress) ?? null;
+
+          if (!activeProgress) {
+            setActiveJourneyView(null);
+            setActiveJourneyStatus("empty");
+            return;
+          }
+
+          // API danh sách tiến độ có thể không kèm route đầy đủ (thiếu media,
+          // hotspot). Khi đó gọi thêm route detail để lấy hình và điểm dừng.
+          let journeyRoute = activeProgress.route ?? null;
+
+          if (!journeyRoute || journeyRoute.hotspots.length === 0) {
+            try {
+              journeyRoute = await getRouteById({
+                accessToken,
+                routeId: activeProgress.routeId,
+                tokenType: authSession.tokenType,
+              });
+            } catch (routeError) {
+              console.info("[home] load active journey route skipped", {
+                error:
+                  routeError instanceof Error ? routeError.message : routeError,
+                routeId: activeProgress.routeId,
+              });
+            }
+          }
+
+          if (!isActive) {
+            return;
+          }
+
+          setActiveJourneyView(
+            buildActiveJourneyView(activeProgress, journeyRoute),
+          );
+          setActiveJourneyStatus("ready");
+        } catch (error) {
+          console.warn("[home] load active journey failed", {
+            error: error instanceof Error ? error.message : error,
+          });
+
+          if (!isActive) {
+            return;
+          }
+
+          setActiveJourneyView(null);
+          setActiveJourneyStatus("empty");
+        }
+      }
+
+      void loadActiveJourney();
+
+      return () => {
+        isActive = false;
+      };
+    }, [authSession.isAuthenticated, authSession.tokenType]),
+  );
 
   const loadNearbyPlaces = useCallback(async () => {
     const requestId = nearbyPlacesRequestRef.current + 1;
@@ -1849,120 +2302,271 @@ export default function HomeScreen() {
           )}
 
           <View className="gap-4">
-            <Text className={homeSectionTitleClassName}>
-              Tuyến nổi bật
-            </Text>
-
-            <View
-              className="items-start"
-              style={{
-                marginHorizontal: -gutter,
-                width: safeWidth,
-                paddingLeft: routeCardLeftInset,
-              }}
-            >
-              <View
-                key={activeFeaturedRoute.title}
-                className="overflow-hidden rounded-[30px] bg-[#2B2233]"
-                style={[
-                  heroShadowStyle,
-                  {
-                    width: routeCardWidth,
-                  },
-                ]}
-              >
-                <Image
-                  source={activeFeaturedRoute.imageUri}
-                  contentFit="cover"
-                  transition={220}
-                  cachePolicy="memory-disk"
-                  style={{ height: 210, width: "100%" }}
-                />
-
-                <LinearGradient
-                  colors={[
-                    "rgba(36, 28, 44, 0.10)",
-                    "rgba(36, 28, 44, 0.38)",
-                    "rgba(36, 28, 44, 0.92)",
-                  ]}
-                  locations={[0, 0.46, 1]}
-                  start={{ x: 0.5, y: 0 }}
-                  end={{ x: 0.5, y: 1 }}
-                  className="absolute inset-0 px-4 py-4"
-                >
-                  <View className="flex-1 justify-end gap-3">
-                    <View className="flex-row items-start justify-between gap-3">
-                      <View className="max-w-[78%] gap-2">
-                        <View className="gap-1">
-                          <Text className="text-[21px] font-extrabold leading-6 text-white">
-                            {activeFeaturedRoute.title}
-                          </Text>
-                        </View>
-                        <View className="gap-3">
-                          <View className="flex-row flex-wrap gap-2">
-                            <View className="rounded-full bg-white/18 px-3 py-1.5">
-                              <Text className="text-[11px] font-bold text-white">
-                                {activeFeaturedRoute.stops}
-                              </Text>
-                            </View>
-                            <View className="rounded-full bg-white/18 px-3 py-1.5">
-                              <Text className="text-[11px] font-bold text-white">
-                                {activeFeaturedRoute.distance}
-                              </Text>
-                            </View>
-                            <View className="rounded-full bg-white/18 px-3 py-1.5">
-                              <Text className="text-[11px] font-bold text-white">
-                                {activeFeaturedRoute.duration}
-                              </Text>
-                            </View>
-                          </View>
-
-                          <View className="flex-row items-end">
-                            <Pressable className="rounded-full bg-white/92 px-4 py-2.5">
-                              <Text className="text-[14px] font-extrabold text-[#D9587F]">
-                                Xem tuyến đường
-                              </Text>
-                            </Pressable>
-                          </View>
-                        </View>
-                      </View>
-
-                      <View className="h-9 w-9 items-center justify-center rounded-2xl bg-white/16">
-                        <SymbolView
-                          name={{ ios: "map", android: "map", web: "map" }}
-                          size={15}
-                          tintColor="#FFFFFF"
-                        />
-                      </View>
-                    </View>
-                  </View>
-                </LinearGradient>
+            <View className="flex-row items-center justify-between gap-3">
+              <View className="flex-1">
+                <Text className="text-[17px] font-extrabold text-[#2B2233]">
+                  Tuyến nổi bật
+                </Text>
+                <Text className="mt-0.5 text-[11px] font-medium text-[#9C94A5]">
+                  Những hành trình được cộng đồng khám phá nhiều nhất
+                </Text>
               </View>
+
+              {featuredRouteCards.length > 0 ? (
+                <Pressable
+                  className="rounded-full bg-[#FFF1F6] px-3.5 py-2"
+                  hitSlop={6}
+                  onPress={handleOpenRoutes}
+                >
+                  <Text className="text-[12px] font-bold text-[#EB489B]">
+                    Xem tất cả
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
 
-            <View
-              className="flex-row items-center justify-center gap-2"
-              style={{ paddingHorizontal: gutter }}
-            >
-              {featuredRoutes.map((route, index) => (
-                <Pressable
-                  key={route.title}
-                  onPress={() => {
-                    activeRouteIndexRef.current = index;
-                    setActiveRouteIndex(index);
+            {featuredRoutesStatus === "loading" ? (
+              <SectionEmptyState
+                description="Đang tải danh sách tuyến đã xuất bản từ hệ thống."
+                title="Đang tải tuyến nổi bật..."
+              />
+            ) : !activeFeaturedRoute ? (
+              <SectionEmptyState
+                description={
+                  featuredRoutesNote ?? "Không có dữ liệu tuyến phù hợp."
+                }
+                title="Chưa có tuyến nổi bật"
+              />
+            ) : (
+              <>
+                <View
+                  className="items-start"
+                  style={{
+                    marginHorizontal: -gutter,
+                    width: safeWidth,
+                    paddingLeft: routeCardLeftInset,
                   }}
-                  className={`rounded-full ${
-                    index === activeRouteIndex
-                      ? "h-2.5 w-8 bg-[#EB489B]"
-                      : "h-2.5 w-2.5 bg-[#F3C9D9]"
-                  }`}
-                />
-              ))}
-            </View>
+                >
+                  <Pressable
+                    key={activeFeaturedRoute.routeId}
+                    className="overflow-hidden rounded-[30px] bg-[#2B2233]"
+                    onPress={() => {
+                      handleOpenRouteDetail(activeFeaturedRoute.routeId);
+                    }}
+                    style={[
+                      heroShadowStyle,
+                      {
+                        width: routeCardWidth,
+                      },
+                    ]}
+                  >
+                    <Image
+                      source={activeFeaturedRoute.coverUri}
+                      contentFit="cover"
+                      transition={220}
+                      cachePolicy="memory-disk"
+                      style={{ height: 230, width: "100%" }}
+                    />
+
+                    <LinearGradient
+                      colors={[
+                        "rgba(36, 28, 44, 0.10)",
+                        "rgba(36, 28, 44, 0.38)",
+                        "rgba(36, 28, 44, 0.92)",
+                      ]}
+                      locations={[0, 0.46, 1]}
+                      start={{ x: 0.5, y: 0 }}
+                      end={{ x: 0.5, y: 1 }}
+                      className="absolute inset-0 px-4 py-4"
+                    >
+                      <View className="flex-row items-start justify-between gap-3">
+                        <View className="flex-row flex-wrap items-center gap-2">
+                          <View className="rounded-full bg-white/92 px-3 py-1.5">
+                            <Text className="text-[10px] font-extrabold uppercase tracking-[0.5px] text-[#D9587F]">
+                              {activeFeaturedRoute.tagLabel}
+                            </Text>
+                          </View>
+
+                          <View className="flex-row items-center rounded-full bg-black/32 px-2.5 py-1.5">
+                            <SymbolView
+                              name={{
+                                ios: "figure.walk",
+                                android: "directions_walk",
+                                web: "directions_walk",
+                              }}
+                              size={11}
+                              tintColor="#FFFFFF"
+                            />
+                            <Text className="ml-1 text-[10px] font-extrabold text-white">
+                              {activeFeaturedRoute.difficultyLabel}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {activeFeaturedRoute.xpLabel ? (
+                          <LinearGradient
+                            colors={gradientColors}
+                            end={{ x: 1, y: 0.5 }}
+                            locations={[0, 0.58, 1]}
+                            start={{ x: 0, y: 0.5 }}
+                            className="flex-row items-center rounded-full px-2.5 py-1.5"
+                          >
+                            <SymbolView
+                              name={{
+                                ios: "sparkles",
+                                android: "auto_awesome",
+                                web: "auto_awesome",
+                              }}
+                              size={11}
+                              tintColor="#FFFFFF"
+                            />
+                            <Text className="ml-1 text-[10px] font-extrabold text-white">
+                              {activeFeaturedRoute.xpLabel}
+                            </Text>
+                          </LinearGradient>
+                        ) : null}
+                      </View>
+
+                      <View className="mt-auto gap-3">
+                        <Text
+                          className="text-[21px] font-extrabold leading-6 text-white"
+                          numberOfLines={2}
+                        >
+                          {activeFeaturedRoute.title}
+                        </Text>
+
+                        <View className="flex-row flex-wrap gap-2">
+                          <View className="flex-row items-center rounded-full bg-white/18 px-3 py-1.5">
+                            <SymbolView
+                              name={{
+                                ios: "mappin.and.ellipse",
+                                android: "place",
+                                web: "place",
+                              }}
+                              size={11}
+                              tintColor="#FFFFFF"
+                            />
+                            <Text className="ml-1.5 text-[11px] font-bold text-white">
+                              {activeFeaturedRoute.stopsLabel}
+                            </Text>
+                          </View>
+
+                          <View className="flex-row items-center rounded-full bg-white/18 px-3 py-1.5">
+                            <SymbolView
+                              name={{
+                                ios: "point.topleft.down.curvedto.point.bottomright.up",
+                                android: "route",
+                                web: "route",
+                              }}
+                              size={11}
+                              tintColor="#FFFFFF"
+                            />
+                            <Text className="ml-1.5 text-[11px] font-bold text-white">
+                              {activeFeaturedRoute.distanceLabel}
+                            </Text>
+                          </View>
+
+                          <View className="flex-row items-center rounded-full bg-white/18 px-3 py-1.5">
+                            <SymbolView
+                              name={{
+                                ios: "clock.fill",
+                                android: "schedule",
+                                web: "schedule",
+                              }}
+                              size={11}
+                              tintColor="#FFFFFF"
+                            />
+                            <Text className="ml-1.5 text-[11px] font-bold text-white">
+                              {activeFeaturedRoute.durationLabel}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View className="flex-row items-center justify-between gap-3">
+                          <Pressable
+                            className="flex-row items-center rounded-full bg-white/92 px-4 py-2.5"
+                            onPress={() => {
+                              handleOpenRouteDetail(
+                                activeFeaturedRoute.routeId,
+                              );
+                            }}
+                          >
+                            <Text className="text-[14px] font-extrabold text-[#D9587F]">
+                              Xem tuyến đường
+                            </Text>
+                            <SymbolView
+                              name={{
+                                ios: "arrow.right",
+                                android: "arrow_forward",
+                                web: "arrow_forward",
+                              }}
+                              size={13}
+                              tintColor="#D9587F"
+                            />
+                          </Pressable>
+
+                          <View className="h-9 w-9 items-center justify-center rounded-2xl bg-white/16">
+                            <SymbolView
+                              name={{ ios: "map", android: "map", web: "map" }}
+                              size={15}
+                              tintColor="#FFFFFF"
+                            />
+                          </View>
+                        </View>
+                      </View>
+                    </LinearGradient>
+                  </Pressable>
+                </View>
+
+                {featuredRouteCards.length > 1 ? (
+                  <View
+                    className="flex-row items-center justify-center gap-2"
+                    style={{ paddingHorizontal: gutter }}
+                  >
+                    {featuredRouteCards.map((route, index) => (
+                      <Pressable
+                        key={route.routeId}
+                        onPress={() => {
+                          activeRouteIndexRef.current = index;
+                          setActiveRouteIndex(index);
+                        }}
+                        className={`rounded-full ${
+                          index === activeRouteIndex
+                            ? "h-2.5 w-8 bg-[#EB489B]"
+                            : "h-2.5 w-2.5 bg-[#F3C9D9]"
+                        }`}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+              </>
+            )}
           </View>
 
           {isGuest ? (
             <GuestAccessCard onPress={handleOpenRegister} />
+          ) : isActiveJourneyLoading ? (
+            <View className="gap-3">
+              <Text className="text-[18px] font-extrabold text-[#2B2233]">
+                Tiếp tục hành trình
+              </Text>
+
+              <SectionEmptyState
+                description="Đang kiểm tra hành trình đang dang dở của bạn."
+                title="Đang tải hành trình..."
+              />
+            </View>
+          ) : activeJourneyStatus === "empty" ? (
+            <View className="gap-3">
+              <Text className={homeSectionTitleClassName}>
+                Tiếp tục hành trình
+              </Text>
+
+              <SectionEmptyState
+                description="Bạn chưa có hành trình đang thực hiện. Chọn một tuyến để bắt đầu khám phá."
+                title="Chưa có hành trình hoạt động"
+              />
+            </View>
           ) : currentJourney ? (
             <View className="gap-3">
               <Text className={homeSectionTitleClassName}>
@@ -1981,7 +2585,7 @@ export default function HomeScreen() {
               >
                 <View className="relative h-[118px]">
                   <Image
-                    source={currentJourney.imageUri}
+                    source={currentJourney.coverUri}
                     contentFit="cover"
                     transition={220}
                     cachePolicy="memory-disk"
@@ -2011,20 +2615,22 @@ export default function HomeScreen() {
                       </Text>
                     </View>
 
-                    <View className="flex-row items-center rounded-full bg-[#F58752] px-2.5 py-1.5">
-                      <SymbolView
-                        name={{
-                          ios: "sparkles",
-                          android: "auto_awesome",
-                          web: "auto_awesome",
-                        }}
-                        size={12}
-                        tintColor="#FFFFFF"
-                      />
-                      <Text className="ml-1 text-[11px] font-extrabold text-white">
-                        {currentJourney.rewardLabel}
-                      </Text>
-                    </View>
+                    {currentJourney.rewardLabel ? (
+                      <View className="flex-row items-center rounded-full bg-[#F58752] px-2.5 py-1.5">
+                        <SymbolView
+                          name={{
+                            ios: "sparkles",
+                            android: "auto_awesome",
+                            web: "auto_awesome",
+                          }}
+                          size={12}
+                          tintColor="#FFFFFF"
+                        />
+                        <Text className="ml-1 text-[11px] font-extrabold text-white">
+                          {currentJourney.rewardLabel}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
                 </View>
 
@@ -2035,7 +2641,10 @@ export default function HomeScreen() {
                     </View>
 
                     <View className="flex-1 gap-1.5 pt-4">
-                      <Text className="text-[16px] font-extrabold text-[#2B2233]">
+                      <Text
+                        className="text-[16px] font-extrabold text-[#2B2233]"
+                        numberOfLines={2}
+                      >
                         {currentJourney.title}
                       </Text>
 
@@ -2049,9 +2658,17 @@ export default function HomeScreen() {
                           size={13}
                           tintColor="#8E869A"
                         />
-                        <Text className="text-[13px] text-[#6F657A]">
-                          Tiếp theo: {currentJourney.nextStop} ·{" "}
-                          {currentJourney.distanceToNext}
+                        <Text
+                          className="flex-1 text-[13px] text-[#6F657A]"
+                          numberOfLines={1}
+                        >
+                          {currentJourney.nextStopName
+                            ? `Tiếp theo: ${currentJourney.nextStopName}${
+                                currentJourney.distanceToNextLabel
+                                  ? ` · ${currentJourney.distanceToNextLabel}`
+                                  : ""
+                              }`
+                            : `${currentJourney.currentCheckpoint}/${currentJourney.totalCheckpoints} điểm dừng đã check-in`}
                         </Text>
                       </View>
 
@@ -2103,13 +2720,19 @@ export default function HomeScreen() {
                       </View>
 
                       <Text className="text-[12px] font-medium text-[#8E869A]">
-                        {currentJourney.remainingStopsLabel} ·{" "}
-                        {currentJourney.remainingTimeLabel}
+                        {currentJourney.remainingTimeLabel
+                          ? `${currentJourney.remainingStopsLabel} · ${currentJourney.remainingTimeLabel}`
+                          : currentJourney.remainingStopsLabel}
                       </Text>
                     </View>
                   </View>
 
-                  <Pressable className="overflow-hidden rounded-[18px]">
+                  <Pressable
+                    className="overflow-hidden rounded-[18px]"
+                    onPress={() => {
+                      handleOpenRouteDetail(currentJourney.routeId);
+                    }}
+                  >
                     <LinearGradient
                       colors={gradientColors}
                       start={{ x: 0, y: 0.5 }}
