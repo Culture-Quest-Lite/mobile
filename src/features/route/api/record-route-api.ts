@@ -83,14 +83,41 @@ function getErrorMessage(body: unknown, status: number) {
 }
 
 /** Error kèm HTTP status để nơi gọi phân biệt được "rỗng" với "hỏng thật". */
-class RecordRouteApiError extends Error {
+export class RecordRouteApiError extends Error {
   readonly status: number;
+  readonly path: string;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, path: string) {
     super(message);
     this.name = "RecordRouteApiError";
     this.status = status;
+    this.path = path;
   }
+}
+
+/**
+ * KHÔNG suy diễn 500 thành lỗi phiên đăng nhập.
+ *
+ * Bản trước quy mọi 500 "Đã xảy ra lỗi hệ thống" về "token không tới được
+ * server". Thực tế nguyên nhân là path cũ `/api/v1/routes/record*` rơi trúng
+ * `GET/PUT /api/v1/routes/{id}` (id = "record"/"my-journey" không parse được
+ * thành Long) -> 500 generic. Thông báo đó khiến user có token hợp lệ tưởng
+ * mình bị đăng xuất và đi đăng nhập lại mãi không hết lỗi. Chỉ 401/403 mới là
+ * tín hiệu auth thật (endpoint `/api/v1/custom-routes/**` trả đúng 401).
+ */
+function describeFailure(body: unknown, status: number) {
+  const raw = getErrorMessage(body, status);
+
+  if (status === 401 || status === 403) {
+    return "Phiên đăng nhập đã hết hạn hoặc không đủ quyền. Vui lòng đăng nhập lại.";
+  }
+
+  return raw;
+}
+
+function throwRequestFailure(body: unknown, status: number, path: string): never {
+  console.warn("[record-route] request failed", { body, path, status });
+  throw new RecordRouteApiError(describeFailure(body, status), status, path);
 }
 
 
@@ -125,10 +152,7 @@ async function requestJson(path: string, { accessToken, tokenType }: AuthRequest
     try { body = JSON.parse(text) as unknown; } catch { body = text; }
   }
   if (!response.ok) {
-    throw new RecordRouteApiError(
-      getErrorMessage(body, response.status),
-      response.status,
-    );
+    throwRequestFailure(body, response.status, path);
   }
   return unwrapPayload(body);
 }
@@ -165,10 +189,7 @@ async function requestRecordRoute(
   }
 
   if (!response.ok) {
-    throw new RecordRouteApiError(
-      getErrorMessage(body, response.status),
-      response.status,
-    );
+    throwRequestFailure(body, response.status, path);
   }
 
   const payload = unwrapPayload(body);
@@ -179,9 +200,19 @@ async function requestRecordRoute(
   return payload as RecordRouteDto;
 }
 
+/**
+ * Base path của toàn bộ nhóm endpoint record.
+ *
+ * Backend đã tách `CustomRouteController` ra khỏi `RouteController`:
+ * `/api/v1/routes/record*` và `/api/v1/routes/my-journey` KHÔNG còn tồn tại,
+ * gọi vào đó sẽ khớp nhầm `/api/v1/routes/{id}` và trả 500 generic. Giữ base
+ * path ở một hằng số để lần đổi sau chỉ phải sửa một chỗ.
+ */
+const RECORD_BASE_PATH = "/api/v1/custom-routes";
+
 /** B1: tạo route CUSTOM/RECORDING. Explorer chỉ được có một route RECORDING. */
 export function startRecordRoute(auth: AuthRequest) {
-  return requestRecordRoute("/api/v1/routes/record", auth, "POST");
+  return requestRecordRoute(`${RECORD_BASE_PATH}/record`, auth, "POST");
 }
 
 /**
@@ -189,21 +220,21 @@ export function startRecordRoute(auth: AuthRequest) {
  * Backend từ chối nếu route có ít hơn {@link MIN_RECORD_HOTSPOTS} điểm dừng.
  */
 export function finishRecordRoute(auth: AuthRequest) {
-  return requestRecordRoute("/api/v1/routes/record/finish", auth, "PUT");
+  return requestRecordRoute(`${RECORD_BASE_PATH}/record/finish`, auth, "PUT");
 }
 
 /**
  * B4: submit một route DRAFT cụ thể và chuyển sang PUBLISHED.
  *
- * LƯU Ý: Backend (RouteController#finalizeRecordJourney) mapping là
- * `PUT /api/v1/routes/record/finalize` (KHÔNG có routeId trên path) và nhận
- * `FinalizeCustomRouteRequest { routeId, description }` qua JSON body.
+ * LƯU Ý: Backend (CustomRouteController#finalizeRecordJourney) mapping là
+ * `PUT /api/v1/custom-routes/record/finalize` (KHÔNG có routeId trên path) và
+ * nhận `FinalizeCustomRouteRequest { routeId, description }` qua JSON body.
  * Bản cũ gọi `PUT /record/finalize/{routeId}` không kèm body -> luôn 404 vì
  * sai path, đồng thời không có cách nào set được description.
  */
 export function finalizeRecordRoute({ accessToken, routeId, description, tokenType }: FinalizeRecordRouteRequest) {
   return requestRecordRoute(
-    "/api/v1/routes/record/finalize",
+    `${RECORD_BASE_PATH}/record/finalize`,
     { accessToken, tokenType },
     "PUT",
     { routeId: Number(routeId), description: description ?? "" },
@@ -225,19 +256,19 @@ export async function getMyRecordJourneys(
   routeStatus?: RecordRouteStatus,
 ): Promise<RecordRouteDto[]> {
   const path = routeStatus
-    ? `/api/v1/routes/my-journey?routeStatus=${encodeURIComponent(routeStatus)}`
-    : "/api/v1/routes/my-journey";
+    ? `${RECORD_BASE_PATH}/my-journey?routeStatus=${encodeURIComponent(routeStatus)}`
+    : `${RECORD_BASE_PATH}/my-journey`;
 
   let payload: unknown;
   try {
     payload = await requestJson(path, auth);
   } catch (error) {
-    if (
-      error instanceof RecordRouteApiError &&
-      error.status === 400 &&
-      /không tìm thấy hành trình cá nhân/i.test(error.message)
-    ) {
-      return [];
+    // BusinessException của BE hiện map sang 400, nhưng đừng phụ thuộc vào đúng
+    // một status: dấu hiệu thật là nội dung "không tìm thấy hành trình cá nhân".
+    // 404 cũng coi là rỗng. Các lỗi khác (401, 5xx, mất mạng) vẫn ném tiếp.
+    if (error instanceof RecordRouteApiError) {
+      if (/không tìm thấy hành trình cá nhân/i.test(error.message)) return [];
+      if (error.status === 404) return [];
     }
     throw error;
   }
