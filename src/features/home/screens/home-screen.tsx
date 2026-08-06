@@ -2133,6 +2133,18 @@ export default function HomeScreen() {
   const [themeCategories, setThemeCategories] = useState<NearbyCategoryCard[]>(
     [],
   );
+  const [featuredRouteCards, setFeaturedRouteCards] = useState<
+    FeaturedRouteCard[]
+  >([]);
+  const [featuredRoutesStatus, setFeaturedRoutesStatus] =
+    useState<FeaturedRoutesSectionStatus>("loading");
+  const [featuredRoutesNote, setFeaturedRoutesNote] = useState<string | null>(
+    null,
+  );
+  const [activeJourneyView, setActiveJourneyView] =
+    useState<ActiveJourneyView | null>(null);
+  const [activeJourneyStatus, setActiveJourneyStatus] =
+    useState<ActiveJourneySectionStatus>("loading");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const nearbyPlacesRequestRef = useRef(0);
   const themeCategoriesRequestRef = useRef(0);
@@ -2333,7 +2345,175 @@ export default function HomeScreen() {
     return () => {
       clearInterval(intervalId);
     };
-  }, []);
+  }, [featuredRouteCards.length]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadFeaturedRoutes() {
+      setFeaturedRoutesStatus("loading");
+      setFeaturedRoutesNote(null);
+
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+
+        if (!isActive) {
+          return;
+        }
+
+        const routePage = await searchRoutes({
+          accessToken,
+          page: 0,
+          size: 20,
+          sortDirection: "DESC",
+          status: "PUBLISHED",
+          tokenType: authSession.tokenType,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        // Backend có thể chưa lọc status theo filter động nên lọc thêm ở client.
+        const publishedRoutes = routePage.content.filter(isPublishedRoute);
+        const highlightRoutes = getHighlightRoutes(
+          publishedRoutes.length > 0 ? publishedRoutes : routePage.content,
+        );
+
+        activeRouteIndexRef.current = 0;
+        setActiveRouteIndex(0);
+        setFeaturedRouteCards(highlightRoutes.map(mapRouteToFeaturedRouteCard));
+        setFeaturedRoutesStatus(highlightRoutes.length > 0 ? "ready" : "empty");
+        setFeaturedRoutesNote(
+          highlightRoutes.length > 0
+            ? null
+            : "Chưa có tuyến nào được xuất bản trên hệ thống.",
+        );
+      } catch (error) {
+        console.warn("[home] load featured routes failed", {
+          error: error instanceof Error ? error.message : error,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setFeaturedRouteCards([]);
+        setFeaturedRoutesNote(
+          error instanceof Error
+            ? error.message
+            : "Không tải được tuyến nổi bật.",
+        );
+        setFeaturedRoutesStatus("empty");
+      }
+    }
+
+    void loadFeaturedRoutes();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.isAuthenticated, authSession.tokenType]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      async function loadActiveJourney() {
+        if (!authSession.isAuthenticated) {
+          setActiveJourneyView(null);
+          setActiveJourneyStatus("empty");
+          return;
+        }
+
+        setActiveJourneyStatus("loading");
+
+        try {
+          const accessToken = await getValidAccessToken();
+
+          if (!isActive) {
+            return;
+          }
+
+          if (!accessToken) {
+            setActiveJourneyView(null);
+            setActiveJourneyStatus("empty");
+            return;
+          }
+
+          const progressPage = await getUserRouteProgressList({
+            accessToken,
+            page: 0,
+            size: 20,
+            sortBy: "startedAt",
+            sortDirection: "DESC",
+            tokenType: authSession.tokenType,
+          });
+
+          if (!isActive) {
+            return;
+          }
+
+          const activeProgress =
+            progressPage.content.find(isActiveRouteProgress) ?? null;
+
+          if (!activeProgress) {
+            setActiveJourneyView(null);
+            setActiveJourneyStatus("empty");
+            return;
+          }
+
+          // API danh sách tiến độ có thể không kèm route đầy đủ (thiếu media,
+          // hotspot). Khi đó gọi thêm route detail để lấy hình và điểm dừng.
+          let journeyRoute = activeProgress.route ?? null;
+
+          if (!journeyRoute || journeyRoute.hotspots.length === 0) {
+            try {
+              journeyRoute = await getRouteById({
+                accessToken,
+                routeId: activeProgress.routeId,
+                tokenType: authSession.tokenType,
+              });
+            } catch (routeError) {
+              console.info("[home] load active journey route skipped", {
+                error:
+                  routeError instanceof Error ? routeError.message : routeError,
+                routeId: activeProgress.routeId,
+              });
+            }
+          }
+
+          if (!isActive) {
+            return;
+          }
+
+          setActiveJourneyView(
+            buildActiveJourneyView(activeProgress, journeyRoute),
+          );
+          setActiveJourneyStatus("ready");
+        } catch (error) {
+          console.warn("[home] load active journey failed", {
+            error: error instanceof Error ? error.message : error,
+          });
+
+          if (!isActive) {
+            return;
+          }
+
+          setActiveJourneyView(null);
+          setActiveJourneyStatus("empty");
+        }
+      }
+
+      void loadActiveJourney();
+
+      return () => {
+        isActive = false;
+      };
+    }, [authSession.isAuthenticated, authSession.tokenType]),
+  );
 
   const loadNearbyPlaces = useCallback(async () => {
     const requestId = nearbyPlacesRequestRef.current + 1;

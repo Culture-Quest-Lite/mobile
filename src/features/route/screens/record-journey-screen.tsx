@@ -99,6 +99,7 @@ export default function RecordJourneyScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [checkingInId, setCheckingInId] = useState<number | null>(null);
   const [nearbyError, setNearbyError] = useState<string | null>(null);
+  const [journeysError, setJourneysError] = useState<string | null>(null);
   /** Route đang được hiển thị, dùng để biết lần apply sau có cùng route không. */
   const appliedRouteIdRef = useRef<number | null>(null);
 
@@ -163,11 +164,13 @@ export default function RecordJourneyScreen() {
   const loadMyJourneys = useCallback(async () => {
     if (!session.isAuthenticated) {
       setMyJourneys([]);
+      setJourneysError(null);
       applyRouteRecord(null);
       return [];
     }
 
     setIsLoadingJourneys(true);
+    setJourneysError(null);
     try {
       const auth = await getAuth();
       const journeys = await getMyRecordJourneys(auth);
@@ -176,7 +179,11 @@ export default function RecordJourneyScreen() {
       applyRouteRecord(recording);
       return journeys;
     } catch (error) {
-      routeSystemAlert.alert("Không thể tải hành trình", error instanceof Error ? error.message : "Vui lòng thử lại.");
+      // Đây là lần load lúc mở màn hình, không phải hành động user chủ động bấm.
+      // Bắn modal ở đây khiến mỗi lần vào màn record đều bị chặn bởi popup lỗi,
+      // nên hiển thị inline kèm nút thử lại giống khối hotspot gần bạn.
+      console.warn("[record-journey] load my journeys failed", error);
+      setJourneysError(error instanceof Error ? error.message : "Không thể tải hành trình của bạn.");
       return [];
     } finally {
       setIsLoadingJourneys(false);
@@ -556,6 +563,11 @@ export default function RecordJourneyScreen() {
                 {isLoadingJourneys ? <ActivityIndicator size="small" color="#EB489B" /> : <Text className="text-[10px] font-extrabold text-[#2B2233]">Làm mới</Text>}
               </Pressable>
             </View>
+            {journeysError ? (
+              <Pressable onPress={() => void loadMyJourneys()} className="mt-3 rounded-2xl bg-[#FFF3F3] p-3">
+                <Text className="text-[10px] font-bold leading-4 text-[#C74655]">{journeysError} · Bấm để thử lại</Text>
+              </Pressable>
+            ) : null}
             <View className="mt-3 gap-2">
               {myJourneys.map((journey) => (
                 <Pressable
@@ -574,7 +586,7 @@ export default function RecordJourneyScreen() {
                   </View>
                 </Pressable>
               ))}
-              {!myJourneys.length && !isLoadingJourneys ? (
+              {!myJourneys.length && !isLoadingJourneys && !journeysError ? (
                 <View className="items-center rounded-2xl border border-dashed border-[#D9DDE7] px-4 py-6">
                   <Text className="text-[11px] font-bold text-[#8E869A]">Bạn chưa có hành trình record nào</Text>
                 </View>
