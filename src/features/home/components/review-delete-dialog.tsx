@@ -100,14 +100,14 @@ export function ReviewDeleteDialog({
           <View className="px-4 pb-4 pt-3">
             <Text
               className="text-center text-[17px] font-black text-[#241D22]"
-              style={{ lineHeight: 20 }}
+              style={{ lineHeight: 17 }}
             >
               {title}
             </Text>
 
             <Text
               className="mt-1 text-center text-[12px]"
-              style={{ color: bodyColor, lineHeight: 16 }}
+              style={{ color: bodyColor, lineHeight: 13 }}
             >
               {description}
             </Text>

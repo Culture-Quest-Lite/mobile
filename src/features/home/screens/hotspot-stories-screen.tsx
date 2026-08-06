@@ -1,4 +1,5 @@
 import { SymbolView } from "@/components/ui/symbol-view";
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -46,7 +47,7 @@ const cardShadowStyle = {
   elevation: 8,
 } as const;
 
-const pageBackground = "#FFF9FD";
+const pageBackground = "#FFFFFF";
 
 type StoryImageSource = ComponentProps<typeof Image>["source"];
 
@@ -218,35 +219,23 @@ function getStoryCardAccent(tag: StoryThemeTag) {
   switch (tag) {
     case "history":
       return {
-        badgeBackground: "rgba(255, 255, 255, 0.9)",
-        badgeText: "#C73A86",
         dot: "#EB489B",
         dotInactive: "rgba(255, 255, 255, 0.52)",
-        moreText: "#B45384",
       };
     case "culture":
       return {
-        badgeBackground: "rgba(255, 255, 255, 0.9)",
-        badgeText: "#0F8A5F",
         dot: "#10B981",
         dotInactive: "rgba(255, 255, 255, 0.52)",
-        moreText: "#0F8A5F",
       };
     case "food":
       return {
-        badgeBackground: "rgba(255, 255, 255, 0.9)",
-        badgeText: "#DD6B20",
         dot: "#F97316",
         dotInactive: "rgba(255, 255, 255, 0.52)",
-        moreText: "#D97706",
       };
     case "education":
       return {
-        badgeBackground: "rgba(255, 255, 255, 0.9)",
-        badgeText: "#7C3AED",
         dot: "#8B5CF6",
         dotInactive: "rgba(255, 255, 255, 0.52)",
-        moreText: "#7C3AED",
       };
   }
 }
@@ -263,21 +252,35 @@ function getStoryPreviewImages(item: HotspotThemeStory): StoryImageSource[] {
   return [...new Set(previewImages)];
 }
 
+function buildStoryPreviewDescription(item: HotspotThemeStory) {
+  const summary = item.summary.trim();
+  const previewSegments = [
+    summary,
+    ...item.scriptParagraphs
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean),
+  ].filter(Boolean);
+  const previewText = [...new Set(previewSegments)].join(" ");
+
+  if (!previewText) {
+    return "Story này đang được cập nhật nội dung.";
+  }
+
+  return previewText.length > 340
+    ? `${previewText.slice(0, 337).trimEnd()}...`
+    : previewText;
+}
+
 function StoryCard({
-  hotspotTitle,
   item,
   onPress,
 }: {
-  hotspotTitle: string;
   item: HotspotThemeStory;
   onPress: () => void;
 }) {
   const previewImages = getStoryPreviewImages(item);
   const accent = getStoryCardAccent(item.tag);
-  const previewDescription =
-    item.summary.trim() ||
-    item.scriptParagraphs.find((paragraph) => paragraph.trim())?.trim() ||
-    "Story này đang được cập nhật nội dung.";
+  const previewDescription = buildStoryPreviewDescription(item);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   useEffect(() => {
@@ -360,45 +363,40 @@ function StoryCard({
           {item.title}
         </Text>
 
-        <Text
-          className="mt-0 text-[14px] text-[#6F657A]"
-          numberOfLines={2}
-          style={{
-            includeFontPadding: false,
-            lineHeight: 15,
-          }}
-        >
-          {previewDescription}
-        </Text>
+        <View className="mt-1">
+          <Text
+            className="text-[13px] text-[#6F657A]"
+            numberOfLines={6}
+            style={{
+              includeFontPadding: false,
+              lineHeight: 15,
+              minHeight: 90,
+            }}
+          >
+            {previewDescription}
+          </Text>
 
-        <View className="mt-1 flex-row flex-wrap gap-2">
-          <View className="rounded-full bg-[#FFF7DD] px-3 py-1.5">
+          <Pressable
+            className="mt-1 self-end"
+            hitSlop={8}
+            onPress={(event) => {
+              event.stopPropagation();
+              onPress();
+            }}
+          >
             <Text
-              className="text-[12px] font-medium"
+              className="text-[12px] font-semibold"
               style={{
-                color: "#A16207",
+                color: "#EB489B",
                 includeFontPadding: false,
                 lineHeight: 13,
               }}
             >
-              {item.tagLabel}
+              Xem thêm
             </Text>
-          </View>
-
-          <View className="rounded-full bg-[#FFF7DD] px-3 py-1.5">
-            <Text
-              className="text-[12px] font-medium"
-              numberOfLines={1}
-              style={{
-                color: "#A16207",
-                includeFontPadding: false,
-                lineHeight: 13,
-              }}
-            >
-              {hotspotTitle}
-            </Text>
-          </View>
+          </Pressable>
         </View>
+
       </View>
     </Pressable>
   );
@@ -709,6 +707,24 @@ export default function HotspotStoriesScreen() {
               tagId: item.tagId,
             }) === resolvedActiveTab.id,
         );
+  const shouldShowLoadingState =
+    isCheckedIn &&
+    resolvedHotspotId !== null &&
+    isStoriesLoading &&
+    visibleStories.length === 0;
+
+  if (shouldShowLoadingState) {
+    return (
+      <View className="flex-1 bg-white">
+        <StatusBar style="dark" />
+        <SafeAreaView className="flex-1 bg-white" edges={["left", "right", "bottom"]}>
+          <View className="flex-1 items-center justify-center bg-white">
+            <ActivityIndicator color="#EB489B" size="large" />
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1" style={{ backgroundColor: pageBackground }}>
@@ -720,9 +736,10 @@ export default function HotspotStoriesScreen() {
         edges={["left", "right", "bottom"]}
       >
         <View
-          className="border-b border-[#F2E8F7] px-5"
+          className="border-b border-[#F2E8F7]"
           style={{
             backgroundColor: pageBackground,
+            paddingHorizontal: ScreenHorizontalPadding,
             paddingTop: insets.top + 6,
           }}
         >
@@ -795,7 +812,7 @@ export default function HotspotStoriesScreen() {
           className="flex-1"
           contentContainerStyle={{
             paddingBottom: Math.max(insets.bottom + 30, 34),
-            paddingHorizontal: 23,
+            paddingHorizontal: ScreenHorizontalPadding,
             paddingTop: 18,
             rowGap: 18,
           }}
@@ -807,7 +824,6 @@ export default function HotspotStoriesScreen() {
             visibleStories.map((story) => (
               <StoryCard
                 key={story.id}
-                hotspotTitle={hotspot.title}
                 item={story}
                 onPress={() =>
                   router.push(

@@ -1,4 +1,5 @@
 import { SymbolView } from "@/components/ui/symbol-view";
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
@@ -292,7 +293,7 @@ export default function CommunityGroupCreatedScreen() {
   const groupSession = getCachedCommunityGroupSession(resolvedShareToken);
   const [copied, setCopied] = useState(false);
   const safeScreenWidth = Math.max(width - insets.left - insets.right, 320);
-  const horizontalPadding = safeScreenWidth < 360 ? 14 : safeScreenWidth < 430 ? 18 : 22;
+  const horizontalPadding = ScreenHorizontalPadding;
   const contentMaxWidth = Math.min(460, safeScreenWidth - horizontalPadding * 2);
   const heroImageWidth = Math.min(Math.max(contentMaxWidth - 8, 250), 304);
   const heroImageHeight = Math.round(heroImageWidth * (202 / 304));

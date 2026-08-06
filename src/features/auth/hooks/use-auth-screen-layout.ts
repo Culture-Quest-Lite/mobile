@@ -6,7 +6,7 @@ export function useAuthScreenLayout(compactHeightThreshold: number) {
   const layout = useScreenLayout({ maxContentWidth: AUTH_CARD_MAX_WIDTH });
   const isCompactScreen =
     layout.isCompactWidth || layout.height <= compactHeightThreshold;
-  const horizontalPadding = layout.safeWidth <= 360 ? 16 : 20;
+  const horizontalPadding = layout.gutter;
   const cardMaxWidth = Math.min(
     Math.max(layout.safeWidth - horizontalPadding * 2, 0),
     AUTH_CARD_MAX_WIDTH,

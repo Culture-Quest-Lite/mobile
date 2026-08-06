@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import { SymbolView } from "@/components/ui/symbol-view";
 
 const PREMIUM_FEATURES = [
@@ -31,7 +32,13 @@ export default function SubscriptionScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#F7F8FC]" edges={["top", "bottom"]}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingBottom: 40,
+          paddingHorizontal: ScreenHorizontalPadding,
+          paddingTop: 20,
+        }}
+      >
         {/* Header */}
         <View className="mb-6 flex-row items-center justify-between">
           <View className="flex-1 pr-3">

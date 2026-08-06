@@ -259,22 +259,6 @@ function ReviewMediaPreview({
         />
       </Pressable>
 
-      <Text
-        className="mt-1.5 text-[11px]"
-        numberOfLines={1}
-        style={{ color: mutedTextColor, lineHeight: 14 }}
-      >
-        {item.fileName}
-      </Text>
-
-      {item.sizeLabel ? (
-        <Text
-          className="mt-0.5 text-[11px]"
-          style={{ color: subtleTextColor, lineHeight: 14 }}
-        >
-          {item.sizeLabel}
-        </Text>
-      ) : null}
     </View>
   );
 }
@@ -855,7 +839,7 @@ export default function HotspotReviewComposeScreen() {
                 style={{
                   color: primaryTextColor,
                   fontSize: 14,
-                  lineHeight: 20,
+                  lineHeight: 18,
                   minHeight: 108,
                   padding: 0,
                   textAlignVertical: "top",

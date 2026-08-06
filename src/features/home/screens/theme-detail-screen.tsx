@@ -7,7 +7,7 @@ import { getRouteById } from "@/features/route/api/route-api";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -151,6 +151,101 @@ function EmptySection({
       <Text className="mt-2 max-w-[280px] text-center text-[12px] font-medium leading-[16px] text-[#8E869A]">
         {description}
       </Text>
+    </View>
+  );
+}
+
+function ThemeContentEmptyState({
+  accent,
+  background,
+  icon,
+  onBrowseThemes,
+  onGoBack,
+  themeTitle,
+}: {
+  accent: string;
+  background: string;
+  icon: Parameters<typeof SymbolView>[0]["name"];
+  onBrowseThemes: () => void;
+  onGoBack: () => void;
+  themeTitle: string;
+}) {
+  return (
+    <View
+      className="overflow-hidden rounded-[28px] border border-[#F4DCE7] bg-white"
+      style={cardShadowStyle}
+    >
+      <LinearGradient
+        colors={["#FFFFFF", background]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        className="px-5 py-6"
+      >
+        <View className="items-center">
+          <View
+            className="h-20 w-20 items-center justify-center rounded-full border border-white/80"
+            style={{
+              backgroundColor: "#FFF8FB",
+              shadowColor: "rgba(217, 91, 141, 0.18)",
+              shadowOpacity: 1,
+              shadowRadius: 16,
+              shadowOffset: { width: 0, height: 10 },
+              elevation: 4,
+            }}
+          >
+            <View className="h-14 w-14 items-center justify-center rounded-full bg-white">
+              <SymbolView name={icon} size={30} tintColor={accent} />
+            </View>
+          </View>
+
+          <View className="mt-4 items-center">
+            <Text className="text-center text-[18px] font-semibold leading-[22px] text-[#2B2233]">
+              Chủ đề này đang được cập nhật
+            </Text>
+            <Text className="mt-2 max-w-[300px] text-center text-[13px] leading-[19px] text-[#7E7482]">
+              Explorer chưa có tuyến đường hoặc câu chuyện nào trong chủ đề{" "}
+              {themeTitle}. Hãy quay lại để khám phá chủ đề khác trong lúc nội
+              dung này được bổ sung.
+            </Text>
+          </View>
+
+          <View className="mt-4 flex-row flex-wrap items-center justify-center gap-2">
+            <View className="rounded-full bg-white px-3 py-2">
+              <Text className="text-[11px] font-semibold text-[#D95B8D]">
+                0 tuyến đường
+              </Text>
+            </View>
+            <View className="rounded-full bg-white px-3 py-2">
+              <Text className="text-[11px] font-semibold text-[#D95B8D]">
+                0 câu chuyện
+              </Text>
+            </View>
+          </View>
+
+          <View className="mt-5 w-full gap-2">
+            <Pressable onPress={onBrowseThemes}>
+              <LinearGradient
+                colors={["#EB489B", "#F58752"]}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                className="items-center rounded-full px-4 py-3.5"
+              >
+                <Text className="text-[13px] font-semibold text-white">
+                  Khám phá chủ đề khác
+                </Text>
+              </LinearGradient>
+            </Pressable>
+
+            <Pressable onPress={onGoBack}>
+              <View className="items-center rounded-full border border-[#F3D9E5] bg-white px-4 py-3.5">
+                <Text className="text-[13px] font-semibold text-[#D95B8D]">
+                  Quay lại
+                </Text>
+              </View>
+            </Pressable>
+          </View>
+        </View>
+      </LinearGradient>
     </View>
   );
 }
@@ -489,6 +584,7 @@ export default function ThemeDetailScreen() {
   const visibleStories = storyItems.slice(0, 4);
   const shouldShowRoutes = activeTab === "routes";
   const shouldShowStories = activeTab === "stories";
+  const hasAnyThemeContent = routeItems.length > 0 || storyItems.length > 0;
   const heroCardWidth = Math.min(safeWidth - gutter * 2, 540);
 
   return (
@@ -659,7 +755,18 @@ export default function ThemeDetailScreen() {
             </Pressable>
           ) : null}
 
-          {!isLoading && !loadError && shouldShowRoutes ? (
+          {!isLoading && !loadError && !hasAnyThemeContent ? (
+            <ThemeContentEmptyState
+              accent={themeModel.accent}
+              background={themeModel.background}
+              icon={themeModel.icon}
+              onBrowseThemes={() => router.replace("/home" as Href)}
+              onGoBack={() => router.back()}
+              themeTitle={themeModel.title}
+            />
+          ) : null}
+
+          {!isLoading && !loadError && hasAnyThemeContent && shouldShowRoutes ? (
             <View className="gap-3">
               <SectionHeader
                 icon={{
@@ -685,7 +792,7 @@ export default function ThemeDetailScreen() {
             </View>
           ) : null}
 
-          {!isLoading && !loadError && shouldShowStories ? (
+          {!isLoading && !loadError && hasAnyThemeContent && shouldShowStories ? (
             <View className="gap-3">
               <SectionHeader
                 icon={{

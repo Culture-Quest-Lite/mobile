@@ -650,6 +650,10 @@ const communityRowShadowStyle = {
   elevation: 2,
 } as const;
 
+const homeSectionTitleClassName =
+  "text-[17px] font-extrabold leading-[22px] text-[#2B2233]";
+const homeSectionActionTextClassName = "text-[12px] font-bold text-[#D85B86]";
+
 type ExplorerSummary = {
   avatar: string | null;
   isPremium: boolean;
@@ -699,9 +703,9 @@ type CommunityBoardViewModel = {
   totalPoints: string;
 };
 
-const defaultNearbySearchDistanceMeters = 1000;
-const nearbyDistanceSliderMinimumMeters = 1000;
-const nearbyDistanceSliderMaximumMeters = 30000;
+const defaultNearbySearchDistanceMeters = 10000;
+const nearbyDistanceSliderMinimumMeters = 10000;
+const nearbyDistanceSliderMaximumMeters = 50000;
 const nearbyDistanceSliderStepMeters = 20;
 const suggestedRouteCardImageHeight = 136;
 const suggestedRouteCardHeight = 248;
@@ -2085,9 +2089,10 @@ export default function HomeScreen() {
   const authSession = useAuthSession();
   const checkedInHotspotSlugs = useCheckins();
   const checkedInApiHotspotIds = useCheckedInApiHotspots();
-  const { contentWidth, gutter, safeWidth } = useScreenLayout({
+  const { contentWidth, gutter, insets, safeWidth } = useScreenLayout({
     maxContentWidth: 640,
   });
+  const homeContentBottomPadding = Math.max(insets.bottom + 72, 96);
   const activeRouteIndexRef = useRef(0);
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
   const [explorerSummary, setExplorerSummary] =
@@ -2929,7 +2934,7 @@ export default function HomeScreen() {
       />
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 0 }}
+        contentContainerStyle={{ paddingBottom: homeContentBottomPadding }}
         refreshControl={
           <RefreshControl
             colors={["#EB489B", "#F58752", "#FFC93C"]}
@@ -3331,6 +3336,17 @@ export default function HomeScreen() {
                 Tiếp tục hành trình
               </Text>
 
+              <SectionEmptyState
+                description="Đang kiểm tra hành trình đang dang dở của bạn."
+                title="Đang tải hành trình..."
+              />
+            </View>
+          ) : currentJourney ? (
+            <View className="gap-3">
+              <Text className={homeSectionTitleClassName}>
+                Tiếp tục hành trình
+              </Text>
+
               <View
                 className="overflow-hidden rounded-[28px] border"
                 style={[
@@ -3524,17 +3540,27 @@ export default function HomeScreen() {
                 hitSlop={8}
                 onPress={handleOpenNearbyHotspots}
               >
-                <Text className="text-[18px] font-extrabold text-[#2B2233]">
+                <Text className={homeSectionTitleClassName}>
                   Địa điểm gần bạn
                 </Text>
               </Pressable>
               <Pressable
-                className="rounded-full border border-[#F3D9E5] bg-white px-3 py-1.5"
+                className="flex-row items-center"
+                hitSlop={8}
                 onPress={handleOpenNearbyHotspots}
               >
-                <Text className="text-[12px] font-bold text-[#D85B86]">
+                <Text className={homeSectionActionTextClassName}>
                   Xem tất cả
                 </Text>
+                <SymbolView
+                  name={{
+                    ios: "chevron.right",
+                    android: "chevron_right",
+                    web: "chevron_right",
+                  }}
+                  size={14}
+                  tintColor="#D85B86"
+                />
               </Pressable>
             </View>
 
@@ -3806,7 +3832,7 @@ export default function HomeScreen() {
             )}
 
             <View className="flex-row items-center justify-between gap-3">
-              <Text className="text-[18px] font-extrabold text-[#2B2233]">
+              <Text className={homeSectionTitleClassName}>
                 Chủ đề
               </Text>
 
@@ -3815,7 +3841,7 @@ export default function HomeScreen() {
                 hitSlop={8}
                 onPress={handleOpenHotspots}
               >
-                <Text className="text-[12px] font-bold text-[#D85B86]">
+                <Text className={homeSectionActionTextClassName}>
                   Xem tất cả
                 </Text>
                 <SymbolView
@@ -3908,17 +3934,27 @@ export default function HomeScreen() {
             )}
 
             <View className="flex-row items-center justify-between">
-              <Text className="text-[18px] font-extrabold text-[#2B2233]">
+              <Text className={homeSectionTitleClassName}>
                 Đề xuất tuyến đường
               </Text>
               {suggestedRoutes.length > 1 ? (
                 <Pressable
-                  className="rounded-full bg-[#FFF4EF] px-3.5 py-2"
+                  className="flex-row items-center"
+                  hitSlop={8}
                   onPress={handleOpenRoutes}
                 >
-                  <Text className="text-[12px] font-bold text-[#F58752]">
+                  <Text className={homeSectionActionTextClassName}>
                     Xem tất cả
                   </Text>
+                  <SymbolView
+                    name={{
+                      ios: "chevron.right",
+                      android: "chevron_right",
+                      web: "chevron_right",
+                    }}
+                    size={14}
+                    tintColor="#D85B86"
+                  />
                 </Pressable>
               ) : null}
             </View>
@@ -4074,7 +4110,7 @@ export default function HomeScreen() {
             <View className="gap-4">
               <View className="flex-row items-start justify-between gap-3">
                 <View className="flex-1">
-                  <Text className="text-[18px] font-extrabold text-[#2B2233]">
+                  <Text className={homeSectionTitleClassName}>
                     Voucher ưu đãi
                   </Text>
                 </View>
@@ -4159,7 +4195,7 @@ export default function HomeScreen() {
                     />
                   </View>
                   <View className="min-w-0 flex-1">
-                    <Text className="text-[17px] font-extrabold leading-[23px] text-[#2B2233]">
+                    <Text className={homeSectionTitleClassName}>
                       Cộng đồng hôm nay
                     </Text>
                   </View>

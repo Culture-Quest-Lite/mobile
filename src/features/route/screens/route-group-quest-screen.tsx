@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import { SymbolView } from "@/components/ui/symbol-view";
 import {
   getValidAccessToken,
@@ -555,7 +556,10 @@ export default function RouteGroupQuestScreen() {
   return (
     <View className="flex-1 bg-[#FCF6F8]">
       <SafeAreaView edges={["top"]} className="bg-[#FCF6F8]">
-        <View className="flex-row items-center px-5 pb-3 pt-2">
+        <View
+          className="flex-row items-center pb-3 pt-2"
+          style={{ paddingHorizontal: ScreenHorizontalPadding }}
+        >
           <Pressable
             className="h-10 w-10 items-center justify-center rounded-full"
             onPress={() => router.back()}

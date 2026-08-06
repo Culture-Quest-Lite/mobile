@@ -1,6 +1,6 @@
-import { LinearGradient } from "expo-linear-gradient";
-import { Image } from "expo-image";
 import { SymbolView } from "@/components/ui/symbol-view";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { type ComponentProps } from "react";
 import { Pressable, Text, View } from "react-native";
 
@@ -50,13 +50,7 @@ export function HiddenStoryUnlockedContent({
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       className="items-center rounded-[20px] px-5 py-4"
-      style={[
-        cardShadowStyle,
-        {
-          borderColor: "#F9DCE8",
-          borderWidth: 1,
-        },
-      ]}
+      style={cardShadowStyle}
     >
       <View
         className="w-[224px] overflow-hidden rounded-[14px] bg-[#FFF4F8]"
@@ -78,7 +72,7 @@ export function HiddenStoryUnlockedContent({
         className="mt-0.5 max-w-[320px] text-center text-[13px] text-[#6A5964]"
         style={{ lineHeight: 16 }}
       >
-        {`Bạn đã check-in tại hotspot này. Story hotspot ${audioStoryDurationLabel} và nội dung độc quyền đã sẵn sàng.`}
+        {`Bạn đã check-in tại địa điểm này. Câu chuyện địa điểm và nội dung độc quyền đã sẵn sàng chờ bạn khám phá.`}
       </Text>
 
       <Pressable
@@ -108,7 +102,7 @@ export function HiddenStoryUnlockedContent({
             className="ml-2 text-[13px] font-black"
             style={{ color: hiddenStoryActionForegroundColor }}
           >
-            Xem story
+            Xem câu chuyện
           </Text>
         </LinearGradient>
       </Pressable>
