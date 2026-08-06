@@ -125,6 +125,7 @@ export default function RootLayout() {
           <Stack.Screen name="route/custom/plan" />
           <Stack.Screen name="route/custom/plan/[id]" />
           <Stack.Screen name="route/custom/record" />
+          <Stack.Screen name="theme/index" />
           <Stack.Screen name="theme/[slug]" />
           <Stack.Screen name="checkin/[id]" />
           <Stack.Screen name="hotspot/[slug]" />
