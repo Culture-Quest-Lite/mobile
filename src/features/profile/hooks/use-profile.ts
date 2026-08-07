@@ -6,7 +6,7 @@ import { routes, type RouteItem } from "@/lib/demo-data";
 
 import { getGamificationLevels } from "../api/get-levels";
 import { getMyProfile } from "../api/get-me";
-import { getMyProfilePosts } from "../api/get-profile-posts";
+import { getUserProfilePosts } from "../api/get-profile-posts";
 import { useCachedProfilePosts } from "../data/profile-post-cache";
 import { CURRENT_USER_ID, getProfileById, getProfilePosts } from "../data/profile-demo";
 import { applyLevelProgressToProfile } from "../lib/level-progress";
@@ -84,7 +84,7 @@ export function useProfile(userId?: string, options?: UseProfileOptions): UsePro
   );
   const [profile, setProfile] = useState<Profile | undefined>();
   const [posts, setPosts] = useState<ProfilePost[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(authSession.isAuthenticated);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
@@ -112,20 +112,13 @@ export function useProfile(userId?: string, options?: UseProfileOptions): UsePro
         throw new Error("Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.");
       }
 
-      const [profileResult, levelsResult, postsResult] = await Promise.allSettled([
+      const [profileResult, levelsResult] = await Promise.allSettled([
         getMyProfile({
           accessToken,
           tokenType: authSession.tokenType,
         }),
         getGamificationLevels({
           accessToken,
-          tokenType: authSession.tokenType,
-        }),
-        getMyProfilePosts({
-          accessToken,
-          size: 10,
-          sort: [],
-          status: postStatus,
           tokenType: authSession.tokenType,
         }),
       ]);
@@ -162,12 +155,36 @@ export function useProfile(userId?: string, options?: UseProfileOptions): UsePro
       const mergedProfile = mergeProfileWithFallback(resolvedProfile, fallbackProfile);
       setProfile(mergedProfile);
 
-      if (postsResult.status === "fulfilled") {
-        setPosts(filterPostsForOwner(postsResult.value, mergedProfile));
+      const profileNumericId = Number.parseInt(resolvedProfile.id, 10);
+      const [resolvedPostsResult] =
+        Number.isFinite(profileNumericId) && profileNumericId > 0
+          ? await Promise.allSettled([
+              getUserProfilePosts({
+                accessToken,
+                size: 10,
+                sort: [],
+                status: postStatus,
+                tokenType: authSession.tokenType,
+                userId: profileNumericId,
+              }),
+            ])
+          : [
+              {
+                reason: new Error("Không xác định được tài khoản để tải bài viết."),
+                status: "rejected",
+              } as const,
+            ];
+
+      if (!isMountedRef.current || requestId !== loadRequestIdRef.current) {
+        return;
+      }
+
+      if (resolvedPostsResult.status === "fulfilled") {
+        setPosts(filterPostsForOwner(resolvedPostsResult.value, mergedProfile));
       } else {
         const postsError =
-          postsResult.reason instanceof Error
-            ? postsResult.reason
+          resolvedPostsResult.reason instanceof Error
+            ? resolvedPostsResult.reason
             : new Error("Không thể tải bài viết.");
 
         console.warn("[profile] posts unavailable", {
@@ -201,8 +218,12 @@ export function useProfile(userId?: string, options?: UseProfileOptions): UsePro
 
   useEffect(() => {
     if (!authSession.isAuthenticated) {
+      setIsLoading(false);
       return;
     }
+
+    setIsLoading(true);
+    setError(null);
 
     const loadTimer = setTimeout(() => {
       void loadProfile();

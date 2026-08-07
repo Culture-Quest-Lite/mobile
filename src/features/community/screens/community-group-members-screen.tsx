@@ -23,6 +23,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { appToast } from "@/components/ui/app-toast";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -1052,18 +1053,7 @@ export default function CommunityGroupMembersScreen() {
   }
 
   if (status === "loading" && groupMembers.length === 0) {
-    return (
-      <SafeAreaView
-        className="flex-1"
-        edges={["left", "right"]}
-        style={{ backgroundColor: palette.background }}
-      >
-        <StatusBar style="dark" />
-        <View className="flex-1 items-center justify-center px-5">
-          <ActivityIndicator color={palette.accent} size="small" />
-        </View>
-      </SafeAreaView>
-    );
+    return <AppLoadingScreen edges={["left", "right"]} />;
   }
 
   const groupName = cachedGroupSession?.groupName ?? "Nhóm cộng đồng";

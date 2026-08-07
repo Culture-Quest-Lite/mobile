@@ -69,7 +69,9 @@ export type CreatedReviewResponse = {
   comment: string;
   createdAt: string;
   displayName: string;
+  isLiked: boolean;
   isOwner: boolean;
+  likeCount: number;
   medias: CreatedReviewMedia[];
   rating: number;
   reviewId: number;
@@ -151,39 +153,63 @@ function parseCreatedReviewMedia(value: unknown): CreatedReviewMedia | null {
   };
 }
 
+function unwrapCreatedReviewBody(value: unknown) {
+  if (!isObject(value)) {
+    return value;
+  }
+
+  if (value.reviewId !== undefined) {
+    return value;
+  }
+
+  for (const key of ["data", "result"]) {
+    const candidate = value[key];
+
+    if (isObject(candidate) && candidate.reviewId !== undefined) {
+      return candidate;
+    }
+  }
+
+  return value;
+}
+
 export function parseCreatedReviewResponse(
   value: unknown,
 ): CreatedReviewResponse | null {
-  if (!isObject(value)) {
+  const unwrappedValue = unwrapCreatedReviewBody(value);
+
+  if (!isObject(unwrappedValue)) {
     return null;
   }
 
-  const reviewId = readNumber(value.reviewId);
-  const userId = readNumber(value.userId);
+  const reviewId = readNumber(unwrappedValue.reviewId);
+  const userId = readNumber(unwrappedValue.userId);
 
   if (reviewId === null || userId === null) {
     return null;
   }
 
-  const medias = Array.isArray(value.medias)
-    ? value.medias.map(parseCreatedReviewMedia).filter(isNonNull)
+  const medias = Array.isArray(unwrappedValue.medias)
+    ? unwrappedValue.medias.map(parseCreatedReviewMedia).filter(isNonNull)
     : [];
 
   return {
-    avatarUrl: readString(value.avatarUrl),
-    comment: readString(value.comment),
-    createdAt: readString(value.createdAt),
-    displayName: readString(value.displayName),
-    isOwner: readBoolean(value.isOwner),
+    avatarUrl: readString(unwrappedValue.avatarUrl),
+    comment: readString(unwrappedValue.comment),
+    createdAt: readString(unwrappedValue.createdAt),
+    displayName: readString(unwrappedValue.displayName),
+    isLiked: readBoolean(unwrappedValue.isLiked),
+    isOwner: readBoolean(unwrappedValue.isOwner),
+    likeCount: Math.max(0, Math.round(readNumber(unwrappedValue.likeCount) ?? 0)),
     medias,
-    rating: readNumber(value.rating) ?? 0,
+    rating: readNumber(unwrappedValue.rating) ?? 0,
     reviewId,
-    status: readString(value.status),
-    targetId: readNumber(value.targetId) ?? 0,
-    targetType: readString(value.targetType),
-    updatedAt: readNullableString(value.updatedAt),
+    status: readString(unwrappedValue.status),
+    targetId: readNumber(unwrappedValue.targetId) ?? 0,
+    targetType: readString(unwrappedValue.targetType),
+    updatedAt: readNullableString(unwrappedValue.updatedAt),
     userId,
-    username: readString(value.username),
+    username: readString(unwrappedValue.username),
   };
 }
 

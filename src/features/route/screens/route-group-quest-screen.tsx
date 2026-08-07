@@ -1,5 +1,10 @@
 import { Image } from "expo-image";
-import { type Href, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+  type Href,
+} from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,8 +16,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { ScreenHorizontalPadding } from "@/constants/theme";
 import { SymbolView } from "@/components/ui/symbol-view";
+import { ScreenHorizontalPadding } from "@/constants/theme";
 import {
   getValidAccessToken,
   useAuthSession,
@@ -86,7 +91,8 @@ function getCommunityGroupAccessLabel(requiredApproval: boolean | null) {
 }
 
 function getCommunityGroupMemberLabel(group: CommunityGroupPayload) {
-  return typeof group.totalMembers === "number" && Number.isFinite(group.totalMembers)
+  return typeof group.totalMembers === "number" &&
+    Number.isFinite(group.totalMembers)
     ? `${Math.max(0, Math.round(group.totalMembers))} thành viên`
     : "Chưa có số liệu thành viên";
 }
@@ -144,7 +150,10 @@ function getRouteSecondaryMeta(route: RouteDto | null) {
   return readMeaningfulText(route.description) ?? "Chưa có thông tin điểm đến";
 }
 
-function getRouteDisplayName(route: RouteDto | null, fallbackRouteName: string) {
+function getRouteDisplayName(
+  route: RouteDto | null,
+  fallbackRouteName: string,
+) {
   return (
     readMeaningfulText(route?.routeName) ??
     readMeaningfulText(fallbackRouteName) ??
@@ -344,9 +353,8 @@ export default function RouteGroupQuestScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGroupListExpanded, setIsGroupListExpanded] = useState(true);
-  const [successState, setSuccessState] = useState<GroupQuestSuccessState | null>(
-    null,
-  );
+  const [successState, setSuccessState] =
+    useState<GroupQuestSuccessState | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -389,22 +397,25 @@ export default function RouteGroupQuestScreen() {
             throw new Error("Không lấy được access token hợp lệ.");
           }
 
-          const [currentProfileResult, communityGroupsResult, routeDetailResult] =
-            await Promise.allSettled([
-              getMyProfile({
-                accessToken,
-                tokenType: authSession.tokenType,
-              }),
-              getCommunityGroups({
-                accessToken,
-                tokenType: authSession.tokenType,
-              }),
-              getRouteById({
-                accessToken,
-                routeId: resolvedRouteId,
-                tokenType: authSession.tokenType,
-              }),
-            ]);
+          const [
+            currentProfileResult,
+            communityGroupsResult,
+            routeDetailResult,
+          ] = await Promise.allSettled([
+            getMyProfile({
+              accessToken,
+              tokenType: authSession.tokenType,
+            }),
+            getCommunityGroups({
+              accessToken,
+              tokenType: authSession.tokenType,
+            }),
+            getRouteById({
+              accessToken,
+              routeId: resolvedRouteId,
+              tokenType: authSession.tokenType,
+            }),
+          ]);
 
           if (!isActive) {
             return;
@@ -430,7 +441,9 @@ export default function RouteGroupQuestScreen() {
 
           setGroups(nextGroups);
           setRouteDetail(
-            routeDetailResult.status === "fulfilled" ? routeDetailResult.value : null,
+            routeDetailResult.status === "fulfilled"
+              ? routeDetailResult.value
+              : null,
           );
           setSelectedGroupId((current) => {
             if (
@@ -490,13 +503,16 @@ export default function RouteGroupQuestScreen() {
 
   const selectedGroup = useMemo(() => {
     return (
-      groups.find((group) => readMeaningfulText(group.groupId) === selectedGroupId) ??
-      null
+      groups.find(
+        (group) => readMeaningfulText(group.groupId) === selectedGroupId,
+      ) ?? null
     );
   }, [groups, selectedGroupId]);
 
   const routeDisplayName = getRouteDisplayName(routeDetail, resolvedRouteName);
-  const routeImageSource = getRouteCoverUrl(routeDetail ?? { hotspots: [], medias: [] });
+  const routeImageSource = getRouteCoverUrl(
+    routeDetail ?? { hotspots: [], medias: [] },
+  );
   const routePrimaryMeta = getRoutePrimaryMeta(routeDetail);
   const routeSecondaryMeta = getRouteSecondaryMeta(routeDetail);
   const selectedGroupSummary = selectedGroup
@@ -672,7 +688,9 @@ export default function RouteGroupQuestScreen() {
 
           <SymbolView
             name={{
-              android: isGroupListExpanded ? "keyboard_arrow_up" : "keyboard_arrow_down",
+              android: isGroupListExpanded
+                ? "keyboard_arrow_up"
+                : "keyboard_arrow_down",
               ios: isGroupListExpanded ? "chevron.up" : "chevron.down",
               web: isGroupListExpanded ? "expand_less" : "expand_more",
             }}
@@ -826,7 +844,9 @@ export default function RouteGroupQuestScreen() {
             </View>
 
             <View className="flex-1">
-              <Text className="text-[12px] text-[#8E869A]">Lộ trình đã chọn</Text>
+              <Text className="text-[12px] text-[#8E869A]">
+                Lộ trình đã chọn
+              </Text>
             </View>
 
             <View className="items-end">
@@ -867,7 +887,7 @@ export default function RouteGroupQuestScreen() {
       <SafeAreaView edges={["bottom"]} className="bg-[#FCF6F8] px-4 pb-5 pt-2">
         <Pressable
           disabled={!selectedGroupId || isLoading || isSubmitting}
-          className={`rounded-[16px] py-4 ${
+          className={`rounded-[15px] py-3.5 ${
             !selectedGroupId || isLoading || isSubmitting
               ? "bg-[#E5DFE8]"
               : "bg-[#D95B8D]"
@@ -878,21 +898,21 @@ export default function RouteGroupQuestScreen() {
           }}
         >
           <Text
-            className={`text-center text-[15px] font-semibold ${
+            className={`text-center text-[14px] font-semibold ${
               !selectedGroupId || isLoading || isSubmitting
                 ? "text-[#8E869A]"
                 : "text-white"
             }`}
           >
-            {isSubmitting ? "Đang tham gia..." : "Tham gia nhóm"}
+            {isSubmitting ? "Đang bắt đầu khám phá..." : "Bắt đầu hành trình"}
           </Text>
         </Pressable>
 
         <Pressable
-          className="mt-3 rounded-[16px] border border-[#F0DEE7] bg-white py-4"
+          className="mt-3 rounded-[15px] border border-[#F0DEE7] bg-white py-3.5"
           onPress={() => router.back()}
         >
-          <Text className="text-center text-[15px] font-semibold text-[#D95B8D]">
+          <Text className="text-center text-[14px] font-semibold text-[#D95B8D]">
             Hủy
           </Text>
         </Pressable>
@@ -908,7 +928,9 @@ export default function RouteGroupQuestScreen() {
             router.back();
           }}
           onViewGroup={() => {
-            const detailRouteKey = readMeaningfulText(successState.detailRouteKey);
+            const detailRouteKey = readMeaningfulText(
+              successState.detailRouteKey,
+            );
             setSuccessState(null);
 
             if (!detailRouteKey) {

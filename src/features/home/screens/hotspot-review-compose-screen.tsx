@@ -1,7 +1,7 @@
 import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState, type ComponentProps } from "react";
 import {
@@ -268,7 +268,9 @@ export default function HotspotReviewComposeScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     hotspotId?: string | string[];
+    id?: string | string[];
     reviewId?: string | string[];
+    routeId?: string | string[];
     slug?: string | string[];
     title?: string | string[];
   }>();
@@ -280,17 +282,21 @@ export default function HotspotReviewComposeScreen() {
     hotspotId: params.hotspotId,
     slug: resolvedSlug,
   });
+  const resolvedRouteId = resolvePositiveIntegerParam(params.routeId ?? params.id);
   const resolvedReviewId = resolvePositiveIntegerParam(params.reviewId);
   const editingReview =
     resolvedReviewId !== null
       ? getCachedHotspotReviewForEdit(resolvedReviewId)
       : null;
   const isEditMode = resolvedReviewId !== null;
+  const isRouteReviewMode = resolvedRouteId !== null;
   const resolvedHotspotId =
-    routeHotspotId ??
-    (editingReview && editingReview.targetId > 0
-      ? editingReview.targetId
-      : null);
+    isRouteReviewMode
+      ? null
+      : routeHotspotId ??
+        (editingReview && editingReview.targetId > 0
+          ? editingReview.targetId
+          : null);
   const routeHotspotTitle = Array.isArray(params.title)
     ? (params.title[0] ?? "")
     : (params.title ?? "");
@@ -299,8 +305,10 @@ export default function HotspotReviewComposeScreen() {
     slug: resolvedSlug,
   });
   const hotspot = cachedHotspotEntry?.hotspot ?? getHotspotBySlug(resolvedSlug);
-  const fallbackHotspotName =
-    hotspot?.title.trim() || routeHotspotTitle.trim() || resolvedSlug.trim() || "";
+  const fallbackTargetName = isRouteReviewMode
+    ? routeHotspotTitle.trim() ||
+      (resolvedRouteId !== null ? `Tuyến #${resolvedRouteId}` : "")
+    : hotspot?.title.trim() || routeHotspotTitle.trim() || resolvedSlug.trim() || "";
   const authorDisplayName =
     editingReview?.displayName.trim() ||
     authSession.displayName.trim() ||
@@ -352,22 +360,30 @@ export default function HotspotReviewComposeScreen() {
   const [isDuplicateDialogVisible, setIsDuplicateDialogVisible] =
     useState(false);
   const trimmedDraftText = draftText.trim();
+  const resolvedTargetId = isRouteReviewMode ? resolvedRouteId : resolvedHotspotId;
+  const reviewTargetType = isRouteReviewMode ? "ROUTE" : "HOTSPOT";
+  const hotspotDetailSlug =
+    resolvedSlug.trim() ||
+    (resolvedHotspotId !== null ? getApiHotspotRouteSlug(resolvedHotspotId) : "");
+  const targetDetailHref = isRouteReviewMode
+    ? (`/route/${resolvedRouteId}` as Href)
+    : hotspotDetailSlug
+      ? getHotspotHref(hotspotDetailSlug, resolvedHotspotId)
+      : null;
+  const targetLabelPrefix = isRouteReviewMode ? "Tuyến đường" : "Địa điểm";
   // Tên hotspot chỉ dùng khi payload đã tải khớp với hotspot đang đánh giá.
   const remoteHotspot =
     loadedHotspot?.hotspotId === resolvedHotspotId ? loadedHotspot : null;
   const isHotspotNameLoading =
-    resolvedHotspotId !== null && remoteHotspot === null;
-  const resolvedHotspotName = remoteHotspot?.name || fallbackHotspotName;
-  const hotspotDetailSlug =
-    resolvedSlug.trim() ||
-    (resolvedHotspotId !== null ? getApiHotspotRouteSlug(resolvedHotspotId) : "");
+    !isRouteReviewMode && resolvedHotspotId !== null && remoteHotspot === null;
+  const resolvedHotspotName = remoteHotspot?.name || fallbackTargetName;
   const locationLabel =
     resolvedHotspotName ||
     (isHotspotNameLoading
-      ? "Đang tải tên địa điểm..."
-      : "Chưa xác định địa điểm");
+      ? `Đang tải tên ${isRouteReviewMode ? "tuyến" : "địa điểm"}...`
+      : `Chưa xác định ${isRouteReviewMode ? "tuyến" : "địa điểm"}`);
   useEffect(() => {
-    if (resolvedHotspotId === null) {
+    if (isRouteReviewMode || resolvedHotspotId === null) {
       return;
     }
 
@@ -412,18 +428,23 @@ export default function HotspotReviewComposeScreen() {
     return () => {
       isActive = false;
     };
-  }, [authSession.isAuthenticated, authSession.tokenType, resolvedHotspotId]);
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    isRouteReviewMode,
+    resolvedHotspotId,
+  ]);
 
   const handleOpenHotspotDetail = () => {
-    if (!hotspotDetailSlug) {
+    if (!targetDetailHref) {
       Alert.alert(
-        "Địa điểm đánh giá",
-        "Không xác định được hotspot để mở trang chi tiết.",
+        `${targetLabelPrefix} đánh giá`,
+        `Không xác định được ${isRouteReviewMode ? "tuyến" : "hotspot"} để mở trang chi tiết.`,
       );
       return;
     }
 
-    router.push(getHotspotHref(hotspotDetailSlug, resolvedHotspotId));
+    router.push(targetDetailHref);
   };
 
   const handleLeaveComposer = () => {
@@ -434,8 +455,8 @@ export default function HotspotReviewComposeScreen() {
       return;
     }
 
-    if (hotspotDetailSlug) {
-      router.replace(getHotspotHref(hotspotDetailSlug, resolvedHotspotId));
+    if (targetDetailHref) {
+      router.replace(targetDetailHref);
       return;
     }
 
@@ -524,10 +545,10 @@ export default function HotspotReviewComposeScreen() {
       return;
     }
 
-    if (resolvedHotspotId === null) {
+    if (resolvedTargetId === null) {
       Alert.alert(
-        "Thiếu hotspot",
-        "Không xác định được hotspot hiện tại để gắn vào bài đánh giá.",
+        `Thiếu ${isRouteReviewMode ? "tuyến" : "hotspot"}`,
+        `Không xác định được ${isRouteReviewMode ? "tuyến" : "hotspot"} hiện tại để gắn vào bài đánh giá.`,
       );
       return;
     }
@@ -604,8 +625,8 @@ export default function HotspotReviewComposeScreen() {
           uri: media.uri,
         })),
         rating,
-        targetId: resolvedHotspotId,
-        targetType: "HOTSPOT",
+        targetId: resolvedTargetId,
+        targetType: reviewTargetType,
         tokenType: authSession.tokenType,
       });
 
@@ -669,7 +690,7 @@ export default function HotspotReviewComposeScreen() {
               numberOfLines={1}
               style={{ color: primaryTextColor }}
             >
-              {isEditMode ? "Chỉnh sửa bài đánh giá" : "Viết bài đăng"}
+              {isEditMode ? "Chỉnh sửa bài đánh giá" : "Viết bài đánh giá"}
             </Text>
 
             <Pressable
@@ -736,9 +757,11 @@ export default function HotspotReviewComposeScreen() {
                 >
                   <SymbolView
                     name={{
-                      ios: "mappin.and.ellipse",
-                      android: "location_on",
-                      web: "location_on",
+                      ios: isRouteReviewMode
+                        ? "map"
+                        : "mappin.and.ellipse",
+                      android: isRouteReviewMode ? "map" : "location_on",
+                      web: isRouteReviewMode ? "map" : "location_on",
                     }}
                     size={14}
                     tintColor={accentColor}
@@ -834,7 +857,6 @@ export default function HotspotReviewComposeScreen() {
                 multiline
                 maxLength={maxCommentLength}
                 onChangeText={setDraftText}
-                placeholder="Điều gì làm bạn ấn tượng nhất ở hotspot này?"
                 placeholderTextColor={subtleTextColor}
                 style={{
                   color: primaryTextColor,
@@ -844,6 +866,11 @@ export default function HotspotReviewComposeScreen() {
                   padding: 0,
                   textAlignVertical: "top",
                 }}
+                placeholder={
+                  isRouteReviewMode
+                    ? "Điều gì làm bạn ấn tượng nhất ở tuyến đường này?"
+                    : "Điều gì làm bạn ấn tượng nhất ở hotspot này?"
+                }
                 value={draftText}
               />
             </View>

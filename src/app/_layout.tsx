@@ -121,6 +121,10 @@ export default function RootLayout() {
           <Stack.Screen name="vouchers/[id]" />
           <Stack.Screen name="subscription" />
           <Stack.Screen name="route/[id]" />
+          <Stack.Screen
+            name="route/[id]/review-compose"
+            options={{ presentation: "modal" }}
+          />
           <Stack.Screen name="route/[id]/group-quest" />
           <Stack.Screen name="route/custom/plan" />
           <Stack.Screen name="route/custom/plan/[id]" />

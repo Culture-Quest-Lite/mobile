@@ -8,6 +8,7 @@ import {
   type SocialProvider,
 } from "@/features/auth/api/social-login";
 import { syncSocialAccount } from "@/features/auth/api/social-sync";
+import { resetCheckins } from "@/lib/checkin-store";
 import { readStoredJson, writeStoredJson } from "@/lib/persistent-json-storage";
 
 export type AuthRole = "guest" | "explorer";
@@ -88,8 +89,17 @@ function emitChange() {
 }
 
 function setAuthSession(nextSession: AuthSession) {
+  const didIdentityChange =
+    authSession.isAuthenticated !== nextSession.isAuthenticated ||
+    authSession.username !== nextSession.username;
+
   authSession = nextSession;
   writeStoredJson(AUTH_SESSION_STORAGE_KEY, nextSession);
+
+  if (didIdentityChange) {
+    resetCheckins();
+  }
+
   emitChange();
 }
 

@@ -405,6 +405,7 @@ export async function getUserProfilePosts({
   accessToken,
   page,
   size,
+  status,
   sort,
   tokenType,
   userId,
@@ -415,7 +416,7 @@ export async function getUserProfilePosts({
     resolvePageUrl: (nextPage) =>
       resolveProfilePostsUrl(
         `/api/users/user/${userId}/posts`,
-        buildPostsQuery({ page: nextPage, size, sort }),
+        buildPostsQuery({ page: nextPage, size, sort, status }),
       ),
     size,
     tokenType,

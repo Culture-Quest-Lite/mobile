@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { getActiveTags } from "../api/get-tags";
 import { getTagById } from "../api/get-tag-by-id";
 import {
@@ -216,8 +217,6 @@ export default function ThemeListScreen() {
         }
 
         const baseItems = buildThemeListItems(mapActiveTagsToThemeCategories(tags));
-        setThemeItems(baseItems);
-        setIsLoading(false);
 
         const detailResults = await Promise.allSettled(
           baseItems.map((item) =>
@@ -268,11 +267,12 @@ export default function ThemeListScreen() {
         });
 
         if (detailById.size === 0) {
+          setThemeItems(baseItems);
           return;
         }
 
-        setThemeItems((currentItems) =>
-          currentItems.map((item) => {
+        setThemeItems(
+          baseItems.map((item) => {
             if (typeof item.tagId !== "number" || item.tagId <= 0) {
               return item;
             }
@@ -346,14 +346,10 @@ export default function ThemeListScreen() {
 
   if (isLoading && themeItems.length === 0 && !loadError) {
     return (
-      <SafeAreaView className="flex-1 bg-white" edges={["left", "right", "bottom"]}>
-        <View className="flex-1 items-center justify-center px-6">
-          <ActivityIndicator color="#EB489B" size="large" />
-          <Text className="mt-3 text-[13px] font-medium leading-[16px] text-[#8E869A]">
-            Đang tải danh sách chủ đề...
-          </Text>
-        </View>
-      </SafeAreaView>
+      <AppLoadingScreen
+        edges={["left", "right", "bottom"]}
+        message="Đang tải danh sách chủ đề..."
+      />
     );
   }
 

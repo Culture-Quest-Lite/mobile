@@ -15,9 +15,12 @@ export type RouteStatus =
 export type RouteTagDto = {
   createdAt?: string;
   hotspotCount?: number | null;
+  imageUrl?: string | null;
   tagId: number;
   tagName: string;
   tagStatus?: string;
+  routeCount?: number | null;
+  storyCount?: number | null;
   updatedAt?: string;
 };
 
@@ -50,18 +53,22 @@ export type RouteHotspotDto = {
 };
 
 export type RouteDto = {
+  averageRating?: number | null;
   routeId: number;
   routeName: string;
   description: string;
   difficulty: RouteDifficulty;
   estimateTime: number;
+  imageUrl?: string | null;
   totalDistance: number;
   status: RouteStatus;
+  totalReviews?: number | null;
   xp: number;
   point: number;
   tags: RouteTagDto[];
   hotspots: RouteHotspotDto[];
   medias: RouteMediaDto[];
+  userProgress?: ProgressStatus | null;
 };
 
 export type RoutePageDto = {
@@ -95,6 +102,7 @@ export type UserRouteProgressDto = {
   progressPercentage: number;
   route?: RouteDto | null;
   routeId: number;
+  routeName?: string | null;
   startedAt?: string | null;
   status: ProgressStatus;
   totalStops: number;
@@ -294,9 +302,12 @@ function parseTag(value: unknown): RouteTagDto | null {
   return {
     createdAt: readString(value.createdAt),
     hotspotCount: readNullableNumber(value.hotspotCount),
+    imageUrl: readString(value.imageUrl) || null,
     tagId,
     tagName,
     tagStatus: readString(value.tagStatus),
+    routeCount: readNullableNumber(value.routeCount),
+    storyCount: readNullableNumber(value.storyCount),
     updatedAt: readString(value.updatedAt),
   };
 }
@@ -349,11 +360,13 @@ export function parseRoute(value: unknown): RouteDto | null {
   if (routeId < 0 || !routeName.trim()) return null;
 
   return {
+    averageRating: readNullableNumber(value.averageRating),
     description,
     difficulty: readString(value.difficulty, "EASY"),
     estimateTime: readNumber(
       value.estimateTime ?? value.duration ?? value.estimatedDuration,
     ),
+    imageUrl: readString(value.imageUrl) || null,
     hotspots: Array.isArray(value.hotspots)
       ? value.hotspots.map(parseHotspot).filter(isNonNull)
       : [],
@@ -371,6 +384,10 @@ export function parseRoute(value: unknown): RouteDto | null {
           return singleTag ? [singleTag] : [];
         })(),
     totalDistance: readNumber(value.totalDistance ?? value.distance),
+    totalReviews: readNullableNumber(
+      value.totalReviews ?? value.totalReview ?? value.total_reviews,
+    ),
+    userProgress: readString(value.userProgress) || null,
     xp: readNumber(value.xp ?? value.totalXp),
   };
 }
@@ -425,6 +442,7 @@ export function parseUserRouteProgress(
     progressPercentage: readNumber(value.progressPercentage),
     route: routeFromBody,
     routeId,
+    routeName: readString(value.routeName ?? routeFromBody?.routeName) || null,
     startedAt: readString(value.startedAt) || null,
     status: readString(value.status, "IN_PROGRESS"),
     totalStops: readNumber(value.totalStops),
@@ -537,8 +555,10 @@ function getRouteImageMedia(route: Pick<RouteDto, "hotspots" | "medias">) {
   return null;
 }
 
-export function getRouteCoverUrl(route: Pick<RouteDto, "hotspots" | "medias">) {
-  return getRouteImageMedia(route)?.fileUrl || null;
+export function getRouteCoverUrl(
+  route: Pick<RouteDto, "hotspots" | "imageUrl" | "medias">,
+) {
+  return getRouteImageMedia(route)?.fileUrl || route.imageUrl || null;
 }
 
 export function getRouteStopCount(route: Pick<RouteDto, "hotspots">) {
@@ -801,6 +821,7 @@ export function mapRouteToRouteItem(route: RouteDto) {
       `${route.hotspots.length} điểm dừng · ${route.totalDistance || 0} km`,
     theme: description || firstTag,
     title: route.routeName,
+    userProgress: route.userProgress ?? null,
     xp: route.xp || route.point || 0,
   };
 }
@@ -880,33 +901,40 @@ export async function getUserRouteProgressList({
   tokenType,
 }: UserRouteProgressListRequest = {}): Promise<UserRouteProgressPageDto> {
   requireAccessToken(accessToken);
+  // Backend nhận filter dạng object nên Swagger hiển thị JSON, nhưng Spring vẫn
+  // bind từng field từ query string. Gửi cả sortDir lẫn sortDirection để tương
+  // thích với cả hai phiên bản API.
   const params = new URLSearchParams({
     page: String(page),
     size: String(size),
     sortBy,
+    sortDir: sortDirection,
     sortDirection,
   });
 
   if (status) params.set("status", status);
 
-  const url = `${resolveRouteUrl("/api/v1/route-participants")}?${params.toString()}`;
+  const url = `${resolveRouteParticipantUrl("/api/v1/route-participants")}?${params.toString()}`;
   const body = await fetchRouteJson(url, accessToken, tokenType);
   const unwrappedBody = unwrapApiBody(body);
+  // Response mới gói metadata trong "page", response cũ để phẳng ở gốc.
+  const pageMeta =
+    isObject(unwrappedBody) && isObject(unwrappedBody.page)
+      ? unwrappedBody.page
+      : isObject(unwrappedBody)
+        ? unwrappedBody
+        : null;
   const rawContent = readPageContent(body);
   const content = rawContent.map(parseUserRouteProgress).filter(isNonNull);
 
   return {
     content,
-    number: isObject(unwrappedBody)
-      ? readNumber(unwrappedBody.number, page)
-      : page,
-    size: isObject(unwrappedBody) ? readNumber(unwrappedBody.size, size) : size,
-    totalElements: isObject(unwrappedBody)
-      ? readNumber(unwrappedBody.totalElements, content.length)
+    number: pageMeta ? readNumber(pageMeta.number, page) : page,
+    size: pageMeta ? readNumber(pageMeta.size, size) : size,
+    totalElements: pageMeta
+      ? readNumber(pageMeta.totalElements, content.length)
       : content.length,
-    totalPages: isObject(unwrappedBody)
-      ? readNumber(unwrappedBody.totalPages, 1)
-      : 1,
+    totalPages: pageMeta ? readNumber(pageMeta.totalPages, 1) : 1,
   };
 }
 
