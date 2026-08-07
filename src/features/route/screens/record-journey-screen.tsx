@@ -136,6 +136,7 @@ export default function RecordJourneyScreen() {
       closingTime: hotspot.closingTime ?? "",
       averageRating: null,
       totalReviews: null,
+      checkInRadius: null, boundaryGeoJson: "",
       createByUserId: null, createdAt: "", description: "", endTime: "",
       estimatedDurationMax: null, estimatedDurationMin: null, historyInformation: "",
       isCheckedIn: true, medias: [], point: null, startTime: "",

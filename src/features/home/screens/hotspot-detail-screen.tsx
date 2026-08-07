@@ -410,6 +410,9 @@ function buildHotspotFromApi({
         latitude: apiHotspot.latitude,
         longitude: apiHotspot.longitude,
       },
+      // Vùng check-in do curator cấu hình; overlay dùng để bật/tắt nút theo thời gian thực.
+      checkInRadius: apiHotspot.checkInRadius,
+      boundaryGeoJson: apiHotspot.boundaryGeoJson,
       distance: "",
       district: "",
       gallery,

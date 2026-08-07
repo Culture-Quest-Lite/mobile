@@ -157,6 +157,9 @@ function parseHotspot(value: unknown): NearbyHotspotDto | null {
   return {
     address: readString(value.address),
     averageRating: readNumber(value.averageRating),
+    // Vùng check-in: bán kính riêng của hotspot, hoặc ranh giới GeoJSON nếu curator đã vẽ.
+    checkInRadius: readNumber(value.checkInRadius),
+    boundaryGeoJson: readString(value.boundaryGeoJson),
     closingTime: readString(value.closingTime),
     totalReviews: readNumber(
       value.totalReviews ?? value.totalReview ?? value.total_reviews,
