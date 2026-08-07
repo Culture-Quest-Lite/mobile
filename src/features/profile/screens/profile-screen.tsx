@@ -1,3 +1,4 @@
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Image } from "expo-image";
@@ -47,7 +48,6 @@ import {
   getHotspotHref,
 } from "@/features/home/data/hotspots";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
-import type { RouteItem } from "@/lib/demo-data";
 import {
   getPostVisibilityIcon,
   getPostVisibilityLabel,
@@ -57,6 +57,10 @@ import type { SharedPostSummary } from "@/lib/shared-post";
 import { getRouteById } from "@/features/route/api/route-api";
 import { LevelProgressCard } from "../components/level-progress-card";
 import { useProfile } from "../hooks/use-profile";
+import {
+  useRouteParticipants,
+  type ProfileRouteParticipant,
+} from "../hooks/use-route-participants";
 import {
   cacheProfilePost,
   updateCachedProfilePost,
@@ -141,6 +145,8 @@ const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
     icon: { ios: "map", android: "route", web: "route" },
   },
 ];
+const routeParticipantFallbackCover =
+  "https://i.pinimg.com/1200x/80/69/f9/8069f9581583a196f9f39bda000b9312.jpg";
 const fallbackPostAuthorName = "Minh Anh";
 const fallbackPostTimestamp = "02/07/2026";
 const postMenuSections: {
@@ -309,6 +315,66 @@ function formatPostTimestamp(value: string | null) {
   }).format(parsedDate);
 
   return dateText;
+}
+
+function formatRouteParticipantDate(value: string | null) {
+  const parsedDate = new Date(value ?? "");
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(parsedDate);
+}
+
+function normalizeRouteParticipantStatus(value?: string | null) {
+  return (value ?? "").trim().toUpperCase();
+}
+
+function getRouteParticipantStatusLabel(value?: string | null) {
+  switch (normalizeRouteParticipantStatus(value)) {
+    case "COMPLETED":
+      return "Hoàn thành";
+    case "IN_PROGRESS":
+      return "Đang đi";
+    default:
+      return "Đang đi";
+  }
+}
+
+function getRouteParticipantStatusTone(value?: string | null) {
+  switch (normalizeRouteParticipantStatus(value)) {
+    case "COMPLETED":
+      return {
+        backgroundColor: "#E8F7EE",
+        borderColor: "#B7E4C7",
+        textColor: "#137333",
+      };
+    case "IN_PROGRESS":
+      return {
+        backgroundColor: "#FFF4E5",
+        borderColor: "#F8D3A8",
+        textColor: "#B45309",
+      };
+    default:
+      return {
+        backgroundColor: "#F3F4F6",
+        borderColor: "#E5E7EB",
+        textColor: "#6B7280",
+      };
+  }
+}
+
+function formatRouteParticipantRating(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return value.toFixed(value >= 5 ? 1 : 1);
 }
 
 function formatCompactCount(value?: number | null) {
@@ -534,7 +600,7 @@ function buildProfileRouteLabel(
       : resolvedRoutes[primaryRouteId]?.routeName?.trim() || null;
 
   if (validRouteIds.length === 1) {
-    return primaryRouteName ?? "Đang tải tuyến đường...";
+    return primaryRouteName ?? "1 tuyến đường được gắn";
   }
 
   return `${primaryRouteName ?? `${validRouteIds.length} tuyến đường được gắn`} +${validRouteIds.length - 1}`;
@@ -557,7 +623,7 @@ function buildProfileHotspotSubtitle(
     .filter((hotspotName): hotspotName is string => Boolean(hotspotName));
 
   if (validHotspotIds.length === 1) {
-    return hotspotNames[0] ?? "Đang tải địa điểm...";
+    return hotspotNames[0] ?? "1 địa điểm được gắn";
   }
 
   if (hotspotNames.length >= 2) {
@@ -649,14 +715,12 @@ export default function ProfileScreen() {
     ? authSession.username?.trim() || authSession.displayName.trim() || null
     : null;
   const hasFocusedProfileRef = useRef(false);
+  const { profile, posts, isLoading, error, reloadProfile } = useProfile();
   const {
-    profile,
-    posts,
-    userRoutes,
-    isLoading,
-    error,
-    reloadProfile,
-  } = useProfile();
+    error: routeParticipantsError,
+    isLoading: isLoadingRouteParticipants,
+    participants: routeParticipants,
+  } = useRouteParticipants();
   const [tab, setTab] = useState<Tab>("posts");
   const [likingPostIds, setLikingPostIds] = useState<number[]>([]);
   const [resolvedPostHotspots, setResolvedPostHotspots] = useState<
@@ -1041,11 +1105,7 @@ export default function ProfileScreen() {
   }
 
   if (isLoading && !profile) {
-    return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-[#F7F8FC]">
-        <ActivityIndicator color="#F58752" size="large" />
-      </SafeAreaView>
-    );
+    return <AppLoadingScreen />;
   }
 
   if (error && !profile) {
@@ -1062,11 +1122,7 @@ export default function ProfileScreen() {
   }
 
   if (!profile) {
-    return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-[#F7F8FC]">
-        <Text className="text-[15px] text-[#8E869A]">Không tìm thấy hồ sơ</Text>
-      </SafeAreaView>
-    );
+    return <AppLoadingScreen />;
   }
 
   const levelNumber = typeof profile.level === "number" ? profile.level : null;
@@ -1304,17 +1360,34 @@ export default function ProfileScreen() {
                   })}
                 </View>
               )
-            ) : userRoutes.length === 0 ? (
-              <EmptyRoutes />
             ) : (
-              <View className="gap-2">
-                {userRoutes.map((route) => (
-                  <RouteCard
-                    key={route.id}
-                    route={route}
-                    onPress={() => router.push(`/route/${route.id}` as Href)}
-                  />
-                ))}
+              <View>
+                <ProfilePostsSectionHeader title="Tuyến đường của bạn" />
+
+                {routeParticipantsError ? (
+                  <InlineNotice message={routeParticipantsError.message} />
+                ) : null}
+
+                {isLoadingRouteParticipants && routeParticipants.length === 0 ? (
+                  <View className="items-center py-12">
+                    <ActivityIndicator color="#EB489B" />
+                  </View>
+                ) : routeParticipants.length === 0 ? (
+                  <EmptyRoutes />
+                ) : (
+                  <View>
+                    {routeParticipants.map((participant, index) => (
+                      <RouteParticipantCard
+                        isLast={index === routeParticipants.length - 1}
+                        key={participant.userRouteProgressId}
+                        onPress={() =>
+                          router.push(`/route/${participant.routeId}` as Href)
+                        }
+                        participant={participant}
+                      />
+                    ))}
+                  </View>
+                )}
               </View>
             )}
           </View>
@@ -2550,39 +2623,201 @@ function PostCard({
   );
 }
 
-function RouteCard({
-  route,
+function RouteParticipantCard({
+  isLast,
   onPress,
+  participant,
 }: {
-  route: RouteItem;
+  isLast: boolean;
   onPress: () => void;
+  participant: ProfileRouteParticipant;
 }) {
+  const routeName =
+    participant.routeName?.trim() || `Tuyến đường #${participant.routeId}`;
+  const normalizedStatus = normalizeRouteParticipantStatus(participant.status);
+  const statusLabel = getRouteParticipantStatusLabel(participant.status);
+  const statusTone = getRouteParticipantStatusTone(participant.status);
+  const activityDateLabel = formatRouteParticipantDate(
+    normalizedStatus === "COMPLETED"
+      ? participant.completedAt ?? participant.startedAt ?? null
+      : participant.startedAt ?? participant.completedAt ?? null,
+  );
+  const ratingLabel = formatRouteParticipantRating(participant.rating);
+  const progressLabel = `${participant.completedStops}/${participant.totalStops} điểm dừng`;
+  const addressLabel =
+    participant.address?.trim() ||
+    participant.description ||
+    "Nhấn để xem chi tiết tuyến đường.";
+  const footerMetaItems = [
+    participant.estimateTime ? `${participant.estimateTime} phút` : null,
+    participant.totalDistance ? `${participant.totalDistance} km` : null,
+  ].filter((item): item is string => Boolean(item));
+  const activityLabel =
+    normalizedStatus === "COMPLETED"
+      ? activityDateLabel
+        ? `Hoàn tất ${activityDateLabel}`
+        : "Đã hoàn tất hành trình"
+      : activityDateLabel
+        ? `Bắt đầu ${activityDateLabel}`
+        : "Đang khám phá";
+
   return (
     <Pressable
+      className={isLast ? "" : "mb-3"}
       onPress={onPress}
-      className="flex-row gap-3 rounded-2xl bg-white p-2"
-      style={cardShadow}
+      style={{
+        borderColor: "#F0E7ED",
+        borderWidth: 0.8,
+        borderRadius: 24,
+        backgroundColor: "#FFFFFF",
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 12,
+        shadowColor: "rgba(64, 34, 58, 0.08)",
+        shadowOpacity: 1,
+        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 10 },
+        elevation: 4,
+      }}
     >
-      <Image
-        source={route.cover}
-        contentFit="cover"
-        transition={180}
-        cachePolicy="memory-disk"
-        style={{ width: 64, height: 64, borderRadius: 12 }}
-      />
-      <View className="min-w-0 flex-1 justify-center">
-        <Text
-          className="text-[14px] font-semibold text-[#2B2233]"
-          numberOfLines={1}
-        >
-          {route.title}
-        </Text>
-        <Text className="text-[11px] text-[#8E869A]">
-          {route.distance} · {route.duration}
-        </Text>
-        <Text className="mt-0.5 text-[11px] font-extrabold text-[#F58752]">
-          +{route.xp} XP
-        </Text>
+      <View className="flex-row items-center">
+        <View className="overflow-hidden rounded-[18px] bg-[#EDF2F7]">
+          <Image
+            cachePolicy="memory-disk"
+            contentFit="cover"
+            source={participant.cover ?? routeParticipantFallbackCover}
+            style={{ height: 116, width: 116 }}
+            transition={180}
+          />
+
+          {participant.xp ? (
+            <LinearGradient
+              className="absolute left-2 top-2 rounded-full px-2 py-1"
+              colors={["#FFD84D", "#F59E0B"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Text
+                className="text-[10px] font-extrabold text-[#5A3400]"
+                style={{ includeFontPadding: false, lineHeight: 11 }}
+              >
+                +{formatCompactCount(participant.xp)} XP
+              </Text>
+            </LinearGradient>
+          ) : null}
+        </View>
+
+        <View className="ml-3 min-w-0 flex-1">
+          <View className="flex-row items-start gap-1.5">
+            <View className="min-w-0 flex-1">
+              <Text
+                className="text-[14px] font-bold text-[#2F2432]"
+                numberOfLines={1}
+                style={{ includeFontPadding: false, lineHeight: 16 }}
+              >
+                {routeName}
+              </Text>
+
+              <Text
+                className="mt-[2px] text-[11.5px] text-[#8A7D86]"
+                numberOfLines={1}
+                style={{ includeFontPadding: false, lineHeight: 12 }}
+              >
+                {activityLabel}
+              </Text>
+            </View>
+
+            <View
+              className="rounded-full border px-2 py-[3px]"
+              style={{
+                backgroundColor: statusTone.backgroundColor,
+                borderColor: statusTone.borderColor,
+              }}
+            >
+              <Text
+                className="text-[9px] font-bold"
+                style={{
+                  color: statusTone.textColor,
+                  includeFontPadding: false,
+                  lineHeight: 10,
+                }}
+              >
+                {statusLabel}
+              </Text>
+            </View>
+          </View>
+
+          <View className="mt-[2px] flex-row flex-wrap items-center gap-1">
+            {ratingLabel ? (
+              <View className="flex-row items-center gap-1">
+                <SymbolView
+                  name={{ ios: "star.fill", android: "star", web: "star" }}
+                  size={11}
+                  tintColor="#F59E0B"
+                />
+                <Text
+                  className="text-[11.5px] text-[#D97706]"
+                  style={{ includeFontPadding: false, lineHeight: 11 }}
+                >
+                  {ratingLabel}
+                </Text>
+              </View>
+            ) : null}
+
+            {ratingLabel ? (
+              <Text
+                className="text-[11px] text-[#C49A72]"
+                style={{ includeFontPadding: false, lineHeight: 11 }}
+              >
+                ·
+              </Text>
+            ) : null}
+
+            <Text
+              className="text-[11.5px] text-[#E59A54]"
+              numberOfLines={1}
+              style={{ includeFontPadding: false, lineHeight: 11 }}
+            >
+              {progressLabel}
+            </Text>
+          </View>
+
+          <View className="mt-[2px] flex-row items-start gap-1">
+            <SymbolView
+              name={{ ios: "mappin.and.ellipse", android: "place", web: "place" }}
+              size={11}
+              tintColor="#A38D9F"
+            />
+            <Text
+              className="min-w-0 flex-1 text-[11.5px] text-[#776B77]"
+              numberOfLines={1}
+              style={{ includeFontPadding: false, lineHeight: 12 }}
+            >
+              {addressLabel}
+            </Text>
+          </View>
+
+          <View className="mt-[3px] flex-row items-center">
+            <View className="flex-row flex-wrap items-center gap-2">
+              {footerMetaItems.map((item) => (
+                <View className="flex-row items-center gap-1" key={item}>
+                  <SymbolView
+                    name={{ ios: "clock", android: "schedule", web: "schedule" }}
+                    size={10}
+                    tintColor="#A38D9F"
+                  />
+                  <Text
+                    className="text-[11.5px] text-[#8A7D86]"
+                    numberOfLines={1}
+                    style={{ includeFontPadding: false, lineHeight: 11 }}
+                  >
+                    {item}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
       </View>
     </Pressable>
   );
@@ -2626,7 +2861,7 @@ function EmptyRoutes() {
         tintColor="#AA9FB0"
       />
       <Text className="mt-2 text-[13px] text-[#8E869A]">
-        Chưa có tuyến cộng đồng nào
+        Bạn chưa tham gia tuyến đường nào
       </Text>
     </View>
   );

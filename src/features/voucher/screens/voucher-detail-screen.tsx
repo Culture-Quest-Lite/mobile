@@ -11,6 +11,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { ScreenHorizontalPadding } from "@/constants/theme";
 import { SymbolView } from "@/components/ui/symbol-view";
 import {
@@ -184,11 +185,7 @@ export default function VoucherDetailScreen() {
   }
 
   if (loading) {
-    return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-[#FFF9F6]">
-        <ActivityIndicator size="large" color="#EB489B" />
-      </SafeAreaView>
-    );
+    return <AppLoadingScreen />;
   }
 
   if (error || !voucher) {

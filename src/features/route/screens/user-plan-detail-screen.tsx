@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { ScreenHorizontalPadding } from "@/constants/theme";
 import { routeSystemAlert } from "@/features/route/components/route-system-alert";
 
@@ -264,14 +265,7 @@ export default function UserPlanDetailScreen() {
   }
 
   if (loading) {
-    return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-[#FAF8FC]">
-        <ActivityIndicator size="large" color="#EB489B" />
-        <Text className="mt-3 text-[13px] font-semibold text-[#7A7182]">
-          Đang tải kế hoạch...
-        </Text>
-      </SafeAreaView>
-    );
+    return <AppLoadingScreen message="Đang tải kế hoạch..." />;
   }
 
   if (!plan || error) {

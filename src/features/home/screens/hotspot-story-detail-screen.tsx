@@ -1,3 +1,4 @@
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { ScreenHorizontalPadding } from "@/constants/theme";
 import { useEvent, useEventListener } from "expo";
@@ -204,25 +205,7 @@ function NotFoundState() {
 }
 
 function LoadingState() {
-  return (
-    <View className="flex-1 bg-[#FFF9FD]">
-      <SafeAreaView
-        className="flex-1"
-        edges={["top", "left", "right", "bottom"]}
-      >
-        <View className="flex-1 items-center justify-center px-6">
-          <View
-            className="w-full rounded-[32px] border border-[#F4DCE6] bg-white px-6 py-8"
-            style={[screenShadowStyle, { maxWidth: 360 }]}
-          >
-            <View className="items-center">
-              <ActivityIndicator color="#EB489B" size="large" />
-            </View>
-          </View>
-        </View>
-      </SafeAreaView>
-    </View>
-  );
+  return <AppLoadingScreen />;
 }
 
 function resolveStoryImageSource(story: HotspotThemeStory): StoryImageSource {
