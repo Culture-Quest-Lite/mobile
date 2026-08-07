@@ -65,6 +65,10 @@ export type NearbyHotspotDto = {
   isCheckedIn: boolean | null;
   latitude: number;
   longitude: number;
+  /** Bán kính vùng check-in (mét); null với hotspot cũ chưa cấu hình. */
+  checkInRadius: number | null;
+  /** Ranh giới GeoJSON Polygon; backend chỉ trả ở màn chi tiết. */
+  boundaryGeoJson: string;
   medias: NearbyHotspotMediaDto[];
   openingTime: string;
   point: number | null;
@@ -287,6 +291,8 @@ function parseNearbyHotspot(value: unknown): NearbyHotspotDto | null {
   return {
     address: readString(value.address),
     averageRating: readNumber(value.averageRating),
+    checkInRadius: readNumber(value.checkInRadius),
+    boundaryGeoJson: readString(value.boundaryGeoJson),
     closingTime: readString(value.closingTime),
     totalReviews: readNumber(
       value.totalReviews ?? value.totalReview ?? value.total_reviews,

@@ -198,6 +198,8 @@ type CheckInRequest = AuthenticatedRouteRequest & {
   hotspotId: number;
   latitude: number;
   longitude: number;
+  /** Sai số GPS (mét); server nới ngưỡng check-in theo giá trị này. */
+  accuracy?: number | null;
 };
 
 function resolveRouteUrl(path: string) {
@@ -901,15 +903,12 @@ export async function getUserRouteProgressList({
   tokenType,
 }: UserRouteProgressListRequest = {}): Promise<UserRouteProgressPageDto> {
   requireAccessToken(accessToken);
-  // Backend nhận filter dạng object nên Swagger hiển thị JSON, nhưng Spring vẫn
-  // bind từng field từ query string. Gửi cả sortDir lẫn sortDirection để tương
-  // thích với cả hai phiên bản API.
+  // RouteParticipantFilter khai báo sortDir (không phải sortDirection).
   const params = new URLSearchParams({
     page: String(page),
     size: String(size),
     sortBy,
     sortDir: sortDirection,
-    sortDirection,
   });
 
   if (status) params.set("status", status);
@@ -926,15 +925,22 @@ export async function getUserRouteProgressList({
         : null;
   const rawContent = readPageContent(body);
   const content = rawContent.map(parseUserRouteProgress).filter(isNonNull);
+  // PagedModel gói metadata trong `page`; giữ fallback phẳng cho response cũ.
+  const pageMetadata =
+    isObject(unwrappedBody) && isObject(unwrappedBody.page)
+      ? unwrappedBody.page
+      : isObject(unwrappedBody)
+        ? unwrappedBody
+        : null;
 
   return {
     content,
-    number: pageMeta ? readNumber(pageMeta.number, page) : page,
-    size: pageMeta ? readNumber(pageMeta.size, size) : size,
-    totalElements: pageMeta
-      ? readNumber(pageMeta.totalElements, content.length)
+    number: pageMetadata ? readNumber(pageMetadata.number, page) : page,
+    size: pageMetadata ? readNumber(pageMetadata.size, size) : size,
+    totalElements: pageMetadata
+      ? readNumber(pageMetadata.totalElements, content.length)
       : content.length,
-    totalPages: pageMeta ? readNumber(pageMeta.totalPages, 1) : 1,
+    totalPages: pageMetadata ? readNumber(pageMetadata.totalPages, 1) : 1,
   };
 }
 
@@ -996,12 +1002,20 @@ export async function createRouteCheckIn({
   hotspotId,
   latitude,
   longitude,
+  accuracy,
   tokenType,
 }: CheckInRequest) {
   requireAccessToken(accessToken);
   const url = resolveRouteUrl("/api/v1/user-hotspot-progress");
   const body = await fetchRouteJson(url, accessToken, tokenType, {
-    body: { hotspotId, latitude, longitude },
+    body: {
+      hotspotId,
+      latitude,
+      longitude,
+      ...(typeof accuracy === "number" && Number.isFinite(accuracy)
+        ? { accuracy }
+        : {}),
+    },
     method: "POST",
   });
   const checkIn = parseCheckInResponse(body);
