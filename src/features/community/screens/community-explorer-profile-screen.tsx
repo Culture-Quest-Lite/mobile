@@ -1,5 +1,6 @@
 import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import {
   getValidAccessToken,
   useAuthSession,
@@ -53,7 +54,6 @@ import {
   type ComponentProps,
 } from "react";
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Modal,
@@ -1427,12 +1427,7 @@ export default function CommunityExplorerProfileScreen() {
   ]);
 
   if (!profile && isRemoteProfileLoading) {
-    return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-[#F7F8FC] px-6">
-        <StatusBar style="dark" />
-        <ActivityIndicator color="#F58752" size="large" />
-      </SafeAreaView>
-    );
+    return <AppLoadingScreen />;
   }
 
   if (!profile) {

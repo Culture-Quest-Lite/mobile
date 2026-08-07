@@ -1,3 +1,4 @@
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { ScreenHorizontalPadding } from "@/constants/theme";
 import { Image } from "expo-image";
@@ -57,15 +58,7 @@ import {
   getRoutesByHotspot,
   mapRouteToRouteItem,
 } from "@/features/route/api/route-api";
-import {
-  addApiCheckin,
-  addCheckin,
-  mergeApiCheckins,
-  useCheckedInApiHotspots,
-  useCheckins,
-} from "@/lib/checkin-store";
 import { type RouteItem } from "@/lib/demo-data";
-import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
 import {
   getHotspotReviews,
@@ -703,6 +696,14 @@ function dedupeRouteItemsById(items: RouteItem[]) {
   return Array.from(
     new Map(items.map((item) => [item.id, item] as const)).values(),
   );
+}
+
+function normalizeRouteUserProgressStatus(status?: string | null) {
+  return (status ?? "").trim().toUpperCase();
+}
+
+function isRouteUserProgressCompleted(status?: string | null) {
+  return normalizeRouteUserProgressStatus(status) === "COMPLETED";
 }
 
 function getElapsedCalendarMonths(fromTime: number, toTime: number) {
@@ -1801,12 +1802,11 @@ function HotspotRouteCarouselCard({
   const routeDescription =
     route.description?.trim() || route.subtitle.trim() || route.theme.trim();
   const routeTagLabel = route.era.trim() || route.theme.trim();
+  const isCompleted = isRouteUserProgressCompleted(route.userProgress);
+  const handleOpenRoute = () => router.push(`/route/${route.id}` as Href);
 
   return (
-    <Pressable
-      onPress={() => router.push(`/route/${route.id}` as Href)}
-      style={{ width }}
-    >
+    <Pressable onPress={handleOpenRoute} style={{ width }}>
       <View
         className="overflow-hidden border border-[#EEF1F4] bg-white"
         style={[
@@ -1826,9 +1826,13 @@ function HotspotRouteCarouselCard({
             style={{ height: relatedRouteCardImageHeight, width: "100%" }}
           />
 
-          <View className="absolute right-2 top-2 rounded-full bg-[#FFF1F6] px-2 py-[5px]">
-            <Text className="text-[10px] font-extrabold text-[#EB489B]">
-              +{route.xp} XP
+          <View
+            className={`absolute right-2 top-2 rounded-full px-2 py-[5px] ${isCompleted ? "bg-[#E8F7EE]" : "bg-[#FFF1F6]"}`}
+          >
+            <Text
+              className={`text-[10px] font-extrabold ${isCompleted ? "text-[#15803D]" : "text-[#EB489B]"}`}
+            >
+              {isCompleted ? "Đã tham gia tuyến" : `+${route.xp} XP`}
             </Text>
           </View>
         </View>
@@ -1851,7 +1855,9 @@ function HotspotRouteCarouselCard({
               </View>
               <View
                 className="rounded-full px-2 py-[5px]"
-                style={{ backgroundColor: difficultyBadgeColors.backgroundColor }}
+                style={{
+                  backgroundColor: difficultyBadgeColors.backgroundColor,
+                }}
               >
                 <Text
                   className="text-[10px] font-extrabold"
@@ -2056,7 +2062,10 @@ function PersonalExperienceComposer({
             />
             <Text
               className="ml-2 text-[15px] font-semibold"
-              style={{ color: hiddenStoryActionForegroundColor, lineHeight: 16 }}
+              style={{
+                color: hiddenStoryActionForegroundColor,
+                lineHeight: 16,
+              }}
             >
               Thêm ảnh và video
             </Text>
@@ -2722,12 +2731,12 @@ function StickyCheckinBar({
   onPress: () => void;
 }) {
   return (
-      <View
-        style={{
-          paddingBottom: Math.max(bottomInset + 10, 18),
-          paddingHorizontal: ScreenHorizontalPadding,
-        }}
-      >
+    <View
+      style={{
+        paddingBottom: Math.max(bottomInset + 10, 18),
+        paddingHorizontal: ScreenHorizontalPadding,
+      }}
+    >
       <View
         className="rounded-[30px] bg-white/96 p-3"
         style={[
@@ -2850,20 +2859,7 @@ function NotFoundState() {
 }
 
 function LoadingState() {
-  return (
-    <View style={{ backgroundColor: screenBackground, flex: 1 }}>
-      <SafeAreaView
-        className="flex-1"
-        edges={["top", "left", "right", "bottom"]}
-      >
-        <View className="flex-1 items-center justify-center px-6">
-          <View className="items-center">
-            <ActivityIndicator color="#F58752" size="large" />
-          </View>
-        </View>
-      </SafeAreaView>
-    </View>
-  );
+  return <AppLoadingScreen />;
 }
 
 function LoadFailedState({ message }: { message: string }) {
@@ -2916,8 +2912,6 @@ export default function HotspotDetailScreen() {
   const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
-  const checkins = useCheckins();
-  const checkedInApiHotspots = useCheckedInApiHotspots();
   const { hotspotId, routeId, slug } = useLocalSearchParams<{
     hotspotId?: string;
     routeId?: string;
@@ -2946,8 +2940,6 @@ export default function HotspotDetailScreen() {
   );
   const [relatedRoutesStatus, setRelatedRoutesStatus] =
     useState<RelatedRoutesSectionStatus>("idle");
-  const [isRemoteCheckinStatusLoading, setIsRemoteCheckinStatusLoading] =
-    useState(false);
   const [isRemoteHotspotLoading, setIsRemoteHotspotLoading] = useState(false);
   const [likingReviewIds, setLikingReviewIds] = useState<number[]>([]);
   const [apiHotspotReviews, setApiHotspotReviews] = useState<HotspotReview[]>(
@@ -3194,132 +3186,55 @@ export default function HotspotDetailScreen() {
     }
   }
 
-  useFocusEffect(
-    useCallback(() => {
-      let isActive = true;
-
-      async function loadRemoteHotspot() {
-        if (resolvedHotspotId === null) {
-          setRemoteHotspot(null);
-          setRemoteHotspotError(null);
-          setIsRemoteHotspotLoading(false);
-          return;
-        }
-
-        setIsRemoteHotspotLoading(true);
-        setRemoteHotspotError(null);
-        setRemoteHotspot((currentHotspot) =>
-          currentHotspot?.hotspotId === resolvedHotspotId ? currentHotspot : null,
-        );
-
-        try {
-          const accessToken = authSession.isAuthenticated
-            ? await getValidAccessToken()
-            : null;
-          const nextRemoteHotspot = await getHotspotByIdApi({
-            accessToken,
-            hotspotId: resolvedHotspotId,
-            tokenType: authSession.tokenType,
-          });
-
-          if (!isActive) {
-            return;
-          }
-
-          setRemoteHotspot(nextRemoteHotspot);
-        } catch (error) {
-          if (!isActive) {
-            return;
-          }
-
-          setRemoteHotspot(null);
-          setRemoteHotspotError(
-            error instanceof Error
-              ? error.message
-              : "Không tải được chi tiết địa điểm từ API.",
-          );
-        } finally {
-          if (isActive) {
-            setIsRemoteHotspotLoading(false);
-          }
-        }
-      }
-
-      void loadRemoteHotspot();
-
-      return () => {
-        isActive = false;
-      };
-    }, [
-      authSession.isAuthenticated,
-      authSession.tokenType,
-      resolvedHotspotId,
-      setIsRemoteHotspotLoading,
-      setRemoteHotspot,
-      setRemoteHotspotError,
-    ]),
-  );
-
-  useEffect(() => {
-    if (resolvedHotspotId === null || remoteHotspot?.isCheckedIn !== true) {
+  const loadRemoteHotspot = useCallback(async () => {
+    if (resolvedHotspotId === null) {
+      setRemoteHotspot(null);
+      setRemoteHotspotError(null);
+      setIsRemoteHotspotLoading(false);
       return;
     }
 
-    mergeApiCheckins([resolvedHotspotId]);
-  }, [remoteHotspot?.isCheckedIn, resolvedHotspotId]);
+    setIsRemoteHotspotLoading(true);
+    setRemoteHotspotError(null);
+    setRemoteHotspot((currentHotspot) =>
+      currentHotspot?.hotspotId === resolvedHotspotId ? currentHotspot : null,
+    );
+
+    try {
+      const accessToken = authSession.isAuthenticated
+        ? await getValidAccessToken()
+        : null;
+      const nextRemoteHotspot = await getHotspotByIdApi({
+        accessToken,
+        hotspotId: resolvedHotspotId,
+        tokenType: authSession.tokenType,
+      });
+
+      setRemoteHotspot(nextRemoteHotspot);
+    } catch (error) {
+      setRemoteHotspot(null);
+      setRemoteHotspotError(
+        error instanceof Error
+          ? error.message
+          : "Không tải được chi tiết địa điểm từ API.",
+      );
+    } finally {
+      setIsRemoteHotspotLoading(false);
+    }
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    resolvedHotspotId,
+    setIsRemoteHotspotLoading,
+    setRemoteHotspot,
+    setRemoteHotspotError,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
-      let isActive = true;
-
-      async function syncRemoteCheckinStatus() {
-        if (!authSession.isAuthenticated || resolvedHotspotId === null) {
-          setIsRemoteCheckinStatusLoading(false);
-          return;
-        }
-
-        setIsRemoteCheckinStatusLoading(true);
-
-        try {
-          const accessToken = await getValidAccessToken();
-
-          if (!accessToken || !isActive) {
-            return;
-          }
-
-          const checkedInHotspotIds = await getCheckedInHotspotIds({
-            accessToken,
-            tokenType: authSession.tokenType,
-          });
-
-          if (!isActive) {
-            return;
-          }
-
-          mergeApiCheckins(checkedInHotspotIds);
-        } catch (error) {
-          console.info("[hotspot-detail] check-in status sync skipped", {
-            error: error instanceof Error ? error.message : error,
-            hotspotId: resolvedHotspotId,
-          });
-        } finally {
-          if (isActive) {
-            setIsRemoteCheckinStatusLoading(false);
-          }
-        }
-      }
-
-      void syncRemoteCheckinStatus();
-
-      return () => {
-        isActive = false;
-      };
-    }, [
-      authSession.isAuthenticated,
-      authSession.tokenType,
-      resolvedHotspotId,
-      setIsRemoteCheckinStatusLoading,
-    ]),
+      void loadRemoteHotspot();
+      return undefined;
+    }, [loadRemoteHotspot]),
   );
 
   const remoteHotspotResult = useMemo(
@@ -3513,20 +3428,10 @@ export default function HotspotDetailScreen() {
       ? true
       : Boolean(cachedStoriesEntry?.stories.length) ||
         hasRemoteHotspotStories(remoteHotspot);
-  const hotspotCheckinId = hotspot.slug;
   const isCheckedInFromRemoteHotspot = remoteHotspot?.isCheckedIn === true;
-  const isCheckedInFromApiStore =
-    resolvedHotspotId !== null &&
-    checkedInApiHotspots.includes(resolvedHotspotId);
-  const isCheckedIn =
-    isCheckedInFromRemoteHotspot ||
-    isCheckedInFromApiStore ||
-    checkins.includes(hotspotCheckinId);
+  const isCheckedIn = isCheckedInFromRemoteHotspot;
   const isCheckinUiPending =
-    authSession.isAuthenticated &&
-    resolvedHotspotId !== null &&
-    !isCheckedIn &&
-    (isRemoteHotspotLoading || isRemoteCheckinStatusLoading);
+    resolvedHotspotId !== null && !isCheckedIn && isRemoteHotspotLoading;
   const detailSheetBottomPadding = isCheckedIn
     ? Math.max(insets.bottom, 8)
     : Math.max(insets.bottom + 100, 120);
@@ -4027,11 +3932,8 @@ export default function HotspotDetailScreen() {
             isStoryAvailable={canOpenStories}
             onClose={() => setIsCheckinOverlayVisible(false)}
             onSuccess={() => {
-              addCheckin(hotspotCheckinId);
-
-              if (resolvedHotspotId !== null) {
-                addApiCheckin(resolvedHotspotId);
-              }
+              setIsCheckinOverlayVisible(false);
+              void loadRemoteHotspot();
             }}
           />
         ) : null}

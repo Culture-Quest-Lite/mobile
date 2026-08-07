@@ -1,4 +1,5 @@
 import { SymbolView } from "@/components/ui/symbol-view";
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { UserAvatar, UserAvatarFallback } from "@/components/ui/user-avatar";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
@@ -877,14 +878,7 @@ function mapSharedPostToCommunityFeedPost(
 function CommunityLoadingState() {
   return (
     <View className="flex-1 bg-white">
-      <SafeAreaView
-        className="flex-1"
-        edges={["top", "left", "right", "bottom"]}
-      >
-        <View className="flex-1 items-center justify-center px-6">
-          <ActivityIndicator color="#EB489B" size="large" />
-        </View>
-      </SafeAreaView>
+      <AppLoadingScreen />
     </View>
   );
 }

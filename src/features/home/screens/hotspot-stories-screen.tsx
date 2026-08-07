@@ -10,6 +10,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import {
   getValidAccessToken,
   useAuthSession,
@@ -714,16 +715,7 @@ export default function HotspotStoriesScreen() {
     visibleStories.length === 0;
 
   if (shouldShowLoadingState) {
-    return (
-      <View className="flex-1 bg-white">
-        <StatusBar style="dark" />
-        <SafeAreaView className="flex-1 bg-white" edges={["left", "right", "bottom"]}>
-          <View className="flex-1 items-center justify-center bg-white">
-            <ActivityIndicator color="#EB489B" size="large" />
-          </View>
-        </SafeAreaView>
-      </View>
-    );
+    return <AppLoadingScreen edges={["left", "right", "bottom"]} />;
   }
 
   return (

@@ -54,6 +54,7 @@ export type RouteItem = {
   meaning: string;
   story: string;
   connection: string;
+  userProgress?: string | null;
 };
 
 export type RouteStop = Hotspot & {

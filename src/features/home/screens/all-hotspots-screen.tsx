@@ -37,6 +37,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import {
   getValidAccessToken,
   useAuthSession,
@@ -915,14 +916,7 @@ export default function AllHotspotsScreen() {
   if (nearbyHotspotsStatus === "loading") {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaView
-          className="flex-1 bg-white"
-          edges={["top", "left", "right", "bottom"]}
-        >
-          <View className="flex-1 items-center justify-center bg-white">
-            <ActivityIndicator color="#EB489B" size="large" />
-          </View>
-        </SafeAreaView>
+        <AppLoadingScreen />
       </GestureHandlerRootView>
     );
   }
@@ -931,7 +925,7 @@ export default function AllHotspotsScreen() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView
         className="flex-1 bg-[#F6F1E8]"
-        edges={["top", "left", "right", "bottom"]}
+        edges={["left", "right", "bottom"]}
       >
         <View className="flex-1 bg-[#F6F1E8]">
         {Platform.OS === "web" ? (

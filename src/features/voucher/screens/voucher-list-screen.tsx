@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -12,6 +11,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router";
 import { Image } from "expo-image";
 
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { SymbolView } from "@/components/ui/symbol-view";
 import {
   getValidAccessToken,
@@ -179,9 +179,7 @@ export default function VoucherListScreen() {
           </View>
         </View>
       ) : loading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#EB489B" />
-        </View>
+        <AppLoadingScreen mode="embedded" />
       ) : (
         <ScrollView
           className="flex-1"

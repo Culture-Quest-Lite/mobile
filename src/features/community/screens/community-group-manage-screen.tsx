@@ -7,7 +7,6 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useState, type ReactNode } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   Text as RNText,
   ScrollView,
@@ -19,6 +18,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { appToast } from "@/components/ui/app-toast";
 import { SymbolView } from "@/components/ui/symbol-view";
 import {
@@ -485,35 +485,10 @@ export default function CommunityGroupManageScreen() {
 
   if (status === "loading" && !displayGroup) {
     return (
-      <SafeAreaView
-        className="flex-1"
+      <AppLoadingScreen
         edges={["left", "right"]}
-        style={{ backgroundColor: palette.background }}
-      >
-        <StatusBar style="dark" />
-        <View className="flex-1 items-center justify-center px-5">
-          <View
-            className="w-full max-w-[360px] rounded-[28px] border bg-white px-5 py-6"
-            style={{ borderColor: palette.border }}
-          >
-            <View className="items-center">
-              <ActivityIndicator color={palette.accent} size="small" />
-            </View>
-            <Text
-              className="mt-4 text-center text-[19px] font-semibold"
-              style={{ color: palette.primaryText, lineHeight: 21 }}
-            >
-              Đang tải quản lý nhóm
-            </Text>
-            <Text
-              className="mt-2 text-center text-[13px]"
-              style={{ color: palette.mutedText, lineHeight: 16 }}
-            >
-              Đang chuẩn bị các mục quản lý từ dữ liệu nhóm hiện tại.
-            </Text>
-          </View>
-        </View>
-      </SafeAreaView>
+        message="Đang tải quản lý nhóm"
+      />
     );
   }
 

@@ -11,7 +11,6 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -19,6 +18,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 
 function formatNotificationTime(value: string) {
   const date = new Date(value);
@@ -171,10 +172,7 @@ export default function NotificationScreen() {
       </View>
 
       {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#EB489B" size="large" />
-          <Text className="mt-3 text-[14px] text-[#8E869A]">Đang tải thông báo...</Text>
-        </View>
+        <AppLoadingScreen mode="embedded" message="Đang tải thông báo..." />
       ) : (
         <ScrollView
           className="flex-1"

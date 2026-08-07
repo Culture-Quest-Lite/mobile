@@ -1,3 +1,4 @@
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Image } from "expo-image";
@@ -6,11 +7,10 @@ import * as Location from "expo-location";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
-  RefreshControl,
   StatusBar as RNStatusBar,
+  RefreshControl,
   ScrollView,
   Text,
   View,
@@ -47,11 +47,6 @@ import {
   searchRoutes,
 } from "@/features/route/api/route-api";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
-import {
-  mergeApiCheckins,
-  useCheckedInApiHotspots,
-  useCheckins,
-} from "@/lib/checkin-store";
 import { type RouteItem } from "@/lib/demo-data";
 import {
   type AppCoordinate,
@@ -61,7 +56,6 @@ import {
   getDeviceCoordinate,
 } from "@/lib/location";
 
-import { getCheckedInHotspotIds } from "../api/get-checked-in-hotspots";
 import {
   type NearbyHotspotDto,
   getNearbyHotspots,
@@ -192,7 +186,6 @@ type ActiveJourneyView = {
   progress: number;
   remainingStopsLabel: string;
   remainingTimeLabel: string | null;
-  rewardLabel: string | null;
   routeId: number;
   title: string;
   totalCheckpoints: number;
@@ -388,7 +381,8 @@ function buildActiveJourneyView(
         : null,
     );
   const nextCoordinate =
-    readStopCoordinate(nextStopProgress) ?? readStopCoordinate(nextRouteHotspot);
+    readStopCoordinate(nextStopProgress) ??
+    readStopCoordinate(nextRouteHotspot);
   const remainingStops = Math.max(totalCheckpoints - currentCheckpoint, 0);
   const remainingMinutes =
     route && route.estimateTime > 0 && totalCheckpoints > 0
@@ -415,11 +409,13 @@ function buildActiveJourneyView(
         ? `Còn ${remainingStops} điểm dừng`
         : "Đã đi hết điểm dừng",
     remainingTimeLabel:
-      remainingMinutes > 0 ? `${formatRouteDurationLabel(remainingMinutes)} nữa` : null,
-    rewardLabel: route && route.xp > 0 ? `+${route.xp} XP` : null,
+      remainingMinutes > 0
+        ? `${formatRouteDurationLabel(remainingMinutes)} nữa`
+        : null,
     routeId: progress.routeId,
     title:
-      readMeaningfulNearbyText(route?.routeName) ?? `Tuyến #${progress.routeId}`,
+      readMeaningfulNearbyText(route?.routeName) ??
+      `Tuyến #${progress.routeId}`,
     totalCheckpoints,
   };
 }
@@ -487,11 +483,11 @@ function JourneyProgressRing({ progress }: { progress: number }) {
         })}
       </View>
 
-      <View className="h-[58px] w-[58px] items-center justify-center rounded-full bg-white">
-        <Text className="text-[20px] font-black leading-5 text-[#2B2233]">
+      <View className="h-[60px] w-[60px] items-center justify-center rounded-full bg-white px-1">
+        <Text className="text-[16px] font-black leading-4 text-[#2B2233]">
           {boundedProgress}%
         </Text>
-        <Text className="text-[9px] font-semibold text-[#6F657A]">
+        <Text className="text-[8px] font-semibold leading-3 text-[#6F657A]">
           Hoàn thành
         </Text>
       </View>
@@ -547,6 +543,14 @@ type FeaturedRoutesSectionStatus = "empty" | "loading" | "ready";
 type ActiveJourneySectionStatus = "empty" | "loading" | "ready";
 type NearbyPlacesSectionStatus = "empty" | "loading" | "ready";
 type SuggestedRoutesSectionStatus = "empty" | "loading" | "ready";
+type InitialHomeLoadPart =
+  | "activeJourney"
+  | "communityLeaderboard"
+  | "explorerSummary"
+  | "featuredRoutes"
+  | "nearbyPlaces"
+  | "suggestedRoutes"
+  | "themeCategories";
 type SuggestedRouteCard = RouteItem;
 type CommunityBoardViewEntry = {
   avatarUri: string | null;
@@ -927,25 +931,8 @@ function buildApiNearbyPlaceItems(
 
 function isNearbyPlaceCheckedIn(
   place: NearbyPlaceListItem,
-  checkedInApiHotspotIds: readonly number[],
-  checkedInHotspotSlugs: readonly string[],
 ) {
-  if (place.isCheckedIn) {
-    return true;
-  }
-
-  if (
-    place.hotspotId !== null &&
-    checkedInApiHotspotIds.includes(place.hotspotId)
-  ) {
-    return true;
-  }
-
-  if (place.slug && checkedInHotspotSlugs.includes(place.slug)) {
-    return true;
-  }
-
-  return false;
+  return place.isCheckedIn;
 }
 
 async function resolveNearbyRequestCoordinate(): Promise<{
@@ -1164,20 +1151,22 @@ function SectionEmptyState({
   isLoading?: boolean;
   title?: string;
 }) {
+  if (isLoading) {
+    return (
+      <View className="overflow-hidden rounded-[22px] border border-[#EEF1F4] bg-white">
+        <AppLoadingScreen mode="embedded" style={{ minHeight: 92 }} />
+      </View>
+    );
+  }
+
   return (
     <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-      {isLoading ? (
-        <View className="items-center py-1">
-          <ActivityIndicator color="#EB489B" size="small" />
-        </View>
-      ) : (
-        <>
-          <Text className="text-[15px] font-bold text-[#3B4454]">{title}</Text>
-          <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
-            {description}
-          </Text>
-        </>
-      )}
+      <>
+        <Text className="text-[15px] font-bold text-[#3B4454]">{title}</Text>
+        <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+          {description}
+        </Text>
+      </>
     </View>
   );
 }
@@ -1402,8 +1391,6 @@ function ExplorerHeaderActions({
 export default function HomeScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
-  const checkedInHotspotSlugs = useCheckins();
-  const checkedInApiHotspotIds = useCheckedInApiHotspots();
   const { contentWidth, gutter, insets, safeWidth } = useScreenLayout({
     maxContentWidth: 640,
   });
@@ -1451,42 +1438,41 @@ export default function HomeScreen() {
   const [activeJourneyStatus, setActiveJourneyStatus] =
     useState<ActiveJourneySectionStatus>("loading");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasCompletedInitialHomeLoad, setHasCompletedInitialHomeLoad] =
+    useState(false);
   const nearbyPlacesRequestRef = useRef(0);
   const themeCategoriesRequestRef = useRef(0);
   const communityLeaderboardRequestRef = useRef(0);
   const explorerSummaryRequestRef = useRef(0);
+  const initialHomeLoadPendingRef = useRef<Record<InitialHomeLoadPart, boolean>>({
+    activeJourney: authSession.isAuthenticated,
+    communityLeaderboard: true,
+    explorerSummary: authSession.isAuthenticated,
+    featuredRoutes: true,
+    nearbyPlaces: true,
+    suggestedRoutes: true,
+    themeCategories: true,
+  });
 
-  const syncRemoteCheckinState = useCallback(async () => {
-    if (!authSession.isAuthenticated) {
-      return;
-    }
+  const markInitialHomeLoadPartResolved = useCallback(
+    (part: InitialHomeLoadPart) => {
+      const pending = initialHomeLoadPendingRef.current;
 
-    try {
-      const accessToken = await getValidAccessToken();
-
-      if (!accessToken) {
+      if (!pending[part]) {
         return;
       }
 
-      const checkedInHotspotIds = await getCheckedInHotspotIds({
-        accessToken,
-        tokenType: authSession.tokenType,
-      });
+      pending[part] = false;
 
-      mergeApiCheckins(checkedInHotspotIds);
-    } catch (error) {
-      console.info("[home] check-in sync skipped", {
-        error: error instanceof Error ? error.message : error,
-      });
-    }
-  }, [authSession.isAuthenticated, authSession.tokenType]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void syncRemoteCheckinState();
-    }, [syncRemoteCheckinState]),
+      if (!hasCompletedInitialHomeLoad && !Object.values(pending).some(Boolean)) {
+        setHasCompletedInitialHomeLoad(true);
+      }
+    },
+    [hasCompletedInitialHomeLoad],
   );
+
   const isGuest = authSession.role === "guest";
+  const shouldShowInitialHomeLoading = !hasCompletedInitialHomeLoad;
   const homeHeaderTopPadding = 12;
   const routeCardLeftInset = gutter;
   const routeCardWidth = Math.max(contentWidth, 264);
@@ -1636,6 +1622,7 @@ export default function HomeScreen() {
         setActiveRouteIndex(0);
         setFeaturedRouteCards(highlightRoutes.map(mapRouteToFeaturedRouteCard));
         setFeaturedRoutesStatus(highlightRoutes.length > 0 ? "ready" : "empty");
+        markInitialHomeLoadPartResolved("featuredRoutes");
         setFeaturedRoutesNote(
           highlightRoutes.length > 0
             ? null
@@ -1657,6 +1644,7 @@ export default function HomeScreen() {
             : "Không tải được tuyến nổi bật.",
         );
         setFeaturedRoutesStatus("empty");
+        markInitialHomeLoadPartResolved("featuredRoutes");
       }
     }
 
@@ -1665,7 +1653,11 @@ export default function HomeScreen() {
     return () => {
       isActive = false;
     };
-  }, [authSession.isAuthenticated, authSession.tokenType]);
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    markInitialHomeLoadPartResolved,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1675,6 +1667,7 @@ export default function HomeScreen() {
         if (!authSession.isAuthenticated) {
           setActiveJourneyView(null);
           setActiveJourneyStatus("empty");
+          markInitialHomeLoadPartResolved("activeJourney");
           return;
         }
 
@@ -1690,6 +1683,7 @@ export default function HomeScreen() {
           if (!accessToken) {
             setActiveJourneyView(null);
             setActiveJourneyStatus("empty");
+            markInitialHomeLoadPartResolved("activeJourney");
             return;
           }
 
@@ -1712,6 +1706,7 @@ export default function HomeScreen() {
           if (!activeProgress) {
             setActiveJourneyView(null);
             setActiveJourneyStatus("empty");
+            markInitialHomeLoadPartResolved("activeJourney");
             return;
           }
 
@@ -1743,6 +1738,7 @@ export default function HomeScreen() {
             buildActiveJourneyView(activeProgress, journeyRoute),
           );
           setActiveJourneyStatus("ready");
+          markInitialHomeLoadPartResolved("activeJourney");
         } catch (error) {
           console.warn("[home] load active journey failed", {
             error: error instanceof Error ? error.message : error,
@@ -1754,6 +1750,7 @@ export default function HomeScreen() {
 
           setActiveJourneyView(null);
           setActiveJourneyStatus("empty");
+          markInitialHomeLoadPartResolved("activeJourney");
         }
       }
 
@@ -1762,7 +1759,11 @@ export default function HomeScreen() {
       return () => {
         isActive = false;
       };
-    }, [authSession.isAuthenticated, authSession.tokenType]),
+    }, [
+      authSession.isAuthenticated,
+      authSession.tokenType,
+      markInitialHomeLoadPartResolved,
+    ]),
   );
 
   const loadNearbyPlaces = useCallback(async () => {
@@ -1787,11 +1788,13 @@ export default function HomeScreen() {
         setResolvedNearbyPlaces([]);
         setNearbyPlacesNote(fallbackMessage);
         setNearbyPlacesStatus("empty");
+        markInitialHomeLoadPartResolved("nearbyPlaces");
         setSuggestedRoutes([]);
         setSuggestedRoutesNote(
           "Không xác định được vị trí hiện tại nên chưa thể gợi ý tuyến đường phù hợp.",
         );
         setSuggestedRoutesStatus("empty");
+        markInitialHomeLoadPartResolved("suggestedRoutes");
         return;
       }
 
@@ -1818,17 +1821,14 @@ export default function HomeScreen() {
             : `Không có dữ liệu phù hợp trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh vị trí hiện tại.`,
         );
         setNearbyPlacesStatus("empty");
+        markInitialHomeLoadPartResolved("nearbyPlaces");
         setSuggestedRoutes([]);
         setSuggestedRoutesNote("Không có dữ liệu tuyến đường phù hợp gần bạn.");
         setSuggestedRoutesStatus("empty");
+        markInitialHomeLoadPartResolved("suggestedRoutes");
         return;
       }
 
-      mergeApiCheckins(
-        apiNearbyHotspots
-          .filter((hotspot) => hotspot.isCheckedIn === true)
-          .map((hotspot) => hotspot.hotspotId),
-      );
       setResolvedNearbyPlaces(
         buildApiNearbyPlaceItems(apiNearbyHotspots, coordinate),
       );
@@ -1838,6 +1838,7 @@ export default function HomeScreen() {
           : null,
       );
       setNearbyPlacesStatus("ready");
+      markInitialHomeLoadPartResolved("nearbyPlaces");
 
       const nearbyHotspotsByDistance = sortNearbyHotspotsByDistance(
         apiNearbyHotspots,
@@ -1881,6 +1882,7 @@ export default function HomeScreen() {
             "Không có dữ liệu tuyến đường phù hợp gần bạn.",
           );
           setSuggestedRoutesStatus("empty");
+          markInitialHomeLoadPartResolved("suggestedRoutes");
           return;
         }
 
@@ -1893,6 +1895,7 @@ export default function HomeScreen() {
               : null,
         );
         setSuggestedRoutesStatus("ready");
+        markInitialHomeLoadPartResolved("suggestedRoutes");
       } catch (routeError) {
         console.warn("[home] load suggested routes failed", {
           error: routeError instanceof Error ? routeError.message : routeError,
@@ -1912,6 +1915,7 @@ export default function HomeScreen() {
             : "Không có dữ liệu tuyến đường phù hợp.",
         );
         setSuggestedRoutesStatus("empty");
+        markInitialHomeLoadPartResolved("suggestedRoutes");
       }
     } catch (error) {
       console.warn("[home] load nearby places failed", {
@@ -1929,12 +1933,15 @@ export default function HomeScreen() {
           : "Không có dữ liệu địa điểm phù hợp.",
       );
       setNearbyPlacesStatus("empty");
+      markInitialHomeLoadPartResolved("nearbyPlaces");
       setSuggestedRoutes([]);
       setSuggestedRoutesNote("Không có dữ liệu tuyến đường phù hợp.");
       setSuggestedRoutesStatus("empty");
+      markInitialHomeLoadPartResolved("suggestedRoutes");
     }
   }, [
     authSession.isAuthenticated,
+    markInitialHomeLoadPartResolved,
     authSession.tokenType,
     nearbySearchDistanceMeters,
   ]);
@@ -1971,6 +1978,7 @@ export default function HomeScreen() {
       }
 
       setThemeCategories(mapActiveTagsToThemeCategories(tags));
+      markInitialHomeLoadPartResolved("themeCategories");
     } catch (error) {
       console.warn("[home] load theme categories failed", {
         error: error instanceof Error ? error.message : error,
@@ -1981,8 +1989,13 @@ export default function HomeScreen() {
       }
 
       setThemeCategories([]);
+      markInitialHomeLoadPartResolved("themeCategories");
     }
-  }, [authSession.isAuthenticated, authSession.tokenType]);
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    markInitialHomeLoadPartResolved,
+  ]);
 
   useEffect(() => {
     async function runThemeCategoriesLoad() {
@@ -2022,6 +2035,7 @@ export default function HomeScreen() {
       setCommunityLeaderboardStatus(
         leaderboardResponse.content.length > 0 ? "ready" : "empty",
       );
+      markInitialHomeLoadPartResolved("communityLeaderboard");
     } catch (error) {
       console.warn("[home] load community leaderboard failed", {
         error: error instanceof Error ? error.message : error,
@@ -2038,8 +2052,13 @@ export default function HomeScreen() {
           : "Không tải được bảng xếp hạng cộng đồng.",
       );
       setCommunityLeaderboardStatus("error");
+      markInitialHomeLoadPartResolved("communityLeaderboard");
     }
-  }, [authSession.isAuthenticated, authSession.tokenType]);
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    markInitialHomeLoadPartResolved,
+  ]);
 
   useEffect(() => {
     async function runCommunityLeaderboardLoad() {
@@ -2056,6 +2075,7 @@ export default function HomeScreen() {
 
     if (!authSession.isAuthenticated) {
       setExplorerSummary(null);
+      markInitialHomeLoadPartResolved("explorerSummary");
       return;
     }
 
@@ -2068,6 +2088,7 @@ export default function HomeScreen() {
 
       if (!accessToken) {
         setExplorerSummary(null);
+        markInitialHomeLoadPartResolved("explorerSummary");
         return;
       }
 
@@ -2124,12 +2145,14 @@ export default function HomeScreen() {
           authSession.displayName.trim() ||
           resolvedName,
       });
+      markInitialHomeLoadPartResolved("explorerSummary");
     } catch (error) {
       if (!isActive()) {
         return;
       }
 
       setExplorerSummary(null);
+      markInitialHomeLoadPartResolved("explorerSummary");
       console.warn("[home] load explorer summary failed", {
         error: error instanceof Error ? error.message : error,
       });
@@ -2139,6 +2162,7 @@ export default function HomeScreen() {
     authSession.isAuthenticated,
     authSession.tokenType,
     authSession.username,
+    markInitialHomeLoadPartResolved,
   ]);
 
   useFocusEffect(
@@ -2156,7 +2180,6 @@ export default function HomeScreen() {
         loadNearbyPlaces(),
         loadThemeCategories(),
         loadCommunityLeaderboard(),
-        syncRemoteCheckinState(),
       ]);
     } finally {
       setIsRefreshing(false);
@@ -2166,8 +2189,11 @@ export default function HomeScreen() {
     loadExplorerSummary,
     loadNearbyPlaces,
     loadThemeCategories,
-    syncRemoteCheckinState,
   ]);
+
+  if (shouldShowInitialHomeLoading) {
+    return <AppLoadingScreen />;
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
@@ -2218,11 +2244,17 @@ export default function HomeScreen() {
                 />
 
                 <View className="flex-1 gap-1">
-                  <View className="gap-0.5">
-                    <Text className="text-[15px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
+                  <View className="gap-0 pt-1">
+                    <Text
+                      className="text-[15px] font-semibold tracking-[-0.3px] text-[#2B2233]"
+                      style={{ lineHeight: 15 }}
+                    >
                       {`Chào ${explorerName}`}
                     </Text>
-                    <Text className="text-[11px] leading-4 text-[#8E869A]">
+                    <Text
+                      className="text-[11px] text-[#8E869A]"
+                      style={{ lineHeight: 10, marginTop: -1 }}
+                    >
                       Sẵn sàng khám phá
                     </Text>
                   </View>
@@ -2259,7 +2291,8 @@ export default function HomeScreen() {
                     Bạn đã mở khoá đầy đủ tính năng Premium
                   </Text>
                   <Text className="mt-0.5 text-[11px] text-[#8E869A]">
-                    AI Lập kế hoạch, Ghi hành trình Live & Audio Guide đã sẵn sàng ở trang Khám phá
+                    AI Lập kế hoạch, Ghi hành trình Live & Audio Guide đã sẵn
+                    sàng ở trang Khám phá
                   </Text>
                 </View>
               </View>
@@ -2289,7 +2322,8 @@ export default function HomeScreen() {
                     Mở khóa AI Lập kế hoạch & Ghi hành trình Live
                   </Text>
                   <Text className="mt-0.5 text-[11px] text-[#8E869A]">
-                    Trải nghiệm bộ tính năng Premium (User Plan & Record) tại trang Khám phá
+                    Trải nghiệm bộ tính năng Premium (User Plan & Record) tại
+                    trang Khám phá
                   </Text>
                 </View>
                 <View className="flex-row items-center rounded-full bg-[#EB489B] px-3 py-1.5">
@@ -2326,10 +2360,7 @@ export default function HomeScreen() {
             </View>
 
             {featuredRoutesStatus === "loading" ? (
-              <SectionEmptyState
-                description="Đang tải danh sách tuyến đã xuất bản từ hệ thống."
-                title="Đang tải tuyến nổi bật..."
-              />
+              <SectionEmptyState isLoading />
             ) : !activeFeaturedRoute ? (
               <SectionEmptyState
                 description={
@@ -2349,7 +2380,7 @@ export default function HomeScreen() {
                 >
                   <Pressable
                     key={activeFeaturedRoute.routeId}
-                    className="overflow-hidden rounded-[30px] bg-[#2B2233]"
+                    className="overflow-hidden rounded-[28px] bg-[#20182B]"
                     onPress={() => {
                       handleOpenRouteDetail(activeFeaturedRoute.routeId);
                     }}
@@ -2365,156 +2396,77 @@ export default function HomeScreen() {
                       contentFit="cover"
                       transition={220}
                       cachePolicy="memory-disk"
-                      style={{ height: 230, width: "100%" }}
+                      style={{ height: 224, width: "100%" }}
                     />
 
-                    <LinearGradient
-                      colors={[
-                        "rgba(36, 28, 44, 0.10)",
-                        "rgba(36, 28, 44, 0.38)",
-                        "rgba(36, 28, 44, 0.92)",
-                      ]}
-                      locations={[0, 0.46, 1]}
-                      start={{ x: 0.5, y: 0 }}
-                      end={{ x: 0.5, y: 1 }}
-                      className="absolute inset-0 px-4 py-4"
-                    >
-                      <View className="flex-row items-start justify-between gap-3">
-                        <View className="flex-row flex-wrap items-center gap-2">
-                          <View className="rounded-full bg-white/92 px-3 py-1.5">
-                            <Text className="text-[10px] font-extrabold uppercase tracking-[0.5px] text-[#D9587F]">
-                              {activeFeaturedRoute.tagLabel}
-                            </Text>
-                          </View>
-
-                          <View className="flex-row items-center rounded-full bg-black/32 px-2.5 py-1.5">
-                            <SymbolView
-                              name={{
-                                ios: "figure.walk",
-                                android: "directions_walk",
-                                web: "directions_walk",
-                              }}
-                              size={11}
-                              tintColor="#FFFFFF"
-                            />
-                            <Text className="ml-1 text-[10px] font-extrabold text-white">
-                              {activeFeaturedRoute.difficultyLabel}
-                            </Text>
-                          </View>
-                        </View>
-
-                        {activeFeaturedRoute.xpLabel ? (
-                          <LinearGradient
-                            colors={gradientColors}
-                            end={{ x: 1, y: 0.5 }}
-                            locations={[0, 0.58, 1]}
-                            start={{ x: 0, y: 0.5 }}
-                            className="flex-row items-center rounded-full px-2.5 py-1.5"
-                          >
-                            <SymbolView
-                              name={{
-                                ios: "sparkles",
-                                android: "auto_awesome",
-                                web: "auto_awesome",
-                              }}
-                              size={11}
-                              tintColor="#FFFFFF"
-                            />
-                            <Text className="ml-1 text-[10px] font-extrabold text-white">
-                              {activeFeaturedRoute.xpLabel}
-                            </Text>
-                          </LinearGradient>
-                        ) : null}
-                      </View>
-
-                      <View className="mt-auto gap-3">
+                    <View className="absolute inset-0 px-3.5 py-3.5">
+                      <View className="mt-auto max-w-[84%]">
                         <Text
-                          className="text-[21px] font-extrabold leading-6 text-white"
-                          numberOfLines={2}
+                          className="text-[18px] font-semibold text-white"
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                          style={{
+                            lineHeight: 16,
+                            textShadowColor: "rgba(0, 0, 0, 0.35)",
+                            textShadowOffset: { width: 0, height: 1 },
+                            textShadowRadius: 4,
+                          }}
                         >
                           {activeFeaturedRoute.title}
                         </Text>
 
-                        <View className="flex-row flex-wrap gap-2">
-                          <View className="flex-row items-center rounded-full bg-white/18 px-3 py-1.5">
+                        <View className="mt-1.5 flex-row flex-wrap items-center gap-x-3 gap-y-1">
+                          <View className="flex-row items-center">
+                            <SymbolView
+                              name={{
+                                ios: "star.fill",
+                                android: "star",
+                                web: "star",
+                              }}
+                              size={12}
+                              tintColor="#FFC93C"
+                            />
+                            <Text
+                              className="ml-1 text-[12px] font-semibold text-white"
+                              numberOfLines={1}
+                              style={{
+                                lineHeight: 10,
+                                textShadowColor: "rgba(0, 0, 0, 0.35)",
+                                textShadowOffset: { width: 0, height: 1 },
+                                textShadowRadius: 4,
+                              }}
+                            >
+                              {activeFeaturedRoute.xpLabel ??
+                                "Đang cập nhật XP"}
+                            </Text>
+                          </View>
+
+                          <View className="flex-row items-center">
                             <SymbolView
                               name={{
                                 ios: "mappin.and.ellipse",
                                 android: "place",
                                 web: "place",
                               }}
-                              size={11}
-                              tintColor="#FFFFFF"
+                              size={12}
+                              tintColor="#7DD3FC"
                             />
-                            <Text className="ml-1.5 text-[11px] font-bold text-white">
+                            <Text
+                              className="ml-1 text-[12px] font-semibold text-white"
+                              numberOfLines={1}
+                              style={{
+                                lineHeight: 10,
+                                textShadowColor: "rgba(0, 0, 0, 0.35)",
+                                textShadowOffset: { width: 0, height: 1 },
+                                textShadowRadius: 4,
+                              }}
+                            >
                               {activeFeaturedRoute.stopsLabel}
                             </Text>
                           </View>
-
-                          <View className="flex-row items-center rounded-full bg-white/18 px-3 py-1.5">
-                            <SymbolView
-                              name={{
-                                ios: "point.topleft.down.curvedto.point.bottomright.up",
-                                android: "route",
-                                web: "route",
-                              }}
-                              size={11}
-                              tintColor="#FFFFFF"
-                            />
-                            <Text className="ml-1.5 text-[11px] font-bold text-white">
-                              {activeFeaturedRoute.distanceLabel}
-                            </Text>
-                          </View>
-
-                          <View className="flex-row items-center rounded-full bg-white/18 px-3 py-1.5">
-                            <SymbolView
-                              name={{
-                                ios: "clock.fill",
-                                android: "schedule",
-                                web: "schedule",
-                              }}
-                              size={11}
-                              tintColor="#FFFFFF"
-                            />
-                            <Text className="ml-1.5 text-[11px] font-bold text-white">
-                              {activeFeaturedRoute.durationLabel}
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View className="flex-row items-center justify-between gap-3">
-                          <Pressable
-                            className="flex-row items-center rounded-full bg-white/92 px-4 py-2.5"
-                            onPress={() => {
-                              handleOpenRouteDetail(
-                                activeFeaturedRoute.routeId,
-                              );
-                            }}
-                          >
-                            <Text className="text-[14px] font-extrabold text-[#D9587F]">
-                              Xem tuyến đường
-                            </Text>
-                            <SymbolView
-                              name={{
-                                ios: "arrow.right",
-                                android: "arrow_forward",
-                                web: "arrow_forward",
-                              }}
-                              size={13}
-                              tintColor="#D9587F"
-                            />
-                          </Pressable>
-
-                          <View className="h-9 w-9 items-center justify-center rounded-2xl bg-white/16">
-                            <SymbolView
-                              name={{ ios: "map", android: "map", web: "map" }}
-                              size={15}
-                              tintColor="#FFFFFF"
-                            />
-                          </View>
                         </View>
                       </View>
-                    </LinearGradient>
+                    </View>
                   </Pressable>
                 </View>
 
@@ -2551,10 +2503,7 @@ export default function HomeScreen() {
                 Tiếp tục hành trình
               </Text>
 
-              <SectionEmptyState
-                description="Đang kiểm tra hành trình đang dang dở của bạn."
-                title="Đang tải hành trình..."
-              />
+              <SectionEmptyState isLoading />
             </View>
           ) : activeJourneyStatus === "empty" ? (
             <View className="gap-3">
@@ -2574,7 +2523,7 @@ export default function HomeScreen() {
               </Text>
 
               <View
-                className="overflow-hidden rounded-[28px] border"
+                className="overflow-hidden rounded-[22px] border"
                 style={[
                   cardShadowStyle,
                   {
@@ -2604,46 +2553,33 @@ export default function HomeScreen() {
                     className="absolute inset-0"
                   />
 
-                  <View className="absolute inset-x-3 top-3 flex-row items-center justify-between gap-2">
-                    <View className="flex-row items-center rounded-full bg-white/96 px-2.5 py-1.5">
+                  <View className="absolute inset-x-3 top-3 flex-row items-center justify-end">
+                    <View
+                      className="flex-row items-center rounded-full px-2.5 py-1.5"
+                      style={{ backgroundColor: activeJourneyAccentSoft }}
+                    >
                       <View
                         className="mr-1.5 h-2 w-2 rounded-full"
                         style={{ backgroundColor: activeJourneyAccentWarm }}
                       />
-                      <Text className="text-[11px] font-extrabold uppercase tracking-[0.5px] text-[#453D4A]">
+                      <Text className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-[#7A5167]">
                         Đang thực hiện
                       </Text>
                     </View>
-
-                    {currentJourney.rewardLabel ? (
-                      <View className="flex-row items-center rounded-full bg-[#F58752] px-2.5 py-1.5">
-                        <SymbolView
-                          name={{
-                            ios: "sparkles",
-                            android: "auto_awesome",
-                            web: "auto_awesome",
-                          }}
-                          size={12}
-                          tintColor="#FFFFFF"
-                        />
-                        <Text className="ml-1 text-[11px] font-extrabold text-white">
-                          {currentJourney.rewardLabel}
-                        </Text>
-                      </View>
-                    ) : null}
                   </View>
                 </View>
 
-                <View className="-mt-9 gap-4 px-4 pb-4">
+                <View className="-mt-9 gap-2.5 px-4 pb-4">
                   <View className="flex-row items-center gap-3">
                     <View className="shrink-0 rounded-full bg-white p-1.5">
                       <JourneyProgressRing progress={activeJourneyProgress} />
                     </View>
 
-                    <View className="flex-1 gap-1.5 pt-4">
+                    <View className="flex-1 gap-0.5 pt-4">
                       <Text
-                        className="text-[16px] font-extrabold text-[#2B2233]"
+                        className="text-[15px] font-extrabold text-[#2B2233]"
                         numberOfLines={2}
+                        style={{ lineHeight: 15 }}
                       >
                         {currentJourney.title}
                       </Text>
@@ -2659,8 +2595,9 @@ export default function HomeScreen() {
                           tintColor="#8E869A"
                         />
                         <Text
-                          className="flex-1 text-[13px] text-[#6F657A]"
+                          className="flex-1 text-[12px] text-[#6F657A]"
                           numberOfLines={1}
+                          style={{ lineHeight: 13 }}
                         >
                           {currentJourney.nextStopName
                             ? `Tiếp theo: ${currentJourney.nextStopName}${
@@ -2672,7 +2609,7 @@ export default function HomeScreen() {
                         </Text>
                       </View>
 
-                      <View className="mt-1 flex-row items-center">
+                      <View className="mt-0.5 flex-row items-center">
                         {Array.from({
                           length: currentJourney.totalCheckpoints,
                         }).map((_, index) => {
@@ -2719,7 +2656,10 @@ export default function HomeScreen() {
                         })}
                       </View>
 
-                      <Text className="text-[12px] font-medium text-[#8E869A]">
+                      <Text
+                        className="text-[11px] font-medium text-[#8E869A]"
+                        style={{ lineHeight: 12 }}
+                      >
                         {currentJourney.remainingTimeLabel
                           ? `${currentJourney.remainingStopsLabel} · ${currentJourney.remainingTimeLabel}`
                           : currentJourney.remainingStopsLabel}
@@ -2728,7 +2668,7 @@ export default function HomeScreen() {
                   </View>
 
                   <Pressable
-                    className="overflow-hidden rounded-[18px]"
+                    className="overflow-hidden rounded-[15px]"
                     onPress={() => {
                       handleOpenRouteDetail(currentJourney.routeId);
                     }}
@@ -2738,7 +2678,7 @@ export default function HomeScreen() {
                       start={{ x: 0, y: 0.5 }}
                       end={{ x: 1, y: 0.5 }}
                       locations={[0, 0.58, 1]}
-                      className="flex-row items-center justify-center px-5 py-4"
+                      className="flex-row items-center justify-center px-4 py-3"
                     >
                       <SymbolView
                         name={{
@@ -2746,10 +2686,13 @@ export default function HomeScreen() {
                           android: "play_arrow",
                           web: "play_arrow",
                         }}
-                        size={14}
+                        size={13}
                         tintColor="#FFFFFF"
                       />
-                      <Text className="ml-2 text-[15px] font-extrabold text-white">
+                      <Text
+                        className="ml-1.5 text-[13px] font-extrabold text-white"
+                        style={{ lineHeight: 15 }}
+                      >
                         Tiếp tục khám phá
                       </Text>
                     </LinearGradient>
@@ -2797,10 +2740,7 @@ export default function HomeScreen() {
             ) : null}
 
             {nearbyPlacesStatus === "loading" ? (
-              <SectionEmptyState
-                description={`Đang lấy vị trí hiện tại trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)}.`}
-                title="Đang tải địa điểm gần bạn..."
-              />
+              <SectionEmptyState isLoading />
             ) : nearbyPlacesStatus === "empty" ? (
               <SectionEmptyState
                 description={nearbyPlacesNote ?? "Không có dữ liệu phù hợp."}
@@ -2843,16 +2783,14 @@ export default function HomeScreen() {
                       paddingRight: gutter,
                       paddingTop: 6,
                     }}
-                    showsHorizontalScrollIndicator={false}
-                    style={{
-                      width: safeWidth,
-                    }}
-                  >
+                      showsHorizontalScrollIndicator={false}
+                      style={{
+                        width: safeWidth,
+                      }}
+                    >
                     {resolvedNearbyPlaces.map((place, index) => {
                       const isPlaceCheckedIn = isNearbyPlaceCheckedIn(
                         place,
-                        checkedInApiHotspotIds,
-                        checkedInHotspotSlugs,
                       );
 
                       return (
@@ -3058,15 +2996,13 @@ export default function HomeScreen() {
             )}
 
             <View className="flex-row items-center justify-between gap-3">
-              <Text className={homeSectionTitleClassName}>
-                Chủ đề
-              </Text>
+              <Text className={homeSectionTitleClassName}>Chủ đề</Text>
 
-                <Pressable
-                  className="flex-row items-center"
-                  hitSlop={8}
-                  onPress={handleOpenAllThemes}
-                >
+              <Pressable
+                className="flex-row items-center"
+                hitSlop={8}
+                onPress={handleOpenAllThemes}
+              >
                 <Text className={homeSectionActionTextClassName}>
                   Xem tất cả
                 </Text>
@@ -3192,10 +3128,7 @@ export default function HomeScreen() {
             ) : null}
 
             {suggestedRoutesStatus === "loading" ? (
-              <SectionEmptyState
-                description="Đang tải dữ liệu tuyến đường theo địa điểm phù hợp."
-                title="Đang tải tuyến gợi ý..."
-              />
+              <SectionEmptyState isLoading />
             ) : suggestedRoutesStatus === "empty" ? (
               <SectionEmptyState
                 description={suggestedRoutesNote ?? "Không có dữ liệu phù hợp."}
@@ -3607,14 +3540,20 @@ export default function HomeScreen() {
                   ) : (
                     <View className="items-center rounded-[24px] border border-[#F3E7ED] bg-[#FFF8FB] px-4 py-5">
                       {communityLeaderboardStatus === "loading" ? (
-                        <ActivityIndicator color="#FF5F87" />
-                      ) : null}
-                      <Text className="mt-3 text-center text-[12px] font-semibold text-[#1F2940]">
-                        {activeCommunityBoard.summaryLabel}
-                      </Text>
-                      <Text className="mt-1 text-center text-[10px] leading-[15px] text-[#8F8290]">
-                        {activeCommunityBoard.summaryNote}
-                      </Text>
+                        <AppLoadingScreen
+                          mode="embedded"
+                          style={{ alignSelf: "stretch", minHeight: 88 }}
+                        />
+                      ) : (
+                        <>
+                          <Text className="text-center text-[12px] font-semibold text-[#1F2940]">
+                            {activeCommunityBoard.summaryLabel}
+                          </Text>
+                          <Text className="mt-1 text-center text-[10px] leading-[15px] text-[#8F8290]">
+                            {activeCommunityBoard.summaryNote}
+                          </Text>
+                        </>
+                      )}
                     </View>
                   )}
                 </View>

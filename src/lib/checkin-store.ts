@@ -8,7 +8,6 @@ type PersistedCheckinState = {
 };
 
 const STORAGE_KEY = "checkins";
-const defaultCheckedInIds = ["ben-thanh"];
 const listeners = new Set<() => void>();
 
 function isValidSlug(value: unknown): value is string {
@@ -36,10 +35,7 @@ function loadPersistedCheckins() {
 }
 
 const persistedCheckins = loadPersistedCheckins();
-const checkedInIds = new Set<string>([
-  ...defaultCheckedInIds,
-  ...persistedCheckins.checkedInIds,
-]);
+const checkedInIds = new Set<string>(persistedCheckins.checkedInIds);
 const checkedInApiHotspotIds = new Set<number>(
   persistedCheckins.checkedInApiHotspotIds,
 );
@@ -122,4 +118,49 @@ export function mergeApiCheckins(hotspotIds: Iterable<number>) {
   if (didChange) {
     emit();
   }
+}
+
+export function replaceApiCheckins(hotspotIds: Iterable<number>) {
+  const nextHotspotIds = new Set<number>();
+
+  for (const hotspotId of hotspotIds) {
+    if (!Number.isInteger(hotspotId) || hotspotId <= 0) {
+      continue;
+    }
+
+    nextHotspotIds.add(hotspotId);
+  }
+
+  let didChange = checkedInApiHotspotIds.size !== nextHotspotIds.size;
+
+  if (!didChange) {
+    for (const hotspotId of checkedInApiHotspotIds) {
+      if (!nextHotspotIds.has(hotspotId)) {
+        didChange = true;
+        break;
+      }
+    }
+  }
+
+  if (!didChange) {
+    return;
+  }
+
+  checkedInApiHotspotIds.clear();
+
+  for (const hotspotId of nextHotspotIds) {
+    checkedInApiHotspotIds.add(hotspotId);
+  }
+
+  emit();
+}
+
+export function resetCheckins() {
+  if (!checkedInIds.size && !checkedInApiHotspotIds.size) {
+    return;
+  }
+
+  checkedInIds.clear();
+  checkedInApiHotspotIds.clear();
+  emit();
 }

@@ -25,6 +25,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { appToast } from "@/components/ui/app-toast";
 import { SymbolView, type SymbolName } from "@/components/ui/symbol-view";
 import {
@@ -860,18 +861,7 @@ export default function CommunityGroupDetailScreen() {
   }
 
   if (status === "loading" && !groupDetail) {
-    return (
-      <SafeAreaView
-        className="flex-1"
-        edges={["left", "right"]}
-        style={{ backgroundColor: "#FFFFFF" }}
-      >
-        <StatusBar style="dark" />
-        <View className="flex-1 items-center justify-center px-5">
-          <ActivityIndicator color={palette.accent} size="large" />
-        </View>
-      </SafeAreaView>
-    );
+    return <AppLoadingScreen edges={["left", "right"]} />;
   }
 
   if (!displayGroup) {
