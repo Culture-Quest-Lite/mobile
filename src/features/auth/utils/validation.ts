@@ -24,6 +24,16 @@ export type RegisterFieldErrors = {
   username?: string;
 };
 
+export type ResetPasswordFormValues = {
+  confirmPassword: string;
+  newPassword: string;
+};
+
+export type ResetPasswordFieldErrors = {
+  confirmPassword?: string;
+  newPassword?: string;
+};
+
 export type VerifyOtpFormValues = {
   email: string;
   otpCode: string;
@@ -110,6 +120,27 @@ export function validateRegisterForm({
   if (isBlank(confirmPassword)) {
     errors.confirmPassword = "Vui lòng nhập lại mật khẩu.";
   } else if (password !== confirmPassword) {
+    errors.confirmPassword = "Mật khẩu nhập lại không khớp.";
+  }
+
+  return errors;
+}
+
+export function validateResetPasswordForm({
+  confirmPassword,
+  newPassword,
+}: ResetPasswordFormValues): ResetPasswordFieldErrors {
+  const errors: ResetPasswordFieldErrors = {};
+
+  if (isBlank(newPassword)) {
+    errors.newPassword = "Vui lòng nhập mật khẩu mới.";
+  } else if (newPassword.length < 6) {
+    errors.newPassword = "Mật khẩu cần ít nhất 6 ký tự.";
+  }
+
+  if (isBlank(confirmPassword)) {
+    errors.confirmPassword = "Vui lòng nhập lại mật khẩu mới.";
+  } else if (newPassword !== confirmPassword) {
     errors.confirmPassword = "Mật khẩu nhập lại không khớp.";
   }
 
