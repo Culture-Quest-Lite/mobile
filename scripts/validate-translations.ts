@@ -112,36 +112,47 @@ function findEmptyValues(
 }
 
 /**
- * Kiểm tra duplicate keys (keys xuất hiện nhiều lần)
+ * Kiểm tra duplicate keys (keys xuất hiện nhiều lần ở cùng level)
+ * Note: Keys giống nhau ở nested level khác nhau là hợp lệ
  */
 function findDuplicateKeys(
   filePath: string,
   language: 'vi' | 'en'
 ): ValidationError[] {
   const errors: ValidationError[] = [];
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const lines = content.split('\n');
-  const keyCount: Record<string, number> = {};
 
-  // Đếm số lần xuất hiện của mỗi key
-  for (const line of lines) {
-    const match = line.match(/^\s*"([^"]+)":/);
-    if (match) {
-      const key = match[1];
-      keyCount[key] = (keyCount[key] || 0) + 1;
-    }
-  }
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const parsed = JSON.parse(content);
 
-  // Tìm keys xuất hiện > 1 lần
-  for (const [key, count] of Object.entries(keyCount)) {
-    if (count > 1) {
-      errors.push({
-        type: 'duplicate_key',
-        language,
-        key,
-        message: `Key "${key}" xuất hiện ${count} lần trong ${language}.json`
-      });
+    // Kiểm tra duplicate ở mỗi level
+    function checkLevel(obj: any, path: string = '') {
+      if (typeof obj !== 'object' || obj === null) return;
+
+      const keys = Object.keys(obj);
+      const seen = new Set<string>();
+
+      for (const key of keys) {
+        if (seen.has(key)) {
+          const fullPath = path ? `${path}.${key}` : key;
+          errors.push({
+            type: 'duplicate_key',
+            language,
+            key: fullPath,
+            message: `Duplicate key "${key}" at path "${path}" in ${language}.json`
+          });
+        }
+        seen.add(key);
+
+        // Recursively check nested objects
+        const fullPath = path ? `${path}.${key}` : key;
+        checkLevel(obj[key], fullPath);
+      }
     }
+
+    checkLevel(parsed);
+  } catch (error) {
+    // JSON parse error will be caught elsewhere
   }
 
   return errors;
