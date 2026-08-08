@@ -56,6 +56,7 @@ import {
 } from "../api/get-nearby-hotspots";
 import { searchHotspots } from "../api/search-hotspots";
 import { getApiHotspotRouteSlug, getHotspotHref } from "../data/hotspots";
+import { lineHeightFor } from "@/lib/text-scale";
 
 const fixedNearbyDistanceMeters = 10_000;
 const nearbyPlaceFallbackImageUri =
@@ -384,7 +385,7 @@ const NearbyListRow = memo(function NearbyListRow({
                 <Text
                   className="flex-1 text-[14px] font-semibold text-[#3B4454]"
                   numberOfLines={2}
-                  style={{ lineHeight: 15 }}
+                  style={{ lineHeight: lineHeightFor(14) }}
                 >
                   {place.title}
                 </Text>
@@ -418,7 +419,7 @@ const NearbyListRow = memo(function NearbyListRow({
                   <Text
                     className="flex-1 text-[12px] text-[#A39AAB]"
                     numberOfLines={1}
-                    style={{ lineHeight: 12 }}
+                    style={{ lineHeight: lineHeightFor(12) }}
                   >
                     {place.openingHours}
                   </Text>
@@ -434,7 +435,7 @@ const NearbyListRow = memo(function NearbyListRow({
                   />
                   <Text
                     className="text-[12px] font-normal text-[#F58752]"
-                    style={{ lineHeight: 12 }}
+                    style={{ lineHeight: lineHeightFor(12) }}
                   >
                     {ratingLabel}
                   </Text>
@@ -454,7 +455,7 @@ const NearbyListRow = memo(function NearbyListRow({
                 <Text
                   className="text-[12px] text-[#8E869A]"
                   numberOfLines={1}
-                  style={{ lineHeight: 12 }}
+                  style={{ lineHeight: lineHeightFor(12) }}
                 >
                   Cách bạn {place.distanceLabel}
                 </Text>
@@ -474,7 +475,7 @@ const NearbyListRow = memo(function NearbyListRow({
                   <Text
                     className="flex-1 text-[12px] text-[#8E869A]"
                     numberOfLines={1}
-                    style={{ lineHeight: 12 }}
+                    style={{ lineHeight: lineHeightFor(12) }}
                   >
                     {place.address}
                   </Text>

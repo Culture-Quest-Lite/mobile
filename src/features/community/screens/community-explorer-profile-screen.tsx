@@ -82,6 +82,7 @@ import {
   type CommunityFeedMediaItem,
   type CommunityFeedPost,
 } from "../data/community-post-cache";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type ProfileTabKey = "posts" | "routes";
@@ -2166,7 +2167,7 @@ function ExplorerExpandablePostCaption({ text }: { text: string }) {
   return (
     <Text
       className="text-[13px] text-[#2B232D]"
-      style={{ includeFontPadding: false, lineHeight: 12 }}
+      style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
     >
       {expanded || !shouldTruncate ? normalizedText : collapsedText}
       {shouldTruncate ? (
@@ -2186,7 +2187,7 @@ function ExplorerPostTagChip({ label }: { label: string }) {
     <View className="mr-2 mt-1.5 rounded-full bg-[#F4F1F4] px-3 py-0.5">
       <Text
         className="text-[12px] text-[#7D7680]"
-        style={{ includeFontPadding: false, lineHeight: 12 }}
+        style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
       >
         {label}
       </Text>
@@ -2261,7 +2262,7 @@ function ExplorerPostMediaGallery({
           <View className="absolute right-3 top-3 rounded-full bg-black/35 px-2.5 py-1">
             <Text
               className="text-[11px] font-semibold text-white"
-              style={{ includeFontPadding: false, lineHeight: 12 }}
+              style={{ includeFontPadding: false, lineHeight: lineHeightFor(11) }}
             >
               {`${safeActiveIndex + 1}/${items.length}`}
             </Text>
@@ -2325,7 +2326,7 @@ function ExplorerSharedPostCard({
           <Text
             className="text-[14px] font-bold text-[#2F2432]"
             numberOfLines={1}
-            style={{ includeFontPadding: false, lineHeight: 14 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
           >
             {author}
           </Text>
@@ -2333,7 +2334,7 @@ function ExplorerSharedPostCard({
           <View className="mt-0.5 flex-row items-center gap-1">
             <Text
               className="text-[12px] text-[#8A7D86]"
-              style={{ includeFontPadding: false, lineHeight: 11 }}
+              style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
             >
               {formatProfileDate(sharedPost.createdAt) ?? fallbackPostTimestamp}
             </Text>
@@ -2404,14 +2405,14 @@ function ExplorerPostRouteCard({
         <View className="flex-1 pr-2">
           <Text
             className="text-[12px] font-semibold text-[#F2608E]"
-            style={{ includeFontPadding: false, lineHeight: 11 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
           >
             Route
           </Text>
           <Text
             className="text-[13px] font-medium text-[#4B414C]"
             numberOfLines={2}
-            style={{ includeFontPadding: false, lineHeight: 12 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
           >
             {label}
           </Text>
@@ -2472,14 +2473,14 @@ function ExplorerPostHotspotCard({
         <View className="flex-1 pr-2">
           <Text
             className="text-[12px] font-semibold text-[#18A7B4]"
-            style={{ includeFontPadding: false, lineHeight: 11 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
           >
             {`${count} hotspot`}
           </Text>
           <Text
             className="text-[13px] text-[#6D6671]"
             numberOfLines={2}
-            style={{ includeFontPadding: false, lineHeight: 11 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
           >
             {subtitle}
           </Text>
@@ -2507,7 +2508,7 @@ function ExplorerPostHotspotCard({
                 <View className="-ml-2 h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#E7EEF2]">
                   <Text
                     className="text-[11px] font-semibold text-[#55606C]"
-                    style={{ includeFontPadding: false, lineHeight: 11 }}
+                    style={{ includeFontPadding: false, lineHeight: lineHeightFor(11) }}
                   >
                     {`+${remainingCount}`}
                   </Text>
@@ -2562,7 +2563,7 @@ function ExplorerPostAction({
       />
       <Text
         className="ml-1.5 text-[13px] text-[#706775]"
-        style={{ includeFontPadding: false, lineHeight: 12 }}
+        style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
       >
         {label}
       </Text>
@@ -2599,7 +2600,7 @@ function ExplorerSharePostPill({
       <SymbolView name={icon} size={12} tintColor="#EB489B" />
       <Text
         className="ml-[5px] text-[13px] font-normal text-[#2F2337]"
-        style={{ includeFontPadding: false, lineHeight: 11 }}
+        style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
       >
         {label}
       </Text>
@@ -2659,13 +2660,13 @@ function ExplorerSharePostMenuRow({
       <View className="ml-2.5 flex-1">
         <Text
           className="text-[14px] font-semibold text-[#2F2337]"
-          style={{ includeFontPadding: false, lineHeight: 15 }}
+          style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
         >
           {label}
         </Text>
         <Text
           className="mt-0.5 text-[12px] text-[#8F8298]"
-          style={{ includeFontPadding: false, lineHeight: 14 }}
+          style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(12) }}
         >
           {description}
         </Text>
@@ -2756,7 +2757,7 @@ function ExplorerSharePostModal({
                     className="text-[15px] font-bold text-[#2F2337]"
                     style={{
                       includeFontPadding: false,
-                      lineHeight: 12,
+                      lineHeight: lineHeightFor(15),
                       marginTop: 7,
                     }}
                   >
@@ -2806,7 +2807,7 @@ function ExplorerSharePostModal({
                 style={{
                   color: "#2F242C",
                   fontSize: 14,
-                  lineHeight: 17,
+                  lineHeight: bodyLineHeightFor(14),
                   marginTop: 12,
                   maxHeight: 96,
                   minHeight: 46,
@@ -2839,7 +2840,7 @@ function ExplorerSharePostModal({
                   >
                     <Text
                       className="text-[14px] font-semibold text-white"
-                      style={{ includeFontPadding: false, lineHeight: 12 }}
+                      style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
                     >
                       {isSubmitting ? "Đang chia sẻ..." : "Chia sẻ"}
                     </Text>
@@ -2961,7 +2962,7 @@ function ExplorerProfilePostCard({
               <Text
                 className="min-w-0 flex-1 text-[15px] font-bold text-[#2F2432]"
                 numberOfLines={1}
-                style={{ includeFontPadding: false, lineHeight: 12 }}
+                style={{ includeFontPadding: false, lineHeight: lineHeightFor(15) }}
               >
                 {authorName}
               </Text>
@@ -2978,7 +2979,7 @@ function ExplorerProfilePostCard({
                     style={{
                       color: statusTone.textColor,
                       includeFontPadding: false,
-                      lineHeight: 10,
+                      lineHeight: lineHeightFor(10),
                     }}
                   >
                     {statusBadgeLabel}
@@ -2990,20 +2991,20 @@ function ExplorerProfilePostCard({
             <View className="-mt-0.5 flex-row flex-wrap items-center gap-1">
               <Text
                 className="text-[12px] text-[#8A7D86]"
-                style={{ includeFontPadding: false, lineHeight: 11 }}
+                style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
               >
                 {getExplorerPostTimestamp(post)}
               </Text>
               <Text
                 className="text-[12px] text-[#8A7D86]"
-                style={{ includeFontPadding: false, lineHeight: 11 }}
+                style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
               >
                 •
               </Text>
               <SymbolView name={visibilityIcon} size={10} tintColor="#8A7D86" />
               <Text
                 className="text-[12px] text-[#8A7D86]"
-                style={{ includeFontPadding: false, lineHeight: 11 }}
+                style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
               >
                 {visibilityLabel}
               </Text>
@@ -3020,7 +3021,7 @@ function ExplorerProfilePostCard({
                     style={{
                       color: statusTone.textColor,
                       includeFontPadding: false,
-                      lineHeight: 10,
+                      lineHeight: lineHeightFor(10),
                     }}
                   >
                     {statusBadgeLabel}
@@ -3161,7 +3162,7 @@ function ExplorerProfilePostCard({
       {readMeaningfulText(post.mood) ? (
         <Text
           className="mt-2 text-[12px] font-semibold text-[#C24F3B]"
-          style={{ includeFontPadding: false, lineHeight: 12 }}
+          style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
         >
           {readMeaningfulText(post.mood)}
         </Text>

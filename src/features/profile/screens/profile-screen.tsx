@@ -1,6 +1,7 @@
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { lineHeightFor } from "@/lib/text-scale";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
@@ -18,6 +19,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -36,17 +38,18 @@ import {
   type CommunityFeedPost,
   updateCachedCommunityPost,
 } from "@/features/community/data/community-post-cache";
-import { likePost } from "@/features/home/api/like-post";
 import { getHotspotById } from "@/features/home/api/get-hotspot-by-id";
+import { likePost } from "@/features/home/api/like-post";
+import {
+  getApiHotspotRouteSlug,
+  getHotspotHref,
+} from "@/features/home/data/hotspots";
 import {
   addLikedPostId,
   removeLikedPostId,
   useLikedPostIds,
 } from "@/features/home/data/liked-post-store";
-import {
-  getApiHotspotRouteSlug,
-  getHotspotHref,
-} from "@/features/home/data/hotspots";
+import { getRouteById } from "@/features/route/api/route-api";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import {
   getPostVisibilityIcon,
@@ -54,17 +57,16 @@ import {
   normalizePostVisibilityValue,
 } from "@/lib/post-visibility";
 import type { SharedPostSummary } from "@/lib/shared-post";
-import { getRouteById } from "@/features/route/api/route-api";
 import { LevelProgressCard } from "../components/level-progress-card";
-import { useProfile } from "../hooks/use-profile";
-import {
-  useRouteParticipants,
-  type ProfileRouteParticipant,
-} from "../hooks/use-route-participants";
 import {
   cacheProfilePost,
   updateCachedProfilePost,
 } from "../data/profile-post-cache";
+import { useProfile } from "../hooks/use-profile";
+import {
+  type ProfileRouteParticipant,
+  useRouteParticipants,
+} from "../hooks/use-route-participants";
 import type { ProfilePost, ProfilePostStatus } from "../types";
 
 type Tab = "posts" | "pending-posts" | "routes";
@@ -149,6 +151,9 @@ const routeParticipantFallbackCover =
   "https://i.pinimg.com/1200x/80/69/f9/8069f9581583a196f9f39bda000b9312.jpg";
 const fallbackPostAuthorName = "Minh Anh";
 const fallbackPostTimestamp = "02/07/2026";
+/** Khớp `detailTextMaxFontSizeMultiplier` của community-screen để tên tác giả
+ * phóng chữ cùng nhịp với bảng tin cộng đồng. */
+const postAuthorMaxFontSizeMultiplier = 1.05;
 const postMenuSections: {
   items: {
     description?: string;
@@ -507,7 +512,9 @@ function buildProfileCommunityMediaItems(
     }));
 }
 
-function buildProfilePostMediaItems(post: ProfilePost): CommunityFeedMediaItem[] {
+function buildProfilePostMediaItems(
+  post: ProfilePost,
+): CommunityFeedMediaItem[] {
   const mediaItems = buildProfileCommunityMediaItems(post);
 
   if (mediaItems.length > 0) {
@@ -541,9 +548,7 @@ function stripTrailingProfileHashtagBlock(content: string) {
     return normalizedContent;
   }
 
-  const lines = normalizedContent
-    .split(/\r?\n/)
-    .map((line) => line.trimEnd());
+  const lines = normalizedContent.split(/\r?\n/).map((line) => line.trimEnd());
   let lastMeaningfulLineIndex = lines.length - 1;
 
   while (
@@ -558,8 +563,7 @@ function stripTrailingProfileHashtagBlock(content: string) {
   }
 
   const trailingLine = lines[lastMeaningfulLineIndex]?.trim() ?? "";
-  const hashtagLinePattern =
-    /^(#[\p{L}\p{N}_-]+)(\s+#[\p{L}\p{N}_-]+)*$/u;
+  const hashtagLinePattern = /^(#[\p{L}\p{N}_-]+)(\s+#[\p{L}\p{N}_-]+)*$/u;
 
   if (!hashtagLinePattern.test(trailingLine)) {
     return normalizedContent;
@@ -578,7 +582,10 @@ function stripTrailingProfileHashtagBlock(content: string) {
     return "";
   }
 
-  return lines.slice(0, previousMeaningfulLineIndex + 1).join("\n").trimEnd();
+  return lines
+    .slice(0, previousMeaningfulLineIndex + 1)
+    .join("\n")
+    .trimEnd();
 }
 
 function buildProfileRouteLabel(
@@ -619,7 +626,9 @@ function buildProfileHotspotSubtitle(
   }
 
   const hotspotNames = validHotspotIds
-    .map((hotspotId) => resolvedHotspots[hotspotId]?.hotspotName?.trim() || null)
+    .map(
+      (hotspotId) => resolvedHotspots[hotspotId]?.hotspotName?.trim() || null,
+    )
     .filter((hotspotName): hotspotName is string => Boolean(hotspotName));
 
   if (validHotspotIds.length === 1) {
@@ -669,7 +678,8 @@ function mapProfilePostToCommunityFeedPost(
     avatarColors: getProfileAvatarPalette(`${author}-${post.userId}`),
     badge: "Hồ sơ",
     caption:
-      stripTrailingProfileHashtagBlock(post.text) || "Bài viết mới từ hồ sơ cá nhân.",
+      stripTrailingProfileHashtagBlock(post.text) ||
+      "Bài viết mới từ hồ sơ cá nhân.",
     comments: formatCompactCount(post.commentCount),
     hotScore: "0",
     image: mediaItems[0]?.source ?? null,
@@ -733,7 +743,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { gutter, safeWidth } = useScreenLayout({ maxContentWidth: 640 });
   const heroHeight = Math.max(Math.min(safeWidth * 0.88, 320), 280);
-  const avatarSize = 126;
+  const avatarSize = 112;
   const profileOverlap = avatarSize * 0.52;
   const approvedPosts = posts.filter(
     (post) =>
@@ -959,7 +969,10 @@ export default function ProfileScreen() {
   );
 
   useEffect(() => {
-    if (!authSession.isAuthenticated || visibleHotspotIdsToResolve.length === 0) {
+    if (
+      !authSession.isAuthenticated ||
+      visibleHotspotIdsToResolve.length === 0
+    ) {
       return;
     }
 
@@ -1128,9 +1141,7 @@ export default function ProfileScreen() {
   const levelNumber = typeof profile.level === "number" ? profile.level : null;
   const levelDisplayName = profile.levelName?.trim() ?? "";
   const resolvedDisplayName =
-    profile.name.trim() ||
-    authSession.displayName.trim() ||
-    "Explorer";
+    profile.name.trim() || authSession.displayName.trim() || "Explorer";
   const resolvedProfileUsername =
     profile.username.trim() ||
     authSession.username?.trim() ||
@@ -1265,10 +1276,10 @@ export default function ProfileScreen() {
               size={avatarSize}
             />
 
-            <View className="min-w-0 flex-1 pt-8">
+            <View className="min-w-0 flex-1 pt-4">
               <View className="mt-0 flex-row items-center">
                 <Text
-                  className="text-[16px] font-extrabold leading-tight text-[#2B2233]"
+                  className="text-[17px] font-semibold leading-tight text-[#2B2233]"
                   numberOfLines={1}
                 >
                   {resolvedDisplayName}
@@ -1349,6 +1360,7 @@ export default function ProfileScreen() {
                         onLikePost={handleLikePost}
                         onOpenHotspot={handleOpenPostHotspot}
                         onOpenRoute={handleOpenPostRoute}
+                        pageGutter={gutter}
                         post={post}
                         profileAvatar={profile.avatar}
                         profileName={resolvedDisplayName}
@@ -1368,7 +1380,8 @@ export default function ProfileScreen() {
                   <InlineNotice message={routeParticipantsError.message} />
                 ) : null}
 
-                {isLoadingRouteParticipants && routeParticipants.length === 0 ? (
+                {isLoadingRouteParticipants &&
+                routeParticipants.length === 0 ? (
                   <View className="items-center py-12">
                     <ActivityIndicator color="#EB489B" />
                   </View>
@@ -1383,6 +1396,7 @@ export default function ProfileScreen() {
                         onPress={() =>
                           router.push(`/route/${participant.routeId}` as Href)
                         }
+                        pageGutter={gutter}
                         participant={participant}
                       />
                     ))}
@@ -1483,7 +1497,7 @@ function GuestProfileScreen({
             />
           </Pressable>
 
-          <Text className="text-center text-[20px] font-black tracking-[-0.3px] text-[#2B2233]">
+          <Text className="text-center text-[17px] font-semibold tracking-[-0.3px] text-[#2B2233]">
             Cá nhân
           </Text>
 
@@ -1493,7 +1507,7 @@ function GuestProfileScreen({
         <View style={{ paddingHorizontal: pageGutter, paddingTop: 20 }}>
           <View
             className="relative rounded-[30px]"
-            style={[guestHeroShadow, { marginBottom: 22, overflow: "visible" }]}
+            style={[guestHeroShadow, { marginBottom: 14, overflow: "visible" }]}
           >
             <LinearGradient
               colors={guestHeroGradientColors}
@@ -1568,20 +1582,20 @@ function GuestProfileScreen({
                 }}
                 className="gap-2.5"
               >
-                <Text className="text-[21px] font-black leading-6 text-white">
+                <Text className="text-[20px] font-semibold leading-6 text-white">
                   Chào bạn
                 </Text>
-                <Text className="text-[13px] leading-5 text-white/90">
+                <Text className="text-[12px] font-medium leading-4 text-white/90">
                   Hãy tham gia để trải nghiệm nội dung đặc sắc
                 </Text>
                 <Pressable
                   accessibilityLabel="Đăng ký hoặc đăng nhập"
-                  className="rounded-[16px] border border-[#D94D89] bg-[#FFF1F8] px-3 py-2.5"
+                  className="rounded-[16px] bg-[#FFF1F8] px-3 py-2.5"
                   onPress={onOpenAuth}
                   style={cardShadow}
                 >
                   <Text
-                    className="text-[14px] font-extrabold text-[#D94D89]"
+                    className="text-[13px] font-semibold text-[#D94D89]"
                     numberOfLines={1}
                   >
                     Đăng ký / Đăng nhập
@@ -1593,7 +1607,7 @@ function GuestProfileScreen({
             <GuestProfileHeroArt width={heroArtWidth} />
           </View>
 
-          <View className="mt-5">
+          <View className="mt-2.5">
             {GUEST_MENU_ITEMS.map((item, index) => (
               <GuestMenuPreviewRow
                 key={item.label}
@@ -1686,7 +1700,7 @@ function GuestMenuPreviewRow({
         <SymbolView name={item.icon} size={16} tintColor="#EB489B" />
       </View>
 
-      <Text className="min-w-0 flex-1 text-[17px] font-semibold leading-5 text-[#2B2233]">
+      <Text className="min-w-0 flex-1 text-[15px] font-medium leading-5 text-[#2B2233]">
         {item.label}
       </Text>
 
@@ -1761,11 +1775,11 @@ function AccountAvatar({
 
 function ProfileStat({ n, label }: { n: number; label: string }) {
   return (
-    <View className="flex-1 rounded-2xl bg-white py-2.5" style={cardShadow}>
-      <Text className="text-center text-[17px] font-extrabold text-[#2B2233]">
+    <View className="flex-1 rounded-2xl bg-white py-3" style={cardShadow}>
+      <Text className="text-center text-[18px] font-semibold text-[#2B2233]">
         {n.toLocaleString()}
       </Text>
-      <Text className="mt-0.5 text-center text-[10px] leading-tight text-[#8E869A]">
+      <Text className="mt-0.5 text-center text-[11px] leading-tight text-[#8E869A]">
         {label}
       </Text>
     </View>
@@ -1789,18 +1803,13 @@ function PostAuthorAvatar({
   avatar: string | null;
   name: string;
 }) {
-  return (
-    <UserAvatar
-      displayName={name}
-      size={42}
-      uri={avatar}
-    />
-  );
+  return <UserAvatar displayName={name} size={42} uri={avatar} />;
 }
 
 function PostAction({
   active = false,
   disabled = false,
+  dimmed,
   icon,
   label,
   onPress,
@@ -1808,11 +1817,18 @@ function PostAction({
 }: {
   active?: boolean;
   disabled?: boolean;
+  /**
+   * Làm mờ nút. Mặc định đi theo `disabled`, nhưng tách riêng để bài riêng tư /
+   * chờ duyệt vẫn hiển thị y hệt bài đã duyệt dù không bấm được.
+   */
+  dimmed?: boolean;
   icon: SymbolName;
   label: number | string;
   onPress?: () => void;
   tintColor?: string;
 }) {
+  const isDimmed = dimmed ?? disabled;
+
   return (
     <Pressable
       className="flex-row items-center rounded-full pr-2"
@@ -1820,7 +1836,7 @@ function PostAction({
       hitSlop={8}
       onPress={onPress}
       style={({ pressed }) => ({
-        opacity: disabled ? 0.5 : pressed ? 0.72 : 1,
+        opacity: isDimmed ? 0.5 : pressed ? 0.72 : 1,
       })}
     >
       <SymbolView
@@ -1829,8 +1845,8 @@ function PostAction({
         tintColor={active ? tintColor : "#7A7380"}
       />
       <Text
-        className="ml-1.5 text-[13px] text-[#706775]"
-        style={{ includeFontPadding: false, lineHeight: 12 }}
+        className="ml-1.5 text-[15px] text-[#706775]"
+        style={{ includeFontPadding: false, lineHeight: lineHeightFor(15) }}
       >
         {label}
       </Text>
@@ -1876,14 +1892,14 @@ function PostMediaGallery({ items }: { items: CommunityFeedMediaItem[] }) {
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={(event) => {
               const layoutWidth =
-                galleryWidth ||
-                event.nativeEvent.layoutMeasurement.width ||
-                1;
+                galleryWidth || event.nativeEvent.layoutMeasurement.width || 1;
               const nextIndex = Math.round(
                 event.nativeEvent.contentOffset.x / layoutWidth,
               );
 
-              setActiveIndex(Math.max(0, Math.min(items.length - 1, nextIndex)));
+              setActiveIndex(
+                Math.max(0, Math.min(items.length - 1, nextIndex)),
+              );
             }}
           >
             {items.map((item) => (
@@ -1901,7 +1917,10 @@ function PostMediaGallery({ items }: { items: CommunityFeedMediaItem[] }) {
           <View className="absolute right-3 top-3 rounded-full bg-black/35 px-2.5 py-1">
             <Text
               className="text-[11px] font-semibold text-white"
-              style={{ includeFontPadding: false, lineHeight: 12 }}
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(11),
+              }}
             >
               {`${safeActiveIndex + 1}/${items.length}`}
             </Text>
@@ -1936,8 +1955,8 @@ function ExpandablePostCaption({ text }: { text: string }) {
 
   return (
     <Text
-      className="text-[13px] text-[#2B232D]"
-      style={{ includeFontPadding: false, lineHeight: 12 }}
+      className="text-[14px] text-[#2B232D]"
+      style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
     >
       {expanded || !shouldTruncate ? normalizedText : collapsedText}
       {shouldTruncate ? (
@@ -1969,7 +1988,8 @@ function SharedPostCard({
   const mediaItems: CommunityFeedMediaItem[] = sharedPost.medias
     .filter(
       (media) =>
-        media.type.trim().toUpperCase() === "IMAGE" && Boolean(media.url.trim()),
+        media.type.trim().toUpperCase() === "IMAGE" &&
+        Boolean(media.url.trim()),
     )
     .map((media) => ({
       key: `shared-${sharedPost.postId}-media-${media.id}`,
@@ -1991,17 +2011,21 @@ function SharedPostCard({
 
         <View className="ml-2.5 flex-1 pr-2">
           <Text
-            className="text-[14px] font-bold text-[#2F2432]"
+            className="text-[16px] font-semibold text-[#2F2432]"
+            maxFontSizeMultiplier={postAuthorMaxFontSizeMultiplier}
             numberOfLines={1}
-            style={{ includeFontPadding: false, lineHeight: 14 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(16) }}
           >
             {author}
           </Text>
 
           <View className="mt-0.5 flex-row items-center gap-1">
             <Text
-              className="text-[12px] text-[#8A7D86]"
-              style={{ includeFontPadding: false, lineHeight: 11 }}
+              className="text-[14px] text-[#8A7D86]"
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(14),
+              }}
             >
               {formatPostTimestamp(sharedPost.createdAt)}
             </Text>
@@ -2044,8 +2068,8 @@ function PostTagChip({ label }: { label: string }) {
   return (
     <View className="mr-2 mt-1.5 rounded-full bg-[#F4F1F4] px-3 py-0.5">
       <Text
-        className="text-[12px] text-[#7D7680]"
-        style={{ includeFontPadding: false, lineHeight: 12 }}
+        className="text-[14px] text-[#7D7680]"
+        style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
       >
         {label}
       </Text>
@@ -2084,15 +2108,15 @@ function PostRouteCard({
         </View>
         <View className="flex-1 pr-2">
           <Text
-            className="text-[12px] font-semibold text-[#F2608E]"
-            style={{ includeFontPadding: false, lineHeight: 11 }}
+            className="text-[13px] font-semibold text-[#F2608E]"
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
           >
             Route
           </Text>
           <Text
-            className="text-[13px] font-medium text-[#4B414C]"
+            className="text-[15px] font-medium text-[#4B414C]"
             numberOfLines={2}
-            style={{ includeFontPadding: false, lineHeight: 12 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(15) }}
           >
             {label}
           </Text>
@@ -2123,7 +2147,10 @@ function PostHotspotCard({
   subtitle: string;
 }) {
   const previewImageUris = imageUris.slice(0, 3);
-  const remainingCount = Math.max(imageUris.length - previewImageUris.length, 0);
+  const remainingCount = Math.max(
+    imageUris.length - previewImageUris.length,
+    0,
+  );
 
   return (
     <Pressable
@@ -2149,15 +2176,15 @@ function PostHotspotCard({
         </View>
         <View className="flex-1 pr-2">
           <Text
-            className="text-[12px] font-semibold text-[#18A7B4]"
-            style={{ includeFontPadding: false, lineHeight: 11 }}
+            className="text-[13px] font-semibold text-[#18A7B4]"
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
           >
             {`${count} hotspot`}
           </Text>
           <Text
-            className="text-[13px] text-[#6D6671]"
+            className="text-[15px] text-[#6D6671]"
             numberOfLines={2}
-            style={{ includeFontPadding: false, lineHeight: 11 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(15) }}
           >
             {subtitle}
           </Text>
@@ -2166,7 +2193,11 @@ function PostHotspotCard({
               {previewImageUris.map((imageUri, index) => (
                 <View
                   key={`${imageUri}-${index}`}
-                  className={index === 0 ? "h-6 w-6 overflow-hidden rounded-full border-2 border-white" : "-ml-2 h-6 w-6 overflow-hidden rounded-full border-2 border-white"}
+                  className={
+                    index === 0
+                      ? "h-6 w-6 overflow-hidden rounded-full border-2 border-white"
+                      : "-ml-2 h-6 w-6 overflow-hidden rounded-full border-2 border-white"
+                  }
                 >
                   <Image
                     source={{ uri: imageUri }}
@@ -2181,7 +2212,10 @@ function PostHotspotCard({
                 <View className="-ml-2 h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#E7EEF2]">
                   <Text
                     className="text-[11px] font-semibold text-[#55606C]"
-                    style={{ includeFontPadding: false, lineHeight: 11 }}
+                    style={{
+                      includeFontPadding: false,
+                      lineHeight: lineHeightFor(11),
+                    }}
                   >
                     {`+${remainingCount}`}
                   </Text>
@@ -2226,15 +2260,23 @@ function PostMenuRow({
       </View>
       <View className="min-w-0 flex-1">
         <Text
-          className="text-[16px] font-semibold leading-5"
-          style={{ color: labelColor }}
+          className="text-[15px] font-normal"
+          style={{
+            color: labelColor,
+            includeFontPadding: false,
+            lineHeight: lineHeightFor(15),
+          }}
         >
           {item.label}
         </Text>
         {item.description ? (
           <Text
-            className="mt-0.5 text-[13px] leading-[17px]"
-            style={{ color: descriptionColor }}
+            className="mt-0.5 text-[12px]"
+            style={{
+              color: descriptionColor,
+              includeFontPadding: false,
+              lineHeight: lineHeightFor(12),
+            }}
           >
             {item.description}
           </Text>
@@ -2306,6 +2348,7 @@ function PostCard({
   onLikePost,
   onOpenHotspot,
   onOpenRoute,
+  pageGutter,
   profileAvatar,
   profileName,
   profileUsername,
@@ -2319,6 +2362,7 @@ function PostCard({
   onLikePost: (post: ProfilePost) => void;
   onOpenHotspot: (hotspotId: number) => void;
   onOpenRoute: (routeId: number) => void;
+  pageGutter: number;
   profileAvatar: string | null;
   profileName: string;
   profileUsername: string;
@@ -2386,250 +2430,268 @@ function PostCard({
   }
 
   return (
-    <View
-      className={isLast ? "" : "mb-3"}
-      style={{
-        borderColor: "#F0E7ED",
-        borderWidth: 0.8,
-        borderRadius: 24,
-        backgroundColor: "#FFFFFF",
-        paddingHorizontal: 16,
-        paddingTop: 12,
-        paddingBottom: 10,
-        shadowColor: "rgba(64, 34, 58, 0.08)",
-        shadowOpacity: 1,
-        shadowRadius: 20,
-        shadowOffset: { width: 0, height: 10 },
-        elevation: 4,
-      }}
-    >
-      <View className="flex-row items-start">
-        <View className="min-w-0 flex-1 flex-row items-start">
-          <PostAuthorAvatar
-            avatar={profileAvatar}
-            name={authorName}
-          />
+    <>
+      <View className="pb-3 pt-3.5">
+        <View className="flex-row items-start">
+          <View className="min-w-0 flex-1 flex-row items-start">
+            <PostAuthorAvatar avatar={profileAvatar} name={authorName} />
 
-          <View className="ml-3 flex-1 pr-2">
-            <View className="flex-row items-center gap-2">
-              <Text
-                className="min-w-0 flex-1 text-[15px] font-bold text-[#2F2432]"
-                numberOfLines={1}
-                style={{ includeFontPadding: false, lineHeight: 12 }}
-              >
-                {authorName}
-              </Text>
-              {isPendingPost ? (
-                <View
-                  className="rounded-full border px-2 py-[2px]"
+            <View className="ml-3 flex-1 pr-2">
+              <View className="flex-row items-center gap-2">
+                <Text
+                  className="min-w-0 flex-1 text-[17px] font-semibold text-[#2F2432]"
+                  maxFontSizeMultiplier={postAuthorMaxFontSizeMultiplier}
+                  numberOfLines={1}
                   style={{
-                    backgroundColor: statusTone.backgroundColor,
-                    borderColor: statusTone.borderColor,
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(17),
                   }}
                 >
-                  <Text
-                    className="text-[10px] font-semibold"
+                  {authorName}
+                </Text>
+                {isPendingPost ? (
+                  <View
+                    className="rounded-full border px-2 py-[2px]"
                     style={{
-                      color: statusTone.textColor,
-                      includeFontPadding: false,
-                      lineHeight: 10,
+                      backgroundColor: statusTone.backgroundColor,
+                      borderColor: statusTone.borderColor,
                     }}
                   >
-                    {statusBadgeLabel}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
+                    <Text
+                      className="text-[10px] font-semibold"
+                      style={{
+                        color: statusTone.textColor,
+                        includeFontPadding: false,
+                        lineHeight: lineHeightFor(10),
+                      }}
+                    >
+                      {statusBadgeLabel}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
 
-            <View className="-mt-0.5 flex-row flex-wrap items-center gap-1">
-              <Text
-                className="text-[12px] text-[#8A7D86]"
-                style={{ includeFontPadding: false, lineHeight: 11 }}
-              >
-                {formatPostTimestamp(post.createdAt)}
-              </Text>
-              <Text
-                className="text-[12px] text-[#8A7D86]"
-                style={{ includeFontPadding: false, lineHeight: 11 }}
-              >
-                •
-              </Text>
-              <SymbolView name={visibilityIcon} size={10} tintColor="#8A7D86" />
-              <Text
-                className="text-[12px] text-[#8A7D86]"
-                style={{ includeFontPadding: false, lineHeight: 11 }}
-              >
-                {visibilityLabel}
-              </Text>
-              {normalizedStatus !== "APPROVED" && !isPendingPost ? (
-                <View
-                  className="rounded-full border px-2 py-[2px]"
+              <View className="-mt-0.5 flex-row flex-wrap items-center gap-1">
+                <Text
+                  className="text-[14px] text-[#8A7D86]"
                   style={{
-                    backgroundColor: statusTone.backgroundColor,
-                    borderColor: statusTone.borderColor,
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(14),
                   }}
                 >
-                  <Text
-                    className="text-[10px] font-semibold"
+                  {formatPostTimestamp(post.createdAt)}
+                </Text>
+                <Text
+                  className="text-[14px] text-[#8A7D86]"
+                  style={{
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(14),
+                  }}
+                >
+                  •
+                </Text>
+                <SymbolView
+                  name={visibilityIcon}
+                  size={12}
+                  tintColor="#8A7D86"
+                />
+                <Text
+                  className="text-[14px] text-[#8A7D86]"
+                  style={{
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(14),
+                  }}
+                >
+                  {visibilityLabel}
+                </Text>
+                {normalizedStatus !== "APPROVED" && !isPendingPost ? (
+                  <View
+                    className="rounded-full border px-2 py-[2px]"
                     style={{
-                      color: statusTone.textColor,
-                      includeFontPadding: false,
-                      lineHeight: 10,
+                      backgroundColor: statusTone.backgroundColor,
+                      borderColor: statusTone.borderColor,
                     }}
                   >
-                    {statusBadgeLabel}
-                  </Text>
-                </View>
-              ) : null}
+                    <Text
+                      className="text-[10px] font-semibold"
+                      style={{
+                        color: statusTone.textColor,
+                        includeFontPadding: false,
+                        lineHeight: lineHeightFor(10),
+                      }}
+                    >
+                      {statusBadgeLabel}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
           </View>
+
+          <Pressable
+            className="h-8 w-8 items-center justify-center rounded-full"
+            onPress={() => setIsPostMenuVisible(true)}
+          >
+            <SymbolView
+              name={{
+                ios: "ellipsis",
+                android: "more_horiz",
+                web: "more_horiz",
+              }}
+              size={18}
+              tintColor="#554C56"
+            />
+          </Pressable>
         </View>
 
-        <Pressable
-          className="h-8 w-8 items-center justify-center rounded-full"
-          onPress={() => setIsPostMenuVisible(true)}
-        >
-          <SymbolView
-            name={{ ios: "ellipsis", android: "more_horiz", web: "more_horiz" }}
-            size={18}
-            tintColor="#554C56"
-          />
-        </Pressable>
-      </View>
+        <View className="pt-1.5">
+          {postContent ? <ExpandablePostCaption text={postContent} /> : null}
 
-      <View className="pt-1.5">
-        {postContent ? <ExpandablePostCaption text={postContent} /> : null}
-
-        {sharedPost ? (
-          <SharedPostCard
-            sharedPost={sharedPost}
-            withTopSpacing={Boolean(postContent)}
-          />
-        ) : null}
-
-        {tagLabels.length > 0 ? (
-          <View className="mt-1 flex-row flex-wrap items-center">
-            {tagLabels.map((tagLabel) => (
-              <PostTagChip key={`${post.id}-${tagLabel}`} label={tagLabel} />
-            ))}
-          </View>
-        ) : null}
-
-        {routeLabel ? (
-          <View className="mt-1.5">
-            <PostRouteCard
-              label={routeLabel}
-              onPress={
-                routeIds.length > 0
-                  ? () => {
-                      onOpenRoute(routeIds[0] ?? 0);
-                    }
-                  : undefined
-              }
+          {sharedPost ? (
+            <SharedPostCard
+              sharedPost={sharedPost}
+              withTopSpacing={Boolean(postContent)}
             />
-          </View>
-        ) : null}
+          ) : null}
 
-        {hotspotSubtitle ? (
-          <View className="mt-1.5">
-            <PostHotspotCard
-              count={hotspotIds.length}
-              imageUris={hotspotImageUris}
-              onPress={
-                hotspotIds.length > 0
-                  ? () => {
-                      onOpenHotspot(hotspotIds[0] ?? 0);
-                    }
-                  : undefined
-              }
-              subtitle={hotspotSubtitle}
-            />
-          </View>
-        ) : null}
-      </View>
+          {tagLabels.length > 0 ? (
+            <View className="mt-1 flex-row flex-wrap items-center">
+              {tagLabels.map((tagLabel) => (
+                <PostTagChip key={`${post.id}-${tagLabel}`} label={tagLabel} />
+              ))}
+            </View>
+          ) : null}
 
-      {mediaItems.length > 0 ? (
-        <View className="mt-2">
-          <PostMediaGallery items={mediaItems} />
+          {routeLabel ? (
+            <View className="mt-1.5">
+              <PostRouteCard
+                label={routeLabel}
+                onPress={
+                  routeIds.length > 0
+                    ? () => {
+                        onOpenRoute(routeIds[0] ?? 0);
+                      }
+                    : undefined
+                }
+              />
+            </View>
+          ) : null}
+
+          {hotspotSubtitle ? (
+            <View className="mt-1.5">
+              <PostHotspotCard
+                count={hotspotIds.length}
+                imageUris={hotspotImageUris}
+                onPress={
+                  hotspotIds.length > 0
+                    ? () => {
+                        onOpenHotspot(hotspotIds[0] ?? 0);
+                      }
+                    : undefined
+                }
+                subtitle={hotspotSubtitle}
+              />
+            </View>
+          ) : null}
         </View>
-      ) : null}
 
-      <View className="mt-1.5 flex-row items-center">
-        <PostAction
-          active={canInteractWithPost && isLiked}
-          disabled={!canInteractWithPost || isLiking}
-          icon={
-            canInteractWithPost && isLiked
-              ? {
-                  ios: "heart.fill",
-                  android: "favorite",
-                  web: "favorite",
-                }
-              : {
-                  ios: "heart",
-                  android: "favorite_border",
-                  web: "favorite_border",
-                }
-          }
-          label={likeCount}
-          onPress={
-            canInteractWithPost
-              ? () => {
-                  onLikePost(post);
-                }
-              : undefined
-          }
+        {mediaItems.length > 0 ? (
+          <View className="mt-2">
+            <PostMediaGallery items={mediaItems} />
+          </View>
+        ) : null}
+
+        <View className="mt-1.5 flex-row items-center">
+          <PostAction
+            active={canInteractWithPost && isLiked}
+            dimmed={isLiking}
+            disabled={!canInteractWithPost || isLiking}
+            icon={
+              canInteractWithPost && isLiked
+                ? {
+                    ios: "heart.fill",
+                    android: "favorite",
+                    web: "favorite",
+                  }
+                : {
+                    ios: "heart",
+                    android: "favorite_border",
+                    web: "favorite_border",
+                  }
+            }
+            label={likeCount}
+            onPress={
+              canInteractWithPost
+                ? () => {
+                    onLikePost(post);
+                  }
+                : undefined
+            }
+          />
+          <View className="ml-4">
+            <PostAction
+              dimmed={false}
+              disabled={!canInteractWithPost}
+              icon={{
+                ios: "bubble.left",
+                android: "chat_bubble_outline",
+                web: "chat_bubble_outline",
+              }}
+              label={commentCount}
+              onPress={canInteractWithPost ? handleOpenComments : undefined}
+            />
+          </View>
+          <View className="ml-4">
+            <PostAction
+              icon={{
+                ios: "arrowshape.turn.up.right",
+                android: "share",
+                web: "share",
+              }}
+              label={shareCount > 0 ? shareCount : "Chia sẻ"}
+            />
+          </View>
+          <View className="flex-1" />
+        </View>
+
+        {post.reason ? (
+          <Text
+            className="mt-2 text-[12px] font-semibold text-[#C24F3B]"
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
+          >
+            Lý do: {post.reason}
+          </Text>
+        ) : null}
+      </View>
+
+      {isLast ? null : (
+        <View
+          style={{
+            backgroundColor: "#ECE6EA",
+            height: StyleSheet.hairlineWidth,
+            marginHorizontal: -pageGutter,
+          }}
         />
-        <View className="ml-4">
-          <PostAction
-            disabled={!canInteractWithPost}
-            icon={{
-              ios: "bubble.left",
-              android: "chat_bubble_outline",
-              web: "chat_bubble_outline",
-            }}
-            label={commentCount}
-            onPress={canInteractWithPost ? handleOpenComments : undefined}
-          />
-        </View>
-        <View className="ml-4">
-          <PostAction
-            icon={{
-              ios: "arrowshape.turn.up.right",
-              android: "share",
-              web: "share",
-            }}
-            label={shareCount > 0 ? shareCount : "Chia sẻ"}
-          />
-        </View>
-        <View className="flex-1" />
-      </View>
-
-      {post.reason ? (
-        <Text
-          className="mt-2 text-[12px] font-semibold text-[#C24F3B]"
-          style={{ includeFontPadding: false, lineHeight: 12 }}
-        >
-          Lý do: {post.reason}
-        </Text>
-      ) : null}
+      )}
 
       <PostOptionsSheet
         bottomInset={insets.bottom}
         visible={isPostMenuVisible}
         onClose={() => setIsPostMenuVisible(false)}
       />
-    </View>
+    </>
   );
 }
 
 function RouteParticipantCard({
   isLast,
   onPress,
+  pageGutter,
   participant,
 }: {
   isLast: boolean;
   onPress: () => void;
+  pageGutter: number;
   participant: ProfileRouteParticipant;
 }) {
   const routeName =
@@ -2639,8 +2701,8 @@ function RouteParticipantCard({
   const statusTone = getRouteParticipantStatusTone(participant.status);
   const activityDateLabel = formatRouteParticipantDate(
     normalizedStatus === "COMPLETED"
-      ? participant.completedAt ?? participant.startedAt ?? null
-      : participant.startedAt ?? participant.completedAt ?? null,
+      ? (participant.completedAt ?? participant.startedAt ?? null)
+      : (participant.startedAt ?? participant.completedAt ?? null),
   );
   const ratingLabel = formatRouteParticipantRating(participant.rating);
   const progressLabel = `${participant.completedStops}/${participant.totalStops} điểm dừng`;
@@ -2662,164 +2724,198 @@ function RouteParticipantCard({
         : "Đang khám phá";
 
   return (
-    <Pressable
-      className={isLast ? "" : "mb-3"}
-      onPress={onPress}
-      style={{
-        borderColor: "#F0E7ED",
-        borderWidth: 0.8,
-        borderRadius: 24,
-        backgroundColor: "#FFFFFF",
-        paddingHorizontal: 16,
-        paddingTop: 12,
-        paddingBottom: 12,
-        shadowColor: "rgba(64, 34, 58, 0.08)",
-        shadowOpacity: 1,
-        shadowRadius: 20,
-        shadowOffset: { width: 0, height: 10 },
-        elevation: 4,
-      }}
-    >
-      <View className="flex-row items-center">
-        <View className="overflow-hidden rounded-[18px] bg-[#EDF2F7]">
-          <Image
-            cachePolicy="memory-disk"
-            contentFit="cover"
-            source={participant.cover ?? routeParticipantFallbackCover}
-            style={{ height: 116, width: 116 }}
-            transition={180}
-          />
+    <>
+      <Pressable
+        className="py-3"
+        onPress={onPress}
+        style={({ pressed }) => ({
+          opacity: pressed ? 0.72 : 1,
+        })}
+      >
+        <View className="flex-row items-center">
+          <View className="overflow-hidden rounded-[18px] bg-[#EDF2F7]">
+            <Image
+              cachePolicy="memory-disk"
+              contentFit="cover"
+              source={participant.cover ?? routeParticipantFallbackCover}
+              style={{ height: 116, width: 116 }}
+              transition={180}
+            />
 
-          {participant.xp ? (
-            <LinearGradient
-              className="absolute left-2 top-2 rounded-full px-2 py-1"
-              colors={["#FFD84D", "#F59E0B"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <Text
-                className="text-[10px] font-extrabold text-[#5A3400]"
-                style={{ includeFontPadding: false, lineHeight: 11 }}
+            {participant.xp ? (
+              <LinearGradient
+                className="absolute left-2 top-2 rounded-full px-2 py-1"
+                colors={["#FFD84D", "#F59E0B"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
               >
-                +{formatCompactCount(participant.xp)} XP
-              </Text>
-            </LinearGradient>
-          ) : null}
-        </View>
-
-        <View className="ml-3 min-w-0 flex-1">
-          <View className="flex-row items-start gap-1.5">
-            <View className="min-w-0 flex-1">
-              <Text
-                className="text-[14px] font-bold text-[#2F2432]"
-                numberOfLines={1}
-                style={{ includeFontPadding: false, lineHeight: 16 }}
-              >
-                {routeName}
-              </Text>
-
-              <Text
-                className="mt-[2px] text-[11.5px] text-[#8A7D86]"
-                numberOfLines={1}
-                style={{ includeFontPadding: false, lineHeight: 12 }}
-              >
-                {activityLabel}
-              </Text>
-            </View>
-
-            <View
-              className="rounded-full border px-2 py-[3px]"
-              style={{
-                backgroundColor: statusTone.backgroundColor,
-                borderColor: statusTone.borderColor,
-              }}
-            >
-              <Text
-                className="text-[9px] font-bold"
-                style={{
-                  color: statusTone.textColor,
-                  includeFontPadding: false,
-                  lineHeight: 10,
-                }}
-              >
-                {statusLabel}
-              </Text>
-            </View>
+                <Text
+                  className="text-[11px] font-extrabold text-[#5A3400]"
+                  style={{
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(11),
+                  }}
+                >
+                  +{formatCompactCount(participant.xp)} XP
+                </Text>
+              </LinearGradient>
+            ) : null}
           </View>
 
-          <View className="mt-[2px] flex-row flex-wrap items-center gap-1">
-            {ratingLabel ? (
-              <View className="flex-row items-center gap-1">
-                <SymbolView
-                  name={{ ios: "star.fill", android: "star", web: "star" }}
-                  size={11}
-                  tintColor="#F59E0B"
-                />
+          <View className="ml-3 min-w-0 flex-1">
+            <View className="flex-row items-start gap-1.5">
+              <View className="min-w-0 flex-1">
                 <Text
-                  className="text-[11.5px] text-[#D97706]"
-                  style={{ includeFontPadding: false, lineHeight: 11 }}
+                  className="text-[17px] font-semibold text-[#2F2432]"
+                  maxFontSizeMultiplier={postAuthorMaxFontSizeMultiplier}
+                  numberOfLines={1}
+                  style={{
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(17),
+                  }}
                 >
-                  {ratingLabel}
+                  {routeName}
+                </Text>
+
+                <Text
+                  className="mt-[2px] text-[13px] text-[#8A7D86]"
+                  numberOfLines={1}
+                  style={{
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(13),
+                  }}
+                >
+                  {activityLabel}
                 </Text>
               </View>
-            ) : null}
 
-            {ratingLabel ? (
-              <Text
-                className="text-[11px] text-[#C49A72]"
-                style={{ includeFontPadding: false, lineHeight: 11 }}
+              <View
+                className="rounded-full border px-2 py-[3px]"
+                style={{
+                  backgroundColor: statusTone.backgroundColor,
+                  borderColor: statusTone.borderColor,
+                }}
               >
-                ·
-              </Text>
-            ) : null}
+                <Text
+                  className="text-[10px] font-bold"
+                  style={{
+                    color: statusTone.textColor,
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(10),
+                  }}
+                >
+                  {statusLabel}
+                </Text>
+              </View>
+            </View>
 
-            <Text
-              className="text-[11.5px] text-[#E59A54]"
-              numberOfLines={1}
-              style={{ includeFontPadding: false, lineHeight: 11 }}
-            >
-              {progressLabel}
-            </Text>
-          </View>
-
-          <View className="mt-[2px] flex-row items-start gap-1">
-            <SymbolView
-              name={{ ios: "mappin.and.ellipse", android: "place", web: "place" }}
-              size={11}
-              tintColor="#A38D9F"
-            />
-            <Text
-              className="min-w-0 flex-1 text-[11.5px] text-[#776B77]"
-              numberOfLines={1}
-              style={{ includeFontPadding: false, lineHeight: 12 }}
-            >
-              {addressLabel}
-            </Text>
-          </View>
-
-          <View className="mt-[3px] flex-row items-center">
-            <View className="flex-row flex-wrap items-center gap-2">
-              {footerMetaItems.map((item) => (
-                <View className="flex-row items-center gap-1" key={item}>
+            <View className="mt-[2px] flex-row flex-wrap items-center gap-1">
+              {ratingLabel ? (
+                <View className="flex-row items-center gap-1">
                   <SymbolView
-                    name={{ ios: "clock", android: "schedule", web: "schedule" }}
-                    size={10}
-                    tintColor="#A38D9F"
+                    name={{ ios: "star.fill", android: "star", web: "star" }}
+                    size={12}
+                    tintColor="#F59E0B"
                   />
                   <Text
-                    className="text-[11.5px] text-[#8A7D86]"
-                    numberOfLines={1}
-                    style={{ includeFontPadding: false, lineHeight: 11 }}
+                    className="text-[13px] text-[#D97706]"
+                    style={{
+                      includeFontPadding: false,
+                      lineHeight: lineHeightFor(13),
+                    }}
                   >
-                    {item}
+                    {ratingLabel}
                   </Text>
                 </View>
-              ))}
+              ) : null}
+
+              {ratingLabel ? (
+                <Text
+                  className="text-[13px] text-[#C49A72]"
+                  style={{
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(13),
+                  }}
+                >
+                  ·
+                </Text>
+              ) : null}
+
+              <Text
+                className="text-[13px] text-[#E59A54]"
+                numberOfLines={1}
+                style={{
+                  includeFontPadding: false,
+                  lineHeight: lineHeightFor(13),
+                }}
+              >
+                {progressLabel}
+              </Text>
+            </View>
+
+            <View className="mt-[2px] flex-row items-start gap-1">
+              <SymbolView
+                name={{
+                  ios: "mappin.and.ellipse",
+                  android: "place",
+                  web: "place",
+                }}
+                size={12}
+                tintColor="#A38D9F"
+              />
+              <Text
+                className="min-w-0 flex-1 text-[13px] text-[#776B77]"
+                numberOfLines={1}
+                style={{
+                  includeFontPadding: false,
+                  lineHeight: lineHeightFor(13),
+                }}
+              >
+                {addressLabel}
+              </Text>
+            </View>
+
+            <View className="mt-[3px] flex-row items-center">
+              <View className="flex-row flex-wrap items-center gap-2">
+                {footerMetaItems.map((item) => (
+                  <View className="flex-row items-center gap-1" key={item}>
+                    <SymbolView
+                      name={{
+                        ios: "clock",
+                        android: "schedule",
+                        web: "schedule",
+                      }}
+                      size={12}
+                      tintColor="#A38D9F"
+                    />
+                    <Text
+                      className="text-[13px] text-[#8A7D86]"
+                      numberOfLines={1}
+                      style={{
+                        includeFontPadding: false,
+                        lineHeight: lineHeightFor(13),
+                      }}
+                    >
+                      {item}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </View>
           </View>
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+
+      {isLast ? null : (
+        <View
+          style={{
+            backgroundColor: "#ECE6EA",
+            height: StyleSheet.hairlineWidth,
+            marginHorizontal: -pageGutter,
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -2866,4 +2962,3 @@ function EmptyRoutes() {
     </View>
   );
 }
-

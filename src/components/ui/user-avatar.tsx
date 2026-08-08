@@ -9,6 +9,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
+import { lineHeightFor } from "@/lib/text-scale";
 
 export const defaultUserAvatarGradientColors = ["#EB489B", "#F58752"] as const;
 
@@ -107,7 +108,7 @@ export function UserAvatarFallback({
           style={[
             {
               fontSize: resolvedTextSize,
-              lineHeight: Math.round(resolvedTextSize * 1.08),
+              lineHeight: lineHeightFor(resolvedTextSize),
             },
             textStyle,
           ]}

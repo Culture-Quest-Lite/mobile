@@ -85,6 +85,7 @@ import {
   resolveRouteIdParam,
   resolveSelectedHotspotId,
 } from "../utils/resolve-selected-hotspot-id";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type HotspotCoordinate = NonNullable<HotspotDetail["coordinate"]>;
@@ -188,32 +189,34 @@ const relatedRouteScrollInset = detailSheetHorizontalPadding;
 const reviewMediaGridGap = 6;
 const reviewCardBorderRadius = 14;
 const reviewMediaBorderRadius = 10;
-const reviewTextLineHeight = 16;
 // Tỉ lệ khung ảnh lấy theo mẫu Google review: 1 ảnh ngang, 2 ảnh gần vuông,
 // lưới 4 ảnh thì dẹt lại cho card gọn.
 const singleMediaAspectRatio = 16 / 9;
 const twoMediaAspectRatio = 6 / 5;
 const gridMediaAspectRatio = 16 / 9;
-const sectionEyebrowTextStyle = {
+// Các style dưới đây nhận cỡ chữ của chính chỗ dùng, vì cùng một style đang
+// phục vụ nhiều cỡ (eyebrow chạy 11/13/14px) - dùng chung một lineHeight cứng
+// là lý do chỗ thì thoáng, chỗ thì khít.
+const sectionEyebrowTextStyle = (fontSize: number) => ({
   color: "#7A6F67",
-  lineHeight: 18,
-} as const;
-const sectionTitleTextStyle = {
+  lineHeight: lineHeightFor(fontSize),
+});
+const sectionTitleTextStyle = (fontSize: number) => ({
   color: "#2B2233",
-  lineHeight: 24,
-} as const;
-const sectionBodyTextStyle = {
+  lineHeight: lineHeightFor(fontSize),
+});
+const sectionBodyTextStyle = (fontSize: number) => ({
   color: "#6F657A",
-  lineHeight: 19,
-} as const;
-const sectionBodyEmphasisTextStyle = {
+  lineHeight: bodyLineHeightFor(fontSize),
+});
+const sectionBodyEmphasisTextStyle = (fontSize: number) => ({
   color: "#554751",
-  lineHeight: 19,
-} as const;
-const sectionCaptionTextStyle = {
+  lineHeight: bodyLineHeightFor(fontSize),
+});
+const sectionCaptionTextStyle = (fontSize: number) => ({
   color: "#7A6F67",
-  lineHeight: 14,
-} as const;
+  lineHeight: lineHeightFor(fontSize),
+});
 
 function Text({
   maxFontSizeMultiplier = detailTextMaxFontSizeMultiplier,
@@ -909,7 +912,7 @@ function SummaryStat({
         <SymbolView name={icon} size={12} tintColor="#EB489B" />
         <Text
           className="text-[11px] font-black uppercase tracking-[0.8px]"
-          style={sectionEyebrowTextStyle}
+          style={sectionEyebrowTextStyle(11)}
         >
           {label}
         </Text>
@@ -920,7 +923,7 @@ function SummaryStat({
         className="mt-1 text-center text-[15px] font-semibold"
         minimumFontScale={0.84}
         numberOfLines={1}
-        style={{ color: "#201B18", lineHeight: 18, textAlign: "center" }}
+        style={{ color: "#201B18", lineHeight: lineHeightFor(15), textAlign: "center" }}
       >
         {value}
       </Text>
@@ -1045,7 +1048,7 @@ function TagChip({
         className={`text-[12px] font-semibold ${
           isUppercase ? "uppercase tracking-[0.8px]" : ""
         }`}
-        style={{ color: textColor, lineHeight: 16 }}
+        style={{ color: textColor, lineHeight: bodyLineHeightFor(12) }}
       >
         {label}
       </Text>
@@ -1169,13 +1172,13 @@ function DirectionMapCard({
         >
           <Text
             className="text-[12px] font-bold text-white"
-            style={{ lineHeight: 16 }}
+            style={{ lineHeight: bodyLineHeightFor(12) }}
           >
             Google Maps error:
           </Text>
           <Text
             className="mt-1 text-[12px] text-white"
-            style={{ lineHeight: 16 }}
+            style={{ lineHeight: bodyLineHeightFor(12) }}
           >
             {activeMapError}
           </Text>
@@ -1285,13 +1288,13 @@ function DirectionMapCard({
                 </View>
                 <Text
                   className="mt-4 text-center text-[16px] font-semibold text-[#2B2233]"
-                  style={{ lineHeight: 20 }}
+                  style={{ lineHeight: bodyLineHeightFor(16) }}
                 >
                   Không tải được preview bản đồ
                 </Text>
                 <Text
                   className="mt-2 text-center text-[15px]"
-                  style={sectionBodyTextStyle}
+                  style={sectionBodyTextStyle(15)}
                 >
                   Kiểm tra Google Maps API key, package Android và SHA-1 của
                   build rồi rebuild app.
@@ -1309,7 +1312,7 @@ function DirectionMapCard({
         <View className="rounded-full bg-white/90 px-3 py-2">
           <Text
             className="text-[12px] font-black uppercase tracking-[0.8px]"
-            style={{ color: "#335A70", lineHeight: 16 }}
+            style={{ color: "#335A70", lineHeight: bodyLineHeightFor(12) }}
           >
             {mapStatusLabel}
           </Text>
@@ -1318,7 +1321,7 @@ function DirectionMapCard({
           <Text
             className="text-[12px] font-medium text-[#4E6473]"
             numberOfLines={1}
-            style={{ lineHeight: 16 }}
+            style={{ lineHeight: lineHeightFor(12) }}
           >
             {address}
           </Text>
@@ -1329,14 +1332,14 @@ function DirectionMapCard({
         <View pointerEvents="none" className="flex-1">
           <Text
             className="text-[12px] font-black uppercase tracking-[0.8px] text-white/72"
-            style={{ lineHeight: 16 }}
+            style={{ lineHeight: bodyLineHeightFor(12) }}
           >
             {mapGestureHint}
           </Text>
           <Text
             className="mt-1 text-[16px] font-semibold text-white"
             numberOfLines={1}
-            style={{ lineHeight: 20 }}
+            style={{ lineHeight: lineHeightFor(16) }}
           >
             {headline}
           </Text>
@@ -1463,7 +1466,7 @@ function LocationInformationSection({
     <View className="mt-6 gap-3">
       <Text
         className="text-[14px] font-black uppercase tracking-[1.4px]"
-        style={sectionEyebrowTextStyle}
+        style={sectionEyebrowTextStyle(14)}
       >
         Thông tin về địa điểm
       </Text>
@@ -1482,7 +1485,7 @@ function LocationInformationSection({
               <View className="flex-1">
                 <Text
                   className="text-[12px] font-black uppercase tracking-[1px] text-[#8FA6BA]"
-                  style={{ lineHeight: 16 }}
+                  style={{ lineHeight: bodyLineHeightFor(12) }}
                 >
                   {item.label}
                 </Text>
@@ -1508,7 +1511,7 @@ function LocationInformationSection({
                 ) : (
                   <Text
                     className="mt-1 text-[15px]"
-                    style={{ color: "#526879", lineHeight: 19 }}
+                    style={{ color: "#526879", lineHeight: bodyLineHeightFor(15) }}
                   >
                     {item.value}
                   </Text>
@@ -1531,7 +1534,7 @@ function HotspotOverviewSection({ text }: { text: string }) {
       <Text
         className="text-[15px]"
         numberOfLines={isExpanded ? undefined : 4}
-        style={sectionBodyTextStyle}
+        style={sectionBodyTextStyle(15)}
       >
         {text}
       </Text>
@@ -1541,7 +1544,7 @@ function HotspotOverviewSection({ text }: { text: string }) {
           className="mt-2 self-end"
           onPress={() => setIsExpanded((value) => !value)}
         >
-          <Text className="text-[12px]" style={sectionCaptionTextStyle}>
+          <Text className="text-[12px]" style={sectionCaptionTextStyle(12)}>
             {isExpanded ? "Thu gọn" : "Xem thêm"}
           </Text>
         </Pressable>
@@ -1558,7 +1561,7 @@ function HistoricalInfoSection({ text }: { text: string }) {
     <View className="gap-3">
       <Text
         className="text-[14px] font-black uppercase tracking-[1.4px]"
-        style={sectionEyebrowTextStyle}
+        style={sectionEyebrowTextStyle(14)}
       >
         Thông tin lịch sử
       </Text>
@@ -1570,7 +1573,7 @@ function HistoricalInfoSection({ text }: { text: string }) {
         <Text
           className="text-[15px]"
           numberOfLines={isExpanded ? undefined : 4}
-          style={sectionBodyEmphasisTextStyle}
+          style={sectionBodyEmphasisTextStyle(15)}
         >
           {text}
         </Text>
@@ -1580,7 +1583,7 @@ function HistoricalInfoSection({ text }: { text: string }) {
             className="mt-2 self-end"
             onPress={() => setIsExpanded((value) => !value)}
           >
-            <Text className="text-[12px]" style={sectionCaptionTextStyle}>
+            <Text className="text-[12px]" style={sectionCaptionTextStyle(12)}>
               {isExpanded ? "Thu gọn" : "Xem thêm"}
             </Text>
           </Pressable>
@@ -1641,7 +1644,7 @@ function HiddenStoryCheckinSection({
       <View className="flex-row items-center justify-between gap-3">
         <Text
           className="text-[13px] font-black uppercase tracking-[1.4px]"
-          style={sectionEyebrowTextStyle}
+          style={sectionEyebrowTextStyle(13)}
         >
           Câu chuyện ẩn
         </Text>
@@ -1731,14 +1734,14 @@ function HiddenStoryCheckinSection({
 
           <Text
             className="mt-4 text-center text-[18px] font-semibold text-[#2B2233]"
-            style={{ lineHeight: 20 }}
+            style={{ lineHeight: lineHeightFor(18) }}
           >
             Câu chuyện đang chờ bạn
           </Text>
 
           <Text
             className="mt-1 max-w-[320px] text-center text-[15px]"
-            style={[sectionBodyTextStyle, { lineHeight: 18 }]}
+            style={sectionBodyTextStyle(15)}
           >
             {isCheckinStatusLoading
               ? "Đang kiểm tra trạng thái check-in từ hệ thống trước khi mở khóa nội dung."
@@ -1869,7 +1872,7 @@ function HotspotRouteCarouselCard({
               className="text-[14px] font-semibold text-[#2B2233]"
               numberOfLines={2}
               ellipsizeMode="tail"
-              style={{ lineHeight: 16 }}
+              style={{ lineHeight: lineHeightFor(14) }}
             >
               {route.title}
             </Text>
@@ -1878,7 +1881,7 @@ function HotspotRouteCarouselCard({
               className="text-[12px] text-[#7A6F67]"
               numberOfLines={2}
               ellipsizeMode="tail"
-              style={{ lineHeight: 13 }}
+              style={{ lineHeight: lineHeightFor(12) }}
             >
               {routeDescription}
             </Text>
@@ -1909,7 +1912,7 @@ function RouteMatchesSectionHeader() {
   return (
     <Text
       className="text-[14px] font-black uppercase tracking-[1.4px]"
-      style={sectionEyebrowTextStyle}
+      style={sectionEyebrowTextStyle(14)}
     >
       Các tuyến đường phù hợp
     </Text>
@@ -1926,7 +1929,7 @@ function PersonalExperienceSectionHeader({
   return (
     <Text
       className="text-[14px] font-black uppercase tracking-[1.4px]"
-      style={sectionEyebrowTextStyle}
+      style={sectionEyebrowTextStyle(14)}
     >
       {title}
       {totalLabel ? (
@@ -2061,7 +2064,7 @@ function PersonalExperienceComposer({
               className="ml-2 text-[15px] font-semibold"
               style={{
                 color: hiddenStoryActionForegroundColor,
-                lineHeight: 16,
+                lineHeight: lineHeightFor(15),
               }}
             >
               Thêm ảnh và video
@@ -2110,7 +2113,7 @@ function PersonalExperienceLikeButton({
       />
       <Text
         className="text-[14px] font-semibold"
-        style={{ color: isLiked ? "#F43F5E" : "#2B2233", lineHeight: 16 }}
+        style={{ color: isLiked ? "#F43F5E" : "#2B2233", lineHeight: lineHeightFor(14) }}
       >
         {value}
       </Text>
@@ -2250,14 +2253,14 @@ function PersonalExperienceCard({
           <Text
             className="text-[14px] font-semibold text-[#2B2233]"
             numberOfLines={1}
-            style={{ lineHeight: 14 }}
+            style={{ lineHeight: lineHeightFor(14) }}
           >
             {item.user}
           </Text>
           <Text
             className="text-[12px] text-[#8A7B83]"
             numberOfLines={1}
-            style={{ lineHeight: 11, marginTop: -3 }}
+            style={{ lineHeight: lineHeightFor(12), marginTop: -3 }}
           >
             {item.date}
           </Text>
@@ -2401,10 +2404,7 @@ function PersonalExperienceCard({
       {hasText ? (
         <Text
           className="mt-1 text-[14px] text-[#554751]"
-          style={[
-            sectionBodyEmphasisTextStyle,
-            { lineHeight: reviewTextLineHeight },
-          ]}
+          style={sectionBodyEmphasisTextStyle(14)}
         >
           {item.text}
         </Text>
@@ -2565,7 +2565,7 @@ function EmptyPersonalExperienceCard({
       </View>
       <Text
         className="mt-4 text-center text-[16px] font-semibold text-[#2B2233]"
-        style={{ lineHeight: 17 }}
+        style={{ lineHeight: lineHeightFor(16) }}
       >
         {title}
       </Text>
@@ -2573,7 +2573,7 @@ function EmptyPersonalExperienceCard({
         adjustsFontSizeToFit
         className="mt-1.5 text-center text-[13px]"
         numberOfLines={1}
-        style={[sectionBodyTextStyle, { lineHeight: 15, width: "100%" }]}
+        style={[sectionBodyTextStyle(13), { width: "100%" }]}
       >
         {description}
       </Text>
@@ -2602,7 +2602,7 @@ function PersonalExperienceErrorCard({ message }: { message: string }) {
     >
       <Text
         className="text-[14px] font-bold text-[#C2416C]"
-        style={{ lineHeight: 18 }}
+        style={{ lineHeight: lineHeightFor(14) }}
       >
         {message}
       </Text>
@@ -2702,7 +2702,7 @@ function PersonalExperienceSection({
         <View className="gap-1">
           <Text
             className="text-[15px] font-semibold text-[#2B2233]"
-            style={{ lineHeight: 15 }}
+            style={{ lineHeight: lineHeightFor(15) }}
           >
             {composerTitle ?? "Chia sẻ bài của bạn"}
           </Text>
@@ -3732,13 +3732,13 @@ export default function HotspotDetailScreen() {
               <View className="gap-1">
                 <Text
                   className="text-[14px] font-black uppercase tracking-[1.4px]"
-                  style={sectionEyebrowTextStyle}
+                  style={sectionEyebrowTextStyle(14)}
                 >
                   Thông tin địa điểm
                 </Text>
                 <Text
                   className="text-[22px] font-semibold text-[#2B2233]"
-                  style={[sectionTitleTextStyle, { lineHeight: 20 }]}
+                  style={sectionTitleTextStyle(22)}
                 >
                   {hotspot.title}
                 </Text>
@@ -3746,7 +3746,7 @@ export default function HotspotDetailScreen() {
                 <View className="mt-1 flex-row items-center gap-1.5">
                   <Text
                     className="text-[13px] font-semibold text-[#3B4454]"
-                    style={{ includeFontPadding: false, lineHeight: 15 }}
+                    style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(13) }}
                   >
                     {hotspot.rating.toFixed(1).replace(".", ",")}
                   </Text>
@@ -3760,7 +3760,7 @@ export default function HotspotDetailScreen() {
 
                   <Text
                     className="text-[13px] text-[#6F657A]"
-                    style={{ includeFontPadding: false, lineHeight: 15 }}
+                    style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(13) }}
                   >
                     ({hotspot.reviews})
                   </Text>
@@ -3823,7 +3823,7 @@ export default function HotspotDetailScreen() {
                 <View className="rounded-[16px] border border-[#F9E2EA] bg-[#FFF8FC] px-4 py-4">
                   <Text
                     className="text-[14px] font-bold text-[#C2416C]"
-                    style={{ lineHeight: 18 }}
+                    style={{ lineHeight: lineHeightFor(14) }}
                   >
                     {relatedRoutesError}
                   </Text>

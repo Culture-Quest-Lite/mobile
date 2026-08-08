@@ -69,6 +69,7 @@ import {
 } from "@/features/route/api/route-api";
 import { openGoogleMapsMultiStopRoute } from "@/lib/google-maps-navigation";
 import { getHotspotDetailHref } from "@/lib/hotspot-navigation";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 const fallbackStopImage =
   "https://i.pinimg.com/736x/f3/0f/e8/f30fe84218790e6ffd25f987d434eb13.jpg";
@@ -787,7 +788,7 @@ function RouteReviewCard({
             <Text
               className="text-[13px] font-semibold text-[#2B2233]"
               numberOfLines={1}
-              style={{ lineHeight: 14 }}
+              style={{ lineHeight: lineHeightFor(13) }}
             >
               {review.user}
             </Text>
@@ -802,7 +803,7 @@ function RouteReviewCard({
           <Text
             className="text-[11px] text-[#8A7B83]"
             numberOfLines={1}
-            style={{ lineHeight: 12, marginTop: 0 }}
+            style={{ lineHeight: lineHeightFor(11), marginTop: 0 }}
           >
             {review.visitedOn}
           </Text>
@@ -948,7 +949,7 @@ function RouteReviewCard({
 
       <Text
         className="mt-0.5 text-[13px] text-[#3D3446]"
-        style={{ lineHeight: 17 }}
+        style={{ lineHeight: bodyLineHeightFor(13) }}
       >
         {review.text}
       </Text>
@@ -991,7 +992,7 @@ function RouteReviewCard({
             className="text-[13px] font-semibold"
             style={{
               color: review.isLiked ? "#F43F5E" : "#2B2233",
-              lineHeight: 13,
+              lineHeight: lineHeightFor(13),
             }}
           >
             {review.helpful}
@@ -1710,7 +1711,7 @@ export default function RouteDetailScreen() {
             <View className="mt-1 flex-row items-center gap-1.5">
               <Text
                 className="text-[13px] font-semibold text-[#3B4454]"
-                style={{ includeFontPadding: false, lineHeight: 15 }}
+                style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(13) }}
               >
                 {routeAverageRating.toFixed(1).replace(".", ",")}
               </Text>
@@ -1719,7 +1720,7 @@ export default function RouteDetailScreen() {
 
               <Text
                 className="text-[13px] text-[#6F657A]"
-                style={{ includeFontPadding: false, lineHeight: 15 }}
+                style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(13) }}
               >
                 ({routeReviewCountLabel})
               </Text>

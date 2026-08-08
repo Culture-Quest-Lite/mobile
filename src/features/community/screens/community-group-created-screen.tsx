@@ -31,6 +31,7 @@ import {
 
 import { CommunityGroupStateCard } from "../components/community-group-ui";
 import { getCachedCommunityGroupSession } from "../data/community-group-session-store";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 
@@ -167,7 +168,7 @@ function MetaItem({ icon, label }: { icon: SymbolName; label: string }) {
   return (
     <View className="flex-row items-center">
       <SymbolView name={icon} size={12} tintColor={pagePalette.iconTint} />
-      <Text className="ml-1 text-[12px]" style={{ color: pagePalette.body, lineHeight: 12 }}>
+      <Text className="ml-1 text-[12px]" style={{ color: pagePalette.body, lineHeight: lineHeightFor(12) }}>
         {label}
       </Text>
     </View>
@@ -209,7 +210,7 @@ function InviteCard({
             <Text
               className="text-[15px] font-black"
               numberOfLines={1}
-              style={{ color: pagePalette.title, lineHeight: 17 }}
+              style={{ color: pagePalette.title, lineHeight: lineHeightFor(15) }}
             >
               {groupName}
             </Text>
@@ -229,7 +230,7 @@ function InviteCard({
 
         <Text
           className="mt-3 text-[11px] font-black uppercase tracking-[0.35px]"
-          style={{ color: pagePalette.body, lineHeight: 11 }}
+          style={{ color: pagePalette.body, lineHeight: lineHeightFor(11) }}
         >
           Link mời
         </Text>
@@ -246,7 +247,7 @@ function InviteCard({
             <Text
               className="text-[12px]"
               numberOfLines={1}
-              style={{ color: pagePalette.body, lineHeight: 13 }}
+              style={{ color: pagePalette.body, lineHeight: lineHeightFor(12) }}
             >
               {inviteUrl}
             </Text>
@@ -413,7 +414,7 @@ export default function CommunityGroupCreatedScreen() {
 
                 <Text
                   className="mt-1 text-center text-[22px] font-black"
-                  style={{ color: pagePalette.title, lineHeight: 22 }}
+                  style={{ color: pagePalette.title, lineHeight: lineHeightFor(22) }}
                 >
                   Tạo nhóm thành công!
                 </Text>
@@ -427,7 +428,7 @@ export default function CommunityGroupCreatedScreen() {
 
                 <Text
                   className="mt-1.5 text-center text-[13px]"
-                  style={{ color: pagePalette.body, lineHeight: 15, maxWidth: descriptionMaxWidth }}
+                  style={{ color: pagePalette.body, lineHeight: bodyLineHeightFor(13), maxWidth: descriptionMaxWidth }}
                 >
                   Cộng đồng của bạn đã sẵn sàng. Hãy mời những người cùng sở
                   thích tham gia nhé.
@@ -479,7 +480,7 @@ export default function CommunityGroupCreatedScreen() {
                       />
                       <Text
                         className="ml-2 text-[15px] font-black text-white"
-                        style={{ lineHeight: 15 }}
+                        style={{ lineHeight: lineHeightFor(15) }}
                       >
                         Xem chi tiết
                       </Text>
@@ -529,7 +530,7 @@ export default function CommunityGroupCreatedScreen() {
                     />
                     <Text
                       className="ml-2 text-[15px] font-black"
-                      style={{ color: pagePalette.body, lineHeight: 15 }}
+                      style={{ color: pagePalette.body, lineHeight: lineHeightFor(15) }}
                     >
                       Về bảng tin
                     </Text>

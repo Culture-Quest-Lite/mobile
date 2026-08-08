@@ -48,6 +48,7 @@ import {
   removeCachedCommunityGroupSession,
 } from "../data/community-group-session-store";
 import { buildCommunityInviteWebUrl } from "../lib/community-group-invite-links";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 const HERO_IMAGE = require("../../../../assets/images/hero.jpg");
 const detailTextMaxFontSizeMultiplier = 1.05;
@@ -186,7 +187,7 @@ function GroupSection({
     >
       <Text
         className="text-[14px] font-extrabold"
-        style={{ color: palette.primaryText, lineHeight: 16 }}
+        style={{ color: palette.primaryText, lineHeight: lineHeightFor(14) }}
       >
         {title}
       </Text>
@@ -226,7 +227,7 @@ function GroupInfoRow({
       <View className="flex-1">
         <Text
           className="text-[12px]"
-          style={{ color: palette.mutedText, lineHeight: 14 }}
+          style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(12) }}
         >
           {label}
         </Text>
@@ -236,7 +237,7 @@ function GroupInfoRow({
         className="ml-3 text-right text-[12.5px] font-semibold"
         style={{
           color: accentValue ? "#25B45B" : palette.primaryText,
-          lineHeight: 14,
+          lineHeight: lineHeightFor(12.5),
         }}
       >
         {value}
@@ -269,7 +270,7 @@ function GroupInviteSection({
       <View className="flex-row items-center justify-between gap-3">
         <Text
           className="flex-1 text-[15px] font-extrabold"
-          style={{ color: palette.primaryText, lineHeight: 18 }}
+          style={{ color: palette.primaryText, lineHeight: lineHeightFor(15) }}
         >
           Mời thành viên tham gia
         </Text>
@@ -288,7 +289,7 @@ function GroupInviteSection({
             ) : (
               <Text
                 className="text-[12px] font-extrabold"
-                style={{ color: palette.accentStrong, lineHeight: 14 }}
+                style={{ color: palette.accentStrong, lineHeight: bodyLineHeightFor(12) }}
               >
                 Làm mới link
               </Text>
@@ -319,7 +320,7 @@ function GroupInviteSection({
           <Text
             className="text-[12px]"
             selectable
-            style={{ color: "#4B5563", lineHeight: 14.5 }}
+            style={{ color: "#4B5563", lineHeight: bodyLineHeightFor(12) }}
           >
             {link}
           </Text>
@@ -348,7 +349,7 @@ function GroupInviteSection({
         />
         <Text
           className="ml-1.5 text-[13px] font-extrabold"
-          style={{ color: palette.accentStrong, lineHeight: 16 }}
+          style={{ color: palette.accentStrong, lineHeight: bodyLineHeightFor(13) }}
         >
           {copied ? "Đã sao chép liên kết" : "Sao chép liên kết"}
         </Text>
@@ -392,7 +393,7 @@ function GroupOverflowActionRow({
       </View>
       <Text
         className="flex-1 text-[15px] font-bold"
-        style={{ color: accentColor, lineHeight: 18 }}
+        style={{ color: accentColor, lineHeight: lineHeightFor(15) }}
       >
         {label}
       </Text>
@@ -1020,7 +1021,7 @@ export default function CommunityGroupDetailScreen() {
               <Text
                 className="flex-1 text-[17px] font-extrabold"
                 numberOfLines={2}
-                style={{ color: palette.primaryText, lineHeight: 20 }}
+                style={{ color: palette.primaryText, lineHeight: lineHeightFor(17) }}
               >
                 {displayGroup.groupName ?? "Nhóm cộng đồng"}
               </Text>
@@ -1036,7 +1037,7 @@ export default function CommunityGroupDetailScreen() {
                   />
                   <Text
                     className="text-[10px] font-extrabold"
-                    style={{ color: statusChipPalette.textColor, lineHeight: 11 }}
+                    style={{ color: statusChipPalette.textColor, lineHeight: lineHeightFor(10) }}
                   >
                     {statusLabel}
                   </Text>
@@ -1056,7 +1057,7 @@ export default function CommunityGroupDetailScreen() {
               />
               <Text
                 className="ml-1.5 text-[13px]"
-                style={{ color: palette.mutedText, lineHeight: 15 }}
+                style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(13) }}
               >
                 {totalMembersLabel}
               </Text>
@@ -1073,7 +1074,7 @@ export default function CommunityGroupDetailScreen() {
             >
               <Text
                 className="text-[12px]"
-                style={{ color: palette.warmText, lineHeight: 16 }}
+                style={{ color: palette.warmText, lineHeight: bodyLineHeightFor(12) }}
               >
                 {errorMessage}
               </Text>
@@ -1138,7 +1139,7 @@ export default function CommunityGroupDetailScreen() {
 
           <Text
             className="mt-4 text-center text-[11px]"
-            style={{ color: palette.mutedText, lineHeight: 13 }}
+            style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(11) }}
           >
             Nhóm được tạo và quản lý bởi CultureQuest Lite
           </Text>

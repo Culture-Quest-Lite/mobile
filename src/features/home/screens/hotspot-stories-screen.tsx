@@ -36,6 +36,7 @@ import {
   resolveRouteIdParam,
   resolveSelectedHotspotId,
 } from "../utils/resolve-selected-hotspot-id";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 const cardShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.16)",
@@ -358,7 +359,7 @@ function StoryCard({
           numberOfLines={2}
           style={{
             includeFontPadding: false,
-            lineHeight: 16,
+            lineHeight: lineHeightFor(16),
           }}
         >
           {item.title}
@@ -370,7 +371,7 @@ function StoryCard({
             numberOfLines={6}
             style={{
               includeFontPadding: false,
-              lineHeight: 15,
+              lineHeight: bodyLineHeightFor(13),
               minHeight: 90,
             }}
           >
@@ -390,7 +391,7 @@ function StoryCard({
               style={{
                 color: "#EB489B",
                 includeFontPadding: false,
-                lineHeight: 13,
+                lineHeight: lineHeightFor(12),
               }}
             >
               Xem thêm

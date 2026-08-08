@@ -1,4 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
+import { lineHeightFor } from "@/lib/text-scale";
+
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect } from "react";
@@ -94,8 +96,9 @@ export default function ForgotPasswordSuccessScreen() {
     insets.bottom + (isCompactScreen ? 18 : 22),
     isCompactScreen ? 20 : 26,
   );
-  const titleSize = isCompactScreen ? 25 : 29;
-  const sectionTopMargin = isCompactScreen ? 18 : 24;
+  const titleSize = isCompactScreen ? 21 : 24;
+  const titleLineHeight = lineHeightFor(titleSize);
+  const sectionTopMargin = isCompactScreen ? 14 : 18;
   const buttonHeightClassName = isCompactScreen ? "h-12" : "h-14";
   const secondaryButtonHeightClassName = isCompactScreen ? "h-11" : "h-12";
   const footerGapClassName = isCompactScreen ? "gap-4 pt-5" : "gap-5 pt-6";
@@ -237,18 +240,24 @@ export default function ForgotPasswordSuccessScreen() {
                   </View>
                 </View>
 
-                <View className="items-center gap-2" style={{ marginTop: sectionTopMargin }}>
+                <View
+                  className="items-center gap-1"
+                  style={{ marginTop: sectionTopMargin }}
+                >
                   <Text
-                    className="text-center font-extrabold text-[#EB489B]"
-                    style={{ fontSize: titleSize }}
+                    className="text-center font-semibold text-[#EB489B]"
+                    style={{ fontSize: titleSize, lineHeight: titleLineHeight }}
                   >
                     Kiểm tra email
                   </Text>
-                  <Text className="text-center text-[14px] leading-6 text-[#8E869A]">
+                  <Text className="text-center text-[14px] leading-[18px] text-[#8E869A]">
                     Chúng tôi đã gửi email khôi phục mật khẩu tới{" "}
-                    <Text className="font-bold text-[#322A3D]">{maskedEmail}</Text>.
+                    <Text className="font-semibold text-[#322A3D]">
+                      {maskedEmail}
+                    </Text>
+                    .
                   </Text>
-                  <Text className="text-center text-[14px] leading-6 text-[#625B71]">
+                  <Text className="text-center text-[14px] leading-[18px] text-[#625B71]">
                     {successMessage}
                   </Text>
                 </View>
@@ -266,7 +275,7 @@ export default function ForgotPasswordSuccessScreen() {
                       start={{ x: 0, y: 0.5 }}
                       className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
                     >
-                      <Text className="text-[16px] font-extrabold text-white">
+                      <Text className="text-[16px] font-semibold text-white">
                         Về đăng nhập
                       </Text>
                     </LinearGradient>
@@ -276,7 +285,7 @@ export default function ForgotPasswordSuccessScreen() {
                     onPress={goBackToForgotPassword}
                     className={`${secondaryButtonHeightClassName} items-center justify-center rounded-[18px] border border-[#F2E4EB] bg-[#FFF9FC]`}
                   >
-                    <Text className="text-[15px] font-bold text-[#F58752]">
+                    <Text className="text-[15px] font-medium text-[#F58752]">
                       Gửi lại email khác
                     </Text>
                   </Pressable>

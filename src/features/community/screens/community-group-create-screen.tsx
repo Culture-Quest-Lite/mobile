@@ -1,3 +1,9 @@
+import {
+  FieldError,
+  fieldErrorBorderColor,
+  fieldErrorColor,
+  fieldWarningColor,
+} from "@/components/ui/field-error";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { ScreenHorizontalPadding } from "@/constants/theme";
@@ -35,6 +41,7 @@ import {
 } from "react-native-safe-area-context";
 
 import { cacheCommunityGroupSession } from "../data/community-group-session-store";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 const screenPalette = {
   accent: "#FF5A87",
@@ -45,6 +52,10 @@ const screenPalette = {
   surface: "#FFFFFF",
   text: "#18212F",
 };
+
+const minGroupNameLength = 3;
+const maxGroupNameLength = 50;
+const groupNameWarningThreshold = maxGroupNameLength - 10;
 
 const inviteAvatarPalettes = [
   ["#D9F26A", "#5BD6B0"],
@@ -250,7 +261,7 @@ function InviteCandidateRow({
             fontSize: compact ? 13.5 : 14,
             fontWeight: "400",
             includeFontPadding: false,
-            lineHeight: compact ? 13 : 14,
+            lineHeight: lineHeightFor(compact ? 13.5 : 14),
           }}
         >
           {candidate.displayName}
@@ -262,7 +273,7 @@ function InviteCandidateRow({
             fontSize: compact ? 11 : 11.5,
             fontWeight: "400",
             includeFontPadding: false,
-            lineHeight: compact ? 11 : 12,
+            lineHeight: lineHeightFor(compact ? 11 : 11.5),
           }}
         >
           {buildInviteCandidateSubtitle(candidate)}
@@ -281,6 +292,8 @@ export default function CommunityGroupCreateScreen() {
   const authSession = useAuthSession();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [groupName, setGroupName] = useState("");
+  // Chỉ báo lỗi tên nhóm sau lần bấm "Tạo nhóm" đầu tiên.
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
   const [inviteCandidates, setInviteCandidates] = useState<MutualFollowUser[]>(
     [],
   );
@@ -296,8 +309,18 @@ export default function CommunityGroupCreateScreen() {
   const isCompactScreen = width < 380;
   const contentHorizontalPadding = ScreenHorizontalPadding;
   const trimmedGroupName = groupName.trim();
-  const isSubmitInactive = trimmedGroupName.length === 0;
-  const isSubmitDisabled = isSubmitting || isSubmitInactive;
+  const groupNameError = !trimmedGroupName
+    ? "Hãy đặt tên cho nhóm."
+    : trimmedGroupName.length < minGroupNameLength
+      ? `Tên nhóm cần ít nhất ${minGroupNameLength} ký tự.`
+      : trimmedGroupName.length > maxGroupNameLength
+        ? `Tên nhóm tối đa ${maxGroupNameLength} ký tự.`
+        : null;
+  const visibleGroupNameError = hasAttemptedSubmit ? groupNameError : null;
+  const isGroupNameNearLimit = groupName.length >= groupNameWarningThreshold;
+  const isSubmitInactive = groupNameError !== null;
+  // Nút vẫn bấm được khi tên chưa hợp lệ: bấm là ra lỗi inline, thay vì nút chết.
+  const isSubmitDisabled = isSubmitting;
   const resolvedInviteCandidates = useMemo(
     () => (authSession.isAuthenticated ? inviteCandidates : []),
     [authSession.isAuthenticated, inviteCandidates],
@@ -420,12 +443,19 @@ export default function CommunityGroupCreateScreen() {
   ]);
 
   const handleSubmit = async () => {
-    if (isSubmitDisabled) {
+    if (isSubmitting) {
+      return;
+    }
+
+    setHasAttemptedSubmit(true);
+
+    if (groupNameError) {
+      setErrorMessage(null);
       return;
     }
 
     if (!authSession.isAuthenticated) {
-      setErrorMessage("Ban can dang nhap de tao nhom moi.");
+      setErrorMessage("Bạn cần đăng nhập để tạo nhóm mới.");
       return;
     }
 
@@ -436,7 +466,7 @@ export default function CommunityGroupCreateScreen() {
       const accessToken = await getValidAccessToken();
 
       if (!accessToken) {
-        throw new Error("Phien dang nhap da het han. Vui long dang nhap lai.");
+        throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
       }
 
       const createdGroup = await createCommunityGroup({
@@ -452,7 +482,7 @@ export default function CommunityGroupCreateScreen() {
       );
 
       if (!cachedSession) {
-        throw new Error("Khong the luu du lieu nhom vua tao.");
+        throw new Error("Không thể lưu dữ liệu nhóm vừa tạo.");
       }
 
       router.replace(
@@ -462,7 +492,7 @@ export default function CommunityGroupCreateScreen() {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "Khong the tao nhom luc nay. Vui long thu lai.",
+          : "Không thể tạo nhóm lúc này. Vui lòng thử lại.",
       );
     } finally {
       setIsSubmitting(false);
@@ -499,7 +529,7 @@ export default function CommunityGroupCreateScreen() {
             fontSize: isCompactScreen ? 16 : 17,
             fontWeight: "600",
             includeFontPadding: false,
-            lineHeight: isCompactScreen ? 19 : 20,
+            lineHeight: lineHeightFor(isCompactScreen ? 16 : 17),
           }}
         >
           Tạo nhóm tham gia
@@ -528,39 +558,69 @@ export default function CommunityGroupCreateScreen() {
               className="flex-1"
               style={{ marginLeft: isCompactScreen ? 12 : 14 }}
             >
-              <Text
-                style={{
-                  color: screenPalette.text,
-                  fontSize: isCompactScreen ? 12 : 12.5,
-                  fontWeight: "400",
-                  includeFontPadding: false,
-                  lineHeight: isCompactScreen ? 14 : 15,
-                }}
-              >
-                Tên nhóm
-              </Text>
+              <View className="flex-row items-center justify-between">
+                <Text
+                  style={{
+                    color: screenPalette.text,
+                    fontSize: isCompactScreen ? 12 : 12.5,
+                    fontWeight: "400",
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(isCompactScreen ? 12 : 12.5),
+                  }}
+                >
+                  {"Tên nhóm "}
+                  <Text style={{ color: fieldErrorColor }}>*</Text>
+                </Text>
+
+                <Text
+                  style={{
+                    color: visibleGroupNameError
+                      ? fieldErrorColor
+                      : isGroupNameNearLimit
+                        ? fieldWarningColor
+                        : screenPalette.muted,
+                    fontSize: isCompactScreen ? 11 : 11.5,
+                    fontWeight: "400",
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(isCompactScreen ? 11 : 11.5),
+                  }}
+                >
+                  {`${groupName.length}/${maxGroupNameLength}`}
+                </Text>
+              </View>
 
               <TextInput
                 autoCapitalize="sentences"
                 autoCorrect={false}
                 editable={!isSubmitting}
+                maxLength={maxGroupNameLength}
                 onChangeText={setGroupName}
+                onSubmitEditing={() => {
+                  void handleSubmit();
+                }}
                 placeholder="Đặt tên nhóm"
                 placeholderTextColor="#99A2AE"
+                returnKeyType="done"
                 selectionColor={screenPalette.accent}
                 style={[
                   styles.groupNameInput,
                   {
+                    borderColor: visibleGroupNameError
+                      ? fieldErrorBorderColor
+                      : screenPalette.borderStrong,
                     borderRadius: isCompactScreen ? 12 : 13,
+                    borderWidth: visibleGroupNameError ? 1.4 : 1,
                     fontSize: isCompactScreen ? 13.5 : 14,
                     height: isCompactScreen ? 40 : 42,
-                    lineHeight: isCompactScreen ? 16 : 17,
+                    lineHeight: lineHeightFor(isCompactScreen ? 13.5 : 14),
                     marginTop: isCompactScreen ? 4 : 5,
                     paddingHorizontal: isCompactScreen ? 14 : 15,
                   },
                 ]}
                 value={groupName}
               />
+
+              <FieldError message={visibleGroupNameError} />
             </View>
           </View>
 
@@ -571,7 +631,7 @@ export default function CommunityGroupCreateScreen() {
                 fontSize: isCompactScreen ? 14 : 15,
                 fontWeight: "400",
                 includeFontPadding: false,
-                lineHeight: isCompactScreen ? 18 : 19,
+                lineHeight: lineHeightFor(isCompactScreen ? 14 : 15),
               }}
             >
               Mời bạn bè
@@ -583,7 +643,7 @@ export default function CommunityGroupCreateScreen() {
                 fontSize: isCompactScreen ? 12 : 13,
                 fontWeight: "400",
                 includeFontPadding: false,
-                lineHeight: isCompactScreen ? 16 : 17,
+                lineHeight: lineHeightFor(isCompactScreen ? 12 : 13),
               }}
             >
               {`Đã chọn: ${selectedInviteCount}`}
@@ -624,7 +684,7 @@ export default function CommunityGroupCreateScreen() {
                 styles.searchInput,
                 {
                   fontSize: isCompactScreen ? 13 : 14,
-                  lineHeight: isCompactScreen ? 16 : 17,
+                  lineHeight: lineHeightFor(isCompactScreen ? 13 : 14),
                 },
               ]}
               value={searchQuery}
@@ -650,7 +710,7 @@ export default function CommunityGroupCreateScreen() {
                     fontSize: isCompactScreen ? 12 : 13,
                     fontWeight: "400",
                     includeFontPadding: false,
-                    lineHeight: isCompactScreen ? 16 : 17,
+                    lineHeight: lineHeightFor(isCompactScreen ? 12 : 13),
                   }}
                 >
                   Đang tải danh sách bạn bè...
@@ -677,7 +737,7 @@ export default function CommunityGroupCreateScreen() {
                     fontSize: isCompactScreen ? 13 : 14,
                     fontWeight: "400",
                     includeFontPadding: false,
-                    lineHeight: isCompactScreen ? 17 : 18,
+                    lineHeight: bodyLineHeightFor(isCompactScreen ? 13 : 14),
                   }}
                 >
                   {resolvedInviteCandidatesErrorMessage}
@@ -702,7 +762,7 @@ export default function CommunityGroupCreateScreen() {
                       fontSize: 13,
                       fontWeight: "400",
                       includeFontPadding: false,
-                      lineHeight: 15,
+                      lineHeight: bodyLineHeightFor(13),
                     }}
                   >
                     {authSession.isAuthenticated ? "Thử lại" : "Đăng nhập"}
@@ -747,7 +807,7 @@ export default function CommunityGroupCreateScreen() {
                     fontSize: isCompactScreen ? 13 : 14,
                     fontWeight: "400",
                     includeFontPadding: false,
-                    lineHeight: isCompactScreen ? 17 : 18,
+                    lineHeight: lineHeightFor(isCompactScreen ? 13 : 14),
                   }}
                 >
                   Không tìm thấy bạn bè phù hợp
@@ -759,7 +819,7 @@ export default function CommunityGroupCreateScreen() {
                     fontSize: isCompactScreen ? 11.5 : 12.5,
                     fontWeight: "400",
                     includeFontPadding: false,
-                    lineHeight: isCompactScreen ? 15 : 16,
+                    lineHeight: bodyLineHeightFor(isCompactScreen ? 11.5 : 12.5),
                   }}
                 >
                   Hãy thử tìm bằng tên khác hoặc tài khoản khác.
@@ -788,7 +848,7 @@ export default function CommunityGroupCreateScreen() {
                   fontSize: isCompactScreen ? 12.5 : 13.5,
                   fontWeight: "400",
                   includeFontPadding: false,
-                  lineHeight: isCompactScreen ? 17 : 18,
+                  lineHeight: bodyLineHeightFor(isCompactScreen ? 12.5 : 13.5),
                 }}
               >
                 {errorMessage}
@@ -807,7 +867,7 @@ export default function CommunityGroupCreateScreen() {
                       fontSize: 13,
                       fontWeight: "400",
                       includeFontPadding: false,
-                      lineHeight: 15,
+                      lineHeight: bodyLineHeightFor(13),
                     }}
                   >
                     Đăng nhập
@@ -843,7 +903,7 @@ export default function CommunityGroupCreateScreen() {
                     fontSize: isCompactScreen ? 15 : 16,
                     fontWeight: "400",
                     includeFontPadding: false,
-                    lineHeight: isCompactScreen ? 17 : 18,
+                    lineHeight: lineHeightFor(isCompactScreen ? 15 : 16),
                   }}
                 >
                   Tạo nhóm
@@ -871,7 +931,7 @@ export default function CommunityGroupCreateScreen() {
                       fontSize: isCompactScreen ? 15 : 16,
                       fontWeight: "400",
                       includeFontPadding: false,
-                      lineHeight: isCompactScreen ? 17 : 18,
+                      lineHeight: lineHeightFor(isCompactScreen ? 15 : 16),
                     }}
                   >
                     Tạo nhóm
