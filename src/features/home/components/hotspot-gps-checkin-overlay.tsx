@@ -7,6 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ComponentProps,
@@ -25,6 +26,7 @@ import {
 import MapView, {
   Circle,
   Marker,
+  Polygon,
   Polyline,
   PROVIDER_GOOGLE,
   type Region,
@@ -39,11 +41,12 @@ import {
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 import { useProfile } from "@/features/profile/hooks/use-profile";
+import { formatDistance, getDistanceMeters } from "@/lib/location";
+
 import {
-  ensureForegroundLocationPermission,
-  getDevelopmentLocationOverride,
-  getDeviceCoordinate,
-} from "@/lib/location";
+  parseBoundaryVertices,
+  useCheckInZone,
+} from "../hooks/use-checkin-zone";
 
 import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
 import {
@@ -79,7 +82,8 @@ type CheckinVerifyStatus =
 
 type CheckinFlowStage = "verify" | "success";
 
-const CHECKIN_RADIUS_METERS = 50;
+/** Dùng cho hotspot chưa khai báo bán kính; khớp CheckInPolicy ở backend. */
+const DEFAULT_CHECKIN_RADIUS_METERS = 50;
 const LOGIN_GRADIENT_COLORS = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const VERIFY_BUTTON_DISABLED_COLORS = [
   "#F8CADC",
@@ -198,35 +202,6 @@ function buildVerificationMapRegion(
   };
 }
 
-function getDistanceMeters(from: Coordinate, to: Coordinate) {
-  const earthRadius = 6_371_000;
-  const latitudeDelta = toRadians(to.latitude - from.latitude);
-  const longitudeDelta = toRadians(to.longitude - from.longitude);
-  const fromLatitude = toRadians(from.latitude);
-  const toLatitude = toRadians(to.latitude);
-
-  const a =
-    Math.sin(latitudeDelta / 2) * Math.sin(latitudeDelta / 2) +
-    Math.cos(fromLatitude) *
-      Math.cos(toLatitude) *
-      Math.sin(longitudeDelta / 2) *
-      Math.sin(longitudeDelta / 2);
-
-  return earthRadius * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-}
-
-function formatDistance(distanceMeters: number | null) {
-  if (distanceMeters === null) {
-    return "--";
-  }
-
-  if (distanceMeters < 1000) {
-    return `${Math.max(1, Math.round(distanceMeters))}m`;
-  }
-
-  return `${(distanceMeters / 1000).toFixed(1)}km`;
-}
-
 // API trả timestamp không kèm timezone (LocalDateTime của server) nên nếu parse
 // thẳng thì giờ hiển thị lệch với đồng hồ máy. Coi chuỗi thiếu timezone là UTC
 // rồi để Date tự đổi về giờ local của thiết bị.
@@ -264,7 +239,9 @@ function buildStatusCopy(
   status: CheckinVerifyStatus,
   distanceMeters: number | null,
   isAlwaysReady = false,
+  requiredMeters: number = DEFAULT_CHECKIN_RADIUS_METERS,
 ) {
+  const zoneLabel = formatDistance(requiredMeters);
   if (status === "loading") {
     return {
       accentColor: "#EB489B",
@@ -282,7 +259,7 @@ function buildStatusCopy(
       badgeLabel: isAlwaysReady ? "Hotspot test sẵn sàng" : "GPS xác minh",
       helperText: isAlwaysReady
         ? "Điểm demo này luôn xác minh thành công để bạn test story và UI sau check-in."
-        : `Bạn cách ${formatDistance(distanceMeters)} · trong bán kính 50m`,
+        : `Bạn đã đến nơi · cách ${formatDistance(distanceMeters)}`,
       primaryLabel: "Check-in ngay",
       primaryDisabled: false,
       primaryGradient: LOGIN_GRADIENT_COLORS,
@@ -293,10 +270,11 @@ function buildStatusCopy(
     return {
       accentColor: "#FFC93C",
       badgeLabel: "Chưa đủ gần",
-      helperText: `Bạn cách ${formatDistance(distanceMeters)} · cần vào gần hơn 50m`,
-      primaryLabel: "Làm mới vị trí",
-      primaryDisabled: false,
-      primaryGradient: LOGIN_GRADIENT_COLORS,
+      helperText: `Bạn cách ${formatDistance(distanceMeters)} · cần vào trong phạm vi ${zoneLabel}`,
+      // Vị trí được theo dõi liên tục nên nút tự sáng khi vào vùng, không cần bấm.
+      primaryLabel: "Chưa đến nơi",
+      primaryDisabled: true,
+      primaryGradient: VERIFY_BUTTON_DISABLED_COLORS,
     };
   }
 
@@ -327,12 +305,16 @@ function VerificationMapPreview({
   hotspotCoordinate,
   userAvatarUri,
   verificationStatus,
+  checkInRadius,
+  boundaryVertices,
 }: {
   currentCoordinate: Coordinate | null;
   distanceMeters: number | null;
   hotspotCoordinate: Coordinate | null;
   userAvatarUri: string | null;
   verificationStatus: CheckinVerifyStatus;
+  checkInRadius: number;
+  boundaryVertices: Coordinate[];
 }) {
   const mapRef = useRef<MapView | null>(null);
   const [pulse] = useState(() => new Animated.Value(0));
@@ -526,9 +508,9 @@ function VerificationMapPreview({
   const distanceBadgeState =
     distanceMeters === null
       ? "Đang xác minh GPS"
-      : distanceMeters <= CHECKIN_RADIUS_METERS
-        ? "Trong vùng 50m"
-        : "Ngoài vùng 50m";
+      : verificationStatus === "ready"
+        ? "Đã vào vùng check-in"
+        : `Ngoài vùng ${formatDistance(checkInRadius)}`;
 
   return (
     <View className="overflow-hidden" style={{ flex: 1 }}>
@@ -596,11 +578,18 @@ function VerificationMapPreview({
             void updateCurrentScreenPoint();
           }}
         >
-          {resolvedHotspotCoordinate ? (
+          {boundaryVertices.length >= 3 ? (
+            <Polygon
+              coordinates={boundaryVertices}
+              fillColor="rgba(235, 72, 155, 0.12)"
+              strokeColor="rgba(235, 72, 155, 0.45)"
+              strokeWidth={2}
+            />
+          ) : resolvedHotspotCoordinate ? (
             <Circle
               center={resolvedHotspotCoordinate}
               fillColor="rgba(235, 72, 155, 0.12)"
-              radius={CHECKIN_RADIUS_METERS}
+              radius={checkInRadius}
               strokeColor="rgba(235, 72, 155, 0.45)"
               strokeWidth={2}
             />
@@ -927,12 +916,34 @@ export function HotspotGpsCheckinOverlay({
   const { profile } = useProfile();
   const insets = useSafeAreaInsets();
   const [checkinStage, setCheckinStage] = useState<CheckinFlowStage>("verify");
-  const [verificationStatus, setVerificationStatus] =
-    useState<CheckinVerifyStatus>("loading");
-  const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
-  const [currentCoordinate, setCurrentCoordinate] = useState<Coordinate | null>(
-    null,
+
+  const hotspotCoordinateForZone = getHotspotCoordinate(hotspot);
+  const effectiveCheckInRadius =
+    typeof hotspot.checkInRadius === "number" &&
+    Number.isFinite(hotspot.checkInRadius)
+      ? hotspot.checkInRadius
+      : DEFAULT_CHECKIN_RADIUS_METERS;
+  const boundaryVertices = useMemo(
+    () => parseBoundaryVertices(hotspot.boundaryGeoJson),
+    [hotspot.boundaryGeoJson],
   );
+
+  // Theo dõi vị trí liên tục: nút check-in tự sáng khi bước vào vùng, thay vì
+  // phải bấm "Làm mới vị trí" như trước.
+  const {
+    status: verificationStatus,
+    distanceMeters,
+    requiredMeters,
+    currentCoordinate,
+    retry: verifyCurrentLocation,
+  } = useCheckInZone({
+    hotspotCoordinate: hotspotCoordinateForZone,
+    checkInRadius: hotspot.checkInRadius,
+    boundaryGeoJson: hotspot.boundaryGeoJson,
+    alwaysReady: isAlwaysReadyHotspot(hotspot),
+    enabled: checkinStage === "verify",
+  });
+
   const [isStoryPrefetching, setIsStoryPrefetching] = useState(false);
   const [storyPrefetchError, setStoryPrefetchError] = useState<string | null>(
     null,
@@ -1014,88 +1025,6 @@ export function HotspotGpsCheckinOverlay({
     routeId,
   ]);
 
-  const verifyCurrentLocation = useCallback(async () => {
-    const hotspotCoordinate = getHotspotCoordinate(hotspot);
-
-    if (!hotspotCoordinate) {
-      setVerificationStatus("error");
-      setDistanceMeters(null);
-      setCurrentCoordinate(null);
-      return;
-    }
-
-    try {
-      setVerificationStatus("loading");
-      setDistanceMeters(null);
-
-      if (isAlwaysReadyHotspot(hotspot)) {
-        setCurrentCoordinate(hotspotCoordinate);
-        setDistanceMeters(0);
-        setVerificationStatus("ready");
-        return;
-      }
-
-      const developmentLocation = getDevelopmentLocationOverride();
-
-      if (developmentLocation) {
-        const nextDistanceMeters = getDistanceMeters(
-          developmentLocation,
-          hotspotCoordinate,
-        );
-
-        setCurrentCoordinate(developmentLocation);
-        setDistanceMeters(nextDistanceMeters);
-        setVerificationStatus(
-          nextDistanceMeters <= CHECKIN_RADIUS_METERS ? "ready" : "too-far",
-        );
-        return;
-      }
-
-      const permissionResponse = await ensureForegroundLocationPermission();
-
-      if (permissionResponse.status !== "granted") {
-        setVerificationStatus("permission-denied");
-        return;
-      }
-
-      if (Platform.OS === "android") {
-        try {
-          await Location.enableNetworkProviderAsync();
-        } catch {
-          // Ignore when the device already has an active location provider.
-        }
-      }
-
-      const nextCoordinate = await getDeviceCoordinate({
-        accuracy: Location.Accuracy.High,
-        maxAge: 15_000,
-        requiredAccuracy: 80,
-      });
-
-      if (!nextCoordinate) {
-        setVerificationStatus("error");
-        setDistanceMeters(null);
-        setCurrentCoordinate(null);
-        return;
-      }
-
-      const nextDistanceMeters = getDistanceMeters(
-        nextCoordinate,
-        hotspotCoordinate,
-      );
-
-      setCurrentCoordinate(nextCoordinate);
-      setDistanceMeters(nextDistanceMeters);
-      setVerificationStatus(
-        nextDistanceMeters <= CHECKIN_RADIUS_METERS ? "ready" : "too-far",
-      );
-    } catch {
-      setVerificationStatus("error");
-      setDistanceMeters(null);
-      setCurrentCoordinate(null);
-    }
-  }, [hotspot]);
-
   const hotspotCoordinate = getHotspotCoordinate(hotspot);
   const userAvatarUri = authSession.isAuthenticated
     ? (profile?.avatar ?? null)
@@ -1120,10 +1049,14 @@ export function HotspotGpsCheckinOverlay({
       return;
     }
 
-    const requestCoordinate = currentCoordinate ?? hotspotCoordinate;
+    // KHÔNG fallback về toạ độ hotspot: làm vậy tức là gửi vị trí của chính
+    // hotspot làm vị trí người dùng, khiến check-in luôn thành công dù GPS hỏng.
+    const requestCoordinate = currentCoordinate;
 
     if (!requestCoordinate) {
-      setCheckInError("Không xác định được vị trí để gửi check-in.");
+      setCheckInError(
+        "Chưa xác định được vị trí của bạn. Hãy bật GPS và thử lại.",
+      );
       return;
     }
 
@@ -1136,6 +1069,7 @@ export function HotspotGpsCheckinOverlay({
         hotspotId,
         latitude: requestCoordinate.latitude,
         longitude: requestCoordinate.longitude,
+        accuracy: requestCoordinate.accuracy,
         tokenType: authSession.tokenType,
       });
 
@@ -1185,6 +1119,7 @@ export function HotspotGpsCheckinOverlay({
     verificationStatus,
     distanceMeters,
     isAlwaysReadyHotspot(hotspot),
+    requiredMeters,
   );
   const hotspotTags = Array.from(
     new Set(
@@ -1594,6 +1529,8 @@ export function HotspotGpsCheckinOverlay({
                   hotspotCoordinate={hotspotCoordinate}
                   userAvatarUri={userAvatarUri}
                   verificationStatus={verificationStatus}
+                  checkInRadius={effectiveCheckInRadius}
+                  boundaryVertices={boundaryVertices}
                 />
 
                 <View

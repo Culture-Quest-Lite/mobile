@@ -6,6 +6,8 @@ import { PublicEnv } from "@/constants/env";
 export type AppCoordinate = {
   latitude: number;
   longitude: number;
+  /** Sai số GPS (mét) do thiết bị báo về. Server dùng để nới ngưỡng check-in. */
+  accuracy: number | null;
   source: "device" | "dev-override";
 };
 
@@ -111,6 +113,8 @@ export function getDevelopmentLocationOverride(): AppCoordinate | null {
   return {
     latitude,
     longitude,
+    // Toạ độ giả lập nên coi như GPS rất chính xác.
+    accuracy: 5,
     source: "dev-override",
   };
 }
@@ -136,6 +140,45 @@ export async function getDeviceCoordinate(
   return {
     latitude: currentPosition.coords.latitude,
     longitude: currentPosition.coords.longitude,
+    accuracy: currentPosition.coords.accuracy ?? null,
     source: "device",
   };
+}
+
+/**
+ * Khoảng cách Haversine (mét). Trước đây mỗi màn tự chép một bản; gom về đây để
+ * hook check-in và các màn "gần đây" dùng chung một công thức.
+ */
+export function getDistanceMeters(
+  from: { latitude: number; longitude: number },
+  to: { latitude: number; longitude: number },
+) {
+  const earthRadius = 6_371_000;
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+
+  const latitudeDelta = toRadians(to.latitude - from.latitude);
+  const longitudeDelta = toRadians(to.longitude - from.longitude);
+  const fromLatitude = toRadians(from.latitude);
+  const toLatitude = toRadians(to.latitude);
+
+  const a =
+    Math.sin(latitudeDelta / 2) * Math.sin(latitudeDelta / 2) +
+    Math.cos(fromLatitude) *
+      Math.cos(toLatitude) *
+      Math.sin(longitudeDelta / 2) *
+      Math.sin(longitudeDelta / 2);
+
+  return earthRadius * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+export function formatDistance(distanceMeters: number | null) {
+  if (distanceMeters === null) {
+    return "--";
+  }
+
+  if (distanceMeters < 1000) {
+    return `${Math.max(1, Math.round(distanceMeters))}m`;
+  }
+
+  return `${(distanceMeters / 1000).toFixed(1)}km`;
 }

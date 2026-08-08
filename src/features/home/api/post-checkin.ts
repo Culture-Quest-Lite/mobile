@@ -7,6 +7,8 @@ export type CreateCheckInRequest = {
   hotspotId: number;
   latitude: number;
   longitude: number;
+  /** Sai số GPS (mét) từ coords.accuracy; server nới ngưỡng check-in theo giá trị này. */
+  accuracy?: number | null;
   tokenType?: string | null;
 };
 
@@ -220,6 +222,7 @@ export async function createCheckIn({
   hotspotId,
   latitude,
   longitude,
+  accuracy,
   tokenType,
 }: CreateCheckInRequest): Promise<CheckInResponse> {
   const createCheckInUrl = resolveCreateCheckInUrl();
@@ -231,6 +234,10 @@ export async function createCheckIn({
         hotspotId,
         latitude,
         longitude,
+        // Bỏ qua khi không có để backend giữ nguyên hành vi cũ (field optional).
+        ...(typeof accuracy === "number" && Number.isFinite(accuracy)
+          ? { accuracy }
+          : {}),
       }),
       headers: {
         Accept: "application/json",
