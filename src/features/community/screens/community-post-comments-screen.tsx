@@ -9,25 +9,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
+import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
 import { SymbolView } from "@/components/ui/symbol-view";
-import {
-  UserAvatar,
-  UserAvatarFallback,
-} from "@/components/ui/user-avatar";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import {
   getValidAccessToken,
   useAuthSession,
@@ -63,19 +59,12 @@ import {
   type CommunityFeedMediaItem,
   type CommunityFeedPost,
 } from "../data/community-post-cache";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
-const socialCardShadowStyle = {
-  shadowColor: "rgba(15, 23, 42, 0.08)",
-  shadowOpacity: 1,
-  shadowRadius: 18,
-  shadowOffset: {
-    width: 0,
-    height: 10,
-  },
-  elevation: 6,
-} as const;
+const postCommentEmptyImage = require("../../../../assets/images/posttachnen.png");
 
 const communityCommentMaxLength = 320;
+const composerKeyboardGap = 10;
 const communityPostCommentsPageSize = 10;
 
 type CommunityCommentsStatus = "idle" | "loading" | "ready" | "error";
@@ -99,6 +88,13 @@ const avatarPalettes = [
   ["#DC2626", "#FB7185"],
   ["#7C3AED", "#C084FC"],
 ] as const;
+const socialCardShadowStyle = {
+  shadowColor: "rgba(15, 23, 42, 0.12)",
+  shadowOffset: { width: 0, height: 10 },
+  shadowOpacity: 0.16,
+  shadowRadius: 18,
+  elevation: 4,
+};
 
 function readMeaningfulText(value?: string | null) {
   if (typeof value !== "string") {
@@ -336,17 +332,6 @@ function replaceCommunityPostStats(
   return nextPost;
 }
 
-function AvatarMonogram({
-  initials,
-  size,
-}: {
-  colors: readonly [string, string];
-  initials: string;
-  size: number;
-}) {
-  return <UserAvatarFallback displayName={initials} size={size} />;
-}
-
 function CommunityPostMediaGallery({
   edgeToEdgeWidth,
   items,
@@ -356,7 +341,7 @@ function CommunityPostMediaGallery({
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [galleryWidth, setGalleryWidth] = useState(
-    Math.max(edgeToEdgeWidth - 52, 240),
+    Math.max(edgeToEdgeWidth - 32, 240),
   );
   const safeActiveIndex = Math.max(0, Math.min(items.length - 1, activeIndex));
   const mediaHeight = Math.min(Math.max(galleryWidth * 0.74, 188), 278);
@@ -416,7 +401,10 @@ function CommunityPostMediaGallery({
           <View className="absolute right-3 top-3 rounded-full bg-black/35 px-2.5 py-1">
             <Text
               className="text-[11px] font-semibold text-white"
-              style={{ includeFontPadding: false, lineHeight: 12 }}
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(11),
+              }}
             >
               {`${safeActiveIndex + 1}/${items.length}`}
             </Text>
@@ -482,7 +470,7 @@ function CommunityPostFooterAction({
         className="ml-1.5 text-[13px] text-[#706775]"
         style={{
           includeFontPadding: false,
-          lineHeight: 12,
+          lineHeight: lineHeightFor(13),
         }}
       >
         {label}
@@ -496,7 +484,7 @@ function CommunityPostTagChip({ label }: { label: string }) {
     <View className="mr-2 mt-1.5 rounded-full bg-[#F4F1F4] px-3 py-0.5">
       <Text
         className="text-[12px] text-[#7D7680]"
-        style={{ includeFontPadding: false, lineHeight: 12 }}
+        style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
       >
         {label}
       </Text>
@@ -536,14 +524,14 @@ function CommunityPostRouteCard({
         <View className="flex-1 pr-2">
           <Text
             className="text-[12px] font-semibold text-[#F2608E]"
-            style={{ includeFontPadding: false, lineHeight: 11 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
           >
             Route
           </Text>
           <Text
             className="text-[13px] font-medium text-[#4B414C]"
             numberOfLines={2}
-            style={{ includeFontPadding: false, lineHeight: 12 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
           >
             {label}
           </Text>
@@ -601,14 +589,14 @@ function CommunityPostHotspotCard({
         <View className="flex-1 pr-2">
           <Text
             className="text-[12px] font-semibold text-[#18A7B4]"
-            style={{ includeFontPadding: false, lineHeight: 11 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
           >
             {`${count} hotspot`}
           </Text>
           <Text
             className="text-[13px] text-[#6D6671]"
             numberOfLines={2}
-            style={{ includeFontPadding: false, lineHeight: 11 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
           >
             {subtitle}
           </Text>
@@ -630,7 +618,10 @@ function CommunityPostHotspotCard({
                 <View className="-ml-2 h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#E7EEF2]">
                   <Text
                     className="text-[11px] font-semibold text-[#55606C]"
-                    style={{ includeFontPadding: false, lineHeight: 11 }}
+                    style={{
+                      includeFontPadding: false,
+                      lineHeight: lineHeightFor(11),
+                    }}
                   >
                     {`+${remainingCount}`}
                   </Text>
@@ -687,7 +678,10 @@ function ExpandablePostCaption({ text }: { text: string }) {
   return (
     <Text
       className="text-[13px] text-[#2B232D]"
-      style={{ includeFontPadding: false, lineHeight: 12 }}
+      style={{
+        includeFontPadding: false,
+        lineHeight: bodyLineHeightFor(13),
+      }}
     >
       {expanded || !shouldTruncate ? normalizedText : collapsedText}
       {shouldTruncate ? (
@@ -773,22 +767,7 @@ function CommunityPostCard({
     .filter((imageUri): imageUri is string => Boolean(imageUri));
 
   return (
-    <View
-      className={isEmbedded ? "bg-transparent px-0 pb-2.5 pt-1" : "rounded-[24px] border bg-white px-4 pb-2.5 pt-3"}
-      style={
-        isEmbedded
-          ? undefined
-          : {
-              borderColor: "#F0E7ED",
-              borderWidth: 0.8,
-              shadowColor: "rgba(64, 34, 58, 0.08)",
-              shadowOpacity: 1,
-              shadowRadius: 20,
-              shadowOffset: { width: 0, height: 10 },
-              elevation: 4,
-            }
-      }
-    >
+    <View className="rounded-[20px] bg-white px-4 pb-2 pt-2">
       <View className="flex-row items-start">
         <Pressable
           accessibilityLabel={`Mở hồ sơ của ${post.author}`}
@@ -813,11 +792,11 @@ function CommunityPostCard({
           />
         </Pressable>
 
-        <View className="ml-3 flex-1 pr-2">
+        <View className="ml-2 flex-1 pr-1">
           <Text
             className="text-[15px] font-bold text-[#2F2432]"
             numberOfLines={1}
-            style={{ includeFontPadding: false, lineHeight: 12 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(15) }}
           >
             {post.author}
           </Text>
@@ -825,20 +804,29 @@ function CommunityPostCard({
           <View className="-mt-0.5 flex-row flex-wrap items-center gap-1">
             <Text
               className="text-[12px] text-[#8A7D86]"
-              style={{ includeFontPadding: false, lineHeight: 11 }}
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(12),
+              }}
             >
               {post.time}
             </Text>
             <Text
               className="text-[12px] text-[#8A7D86]"
-              style={{ includeFontPadding: false, lineHeight: 11 }}
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(12),
+              }}
             >
               •
             </Text>
             <SymbolView name={visibilityIcon} size={10} tintColor="#8A7D86" />
             <Text
               className="text-[12px] text-[#8A7D86]"
-              style={{ includeFontPadding: false, lineHeight: 11 }}
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(12),
+              }}
             >
               {visibilityLabel}
             </Text>
@@ -858,11 +846,11 @@ function CommunityPostCard({
         </View>
       </View>
 
-      <View className="pt-1.5">
+      <View className="pt-1">
         <ExpandablePostCaption text={post.caption} />
 
         {tagLabels.length > 0 ? (
-          <View className="mt-1 flex-row flex-wrap items-center">
+          <View className="mt-1 flex-row flex-wrap items-center gap-1.5">
             {tagLabels.map((tagLabel) => (
               <CommunityPostTagChip
                 key={`${post.id}-${tagLabel}`}
@@ -898,7 +886,7 @@ function CommunityPostCard({
       </View>
 
       {mediaItems.length > 0 ? (
-        <View className="mt-2">
+        <View className="mt-1.5">
           <CommunityPostMediaGallery
             edgeToEdgeWidth={edgeToEdgeWidth}
             items={mediaItems}
@@ -906,73 +894,63 @@ function CommunityPostCard({
         </View>
       ) : null}
 
-      <View className="mt-1.5 flex-row items-center">
-        <CommunityPostFooterAction
-          active={isLiked}
-          disabled={!post.canLike || isLiking}
-          icon={
-            isLiked
-              ? {
-                  ios: "heart.fill",
-                  android: "favorite",
-                  web: "favorite",
-                }
-              : {
-                  ios: "heart",
-                  android: "favorite_border",
-                  web: "favorite_border",
-                }
-          }
-          isLoading={isLiking}
-          onPress={
-            post.canLike
-              ? () => {
-                  onLikePost(post);
-                }
-              : undefined
-          }
-          label={post.likes}
-        />
-        <View className="ml-4">
+      <View className="mt-2 pt-2">
+        <View className="flex-row items-center">
           <CommunityPostFooterAction
-            disabled={!post.canComment}
-            icon={{
-              ios: "bubble.left",
-              android: "chat_bubble_outline",
-              web: "chat_bubble_outline",
-            }}
+            active={isLiked}
+            disabled={!post.canLike || isLiking}
+            icon={
+              isLiked
+                ? {
+                    ios: "heart.fill",
+                    android: "favorite",
+                    web: "favorite",
+                  }
+                : {
+                    ios: "heart",
+                    android: "favorite_border",
+                    web: "favorite_border",
+                  }
+            }
+            isLoading={isLiking}
             onPress={
-              post.canComment
+              post.canLike
                 ? () => {
-                    onCommentPost(post);
+                    onLikePost(post);
                   }
                 : undefined
             }
-            label={post.comments}
+            label={post.likes}
           />
-        </View>
-        <View className="ml-4">
-          <CommunityPostFooterAction
-            disabled
-            icon={{
-              ios: "arrowshape.turn.up.right",
-              android: "share",
-              web: "share",
-            }}
-            label="Chia sẻ"
-          />
-        </View>
-        <View className="flex-1" />
-        <View className="h-9 w-9 items-center justify-center rounded-full">
-          <SymbolView
-            name={{
-              ios: "bookmark",
-              android: "bookmark_border",
-              web: "bookmark_border",
-            }}
-            size={18}
-            tintColor="#706775"
-          />
+          <View className="ml-4">
+            <CommunityPostFooterAction
+              disabled={!post.canComment}
+              icon={{
+                ios: "bubble.left",
+                android: "chat_bubble_outline",
+                web: "chat_bubble_outline",
+              }}
+              onPress={
+                post.canComment
+                  ? () => {
+                      onCommentPost(post);
+                    }
+                  : undefined
+              }
+              label={post.comments}
+            />
+          </View>
+          <View className="ml-4">
+            <CommunityPostFooterAction
+              disabled
+              icon={{
+                ios: "arrowshape.turn.up.right",
+                android: "share",
+                web: "share",
+              }}
+              label="Chia sẻ"
+            />
+          </View>
         </View>
       </View>
     </View>
@@ -998,7 +976,7 @@ function CommunityCommentItem({
     Number.isInteger(item.userId) && item.userId > 0 ? `${item.userId}` : null;
 
   return (
-    <View className="flex-row items-start gap-2">
+    <View className="flex-row items-start gap-1">
       <Pressable
         accessibilityLabel={`Xem trang cá nhân của ${displayName}`}
         accessibilityRole="button"
@@ -1021,21 +999,21 @@ function CommunityCommentItem({
       </Pressable>
 
       <View className="flex-1">
-        <View className="self-start rounded-[16px] bg-[#F3F4F6] px-3 py-2">
+        <View className="max-w-full self-start rounded-[14px] bg-[#F7F4F6] px-2.5 py-1.5">
           <Text
-            className="text-[14px] font-bold text-[#111827]"
+            className="text-[14px] font-semibold text-[#111827]"
             onPress={() => {
               if (commenterId !== null) {
                 onOpenProfile(commenterId);
               }
             }}
-            style={{ includeFontPadding: false, lineHeight: 12 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
           >
             {displayName}
           </Text>
           <Text
             className="mt-0.5 text-[14px] text-[#374151]"
-            style={{ includeFontPadding: false, lineHeight: 12 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
           >
             {readMeaningfulText(item.comment) ?? "Đã gửi một bình luận."}
           </Text>
@@ -1104,7 +1082,7 @@ function CommunityCommentThread({
   const nestedDepth = Math.min(depth + 1, 3);
 
   return (
-    <View style={{ marginLeft: depth > 0 ? 18 : 0 }}>
+    <View style={{ marginLeft: depth > 0 ? 12 : 0 }}>
       <CommunityCommentItem
         item={item}
         onOpenProfile={onOpenProfile}
@@ -1188,8 +1166,25 @@ export default function CommunityPostCommentsScreen() {
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [commentsStatus, setCommentsStatus] =
     useState<CommunityCommentsStatus>("idle");
-  const [isComposerFocused, setIsComposerFocused] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const { height: keyboardOffset, progress: keyboardProgress } =
+    useReanimatedKeyboardAnimation();
+  const composerBottomInset = Math.max(insets.bottom, 6);
+  // Khi bàn phím mở thì không cần chừa safe-area nữa, chỉ giữ một khoảng nhỏ.
+  const composerInsetCollapse = Math.max(
+    composerBottomInset - composerKeyboardGap,
+    0,
+  );
+  const composerAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY:
+          keyboardOffset.value + keyboardProgress.value * composerInsetCollapse,
+      },
+    ],
+  }));
+  const keyboardSpacerAnimatedStyle = useAnimatedStyle(() => ({
+    height: -keyboardOffset.value,
+  }));
   const [replyTarget, setReplyTarget] = useState<PostComment | null>(null);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [isLikingPost, setIsLikingPost] = useState(false);
@@ -1289,47 +1284,6 @@ export default function CommunityPostCommentsScreen() {
       setCommentsStatus("error");
     }
   }, [authSession.isAuthenticated, authSession.tokenType, resolvedPostId]);
-
-  useEffect(() => {
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent =
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const changeFrameEvent =
-      Platform.OS === "ios" ? "keyboardWillChangeFrame" : null;
-    const handleKeyboardShow = (event: {
-      endCoordinates?: {
-        height?: number;
-      };
-    }) => {
-      const nextKeyboardHeight = Math.max(
-        0,
-        Math.round((event.endCoordinates?.height ?? 0) - insets.bottom),
-      );
-
-      setKeyboardHeight(nextKeyboardHeight);
-    };
-    const handleKeyboardHide = () => {
-      setKeyboardHeight(0);
-    };
-
-    const subscriptions = [
-      Keyboard.addListener(showEvent, handleKeyboardShow),
-      Keyboard.addListener(hideEvent, handleKeyboardHide),
-    ];
-
-    if (changeFrameEvent) {
-      subscriptions.push(
-        Keyboard.addListener(changeFrameEvent, handleKeyboardShow),
-      );
-    }
-
-    return () => {
-      subscriptions.forEach((subscription) => {
-        subscription.remove();
-      });
-    };
-  }, [insets.bottom]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1480,8 +1434,6 @@ export default function CommunityPostCommentsScreen() {
   }, [authSession.isAuthenticated, authSession.tokenType, routeIdsToResolve]);
 
   function focusCommentComposer() {
-    setIsComposerFocused(true);
-
     requestAnimationFrame(() => {
       commentInputRef.current?.focus();
     });
@@ -1731,23 +1683,19 @@ export default function CommunityPostCommentsScreen() {
     (typeof postNumericId === "number" && likedPostIdsSet.has(postNumericId)) ||
     post.isLiked === true;
   const trimmedCommentDraft = commentDraft.trim();
-  const composerBottomInset = Math.max(insets.bottom, 6);
-  const composerLift = Math.max(0, keyboardHeight);
   const replyTargetDisplayName = replyTarget
     ? getCommentDisplayName(replyTarget)
     : null;
-  const shouldShowComposerQuickActions =
-    trimmedCommentDraft.length === 0 &&
-    !isSubmittingComment &&
-    replyTarget === null;
+  const canSubmitComment =
+    !isSubmittingComment && trimmedCommentDraft.length > 0;
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
-      <KeyboardAvoidingView className="flex-1">
-        <View className="border-b border-[#E5E7EB] bg-white px-4 pb-3 pt-2">
+      <View className="flex-1 bg-white">
+        <View className="border-b border-[#F2E8EE] bg-white px-4 pb-3 pt-2">
           <View className="flex-row items-center justify-between">
             <Pressable
-              className="h-10 w-10 items-center justify-center rounded-full bg-[#F3F4F6]"
+              className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF1F6]"
               onPress={() => router.back()}
             >
               <SymbolView
@@ -1757,25 +1705,15 @@ export default function CommunityPostCommentsScreen() {
                   web: "arrow_back",
                 }}
                 size={18}
-                tintColor="#111827"
+                tintColor="#FF5D8F"
               />
             </Pressable>
 
-            <Text className="text-[17px] font-black text-[#111827]">
+            <Text className="text-[16px] font-semibold text-[#6A5564]">
               Bình luận
             </Text>
 
-            <Pressable className="h-10 w-10 items-center justify-center rounded-full bg-[#F3F4F6]">
-              <SymbolView
-                name={{
-                  ios: "ellipsis",
-                  android: "more_horiz",
-                  web: "more_horiz",
-                }}
-                size={18}
-                tintColor="#111827"
-              />
-            </Pressable>
+            <View className="h-10 w-10" />
           </View>
         </View>
 
@@ -1784,9 +1722,9 @@ export default function CommunityPostCommentsScreen() {
             className="flex-1"
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 16 }}
+            contentContainerStyle={{ paddingBottom: 20 }}
           >
-            <View className="bg-white px-4 pb-2 pt-2">
+            <View className="pb-2 pt-1">
               <CommunityPostCard
                 edgeToEdgeWidth={safeWidth}
                 isEmbedded
@@ -1805,30 +1743,15 @@ export default function CommunityPostCommentsScreen() {
               />
             </View>
 
-            <View className="px-4 pb-4 pt-2.5">
-              <View className="flex-row items-center">
-                <Text className="text-[16px] font-black text-[#111827]">
-                  Phù hợp nhất
-                </Text>
-                <SymbolView
-                  name={{
-                    ios: "chevron.down",
-                    android: "keyboard_arrow_down",
-                    web: "keyboard_arrow_down",
-                  }}
-                  size={15}
-                  tintColor="#374151"
-                />
-              </View>
-
+            <View className="px-4 pb-4 pt-1">
               {commentsStatus === "loading" ? (
-                <View className="mt-3 items-center px-4 py-3">
-                  <ActivityIndicator color="#2563EB" size="small" />
+                <View className="mt-5 items-center px-4 py-3">
+                  <ActivityIndicator color="#FF5D8F" size="small" />
                 </View>
               ) : null}
 
               {commentsError ? (
-                <View className="mt-4 px-1 py-1">
+                <View className="mt-4 rounded-[20px] bg-[#FFF1F6] px-4 py-4">
                   <Text className="text-[14px] font-bold text-[#B91C1C]">
                     {commentsError}
                   </Text>
@@ -1836,7 +1759,7 @@ export default function CommunityPostCommentsScreen() {
               ) : null}
 
               {topLevelComments.length > 0 ? (
-                <View className="mt-3 gap-3.5">
+                <View className="mt-4 gap-2 px-0 py-0">
                   {topLevelComments.map((item) => (
                     <CommunityCommentThread
                       key={`${item.postActionId}-${item.userId}`}
@@ -1851,35 +1774,46 @@ export default function CommunityPostCommentsScreen() {
               ) : null}
 
               {commentsStatus === "ready" && topLevelComments.length === 0 ? (
-                <View className="mt-3 px-1 py-1">
-                  <Text className="text-[15px] font-semibold text-[#111827]">
+                <View className="mt-0 items-center px-2 py-0">
+                  <Image
+                    source={postCommentEmptyImage}
+                    contentFit="contain"
+                    style={{ height: 300, width: 300, marginBottom: -75 }}
+                  />
+                  <Text className="mt-0 text-[15px] font-semibold text-[#111827]">
                     Chưa có bình luận
                   </Text>
                   <Text
-                    className="mt-1.5 text-[14px] text-[#6B7280]"
-                    style={{ includeFontPadding: false, lineHeight: 17 }}
+                    className="mt-0 text-center text-[14px] text-[#6B7280]"
+                    style={{
+                      includeFontPadding: false,
+                      lineHeight: lineHeightFor(14),
+                    }}
                   >
                     Hãy là người đầu tiên để lại cảm nhận cho bài viết này.
                   </Text>
                 </View>
               ) : null}
             </View>
+
+            {/* Chừa chỗ để bình luận cuối không nằm dưới bàn phím. */}
+            <Animated.View style={keyboardSpacerAnimatedStyle} />
           </ScrollView>
 
-          <View
-            className="border-t border-[#E5E7EB] bg-white"
-            style={{
-              marginBottom: composerLift,
-              paddingBottom: keyboardHeight > 0 ? 8 : composerBottomInset,
-            }}
-          >
-            <View className="px-3 pb-2 pt-2">
+          <Animated.View style={composerAnimatedStyle}>
+            <View
+              className="border-t border-[#F5E8EF] bg-white px-4 pt-2.5"
+              style={{ paddingBottom: composerBottomInset }}
+            >
               {replyTargetDisplayName ? (
                 <View className="mb-2 flex-row items-center justify-between rounded-[16px] bg-[#EFF6FF] px-3 py-2">
                   <Text
                     className="flex-1 text-[12px] font-semibold text-[#2563EB]"
                     numberOfLines={1}
-                    style={{ includeFontPadding: false, lineHeight: 13 }}
+                    style={{
+                      includeFontPadding: false,
+                      lineHeight: lineHeightFor(12),
+                    }}
                   >
                     {`Đang trả lời ${replyTargetDisplayName}`}
                   </Text>
@@ -1901,29 +1835,15 @@ export default function CommunityPostCommentsScreen() {
                 </View>
               ) : null}
 
-              <View className="flex-row items-center gap-2.5">
-                {!isComposerFocused ? (
-                  <AvatarMonogram
-                    colors={getAvatarPalette(authSession.displayName || "me")}
-                    initials={getNameInitials(authSession.displayName || "Bạn")}
-                    size={36}
-                  />
-                ) : null}
-
-                <View className="flex-1 flex-row items-center rounded-full bg-[#F3F4F6] px-3">
+              <View className="flex-row items-center gap-2">
+                <View className="flex-1 flex-row items-center rounded-full border border-[#E9E5EA] bg-white px-3">
                   <TextInput
                     blurOnSubmit={false}
                     className="flex-1 py-2 text-[14px] text-[#111827]"
                     editable={!isSubmittingComment}
                     maxLength={communityCommentMaxLength}
                     ref={commentInputRef}
-                    onBlur={() => {
-                      setIsComposerFocused(false);
-                    }}
                     onChangeText={setCommentDraft}
-                    onFocus={() => {
-                      setIsComposerFocused(true);
-                    }}
                     onSubmitEditing={() => {
                       if (trimmedCommentDraft.length > 0) {
                         void handleSubmitComment();
@@ -1932,54 +1852,45 @@ export default function CommunityPostCommentsScreen() {
                     placeholder={
                       replyTargetDisplayName
                         ? `Trả lời ${replyTargetDisplayName}...`
-                        : isComposerFocused
-                          ? "Viết bình luận công khai..."
-                          : "Viết bình luận..."
+                        : "Viết bình luận..."
                     }
                     placeholderTextColor="#9CA3AF"
                     returnKeyType="send"
                     style={{ includeFontPadding: false }}
                     value={commentDraft}
                   />
-
-                  {!shouldShowComposerQuickActions ? (
-                    <Pressable
-                      className="h-8 w-8 items-center justify-center rounded-full"
-                      disabled={
-                        isSubmittingComment || trimmedCommentDraft.length === 0
-                      }
-                      onPress={() => {
-                        void handleSubmitComment();
-                      }}
-                      style={{
-                        opacity:
-                          isSubmittingComment ||
-                          trimmedCommentDraft.length === 0
-                            ? 0.45
-                            : 1,
-                      }}
-                    >
-                      {isSubmittingComment ? (
-                        <ActivityIndicator color="#2563EB" size="small" />
-                      ) : (
-                        <SymbolView
-                          name={{
-                            ios: "paperplane.fill",
-                            android: "send",
-                            web: "send",
-                          }}
-                          size={18}
-                          tintColor="#2563EB"
-                        />
-                      )}
-                    </Pressable>
-                  ) : null}
                 </View>
+
+                <Pressable
+                  className="h-9 w-9 items-center justify-center rounded-full bg-[#FF6A93]"
+                  disabled={!canSubmitComment}
+                  hitSlop={8}
+                  onPress={() => {
+                    if (canSubmitComment) {
+                      void handleSubmitComment();
+                    }
+                  }}
+                  style={{ opacity: canSubmitComment ? 1 : 0.55 }}
+                >
+                  {isSubmittingComment ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <SymbolView
+                      name={{
+                        ios: "paperplane.fill",
+                        android: "send",
+                        web: "send",
+                      }}
+                      size={15}
+                      tintColor="#FFFFFF"
+                    />
+                  )}
+                </Pressable>
               </View>
             </View>
-          </View>
+          </Animated.View>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }

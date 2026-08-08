@@ -9,6 +9,7 @@ import {
   Text as RNText,
   View,
 } from "react-native";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 type TextProps = ComponentProps<typeof RNText>;
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
@@ -100,14 +101,14 @@ export function ReviewDeleteDialog({
           <View className="px-4 pb-4 pt-3">
             <Text
               className="text-center text-[17px] font-black text-[#241D22]"
-              style={{ lineHeight: 17 }}
+              style={{ lineHeight: lineHeightFor(17) }}
             >
               {title}
             </Text>
 
             <Text
               className="mt-1 text-center text-[12px]"
-              style={{ color: bodyColor, lineHeight: 13 }}
+              style={{ color: bodyColor, lineHeight: lineHeightFor(12) }}
             >
               {description}
             </Text>
@@ -227,14 +228,14 @@ export function DeleteSuccessDialog({
           <View className="px-4 pb-4 pt-3">
             <Text
               className="text-center text-[17px] font-black text-[#241D22]"
-              style={{ lineHeight: 20 }}
+              style={{ lineHeight: lineHeightFor(17) }}
             >
               {title}
             </Text>
 
             <Text
               className="mt-1 text-center text-[12px]"
-              style={{ color: bodyColor, lineHeight: 16 }}
+              style={{ color: bodyColor, lineHeight: bodyLineHeightFor(12) }}
             >
               {description}
             </Text>

@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 type GroupStateVariant = "empty" | "error" | "info";
 
@@ -60,7 +61,7 @@ export function CommunityGroupTopBar({
 
       <Text
         className="text-[18px] font-black text-[#1F2933]"
-        style={{ includeFontPadding: false, lineHeight: 22 }}
+        style={{ includeFontPadding: false, lineHeight: lineHeightFor(18) }}
       >
         {title}
       </Text>
@@ -90,7 +91,7 @@ export function CommunityGroupStatusChip({
         style={{
           color: statusColors.textColor,
           includeFontPadding: false,
-          lineHeight: 12,
+          lineHeight: lineHeightFor(11),
         }}
       >
         {resolvedStatus}
@@ -155,7 +156,7 @@ export function CommunityGroupStateCard({
             style={{
               color: "#1F2933",
               includeFontPadding: false,
-              lineHeight: 20,
+              lineHeight: lineHeightFor(16),
             }}
           >
             {title}
@@ -165,7 +166,7 @@ export function CommunityGroupStateCard({
             style={{
               color: palette.textColor,
               includeFontPadding: false,
-              lineHeight: 19,
+              lineHeight: bodyLineHeightFor(14),
             }}
           >
             {description}
@@ -181,7 +182,7 @@ export function CommunityGroupStateCard({
                 style={{
                   color: palette.textColor,
                   includeFontPadding: false,
-                  lineHeight: 15,
+                  lineHeight: bodyLineHeightFor(13),
                 }}
               >
                 {actionLabel}
@@ -205,13 +206,13 @@ export function CommunityGroupMetricCard({
     <View className="min-h-[84px] flex-1 rounded-[22px] border border-[#E5E7EB] bg-white px-4 py-3.5">
       <Text
         className="text-[12px] font-semibold uppercase tracking-[0.3px] text-[#8A94A3]"
-        style={{ includeFontPadding: false, lineHeight: 14 }}
+        style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(12) }}
       >
         {label}
       </Text>
       <Text
         className="mt-2 text-[18px] font-black text-[#1F2933]"
-        style={{ includeFontPadding: false, lineHeight: 22 }}
+        style={{ includeFontPadding: false, lineHeight: lineHeightFor(18) }}
       >
         {value}
       </Text>
@@ -240,21 +241,21 @@ export function CommunityGroupInviteLinkCard({
         <View className="flex-1">
           <Text
             className="text-[12px] font-semibold uppercase tracking-[0.3px] text-[#8A94A3]"
-            style={{ includeFontPadding: false, lineHeight: 14 }}
+            style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(12) }}
           >
             Invite Link
           </Text>
           <Text
             className="mt-2 text-[15px] font-semibold text-[#1F2933]"
             selectable
-            style={{ includeFontPadding: false, lineHeight: 21 }}
+            style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(15) }}
           >
             {inviteUrl}
           </Text>
           <Text
             className="mt-2 text-[12px] text-[#68737D]"
             selectable
-            style={{ includeFontPadding: false, lineHeight: 17 }}
+            style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(12) }}
           >
             {`App deep link: ${appInviteUrl}`}
           </Text>
@@ -292,7 +293,7 @@ export function CommunityGroupInviteLinkCard({
           />
           <Text
             className="ml-2 text-[14px] font-bold text-[#334155]"
-            style={{ includeFontPadding: false, lineHeight: 16 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
           >
             {copied ? "Da sao chep" : "Copy Link"}
           </Text>
@@ -321,7 +322,7 @@ export function CommunityGroupInviteLinkCard({
               />
               <Text
                 className="ml-2 text-[14px] font-black text-white"
-                style={{ includeFontPadding: false, lineHeight: 16 }}
+                style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
               >
                 Share
               </Text>
@@ -408,7 +409,7 @@ export function CommunityGroupSuccessIllustration() {
         <View className="rounded-full bg-[#FFF7E0] px-3 py-1.5">
           <Text
             className="text-[12px] font-bold uppercase tracking-[0.3px] text-[#8A5A00]"
-            style={{ includeFontPadding: false, lineHeight: 14 }}
+            style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(12) }}
           >
             Nhom da san sang
           </Text>

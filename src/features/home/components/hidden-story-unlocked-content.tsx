@@ -3,6 +3,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { type ComponentProps } from "react";
 import { Pressable, Text, View } from "react-native";
+import { bodyLineHeightFor } from "@/lib/text-scale";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 
@@ -70,7 +71,7 @@ export function HiddenStoryUnlockedContent({
 
       <Text
         className="mt-0.5 max-w-[320px] text-center text-[13px] text-[#6A5964]"
-        style={{ lineHeight: 16 }}
+        style={{ lineHeight: bodyLineHeightFor(13) }}
       >
         {`Bạn đã check-in tại địa điểm này. Câu chuyện địa điểm và nội dung độc quyền đã sẵn sàng chờ bạn khám phá.`}
       </Text>

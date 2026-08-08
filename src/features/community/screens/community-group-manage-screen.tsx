@@ -35,6 +35,7 @@ import {
   cacheCommunityGroupSession,
   getCachedCommunityGroupSession,
 } from "../data/community-group-session-store";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 const detailTextMaxFontSizeMultiplier = 1.05;
 
@@ -132,7 +133,7 @@ function SectionCard({
       <View className="flex-row items-center justify-between gap-3">
         <Text
           className="text-[16px] font-semibold"
-          style={{ color: palette.primaryText, lineHeight: 18 }}
+          style={{ color: palette.primaryText, lineHeight: lineHeightFor(16) }}
         >
           {title}
         </Text>
@@ -141,7 +142,7 @@ function SectionCard({
           <Pressable hitSlop={8} onPress={onActionPress}>
             <Text
               className="text-[13px] font-medium"
-              style={{ color: palette.accent, lineHeight: 14 }}
+              style={{ color: palette.accent, lineHeight: lineHeightFor(13) }}
             >
               {actionLabel}
             </Text>
@@ -189,13 +190,13 @@ function SettingsEntryRow({
       <View className="min-w-0 flex-1 pr-2">
         <Text
           className="text-[15px] font-medium"
-          style={{ color: palette.primaryText, lineHeight: 15 }}
+          style={{ color: palette.primaryText, lineHeight: lineHeightFor(15) }}
         >
           {label}
         </Text>
         <Text
           className="mt-0.5 text-[12px]"
-          style={{ color: palette.subtleText, lineHeight: 14 }}
+          style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(12) }}
         >
           {description}
         </Text>
@@ -249,13 +250,13 @@ function ManagementActionRow({
       <View className="min-w-0 flex-1 pr-2">
         <Text
           className="text-[15px] font-medium"
-          style={{ color: palette.primaryText, lineHeight: 15 }}
+          style={{ color: palette.primaryText, lineHeight: lineHeightFor(15) }}
         >
           {label}
         </Text>
         <Text
           className="mt-0.5 text-[12px]"
-          style={{ color: palette.subtleText, lineHeight: 14 }}
+          style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(12) }}
         >
           {description}
         </Text>
@@ -269,7 +270,7 @@ function ManagementActionRow({
           >
             <Text
               className="text-[11px] font-semibold"
-              style={{ color: palette.mutedText, lineHeight: 11 }}
+              style={{ color: palette.mutedText, lineHeight: lineHeightFor(11) }}
             >
               {badge}
             </Text>
@@ -561,7 +562,7 @@ export default function CommunityGroupManageScreen() {
 
             <Text
               className="text-[17px] font-semibold"
-              style={{ color: palette.primaryText, lineHeight: 19 }}
+              style={{ color: palette.primaryText, lineHeight: lineHeightFor(17) }}
             >
               Quản lý nhóm
             </Text>
@@ -583,7 +584,7 @@ export default function CommunityGroupManageScreen() {
               >
                 <Text
                   className="text-[17px] font-bold"
-                  style={{ color: palette.accentStrong, lineHeight: 18 }}
+                  style={{ color: palette.accentStrong, lineHeight: lineHeightFor(17) }}
                 >
                   {getInitials(displayGroup.groupName)}
                 </Text>
@@ -593,14 +594,14 @@ export default function CommunityGroupManageScreen() {
                 <Text
                   className="text-[19px] font-semibold"
                   numberOfLines={2}
-                  style={{ color: palette.primaryText, lineHeight: 20 }}
+                  style={{ color: palette.primaryText, lineHeight: lineHeightFor(19) }}
                 >
                   {displayGroup.groupName ?? "Nhóm cộng đồng"}
                 </Text>
 
                 <Text
                   className="mt-0.5 text-[12px]"
-                  style={{ color: palette.subtleText, lineHeight: 14 }}
+                  style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(12) }}
                 >
                   Nhóm cộng đồng • {totalMembersLabel}
                 </Text>
@@ -611,7 +612,7 @@ export default function CommunityGroupManageScreen() {
                 >
                   <Text
                     className="text-[11px] font-bold"
-                    style={{ color: palette.successText, lineHeight: 11 }}
+                    style={{ color: palette.successText, lineHeight: lineHeightFor(11) }}
                   >
                     {statusLabel}
                   </Text>
@@ -630,7 +631,7 @@ export default function CommunityGroupManageScreen() {
             >
               <Text
                 className="text-[12px]"
-                style={{ color: "#D97A55", lineHeight: 15 }}
+                style={{ color: "#D97A55", lineHeight: bodyLineHeightFor(12) }}
               >
                 {errorMessage}
               </Text>

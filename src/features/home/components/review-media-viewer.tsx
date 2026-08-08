@@ -13,6 +13,7 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { bodyLineHeightFor } from "@/lib/text-scale";
 
 export type ReviewMediaViewerItem = {
   type: "image" | "video";
@@ -190,7 +191,7 @@ export function ReviewMediaViewer({
             >
               <Text
                 className="text-[13px] font-semibold text-white"
-                style={{ includeFontPadding: false, lineHeight: 17 }}
+                style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(13) }}
               >
                 {`${activeIndex + 1}/${items.length}`}
               </Text>

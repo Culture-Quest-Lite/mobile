@@ -1,4 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
+import { lineHeightFor } from "@/lib/text-scale";
+
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect, useState } from "react";
@@ -97,12 +99,13 @@ export default function ForgotPasswordScreen() {
     isCompactScreen ? 22 : 30,
   );
   const titleSize = isCompactScreen ? 25 : 29;
-  const sectionTopMargin = isCompactScreen ? 22 : 30;
+  const titleLineHeight = lineHeightFor(titleSize);
+  const sectionTopMargin = isCompactScreen ? 16 : 20;
   const fieldHeightClassName = isCompactScreen
     ? "h-12 rounded-2xl"
     : "h-14 rounded-2xl";
   const buttonHeightClassName = isCompactScreen ? "h-12" : "h-14";
-  const formGapClassName = isCompactScreen ? "gap-4" : "gap-5";
+  const formGapClassName = isCompactScreen ? "gap-3" : "gap-4";
   const forgotPasswordErrors = validateForgotPasswordForm(email);
   const emailError =
     touchedEmail || didAttemptSubmit
@@ -166,7 +169,7 @@ export default function ForgotPasswordScreen() {
       });
 
       router.replace({
-        pathname: "./forgot-password-success",
+        pathname: "/forgot-password-success",
         params: {
           email: normalizedEmail,
           entry: "home",
@@ -255,14 +258,14 @@ export default function ForgotPasswordScreen() {
                   paddingTop: cardTopPadding,
                 }}
               >
-                <View className="items-center gap-1.5">
+                <View className="items-center gap-1">
                   <Text
                     className="font-extrabold text-[#EB489B]"
-                    style={{ fontSize: titleSize }}
+                    style={{ fontSize: titleSize, lineHeight: titleLineHeight }}
                   >
                     Quên mật khẩu
                   </Text>
-                  <Text className="text-center text-[14px] leading-6 text-[#8E869A]">
+                  <Text className="text-center text-[14px] leading-[18px] text-[#8E869A]">
                     Nhập email bạn đã dùng để đăng ký để tiếp tục khôi phục mật
                     khẩu
                   </Text>
@@ -274,7 +277,7 @@ export default function ForgotPasswordScreen() {
                       autoCapitalize="none"
                       autoComplete="email"
                       autoCorrect={false}
-                      className="gap-1.5"
+                      className="gap-1"
                       errorMessage={emailError}
                       inputClassName={fieldHeightClassName}
                       keyboardType="email-address"
@@ -316,7 +319,7 @@ export default function ForgotPasswordScreen() {
                     </Pressable>
 
                     {errorMessage ? (
-                      <Text className="text-[14px] font-medium leading-6 text-[#D6456C]">
+                      <Text className="text-[14px] font-medium leading-[18px] text-[#D6456C]">
                         {errorMessage}
                       </Text>
                     ) : null}

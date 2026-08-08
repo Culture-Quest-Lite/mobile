@@ -75,6 +75,7 @@ import {
 import { getApiHotspotRouteSlug, getHotspotHref } from "../data/hotspots";
 import { mapActiveTagsToThemeCategories } from "../lib/theme-categories";
 import { getThemeDetailHref } from "../lib/theme-detail";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const guestPreviewLogo = require("../../../../assets/images/logo3.png");
@@ -2247,13 +2248,13 @@ export default function HomeScreen() {
                   <View className="gap-0 pt-1">
                     <Text
                       className="text-[15px] font-semibold tracking-[-0.3px] text-[#2B2233]"
-                      style={{ lineHeight: 15 }}
+                      style={{ lineHeight: lineHeightFor(15) }}
                     >
                       {`Chào ${explorerName}`}
                     </Text>
                     <Text
                       className="text-[11px] text-[#8E869A]"
-                      style={{ lineHeight: 10, marginTop: -1 }}
+                      style={{ lineHeight: lineHeightFor(11), marginTop: -1 }}
                     >
                       Sẵn sàng khám phá
                     </Text>
@@ -2406,7 +2407,7 @@ export default function HomeScreen() {
                           numberOfLines={1}
                           ellipsizeMode="tail"
                           style={{
-                            lineHeight: 16,
+                            lineHeight: lineHeightFor(18),
                             textShadowColor: "rgba(0, 0, 0, 0.35)",
                             textShadowOffset: { width: 0, height: 1 },
                             textShadowRadius: 4,
@@ -2430,7 +2431,7 @@ export default function HomeScreen() {
                               className="ml-1 text-[12px] font-semibold text-white"
                               numberOfLines={1}
                               style={{
-                                lineHeight: 10,
+                                lineHeight: lineHeightFor(12),
                                 textShadowColor: "rgba(0, 0, 0, 0.35)",
                                 textShadowOffset: { width: 0, height: 1 },
                                 textShadowRadius: 4,
@@ -2455,7 +2456,7 @@ export default function HomeScreen() {
                               className="ml-1 text-[12px] font-semibold text-white"
                               numberOfLines={1}
                               style={{
-                                lineHeight: 10,
+                                lineHeight: lineHeightFor(12),
                                 textShadowColor: "rgba(0, 0, 0, 0.35)",
                                 textShadowOffset: { width: 0, height: 1 },
                                 textShadowRadius: 4,
@@ -2579,7 +2580,7 @@ export default function HomeScreen() {
                       <Text
                         className="text-[15px] font-extrabold text-[#2B2233]"
                         numberOfLines={2}
-                        style={{ lineHeight: 15 }}
+                        style={{ lineHeight: lineHeightFor(15) }}
                       >
                         {currentJourney.title}
                       </Text>
@@ -2597,7 +2598,7 @@ export default function HomeScreen() {
                         <Text
                           className="flex-1 text-[12px] text-[#6F657A]"
                           numberOfLines={1}
-                          style={{ lineHeight: 13 }}
+                          style={{ lineHeight: lineHeightFor(12) }}
                         >
                           {currentJourney.nextStopName
                             ? `Tiếp theo: ${currentJourney.nextStopName}${
@@ -2658,7 +2659,7 @@ export default function HomeScreen() {
 
                       <Text
                         className="text-[11px] font-medium text-[#8E869A]"
-                        style={{ lineHeight: 12 }}
+                        style={{ lineHeight: lineHeightFor(11) }}
                       >
                         {currentJourney.remainingTimeLabel
                           ? `${currentJourney.remainingStopsLabel} · ${currentJourney.remainingTimeLabel}`
@@ -2691,7 +2692,7 @@ export default function HomeScreen() {
                       />
                       <Text
                         className="ml-1.5 text-[13px] font-extrabold text-white"
-                        style={{ lineHeight: 15 }}
+                        style={{ lineHeight: bodyLineHeightFor(13) }}
                       >
                         Tiếp tục khám phá
                       </Text>
@@ -3229,7 +3230,7 @@ export default function HomeScreen() {
                             className="text-[14px] font-semibold text-[#2B2233]"
                             numberOfLines={2}
                             ellipsizeMode="tail"
-                            style={{ lineHeight: 16 }}
+                            style={{ lineHeight: lineHeightFor(14) }}
                           >
                             {route.title}
                           </Text>
@@ -3238,7 +3239,7 @@ export default function HomeScreen() {
                             className="text-[12px] text-[#7A6F67]"
                             numberOfLines={2}
                             ellipsizeMode="tail"
-                            style={{ lineHeight: 13 }}
+                            style={{ lineHeight: lineHeightFor(12) }}
                           >
                             {getSuggestedRouteDescription(route)}
                           </Text>

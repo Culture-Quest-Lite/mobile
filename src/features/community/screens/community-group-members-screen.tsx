@@ -42,6 +42,7 @@ import {
 import { CommunityGroupStateCard } from "../components/community-group-ui";
 import { getCachedCommunityGroupSession } from "../data/community-group-session-store";
 import { buildCommunityInviteWebUrl } from "../lib/community-group-invite-links";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 const detailTextMaxFontSizeMultiplier = 1.05;
 const communityGroupsHeroImage = require("../../../../assets/images/tachnengroup.png");
@@ -245,13 +246,13 @@ function MemberRow({
           <Text
             className="text-[15px]"
             numberOfLines={1}
-            style={{ color: palette.primaryText, lineHeight: 16 }}
+            style={{ color: palette.primaryText, lineHeight: lineHeightFor(15) }}
           >
             {displayName}
           </Text>
           <Text
             className="mt-[2px] text-[12px]"
-            style={{ color: palette.subtleText, lineHeight: 13 }}
+            style={{ color: palette.subtleText, lineHeight: lineHeightFor(12) }}
           >
             {roleLabel}
           </Text>
@@ -284,7 +285,7 @@ function MemberRow({
         >
           <Text
             className="text-[12px] font-bold"
-            style={{ color: "#D95B8D", lineHeight: 14 }}
+            style={{ color: "#D95B8D", lineHeight: bodyLineHeightFor(12) }}
           >
             {actionPending ? "Đang kích..." : (actionLabel ?? "Kích")}
           </Text>
@@ -389,13 +390,13 @@ function PendingRequestRow({
           <Text
             className="text-[15px]"
             numberOfLines={1}
-            style={{ color: palette.primaryText, lineHeight: 16 }}
+            style={{ color: palette.primaryText, lineHeight: lineHeightFor(15) }}
           >
             {displayName}
           </Text>
           <Text
             className="mt-[2px] text-[12px]"
-            style={{ color: palette.subtleText, lineHeight: 13 }}
+            style={{ color: palette.subtleText, lineHeight: lineHeightFor(12) }}
           >
             {submittedAtLabel}
           </Text>
@@ -434,14 +435,14 @@ function PendingRequestsEmptyState() {
 
       <Text
         className="mt-2 text-center text-[17px]"
-        style={{ color: palette.primaryText, lineHeight: 20 }}
+        style={{ color: palette.primaryText, lineHeight: lineHeightFor(17) }}
       >
         Chưa có yêu cầu tham gia
       </Text>
 
       <Text
         className="mt-1 text-center text-[13px]"
-        style={{ color: palette.mutedText, lineHeight: 18, maxWidth: 240 }}
+        style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(13), maxWidth: 240 }}
       >
         Khi có người gửi yêu cầu tham gia, danh sách sẽ hiện ở đây.
       </Text>
@@ -463,14 +464,14 @@ function KickedMembersEmptyState() {
 
       <Text
         className="mt-2 text-center text-[17px]"
-        style={{ color: palette.primaryText, lineHeight: 20 }}
+        style={{ color: palette.primaryText, lineHeight: lineHeightFor(17) }}
       >
         Chưa có thành viên nào bị kích
       </Text>
 
       <Text
         className="mt-1 text-center text-[13px]"
-        style={{ color: palette.mutedText, lineHeight: 18, maxWidth: 260 }}
+        style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(13), maxWidth: 260 }}
       >
         Khi leader kích thành viên khỏi nhóm, danh sách sẽ hiển thị tại đây.
       </Text>
@@ -559,7 +560,7 @@ function KickMemberConfirmModal({
 
             <Text
               className="mt-3 text-center text-[16px] font-bold"
-              style={{ color: palette.primaryText, lineHeight: 19 }}
+              style={{ color: palette.primaryText, lineHeight: lineHeightFor(16) }}
             >
               Kích thành viên
             </Text>
@@ -571,12 +572,12 @@ function KickMemberConfirmModal({
 
             <Text
               className="mt-3 text-center text-[13px]"
-              style={{ color: palette.subtleText, lineHeight: 18 }}
+              style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(13) }}
             >
               Bạn có chắc chắn muốn kích{" "}
               <Text
                 className="text-[13px] font-bold"
-                style={{ color: palette.primaryText, lineHeight: 18 }}
+                style={{ color: palette.primaryText, lineHeight: bodyLineHeightFor(13) }}
               >
                 {memberName ?? "thành viên này"}
               </Text>{" "}
@@ -609,7 +610,7 @@ function KickMemberConfirmModal({
 
             <Text
               className="flex-1 text-[11px]"
-              style={{ color: palette.subtleText, lineHeight: 16 }}
+              style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(11) }}
             >
               Thành viên bị kích sẽ không còn truy cập được nhóm và nội dung liên
               quan.
@@ -639,7 +640,7 @@ function KickMemberConfirmModal({
               <Text
                 className="text-[11px] font-bold"
                 numberOfLines={1}
-                style={{ color: "#8F8698", lineHeight: 13 }}
+                style={{ color: "#8F8698", lineHeight: lineHeightFor(11) }}
               >
                 HỦY
               </Text>
@@ -667,7 +668,7 @@ function KickMemberConfirmModal({
                   <Text
                     className="text-center text-[10px] font-bold text-white"
                     numberOfLines={1}
-                    style={{ lineHeight: 12 }}
+                    style={{ lineHeight: lineHeightFor(10) }}
                   >
                     KÍCH THÀNH VIÊN
                   </Text>
@@ -1158,7 +1159,7 @@ export default function CommunityGroupMembersScreen() {
 
             <Text
               className="text-[17px]"
-              style={{ color: palette.primaryText, lineHeight: 19 }}
+              style={{ color: palette.primaryText, lineHeight: lineHeightFor(17) }}
             >
               {screenTitle}
             </Text>
@@ -1203,7 +1204,7 @@ export default function CommunityGroupMembersScreen() {
                 <Text
                   className="text-[15px]"
                   numberOfLines={2}
-                  style={{ color: palette.primaryText, lineHeight: 18 }}
+                  style={{ color: palette.primaryText, lineHeight: lineHeightFor(15) }}
                 >
                   {groupName}
                 </Text>
@@ -1221,7 +1222,7 @@ export default function CommunityGroupMembersScreen() {
                     />
                     <Text
                       className="ml-1 text-[11px]"
-                      style={{ color: palette.subtleText, lineHeight: 13 }}
+                      style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(11) }}
                     >
                       {totalGroupMembersLabel}
                     </Text>
@@ -1235,7 +1236,7 @@ export default function CommunityGroupMembersScreen() {
                     />
                     <Text
                       className="ml-1 text-[11px]"
-                      style={{ color: palette.subtleText, lineHeight: 13 }}
+                      style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(11) }}
                     >
                       {`Tạo ngày ${createdDateLabel}`}
                     </Text>
@@ -1266,14 +1267,14 @@ export default function CommunityGroupMembersScreen() {
                 <View className="min-w-0 flex-1 pr-2">
                   <Text
                     className="text-[12px]"
-                    style={{ color: palette.primaryText, lineHeight: 14 }}
+                    style={{ color: palette.primaryText, lineHeight: bodyLineHeightFor(12) }}
                   >
                     Link mời tham gia
                   </Text>
                   <Text
                     className="mt-1 text-[11px]"
                     numberOfLines={1}
-                    style={{ color: "#8E869A", lineHeight: 14 }}
+                    style={{ color: "#8E869A", lineHeight: lineHeightFor(11) }}
                   >
                     {inviteLink}
                   </Text>
@@ -1315,7 +1316,7 @@ export default function CommunityGroupMembersScreen() {
             >
               <Text
                 className="text-[12px]"
-                style={{ color: palette.warningText, lineHeight: 15 }}
+                style={{ color: palette.warningText, lineHeight: bodyLineHeightFor(12) }}
               >
                 {errorMessage}
               </Text>
@@ -1329,7 +1330,7 @@ export default function CommunityGroupMembersScreen() {
             <View className="flex-row items-center justify-between gap-3">
               <Text
                 className="text-[16px]"
-                style={{ color: palette.primaryText, lineHeight: 18 }}
+                style={{ color: palette.primaryText, lineHeight: lineHeightFor(16) }}
               >
                 {sectionTitle}
               </Text>

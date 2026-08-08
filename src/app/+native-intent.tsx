@@ -13,6 +13,32 @@ function isAuthCallbackUrl(url: URL) {
   );
 }
 
+// Link đặt lại mật khẩu trong email trỏ tới backend (App Link) và trang bridge của backend lại
+// chuyển sang scheme riêng, nên cả hai dạng đều phải về chung màn /reset-password trong app.
+function readResetPasswordTokenFromUrl(url: URL) {
+  const pathnameTokens = url.pathname.split("/").filter(Boolean);
+  const token = url.searchParams.get("token")?.trim();
+
+  if (!token) {
+    return null;
+  }
+
+  const isApiResetPasswordPath =
+    pathnameTokens[0] === "api" &&
+    pathnameTokens[1] === "auth" &&
+    pathnameTokens[2] === "reset-password";
+
+  if (isApiResetPasswordPath) {
+    return token;
+  }
+
+  if (supportedSchemes.has(url.protocol) && url.hostname === "reset-password") {
+    return token;
+  }
+
+  return null;
+}
+
 function readInviteTokenFromUrl(url: URL) {
   const pathnameTokens = url.pathname.split("/").filter(Boolean);
 
@@ -51,6 +77,12 @@ export function redirectSystemPath({
     // và bước sync tài khoản với backend không bao giờ chạy.
     if (isAuthCallbackUrl(url)) {
       return null;
+    }
+
+    const resetPasswordToken = readResetPasswordTokenFromUrl(url);
+
+    if (resetPasswordToken) {
+      return `/reset-password?token=${encodeURIComponent(resetPasswordToken)}`;
     }
 
     const inviteToken = readInviteTokenFromUrl(url);

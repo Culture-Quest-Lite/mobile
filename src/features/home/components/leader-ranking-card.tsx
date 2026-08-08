@@ -7,6 +7,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { lineHeightFor } from "@/lib/text-scale";
 
 /** Ảnh cúp vàng (PNG nền trong suốt) */
 const trophyImage = require("../../../../assets/images/cup.png");
@@ -42,8 +43,7 @@ export function LeaderRankingCard({
   // Kích thước co giãn theo bề ngang màn hình
   // Cỡ chữ tối đa mà tiêu đề mặc định vẫn gói gọn trên một hàng
   const titleFontSize = isSmallScreen ? 11.5 : 13;
-  // lineHeight sát mức tối thiểu mà dấu tiếng Việt chưa bị cắt
-  const titleLineHeight = isSmallScreen ? 13 : 15;
+  const titleLineHeight = lineHeightFor(titleFontSize);
   const descriptionFontSize = isSmallScreen ? 9.5 : 10.5;
   const xpFontSize = isSmallScreen ? 12 : 13;
 
@@ -103,7 +103,13 @@ export function LeaderRankingCard({
 
           <Text
             adjustsFontSizeToFit
-            style={[styles.description, { fontSize: descriptionFontSize }]}
+            style={[
+              styles.description,
+              {
+                fontSize: descriptionFontSize,
+                lineHeight: lineHeightFor(descriptionFontSize),
+              },
+            ]}
             numberOfLines={1}
           >
             {description}
@@ -187,13 +193,12 @@ const styles = StyleSheet.create({
   description: {
     color: "#A84D72",
     fontWeight: "500",
-    lineHeight: 12.5,
     marginTop: 6,
   },
   heart: {
     color: "#F58BAF",
     fontSize: 13,
-    lineHeight: 14,
+    lineHeight: lineHeightFor(13),
     marginTop: 6,
   },
 
