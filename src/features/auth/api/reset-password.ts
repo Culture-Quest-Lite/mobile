@@ -2,20 +2,22 @@ import { Platform } from "react-native";
 
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 
-export type ForgotPasswordRequest = {
-  email: string;
+export type ResetPasswordRequest = {
+  confirmPassword: string;
+  newPassword: string;
+  token: string;
 };
 
-export type ForgotPasswordResponse = {
+export type ResetPasswordResponse = {
   message: string | null;
 };
 
-function resolveForgotPasswordUrl() {
+function resolveResetPasswordUrl() {
   if (PublicEnv.apiBaseUrl.trim()) {
-    return buildApiUrl("/api/auth/forgot-password");
+    return buildApiUrl("/api/auth/reset-password");
   }
 
-  return "http://13.158.40.56:8080/api/auth/forgot-password";
+  return "http://13.158.40.56:8080/api/auth/reset-password";
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -64,7 +66,7 @@ async function parseResponseBody(response: Response) {
 
 function getErrorMessage(body: unknown, status: number) {
   if (status === 500) {
-    return "Máy chủ khôi phục mật khẩu đang gặp lỗi. Vui lòng thử lại sau.";
+    return "Máy chủ đổi mật khẩu đang gặp lỗi. Vui lòng thử lại sau.";
   }
 
   if (isObject(body)) {
@@ -81,23 +83,19 @@ function getErrorMessage(body: unknown, status: number) {
     return body.trim();
   }
 
-  if (status === 404) {
-    return "Email không tồn tại trong hệ thống.";
-  }
-
   if (status === 400) {
-    return "Không thể gửi email khôi phục.";
+    return "Liên kết đổi mật khẩu không hợp lệ hoặc đã hết hạn.";
   }
 
-  return `Gửi email khôi phục thất bại (${status}).`;
+  return `Đổi mật khẩu thất bại (${status}).`;
 }
 
-function getConnectionErrorMessage(forgotPasswordUrl: string) {
-  if (Platform.OS === "android" && forgotPasswordUrl.startsWith("http://")) {
+function getConnectionErrorMessage(resetPasswordUrl: string) {
+  if (Platform.OS === "android" && resetPasswordUrl.startsWith("http://")) {
     return "Android đang chặn kết nối HTTP tới API. Hãy dùng HTTPS hoặc rebuild Android dev client sau khi bật cleartext traffic.";
   }
 
-  return "Không thể kết nối đến máy chủ khôi phục mật khẩu.";
+  return "Không thể kết nối đến máy chủ đổi mật khẩu.";
 }
 
 function getSuccessMessage(body: unknown) {
@@ -112,24 +110,25 @@ function getSuccessMessage(body: unknown) {
   return null;
 }
 
-export async function forgotPassword({
-  email,
-}: ForgotPasswordRequest): Promise<ForgotPasswordResponse> {
-  const forgotPasswordUrl = resolveForgotPasswordUrl();
+export async function resetPassword({
+  confirmPassword,
+  newPassword,
+  token,
+}: ResetPasswordRequest): Promise<ResetPasswordResponse> {
+  const resetPasswordUrl = resolveResetPasswordUrl();
   let response: Response;
 
-  console.info("[auth] forgot password request started", {
-    email,
+  console.info("[auth] reset password request started", {
     platform: Platform.OS,
-    url: forgotPasswordUrl,
+    url: resetPasswordUrl,
   });
 
   try {
-    response = await fetch(forgotPasswordUrl, {
-      // platform MOBILE để backend gửi link mở app thay vì link web đổi mật khẩu.
+    response = await fetch(resetPasswordUrl, {
       body: JSON.stringify({
-        email,
-        platform: "MOBILE",
+        confirmPassword,
+        newPassword,
+        token,
       }),
       headers: {
         Accept: "application/json",
@@ -138,36 +137,36 @@ export async function forgotPassword({
       method: "POST",
     });
   } catch (error) {
-    console.warn("[auth] forgot password network failure", {
+    console.warn("[auth] reset password network failure", {
       error: serializeError(error),
       platform: Platform.OS,
-      url: forgotPasswordUrl,
+      url: resetPasswordUrl,
     });
-    throw new Error(getConnectionErrorMessage(forgotPasswordUrl));
+    throw new Error(getConnectionErrorMessage(resetPasswordUrl));
   }
 
   const responseBody = await parseResponseBody(response);
 
-  console.info("[auth] forgot password response received", {
+  console.info("[auth] reset password response received", {
     ok: response.ok,
     status: response.status,
-    url: forgotPasswordUrl,
+    url: resetPasswordUrl,
   });
 
   if (!response.ok) {
-    console.info("[auth] forgot password rejected", {
+    console.info("[auth] reset password rejected", {
       body: summarizeBody(responseBody),
       status: response.status,
-      url: forgotPasswordUrl,
+      url: resetPasswordUrl,
     });
     throw new Error(getErrorMessage(responseBody, response.status));
   }
 
   const message = getSuccessMessage(responseBody);
 
-  console.info("[auth] forgot password succeeded", {
+  console.info("[auth] reset password succeeded", {
     message,
-    url: forgotPasswordUrl,
+    url: resetPasswordUrl,
   });
 
   return {

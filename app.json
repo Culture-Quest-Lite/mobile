@@ -35,6 +35,23 @@
               "scheme": "https"
             },
             "category": ["BROWSABLE", "DEFAULT"]
+          },
+          {
+            "autoVerify": true,
+            "action": "VIEW",
+            "data": {
+              "host": "api.culturequestlite.com",
+              "pathPrefix": "/api/auth/reset-password",
+              "scheme": "https"
+            },
+            "category": ["BROWSABLE", "DEFAULT"]
+          },
+          {
+            "action": "VIEW",
+            "data": {
+              "scheme": "culturequest"
+            },
+            "category": ["BROWSABLE", "DEFAULT"]
           }
         ],
         "predictiveBackGestureEnabled": false
