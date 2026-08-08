@@ -1,0 +1,465 @@
+{
+  "common": {
+    "back": "Back",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "close": "Close",
+    "retry": "Retry",
+    "continue": "Continue",
+    "apply": "Apply",
+    "search": "Search",
+    "filter": "Filter",
+    "done": "Done",
+    "skip": "Skip"
+  },
+  "auth": {
+    "login": {
+      "title": "Login",
+      "subtitle": "Enter your account to login",
+      "username": "Username",
+      "password": "Password",
+      "usernamePlaceholder": "Enter username",
+      "passwordPlaceholder": "Enter password",
+      "forgotPassword": "Forgot password?",
+      "loginButton": "Login",
+      "loggingIn": "Logging in...",
+      "orLoginWith": "Or login with",
+      "noAccount": "Don't have an account?",
+      "signUp": "Sign up",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
+      "errorCannotLogin": "Cannot login. Please try again."
+    },
+    "register": {
+      "title": "Sign Up",
+      "subtitle": "Create an account to start your journey",
+      "username": "Username",
+      "displayName": "Display name",
+      "email": "Email",
+      "password": "Password",
+      "confirmPassword": "Confirm password",
+      "usernamePlaceholder": "Choose username",
+      "displayNamePlaceholder": "Choose display name",
+      "emailPlaceholder": "Enter email address",
+      "passwordPlaceholder": "Enter password",
+      "confirmPasswordPlaceholder": "Re-enter password",
+      "createAccountButton": "Create account",
+      "creatingAccount": "Creating account...",
+      "orSignUpWith": "Or sign up with",
+      "haveAccount": "Already have an account?",
+      "signIn": "Sign in",
+      "errorCannotRegister": "Cannot register. Please try again."
+    },
+    "forgotPassword": {
+      "title": "Forgot Password",
+      "subtitle": "Enter the email you used to register to continue password recovery",
+      "email": "Email",
+      "emailPlaceholder": "Enter email address",
+      "sendEmailButton": "Send recovery email",
+      "sendingEmail": "Sending email...",
+      "errorCannotSend": "Cannot send recovery email. Please try again."
+    },
+    "verifyOtp": {
+      "title": "Verify OTP",
+      "subtitle": "Enter the OTP code sent to your email"
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "menu": {
+      "information": "Information",
+      "changeAvatar": "Change avatar",
+      "changeCover": "Change cover photo",
+      "updateBio": "Update bio",
+      "vouchers": "Voucher store",
+      "notifications": "Notifications",
+      "subscription": "Subscription",
+      "myQRCode": "My QR code",
+      "privacy": "Privacy",
+      "accountManagement": "Account management",
+      "generalSettings": "General settings",
+      "language": "Language",
+      "logout": "Logout",
+      "settings": "Settings",
+      "guestMode": "You are in guest mode. Some features require login to use."
+    }
+  },
+  "settings": {
+    "language": {
+      "title": "Language",
+      "vietnamese": "Tiếng Việt",
+      "english": "English",
+      "description": "Choose display language for the app"
+    }
+  },
+  "route": {
+    "tabs": {
+      "official": "Official",
+      "active": "Active",
+      "groups": "My Groups",
+      "completed": "Completed",
+      "bookmarked": "Saved",
+      "plans": "Plans",
+      "journeys": "My Journeys",
+      "community": "Community"
+    },
+    "header": {
+      "journey": "Journey",
+      "exploreNext": "Explore Next",
+      "leaderboard": "Leaderboard"
+    },
+    "level": {
+      "level": "Level",
+      "remainingXP": "{{xp}} XP more to reach level {{level}}"
+    },
+    "progress": {
+      "inProgress": "In Progress",
+      "continueJourney": "Continue Journey",
+      "abandonRoute": "Abandon Route",
+      "abandoning": "Abandoning...",
+      "completed": "Completed",
+      "progress": "Progress"
+    },
+    "empty": {
+      "noRoutes": "You haven't joined any routes",
+      "noCompleted": "No completed routes yet",
+      "noBookmarked": "You haven't saved any routes",
+      "noPlans": "You don't have any Custom User Plans",
+      "noJourneys": "You haven't recorded any journeys",
+      "noCommunity": "No community journeys yet",
+      "noGroups": "You don't have any route groups",
+      "loading": "Loading routes from API..."
+    },
+    "actions": {
+      "continue": "Continue",
+      "unsave": "Unsave",
+      "unsaving": "Unsaving...",
+      "viewDetails": "View Details",
+      "viewGroup": "View Group",
+      "inviteFriends": "Invite Friends"
+    },
+    "userPlan": {
+      "title": "Create New Journey Plan",
+      "subtitle": "Select locations, optimize order and start when ready.",
+      "continuePlan": "Continue Plan"
+    },
+    "recordJourney": {
+      "title": "Record New Journey",
+      "subtitle": "Save checked-in locations and complete your personal journey.",
+      "recording": "Recording",
+      "draft": "Draft",
+      "trial": "Pending Review",
+      "published": "Published",
+      "continueRecording": "Continue Recording",
+      "viewAndComplete": "View and Complete",
+      "viewStatus": "View Status",
+      "viewJourney": "View Journey"
+    },
+    "community": {
+      "title": "Explore Published Journeys",
+      "subtitle": "Routes shared by the community after completing the review process.",
+      "topRoutes": "Most Popular Routes",
+      "fromCommunity": "Routes from Community"
+    },
+    "leaderboard": {
+      "title": "Leaderboard",
+      "city": "Ho Chi Minh City",
+      "national": "National"
+    },
+    "stats": {
+      "points": "points",
+      "stops": "locations",
+      "completed": "completed"
+    }
+  },
+  "hotspot": {
+    "search": {
+      "title": "Search hotspot or address",
+      "placeholder": "Search hotspot or address",
+      "cancel": "Cancel",
+      "noResults": "No matching hotspots",
+      "noResultsSubtitle": "Try changing keywords or reducing search criteria to see more hotspots.",
+      "searchByNameOrAddress": "Search by hotspot name or address.",
+      "filter": {
+        "title": "Hotspot Filter",
+        "addFilter": "+ Add filter",
+        "remove": "Remove",
+        "noFilters": "No advanced filters yet. You can add filters by tag, address, description, history, status, created date or creator.",
+        "sortResults": "Sort Results",
+        "ascending": "Ascending",
+        "descending": "Descending",
+        "apply": "Apply Filter"
+      },
+      "stats": {
+        "xp": "XP",
+        "points": "Points",
+        "createdDate": "Created Date"
+      },
+      "pagination": {
+        "previous": "Previous",
+        "next": "Next",
+        "page": "Page"
+      },
+      "error": {
+        "cannotLoad": "Cannot load hotspot data.",
+        "retry": "Retry"
+      }
+    }
+  },
+  "tabs": {
+    "home": "Home",
+    "explore": "Explore",
+    "community": "Community",
+    "journey": "Journey",
+    "profile": "Profile"
+  },
+  "home": {
+    "greeting": "Hello {{name}}",
+    "readyToExplore": "Ready to explore",
+    "nearbyPlaces": "Places near you",
+    "featuredRoutes": "Featured Routes",
+    "activeJourney": {
+      "title": "Active Journey",
+      "continue": "Continue Journey",
+      "nextStop": "Next Stop",
+      "remainingStops": "{{count}} stops remaining",
+      "distanceToNext": "{{distance}} to next stop",
+      "progress": "Progress"
+    },
+    "stats": {
+      "distance": "{{value}} km",
+      "distanceMeters": "{{value}} m",
+      "duration": "{{value}} minutes",
+      "durationHours": "{{hours}} hours",
+      "durationHoursMinutes": "{{hours}} hours {{minutes}} minutes",
+      "stops": "{{count}} stops",
+      "updating": "Updating"
+    },
+    "difficulty": {
+      "easy": "Easy",
+      "medium": "Medium",
+      "hard": "Hard"
+    },
+    "leaderboard": {
+      "title": "Leaderboard",
+      "viewAll": "View All"
+    },
+    "vouchers": {
+      "title": "Special Offers",
+      "viewAll": "View all vouchers"
+    },
+    "nearby": {
+      "title": "Near You",
+      "rating": "Rating",
+      "reviews": "reviews",
+      "nearYou": "Near you"
+    },
+    "themes": {
+      "title": "Explore by Theme",
+      "viewAll": "View all themes"
+    }
+  },
+  "explore": {
+    "greeting": "Hello {{name}}",
+    "readyToExplore": "Ready to explore",
+    "categories": {
+      "all": "All",
+      "history": "History",
+      "architecture": "Architecture",
+      "culture": "Culture",
+      "cuisine": "Cuisine",
+      "heritage": "Heritage"
+    },
+    "featured": {
+      "title": "Featured Today"
+    },
+    "premium": {
+      "title": "CultureQuest Premium",
+      "subtitle": "Explore More",
+      "explorer": "Premium Explorer"
+    },
+    "features": {
+      "userPlan": "User Plan",
+      "record": "Record",
+      "routes": "Routes"
+    },
+    "search": {
+      "placeholder": "Search spots, routes, challenges..."
+    },
+    "map": {
+      "showingRoute": "Showing route",
+      "showingPlaces": "Showing places"
+    },
+    "missions": {
+      "title": "Missions Near You",
+      "checkpoint": "{{count}} checkpoints left to unlock badge",
+      "completeBefore": "Complete before {{time}}",
+      "bonusReward": "Bonus reward for check-in on time"
+    },
+    "places": {
+      "nearYou": "Near you",
+      "viewAll": "View all places"
+    },
+    "routes": {
+      "title": "Suggested Routes",
+      "viewAll": "View all routes",
+      "stops": "stops",
+      "startJourney": "Start Journey"
+    }
+  },
+  "community": {
+    "title": "Community",
+    "posts": {
+      "create": "Create Post",
+      "edit": "Edit Post",
+      "delete": "Delete Post",
+      "share": "Share",
+      "like": "Like",
+      "comment": "Comment",
+      "comments": "comments"
+    },
+    "status": {
+      "approved": "Approved",
+      "pending": "Pending",
+      "rejected": "Rejected",
+      "deleted": "Deleted"
+    },
+    "visibility": {
+      "public": "Public",
+      "private": "Private",
+      "friendsOnly": "Friends Only"
+    },
+    "time": {
+      "justNow": "Just now",
+      "minutesAgo": "{{count}} minutes ago",
+      "hoursAgo": "{{count}} hours ago",
+      "daysAgo": "{{count}} days ago"
+    },
+    "groups": {
+      "title": "Community Groups",
+      "create": "Create Group",
+      "viewAll": "View All"
+    },
+    "empty": {
+      "noPosts": "No posts yet",
+      "noUpdates": "No updates yet"
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "loading": "Loading notifications...",
+    "empty": {
+      "title": "No notifications",
+      "subtitle": "Updates about your journeys, rewards and subscriptions will appear here"
+    }
+  },
+  "vouchers": {
+    "title": "Voucher Store",
+    "myVouchers": "My Vouchers",
+    "available": "Available",
+    "used": "Used",
+    "expired": "Expired",
+    "viewDetails": "View Details",
+    "useNow": "Use Now"
+  },
+  "subscription": {
+    "partner": {
+      "title": "Partner Registration",
+      "subtitle": "Display shop on CultureQuest map, issue vouchers & attract tourists",
+      "packageLabel": "PARTNER SHOP PACKAGE",
+      "steps": {
+        "step": "Step",
+        "information": "Registration Info",
+        "payment": "Bank Payment"
+      },
+      "benefits": {
+        "title": "Official Partner Benefits",
+        "showOnMap": "Display location/shop on travel map",
+        "manageVouchers": "Create & manage discount vouchers for travelers",
+        "verifiedBadge": "Verified Official Partner badge"
+      },
+      "selectPlan": "Select Partner Package",
+      "packageLabel": "Partner Package",
+      "billingCycle": {
+        "title": "Billing Cycle",
+        "monthly": "Monthly",
+        "yearly": "Yearly",
+        "yearlyNote": "Price by package"
+      },
+      "shopInfo": {
+        "title": "Shop Information",
+        "shopName": "Shop / Location Name *",
+        "shopNamePlaceholder": "E.g.: Heritage Coffee Shop District 1",
+        "shopEmail": "Shop Management Email *",
+        "shopEmailPlaceholder": "E.g.: shop.partner@gmail.com",
+        "address": "Shop Address *",
+        "addressPlaceholder": "Enter street name, location or shop name",
+        "selectLocation": "Select shop location",
+        "locationSelected": "✅ Shop location selected",
+        "tapToSelect": "Tap on map to select shop location",
+        "selectOnMap": "Select location on map",
+        "reselectLocation": "Select location again",
+        "saveLocation": "Save this location",
+        "locationSaved": "Location saved"
+      },
+      "verification": {
+        "title": "Verification Documents",
+        "selectDocument": "📄 Select verification document photo *",
+        "documentSelected": "✅ Selected: {{name}}",
+        "selectShopImages": "🖼️ Add shop photos (optional)",
+        "imagesSelected": "🖼️ Selected {{count}} shop photos"
+      },
+      "payment": {
+        "method": "Payment Method",
+        "bankTransfer": "Bank Transfer / QR",
+        "bankTransferNote": "Scan VietQR code or transfer via any banking app.",
+        "summary": "Payment Summary",
+        "package": "Package",
+        "cycle": "Cycle",
+        "amount": "Amount",
+        "status": "Status",
+        "complete": "Complete Payment",
+        "completeNote": "Open secure payment page to complete. If browser doesn't open, scan QR code below.",
+        "openPayment": "Open Payment Page",
+        "scanQR": "Scan code with banking app or VietQR-supported wallet."
+      },
+      "actions": {
+        "continueToPayment": "Continue to payment step",
+        "backToInfo": "Back to registration info",
+        "registerAndPay": "🏪 Register and Pay"
+      },
+      "status": {
+        "notRegistered": "Not Registered",
+        "paymentPending": "Awaiting Payment",
+        "paymentFailed": "Payment Failed",
+        "pending": "Paid, Awaiting Admin Approval",
+        "active": "Active",
+        "rejected": "Rejected",
+        "expired": "Expired"
+      },
+      "errors": {
+        "needLogin": "You need to login before registering for Partner package.",
+        "missingInfo": "Missing Information",
+        "selectPlan": "Please select a subscription package.",
+        "enterShopName": "Please enter shop name.",
+        "invalidEmail": "Shop email format is invalid.",
+        "enterAddress": "Please enter shop address.",
+        "selectLocationOnMap": "Please select shop location on map.",
+        "uploadDocument": "Please upload verification document.",
+        "cannotLoadSuggestions": "Cannot load address suggestions.",
+        "cannotGetCoordinates": "Cannot get address coordinates."
+      },
+      "permissions": {
+        "needPhotoAccess": "Missing Access Permission",
+        "grantPhotoPermission": "Please grant permission to select verification document photos.",
+        "grantShopPhotoPermission": "Please grant permission to select shop photos."
+      }
+    }
+  }
+}

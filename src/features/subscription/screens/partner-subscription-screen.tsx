@@ -1,3 +1,4 @@
+import * as ExpoLinking from "expo-linking";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -38,7 +39,25 @@ import {
   registerPartnerSubscription,
 } from "../api/partner-subscription-api";
 
-const PAYOS_REDIRECT_URL = "culturequest://partner-subscription/payment-result";
+/**
+ * Deep link PayOS gọi lại sau khi thanh toán xong.
+ *
+ * Phải dùng ExpoLinking.createURL — scheme thật của app là
+ * `culturequestlitemobile` (app.json). Hardcode "culturequest://..."
+ * trước đây sai scheme nên OS không resolve được → app không nhận callback.
+ *
+ * Path trỏ về route đang tồn tại (`src/app/subscription/partner.tsx`).
+ */
+const PAYOS_REDIRECT_URL = ExpoLinking.createURL("/subscription/partner");
+
+/**
+ * Trong Expo Go, createURL trả về `exp://<ip>:8081/--/...` — gửi URL đó lên
+ * PayOS có thể làm bước tạo link thanh toán fail. Khi đó bỏ hẳn redirectUrl
+ * để backend dùng payos.return-url mặc định.
+ */
+const PAYOS_SAFE_REDIRECT_URL = PAYOS_REDIRECT_URL.startsWith("exp://")
+  ? undefined
+  : PAYOS_REDIRECT_URL;
 
 const DEFAULT_SHOP_REGION: Region = {
   latitude: 10.762622,
@@ -478,16 +497,17 @@ export default function PartnerSubscriptionScreen() {
   }
 
 
+  /**
+   * useURL() bắt được cả cold-start deep link (app bị OS kill rồi mở lại qua URL)
+   * lẫn URL đến khi app đang chạy — thay thế hoàn toàn Linking.addEventListener.
+   */
+  const incomingUrl = ExpoLinking.useURL();
   useEffect(() => {
-    const subscription = Linking.addEventListener("url", ({ url }) => {
-      if (url.startsWith(PAYOS_REDIRECT_URL)) {
-        setPayment(null);
-        setRegisteredStatus("PENDING");
-      }
-    });
-
-    return () => subscription.remove();
-  }, []);
+    if (!incomingUrl) return;
+    if (!incomingUrl.includes("subscription/partner")) return;
+    setPayment(null);
+    setRegisteredStatus("PENDING");
+  }, [incomingUrl]);
 
   async function handleRegisterAndPay() {
     const validationMessage = validateStep1();
@@ -524,7 +544,7 @@ export default function PartnerSubscriptionScreen() {
 
       const paymentResponse = await initiatePayOsPayment({
         accessToken,
-        redirectUrl: PAYOS_REDIRECT_URL,
+        redirectUrl: PAYOS_SAFE_REDIRECT_URL,
         subscriptionId: subscription.id,
       });
       setPayment(paymentResponse);

@@ -465,7 +465,7 @@ export default function RouteScreen() {
             setRouteError(
               error instanceof Error
                 ? error.message
-                : "Không thể tải tuyến từ API.",
+                : "Không thể tải tuyến.",
             );
           }
         } finally {

@@ -1,0 +1,5 @@
+# Generated templates - review trước khi commit
+generated-templates/
+
+# Migration suggestions - tự động tạo, không cần commit
+MIGRATION_SUGGESTIONS.md

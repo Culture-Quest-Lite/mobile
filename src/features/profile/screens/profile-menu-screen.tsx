@@ -13,6 +13,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 
 import {
   resetAuthSessionToGuest,
@@ -45,7 +46,7 @@ function Text({
   );
 }
 
-function getProfileTitle(name: string | undefined, fallbackName: string) {
+function getProfileTitle(name: string | undefined, fallbackName: string, t: (key: string) => string) {
   const normalizedName = name?.trim();
 
   if (normalizedName) {
@@ -53,7 +54,7 @@ function getProfileTitle(name: string | undefined, fallbackName: string) {
   }
 
   const resolvedFallbackName = fallbackName.trim();
-  return resolvedFallbackName || "Hồ sơ";
+  return resolvedFallbackName || t('profile.title');
 }
 
 export default function ProfileMenuScreen() {
@@ -61,6 +62,7 @@ export default function ProfileMenuScreen() {
   const authSession = useAuthSession();
   const { profile } = useProfile();
   const insets = useSafeAreaInsets();
+  const { t, i18n } = useTranslation();
 
   const handleBackToProfile = () => {
     if (router.canGoBack()) {
@@ -79,29 +81,31 @@ export default function ProfileMenuScreen() {
     router.replace("/home");
   };
 
-  const displayName = getProfileTitle(profile?.name, authSession.displayName);
+  const displayName = getProfileTitle(profile?.name, authSession.displayName, t);
+
+  const currentLanguage = i18n.language === 'en' ? t('settings.language.english') : t('settings.language.vietnamese');
 
   const informationRows: MenuRowConfig[] = [
     {
-      label: "Thông tin",
+      label: t('profile.menu.information'),
       onPress: () => {
         router.push("/profile/information" as Href);
       },
     },
     {
-      label: "Đổi ảnh đại diện",
+      label: t('profile.menu.changeAvatar'),
       onPress: () => {},
     },
     {
-      label: "Đổi ảnh bìa",
+      label: t('profile.menu.changeCover'),
       onPress: () => {},
     },
     {
-      label: "Cập nhật giới thiệu bản thân",
+      label: t('profile.menu.updateBio'),
       onPress: () => {},
     },
     {
-      label: "Kho voucher",
+      label: t('profile.menu.vouchers'),
       onPress: () => {
         router.push("/vouchers" as Href);
       },
@@ -110,31 +114,38 @@ export default function ProfileMenuScreen() {
 
   const settingsRows: MenuRowConfig[] = [
     {
-      label: "Thông báo",
+      label: t('profile.menu.notifications'),
       onPress: () => {
         router.push("/notifications" as Href);
       },
     },
     {
-      label: "Gói đăng ký",
+      label: t('profile.menu.subscription'),
       onPress: () => {
         router.push("/subscription" as Href);
       },
     },
     {
-      label: "Mã QR của tôi",
+      label: t('profile.menu.myQRCode'),
       onPress: () => {},
     },
     {
-      label: "Quyền riêng tư",
+      label: t('profile.menu.privacy'),
       onPress: () => {},
     },
     {
-      label: "Quản lý tài khoản",
+      label: t('profile.menu.accountManagement'),
       onPress: () => {},
     },
     {
-      label: "Cài đặt chung",
+      label: t('profile.menu.language'),
+      value: currentLanguage,
+      onPress: () => {
+        router.push("/settings/language" as Href);
+      },
+    },
+    {
+      label: t('profile.menu.generalSettings'),
       onPress: () => {},
     },
   ];
@@ -163,7 +174,7 @@ export default function ProfileMenuScreen() {
         >
           <View className="flex-row items-center justify-between">
             <Pressable
-              accessibilityLabel="Quay lại hồ sơ"
+              accessibilityLabel={t('common.back')}
               className="h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-white/15"
               onPress={handleBackToProfile}
             >
@@ -199,7 +210,7 @@ export default function ProfileMenuScreen() {
             className="px-4 py-2.5 text-[14px] font-semibold text-[#EB489B]"
             style={{ lineHeight: 16 }}
           >
-            Cài đặt
+            {t('profile.menu.settings')}
           </Text>
 
           <MenuList rows={settingsRows} />
@@ -213,7 +224,7 @@ export default function ProfileMenuScreen() {
           ) : (
             <View className="border-t border-[#ECE8F2] px-4 py-3">
               <Text className="text-[13px] text-[#9A94A8]" style={{ lineHeight: 18 }}>
-                Bạn đang ở chế độ khách. Một số mục sẽ cần đăng nhập để sử dụng.
+                {t('profile.menu.guestMode')}
               </Text>
             </View>
           )}
@@ -238,10 +249,12 @@ function MenuList({ rows }: { rows: MenuRowConfig[] }) {
 }
 
 function LogoutButton({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+
   return (
     <View className="px-4 py-3">
       <Pressable
-        accessibilityLabel="Đăng xuất"
+        accessibilityLabel={t('profile.menu.logout')}
         className="flex-row items-center justify-center gap-2 rounded-full bg-[#E9EEF1] px-4 py-3"
         onPress={onPress}
       >
@@ -258,7 +271,7 @@ function LogoutButton({ onPress }: { onPress: () => void }) {
           className="text-[15px] font-semibold text-[#E54572]"
           style={{ lineHeight: 18 }}
         >
-          Đăng xuất
+          {t('profile.menu.logout')}
         </Text>
       </Pressable>
     </View>

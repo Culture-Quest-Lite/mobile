@@ -1,0 +1,465 @@
+{
+  "common": {
+    "back": "Quay lại",
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "confirm": "Xác nhận",
+    "delete": "Xóa",
+    "edit": "Chỉnh sửa",
+    "loading": "Đang tải...",
+    "error": "Lỗi",
+    "success": "Thành công",
+    "close": "Đóng",
+    "retry": "Thử lại",
+    "continue": "Tiếp tục",
+    "apply": "Áp dụng",
+    "search": "Tìm kiếm",
+    "filter": "Bộ lọc",
+    "done": "Xong",
+    "skip": "Bỏ qua"
+  },
+  "auth": {
+    "login": {
+      "title": "Đăng nhập",
+      "subtitle": "Nhập tài khoản của bạn để đăng nhập",
+      "username": "Username",
+      "password": "Password",
+      "usernamePlaceholder": "Nhập username",
+      "passwordPlaceholder": "Nhập mật khẩu",
+      "forgotPassword": "Bạn quên mật khẩu?",
+      "loginButton": "Đăng nhập",
+      "loggingIn": "Đang đăng nhập...",
+      "orLoginWith": "Hoặc đăng nhập với",
+      "noAccount": "Bạn chưa có tài khoản?",
+      "signUp": "Đăng ký",
+      "showPassword": "Hiện mật khẩu",
+      "hidePassword": "Ẩn mật khẩu",
+      "errorCannotLogin": "Không thể đăng nhập. Vui lòng thử lại."
+    },
+    "register": {
+      "title": "Đăng ký",
+      "subtitle": "Tạo tài khoản để bắt đầu hành trình",
+      "username": "Username",
+      "displayName": "Tên hiển thị",
+      "email": "Email",
+      "password": "Mật khẩu",
+      "confirmPassword": "Nhập lại mật khẩu",
+      "usernamePlaceholder": "Chọn username",
+      "displayNamePlaceholder": "Chọn tên hiển thị",
+      "emailPlaceholder": "Nhập địa chỉ email",
+      "passwordPlaceholder": "Nhập mật khẩu",
+      "confirmPasswordPlaceholder": "Nhập lại mật khẩu",
+      "createAccountButton": "Tạo tài khoản",
+      "creatingAccount": "Đang tạo tài khoản...",
+      "orSignUpWith": "Hoặc đăng ký với",
+      "haveAccount": "Bạn đã có tài khoản?",
+      "signIn": "Đăng nhập",
+      "errorCannotRegister": "Không thể đăng ký. Vui lòng thử lại."
+    },
+    "forgotPassword": {
+      "title": "Quên mật khẩu",
+      "subtitle": "Nhập email bạn đã dùng để đăng ký để tiếp tục khôi phục mật khẩu",
+      "email": "Email",
+      "emailPlaceholder": "Nhập địa chỉ email",
+      "sendEmailButton": "Gửi email khôi phục",
+      "sendingEmail": "Đang gửi email...",
+      "errorCannotSend": "Không thể gửi email khôi phục. Vui lòng thử lại."
+    },
+    "verifyOtp": {
+      "title": "Xác thực OTP",
+      "subtitle": "Nhập mã OTP đã gửi đến email của bạn"
+    }
+  },
+  "profile": {
+    "title": "Hồ sơ",
+    "menu": {
+      "information": "Thông tin",
+      "changeAvatar": "Đổi ảnh đại diện",
+      "changeCover": "Đổi ảnh bìa",
+      "updateBio": "Cập nhật giới thiệu bản thân",
+      "vouchers": "Kho voucher",
+      "notifications": "Thông báo",
+      "subscription": "Gói đăng ký",
+      "myQRCode": "Mã QR của tôi",
+      "privacy": "Quyền riêng tư",
+      "accountManagement": "Quản lý tài khoản",
+      "generalSettings": "Cài đặt chung",
+      "language": "Ngôn ngữ",
+      "logout": "Đăng xuất",
+      "settings": "Cài đặt",
+      "guestMode": "Bạn đang ở chế độ khách. Một số mục sẽ cần đăng nhập để sử dụng."
+    }
+  },
+  "settings": {
+    "language": {
+      "title": "Ngôn ngữ",
+      "vietnamese": "Tiếng Việt",
+      "english": "English",
+      "description": "Chọn ngôn ngữ hiển thị cho ứng dụng"
+    }
+  },
+  "route": {
+    "tabs": {
+      "official": "Chính thức",
+      "active": "Đang đi",
+      "groups": "Nhóm của tôi",
+      "completed": "Đã xong",
+      "bookmarked": "Đã lưu",
+      "plans": "Kế hoạch",
+      "journeys": "Hành trình của tôi",
+      "community": "Cộng đồng"
+    },
+    "header": {
+      "journey": "Hành trình",
+      "exploreNext": "Khám phá kế tiếp",
+      "leaderboard": "BXH"
+    },
+    "level": {
+      "level": "Cấp",
+      "remainingXP": "Còn {{xp}} XP để lên cấp {{level}}"
+    },
+    "progress": {
+      "inProgress": "Đang thực hiện",
+      "continueJourney": "Tiếp tục hành trình",
+      "abandonRoute": "Bỏ tuyến",
+      "abandoning": "Đang bỏ...",
+      "completed": "Hoàn thành",
+      "progress": "Tiến độ"
+    },
+    "empty": {
+      "noRoutes": "Bạn chưa tham gia tuyến nào",
+      "noCompleted": "Chưa hoàn thành tuyến nào",
+      "noBookmarked": "Bạn chưa lưu tuyến nào",
+      "noPlans": "Bạn chưa có Custom User Plan nào",
+      "noJourneys": "Bạn chưa ghi hành trình nào",
+      "noCommunity": "Chưa có hành trình cộng đồng nào",
+      "noGroups": "Bạn chưa có group route nào",
+      "loading": "Đang tải tuyến từ API..."
+    },
+    "actions": {
+      "continue": "Tiếp tục",
+      "unsave": "Bỏ lưu",
+      "unsaving": "Đang bỏ lưu...",
+      "viewDetails": "Xem chi tiết",
+      "viewGroup": "Xem nhóm",
+      "inviteFriends": "Mời thêm bạn"
+    },
+    "userPlan": {
+      "title": "Tạo kế hoạch hành trình mới",
+      "subtitle": "Chọn địa điểm, tối ưu thứ tự và bắt đầu khi bạn sẵn sàng.",
+      "continuePlan": "Tiếp tục kế hoạch"
+    },
+    "recordJourney": {
+      "title": "Ghi hành trình mới",
+      "subtitle": "Lưu các địa điểm đã check-in và hoàn thiện hành trình của riêng bạn.",
+      "recording": "Đang ghi",
+      "draft": "Bản nháp",
+      "trial": "Đang chờ duyệt",
+      "published": "Đã xuất bản",
+      "continueRecording": "Tiếp tục ghi",
+      "viewAndComplete": "Xem và hoàn thiện",
+      "viewStatus": "Xem trạng thái",
+      "viewJourney": "Xem hành trình"
+    },
+    "community": {
+      "title": "Khám phá hành trình đã xuất bản",
+      "subtitle": "Những route được cộng đồng chia sẻ sau khi hoàn tất quá trình xét duyệt.",
+      "topRoutes": "Tuyến được quan tâm nhiều nhất",
+      "fromCommunity": "Tuyến từ cộng đồng"
+    },
+    "leaderboard": {
+      "title": "Bảng xếp hạng",
+      "city": "TP.HCM",
+      "national": "Toàn quốc"
+    },
+    "stats": {
+      "points": "điểm",
+      "stops": "địa điểm",
+      "completed": "hoàn thành"
+    }
+  },
+  "hotspot": {
+    "search": {
+      "title": "Tìm hotspot hoặc địa chỉ",
+      "placeholder": "Tìm hotspot hoặc địa chỉ",
+      "cancel": "Hủy",
+      "noResults": "Không có hotspot phù hợp",
+      "noResultsSubtitle": "Hãy thử đổi từ khóa hoặc giảm điều kiện tìm kiếm để xem thêm hotspot.",
+      "searchByNameOrAddress": "Tìm kiếm theo tên hotspot hoặc địa chỉ.",
+      "filter": {
+        "title": "Bộ lọc hotspot",
+        "addFilter": "+ Thêm filter",
+        "remove": "Xóa",
+        "noFilters": "Chưa có filter nâng cao. Bạn có thể thêm filter theo tag, địa chỉ, mô tả, lịch sử, trạng thái, ngày tạo hoặc người tạo.",
+        "sortResults": "Sắp xếp kết quả",
+        "ascending": "Tăng dần",
+        "descending": "Giảm dần",
+        "apply": "Áp dụng bộ lọc"
+      },
+      "stats": {
+        "xp": "XP",
+        "points": "Điểm",
+        "createdDate": "Ngày tạo"
+      },
+      "pagination": {
+        "previous": "Trước",
+        "next": "Sau",
+        "page": "Trang"
+      },
+      "error": {
+        "cannotLoad": "Không thể tải dữ liệu hotspot.",
+        "retry": "Thử lại"
+      }
+    }
+  },
+  "tabs": {
+    "home": "Trang chủ",
+    "explore": "Khám phá",
+    "community": "Cộng đồng",
+    "journey": "Hành trình",
+    "profile": "Tài khoản"
+  },
+  "home": {
+    "greeting": "Chào {{name}}",
+    "readyToExplore": "Sẵn sàng khám phá",
+    "nearbyPlaces": "Địa điểm gần bạn",
+    "featuredRoutes": "Tuyến nổi bật",
+    "activeJourney": {
+      "title": "Hành trình đang thực hiện",
+      "continue": "Tiếp tục hành trình",
+      "nextStop": "Điểm dừng tiếp theo",
+      "remainingStops": "Còn {{count}} điểm",
+      "distanceToNext": "Còn {{distance}} đến điểm kế tiếp",
+      "progress": "Tiến độ"
+    },
+    "stats": {
+      "distance": "{{value}} km",
+      "distanceMeters": "{{value}} m",
+      "duration": "{{value}} phút",
+      "durationHours": "{{hours}} giờ",
+      "durationHoursMinutes": "{{hours}} giờ {{minutes}} phút",
+      "stops": "{{count}} điểm dừng",
+      "updating": "Đang cập nhật"
+    },
+    "difficulty": {
+      "easy": "Dễ",
+      "medium": "Vừa",
+      "hard": "Khó"
+    },
+    "leaderboard": {
+      "title": "Bảng xếp hạng",
+      "viewAll": "Xem tất cả"
+    },
+    "vouchers": {
+      "title": "Ưu đãi đặc biệt",
+      "viewAll": "Xem tất cả voucher"
+    },
+    "nearby": {
+      "title": "Gần bạn",
+      "rating": "Đánh giá",
+      "reviews": "đánh giá",
+      "nearYou": "Gần bạn"
+    },
+    "themes": {
+      "title": "Khám phá theo chủ đề",
+      "viewAll": "Xem tất cả chủ đề"
+    }
+  },
+  "explore": {
+    "greeting": "Chào {{name}}",
+    "readyToExplore": "Sẵn sàng khám phá",
+    "categories": {
+      "all": "Tất cả",
+      "history": "Lịch sử",
+      "architecture": "Kiến trúc",
+      "culture": "Văn hoá",
+      "cuisine": "Ẩm thực",
+      "heritage": "Di sản"
+    },
+    "featured": {
+      "title": "Nổi bật hôm nay"
+    },
+    "premium": {
+      "title": "CultureQuest Premium",
+      "subtitle": "Khám phá nhiều hơn",
+      "explorer": "Premium Explorer"
+    },
+    "features": {
+      "userPlan": "User Plan",
+      "record": "Record",
+      "routes": "Tuyến đường"
+    },
+    "search": {
+      "placeholder": "Tìm điểm, tuyến, thử thách..."
+    },
+    "map": {
+      "showingRoute": "Đang hiển thị tuyến",
+      "showingPlaces": "Đang hiển thị địa điểm"
+    },
+    "missions": {
+      "title": "Nhiệm vụ gần bạn",
+      "checkpoint": "Còn {{count}} checkpoint để mở huy hiệu",
+      "completeBefore": "Hoàn thành trước {{time}}",
+      "bonusReward": "Thưởng thêm khi check-in đúng giờ"
+    },
+    "places": {
+      "nearYou": "Gần bạn",
+      "viewAll": "Xem tất cả địa điểm"
+    },
+    "routes": {
+      "title": "Tuyến gợi ý",
+      "viewAll": "Xem tất cả tuyến",
+      "stops": "điểm",
+      "startJourney": "Bắt đầu hành trình"
+    }
+  },
+  "community": {
+    "title": "Cộng đồng",
+    "posts": {
+      "create": "Tạo bài viết",
+      "edit": "Chỉnh sửa bài viết",
+      "delete": "Xóa bài viết",
+      "share": "Chia sẻ",
+      "like": "Thả tim",
+      "comment": "Bình luận",
+      "comments": "bình luận"
+    },
+    "status": {
+      "approved": "Đã duyệt",
+      "pending": "Chờ duyệt",
+      "rejected": "Bị từ chối",
+      "deleted": "Đã xóa"
+    },
+    "visibility": {
+      "public": "Công khai",
+      "private": "Riêng tư",
+      "friendsOnly": "Chỉ bạn bè"
+    },
+    "time": {
+      "justNow": "Vừa xong",
+      "minutesAgo": "{{count}} phút trước",
+      "hoursAgo": "{{count}} giờ trước",
+      "daysAgo": "{{count}} ngày trước"
+    },
+    "groups": {
+      "title": "Nhóm cộng đồng",
+      "create": "Tạo nhóm",
+      "viewAll": "Xem tất cả"
+    },
+    "empty": {
+      "noPosts": "Chưa có bài viết nào",
+      "noUpdates": "Chưa có cập nhật mới"
+    }
+  },
+  "notifications": {
+    "title": "Thông báo",
+    "loading": "Đang tải thông báo...",
+    "empty": {
+      "title": "Chưa có thông báo",
+      "subtitle": "Những cập nhật về hành trình, điểm thưởng và đăng ký sẽ xuất hiện tại đây"
+    }
+  },
+  "vouchers": {
+    "title": "Kho voucher",
+    "myVouchers": "Voucher của tôi",
+    "available": "Có sẵn",
+    "used": "Đã dùng",
+    "expired": "Hết hạn",
+    "viewDetails": "Xem chi tiết",
+    "useNow": "Dùng ngay"
+  },
+  "subscription": {
+    "partner": {
+      "title": "Đăng ký Partner",
+      "subtitle": "Hiển thị shop lên bản đồ CultureQuest, phát hành voucher & thu hút khách du lịch",
+      "packageLabel": "GÓI PARTNER SHOP",
+      "steps": {
+        "step": "Bước",
+        "information": "Thông tin đăng ký",
+        "payment": "Thanh toán ngân hàng"
+      },
+      "benefits": {
+        "title": "Quyền lợi Partner chính thức",
+        "showOnMap": "Đưa địa điểm/shop lên bản đồ du lịch",
+        "manageVouchers": "Tạo & quản lý voucher ưu đãi cho du khách",
+        "verifiedBadge": "Tích xanh Xác minh Partner chính thức"
+      },
+      "selectPlan": "Chọn gói Partner",
+      "packageLabel": "Gói Partner",
+      "billingCycle": {
+        "title": "Chu kỳ thanh toán",
+        "monthly": "Theo tháng",
+        "yearly": "Theo năm",
+        "yearlyNote": "Giá theo từng gói"
+      },
+      "shopInfo": {
+        "title": "Thông tin shop",
+        "shopName": "Tên shop / địa điểm *",
+        "shopNamePlaceholder": "Ví dụ: Cửa hàng Cà phê Heritage Quận 1",
+        "shopEmail": "Email quản lý shop *",
+        "shopEmailPlaceholder": "Ví dụ: shop.partner@gmail.com",
+        "address": "Địa chỉ shop *",
+        "addressPlaceholder": "Nhập tên đường, địa điểm hoặc tên shop",
+        "selectLocation": "Chọn vị trí shop",
+        "locationSelected": "✅ Đã chọn vị trí shop",
+        "tapToSelect": "Chạm vào bản đồ để chọn vị trí shop",
+        "selectOnMap": "Chọn vị trí trên bản đồ",
+        "reselectLocation": "Chọn lại vị trí",
+        "saveLocation": "Lưu vị trí này",
+        "locationSaved": "Đã lưu vị trí"
+      },
+      "verification": {
+        "title": "Hồ sơ xác minh",
+        "selectDocument": "📄 Chọn ảnh giấy tờ xác minh *",
+        "documentSelected": "✅ Đã chọn: {{name}}",
+        "selectShopImages": "🖼️ Chọn thêm ảnh shop (tuỳ chọn)",
+        "imagesSelected": "🖼️ Đã chọn {{count}} ảnh shop"
+      },
+      "payment": {
+        "method": "Phương thức thanh toán",
+        "bankTransfer": "Chuyển khoản ngân hàng / QR",
+        "bankTransferNote": "Quét mã VietQR hoặc chuyển khoản qua ứng dụng ngân hàng bất kỳ.",
+        "summary": "Tóm tắt thanh toán",
+        "package": "Gói",
+        "cycle": "Chu kỳ",
+        "amount": "Số tiền",
+        "status": "Trạng thái",
+        "complete": "Hoàn tất thanh toán",
+        "completeNote": "Mở trang thanh toán an toàn để hoàn tất. Nếu trình duyệt không mở được, hãy quét mã QR bên dưới.",
+        "openPayment": "Mở trang thanh toán",
+        "scanQR": "Quét mã bằng ứng dụng ngân hàng hoặc ví hỗ trợ VietQR."
+      },
+      "actions": {
+        "continueToPayment": "Tiếp tục đến bước thanh toán",
+        "backToInfo": "Quay lại thông tin đăng ký",
+        "registerAndPay": "🏪 Đăng ký và thanh toán"
+      },
+      "status": {
+        "notRegistered": "Chưa đăng ký",
+        "paymentPending": "Chờ thanh toán",
+        "paymentFailed": "Thanh toán thất bại",
+        "pending": "Đã thanh toán, chờ Admin duyệt",
+        "active": "Đang hoạt động",
+        "rejected": "Bị từ chối",
+        "expired": "Đã hết hạn"
+      },
+      "errors": {
+        "needLogin": "Bạn cần đăng nhập trước khi đăng ký gói Partner.",
+        "missingInfo": "Thiếu thông tin",
+        "selectPlan": "Vui lòng chọn gói đăng ký.",
+        "enterShopName": "Vui lòng nhập tên shop.",
+        "invalidEmail": "Email shop không đúng định dạng.",
+        "enterAddress": "Vui lòng nhập địa chỉ shop.",
+        "selectLocationOnMap": "Vui lòng chọn vị trí shop trên bản đồ.",
+        "uploadDocument": "Vui lòng upload giấy tờ xác minh.",
+        "cannotLoadSuggestions": "Không tải được gợi ý địa chỉ.",
+        "cannotGetCoordinates": "Không lấy được tọa độ địa chỉ."
+      },
+      "permissions": {
+        "needPhotoAccess": "Thiếu quyền truy cập",
+        "grantPhotoPermission": "Vui lòng cấp quyền chọn ảnh giấy tờ xác minh.",
+        "grantShopPhotoPermission": "Vui lòng cấp quyền chọn ảnh shop."
+      }
+    }
+  }
+}

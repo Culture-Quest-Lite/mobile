@@ -5,18 +5,48 @@ import {
   DefaultTheme,
   Stack,
   ThemeProvider,
+  useRouter,
 } from "expo-router";
+import * as Notifications from "expo-notifications";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AppState, Text, TextInput } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { warnForInvalidPublicEnv } from '@/constants/env';
 import '@/lib/nativewind';
 import { requestStartupPermissions } from '@/lib/startup-permissions';
+import { initI18n } from '@/lib/i18n';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppToastHost } from '@/components/ui/app-toast';
 import { RouteSystemAlertHost } from '@/features/route/components/route-system-alert';
+import { usePushTokenRegistration } from '@/features/notification/hooks/use-push-token-registration';
+
+/**
+ * Trả về route tương ứng dựa trên data payload của FCM notification.
+ * Backend gửi `notificationType` và `referenceId` trong data field.
+ */
+function resolveNotificationRoute(data: Record<string, unknown>): string {
+  const type =
+    typeof data.notificationType === "string"
+      ? data.notificationType.trim().toUpperCase()
+      : "";
+  const refId = data.referenceId;
+
+  if (type.includes("ROUTE") && refId) {
+    return `/route/${refId}`;
+  }
+
+  if (type.includes("POST") && refId) {
+    return `/community/post/${refId}`;
+  }
+
+  if (type.includes("SUBSCRIPTION")) {
+    return "/subscription";
+  }
+
+  return "/notifications";
+}
 
 const PERMISSION_PROMPT_DELAY_MS = 800;
 
@@ -46,6 +76,38 @@ export default function RootLayout() {
   warnForInvalidPublicEnv();
 
   const colorScheme = useColorScheme();
+  const router = useRouter();
+  const lastNotificationResponse = Notifications.useLastNotificationResponse();
+  const [i18nInitialized, setI18nInitialized] = useState(false);
+
+  // Initialize i18n
+  useEffect(() => {
+    initI18n().then(() => {
+      setI18nInitialized(true);
+    }).catch((error) => {
+      console.error('Failed to initialize i18n:', error);
+      setI18nInitialized(true); // Continue anyway
+    });
+  }, []);
+
+  // Đăng ký FCM token với backend mỗi khi user đăng nhập
+  usePushTokenRegistration();
+
+  // Xử lý tap vào notification (kể cả khi app đang background / bị kill)
+  useEffect(() => {
+    if (!lastNotificationResponse) {
+      return;
+    }
+
+    const data =
+      (lastNotificationResponse.notification.request.content.data as Record<
+        string,
+        unknown
+      >) ?? {};
+    const route = resolveNotificationRoute(data);
+
+    router.push(route as Parameters<typeof router.push>[0]);
+  }, [lastNotificationResponse, router]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -93,6 +155,10 @@ export default function RootLayout() {
     };
   }, []);
 
+  if (!i18nInitialized) {
+    return null;
+  }
+
   return (
     <SafeAreaProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -116,6 +182,7 @@ export default function RootLayout() {
           <Stack.Screen name="join/[shareToken]" />
           <Stack.Screen name="profile/information" />
           <Stack.Screen name="profile/menu" />
+          <Stack.Screen name="settings/language" />
           <Stack.Screen name="notifications" />
           <Stack.Screen name="vouchers/index" />
           <Stack.Screen name="vouchers/[id]" />
