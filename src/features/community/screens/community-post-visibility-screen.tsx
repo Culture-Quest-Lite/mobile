@@ -34,6 +34,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 type CommunityPostVisibilityParams = {
   mode?: string | string[];
@@ -121,11 +122,11 @@ function VisibilityOptionRow({
       <View className="ml-3 flex-1">
         <Text
           className="text-[13px] font-medium text-[#111827]"
-          style={{ lineHeight: 14 }}
+          style={{ lineHeight: lineHeightFor(13) }}
         >
           {getPostVisibilityLabel(value)}
         </Text>
-        <Text className="mt-0.5 text-[11px] text-[#6B7280]" style={{ lineHeight: 14 }}>
+        <Text className="mt-0.5 text-[11px] text-[#6B7280]" style={{ lineHeight: bodyLineHeightFor(11) }}>
           {getPostVisibilityDescription(value)}
         </Text>
       </View>
@@ -332,7 +333,7 @@ export default function CommunityPostVisibilityScreen() {
           >
             <Text
               className="text-[16px] font-semibold text-[#2B2233]"
-              style={{ lineHeight: 18 }}
+              style={{ lineHeight: lineHeightFor(16) }}
             >
               {isEditMode
                 ? "Ai có thể xem bài viết này?"
@@ -340,7 +341,7 @@ export default function CommunityPostVisibilityScreen() {
             </Text>
             <Text
               className="mt-1 text-[13px] text-[#6F657A]"
-              style={{ lineHeight: 15 }}
+              style={{ lineHeight: bodyLineHeightFor(13) }}
             >
               {isEditMode
                 ? "Chọn đối tượng có thể xem bài viết này."

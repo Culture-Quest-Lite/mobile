@@ -1,11 +1,11 @@
-import { LinearGradient } from "expo-linear-gradient";
-import { type Href, useRouter } from "expo-router";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { ScreenHorizontalPadding } from "@/constants/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter, type Href } from "expo-router";
 import {
   Pressable,
-  ScrollView,
   Text as RNText,
+  ScrollView,
   View,
   type TextProps,
 } from "react-native";
@@ -18,10 +18,11 @@ import {
   resetAuthSessionToGuest,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 import { resetPremiumStatus } from "../hooks/use-premium-status";
 import { useProfile } from "../hooks/use-profile";
 
-const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
+const gradientColors = ["#F8B1C8", "#EB489B", "#F58752"] as const;
 const detailTextMaxFontSizeMultiplier = 1.05;
 
 type MenuRowConfig = {
@@ -97,10 +98,6 @@ export default function ProfileMenuScreen() {
       onPress: () => {},
     },
     {
-      label: "Cập nhật giới thiệu bản thân",
-      onPress: () => {},
-    },
-    {
       label: "Kho voucher",
       onPress: () => {
         router.push("/vouchers" as Href);
@@ -120,14 +117,6 @@ export default function ProfileMenuScreen() {
       onPress: () => {
         router.push("/subscription" as Href);
       },
-    },
-    {
-      label: "Mã QR của tôi",
-      onPress: () => {},
-    },
-    {
-      label: "Quyền riêng tư",
-      onPress: () => {},
     },
     {
       label: "Quản lý tài khoản",
@@ -164,7 +153,7 @@ export default function ProfileMenuScreen() {
           <View className="flex-row items-center justify-between">
             <Pressable
               accessibilityLabel="Quay lại hồ sơ"
-              className="h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-white/15"
+              className="h-9 w-9 items-center justify-center rounded-full border border-[#F6C9D9] bg-white/70"
               onPress={handleBackToProfile}
             >
               <SymbolView
@@ -174,14 +163,14 @@ export default function ProfileMenuScreen() {
                   web: "arrow_back",
                 }}
                 size={18}
-                tintColor="#FFF7F0"
+                tintColor="#C53D6C"
               />
             </Pressable>
 
             <Text
               className="flex-1 px-3 text-center text-[19px] font-semibold text-white"
               numberOfLines={1}
-              style={{ lineHeight: 22 }}
+              style={{ lineHeight: lineHeightFor(19) }}
             >
               {displayName}
             </Text>
@@ -197,7 +186,7 @@ export default function ProfileMenuScreen() {
 
           <Text
             className="px-4 py-2.5 text-[14px] font-semibold text-[#EB489B]"
-            style={{ lineHeight: 16 }}
+            style={{ lineHeight: lineHeightFor(14) }}
           >
             Cài đặt
           </Text>
@@ -212,7 +201,10 @@ export default function ProfileMenuScreen() {
             </>
           ) : (
             <View className="border-t border-[#ECE8F2] px-4 py-3">
-              <Text className="text-[13px] text-[#9A94A8]" style={{ lineHeight: 18 }}>
+              <Text
+                className="text-[13px] text-[#9A94A8]"
+                style={{ lineHeight: bodyLineHeightFor(13) }}
+              >
                 Bạn đang ở chế độ khách. Một số mục sẽ cần đăng nhập để sử dụng.
               </Text>
             </View>
@@ -255,8 +247,8 @@ function LogoutButton({ onPress }: { onPress: () => void }) {
           tintColor="#E54572"
         />
         <Text
-          className="text-[15px] font-semibold text-[#E54572]"
-          style={{ lineHeight: 18 }}
+          className="text-[15px] text-[#E54572]"
+          style={{ lineHeight: bodyLineHeightFor(15) }}
         >
           Đăng xuất
         </Text>
@@ -289,8 +281,8 @@ function MenuRow({
       }
     >
       <Text
-        className="min-w-0 flex-1 text-[15px] font-medium"
-        style={{ color: labelColor, lineHeight: 18 }}
+        className="min-w-0 flex-1 text-[15px]"
+        style={{ color: labelColor, lineHeight: bodyLineHeightFor(15) }}
       >
         {row.label}
       </Text>
@@ -300,7 +292,7 @@ function MenuRow({
           <Text
             className="text-right text-[13px]"
             numberOfLines={2}
-            style={{ color: valueColor, lineHeight: 17 }}
+            style={{ color: valueColor, lineHeight: lineHeightFor(13) }}
           >
             {row.value}
           </Text>

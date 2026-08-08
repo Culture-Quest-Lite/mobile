@@ -1,12 +1,13 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   Alert,
   Image,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -28,6 +29,7 @@ import { cacheCommunityGroupSession } from "@/features/community/data/community-
 import { useCommunityGroups } from "@/features/community/hooks/use-community-groups";
 import { getMyProfile } from "@/features/profile/api/get-me";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
+import { lineHeightFor } from "@/lib/text-scale";
 
 const communityGroupsHeroImage = require("../../../../assets/images/tachnengroup.png");
 
@@ -200,20 +202,10 @@ function CommunityGroupListRow({
 
   return (
     <Pressable
-      className="rounded-[22px] bg-white px-3.5 py-3"
+      className="rounded-[18px] px-1 py-3"
       onPress={onPress}
       style={({ pressed }) => ({
-        borderColor: "#EEE5F2",
-        borderWidth: 1,
-        opacity: pressed ? 0.9 : 1,
-        shadowColor: "#2B1D3A",
-        shadowOpacity: 0.08,
-        shadowRadius: 16,
-        shadowOffset: {
-          width: 0,
-          height: 7,
-        },
-        elevation: 3,
+        backgroundColor: pressed ? "#FBF8FC" : "transparent",
       })}
     >
       <View className="flex-row items-start">
@@ -227,12 +219,12 @@ function CommunityGroupListRow({
                 style={{ columnGap: 4, maxWidth: "100%" }}
               >
                 <Text
-                  className="text-[15px] font-normal text-[#2E2336]"
+                  className="text-[14px] font-normal text-[#2E2336]"
                   numberOfLines={2}
                   style={{
                     flexShrink: 1,
                     includeFontPadding: false,
-                    lineHeight: 15,
+                    lineHeight: lineHeightFor(14),
                   }}
                 >
                   {groupName}
@@ -251,56 +243,69 @@ function CommunityGroupListRow({
               </View>
             </View>
             <Text
-              className="text-[12px] font-medium text-[#A9A1B1]"
-              style={{ includeFontPadding: false, lineHeight: 14 }}
+              className="text-[11px] font-normal text-[#A9A1B1]"
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(11),
+              }}
             >
               {formatGroupRowDate(group)}
             </Text>
           </View>
 
-          <View className="mt-1 flex-row items-center">
+          <View className="mt-0.5 flex-row items-center">
             <View className="h-2 w-2 rounded-full bg-[#4BB862]" />
             <Text
-              className="ml-1.5 text-[12px] font-normal text-[#5A5563]"
-              style={{ includeFontPadding: false, lineHeight: 13 }}
+              className="ml-1.5 text-[12px] font-normal text-[#7A6F67]"
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(12),
+              }}
             >
               {getLocalizedGroupStatusLabel(group.status)}
             </Text>
           </View>
 
           <View
-            className="mt-1.5 flex-row flex-wrap items-center"
-            style={{ columnGap: 8, rowGap: 6 }}
+            className="mt-1 flex-row flex-wrap items-center"
+            style={{ columnGap: 8, rowGap: 4 }}
           >
-            <View className="flex-row items-center rounded-full bg-[#F4F2F7] px-2.5 py-1">
+            <View className="flex-row items-center rounded-full bg-[#F4EFF8] px-2 py-[5px]">
               <SymbolView
-                name={{ ios: "person.2.fill", android: "groups", web: "groups" }}
-                size={11}
-                tintColor="#7D7488"
+                name={{
+                  ios: "person.2.fill",
+                  android: "groups",
+                  web: "groups",
+                }}
+                size={10}
+                tintColor="#6F657A"
               />
               <Text
-                className="ml-1 text-[12px] font-normal text-[#7D7488]"
-                style={{ includeFontPadding: false, lineHeight: 12 }}
+                className="ml-1 text-[10px] font-normal text-[#6F657A]"
+                style={{
+                  includeFontPadding: false,
+                  lineHeight: lineHeightFor(10),
+                }}
               >
                 {formatCompactCount(group.totalMembers)} thành viên
               </Text>
             </View>
 
             <View
-              className="flex-row items-center rounded-full px-2.5 py-1"
+              className="flex-row items-center rounded-full px-2 py-[5px]"
               style={{ backgroundColor: accessPalette.backgroundColor }}
             >
               <SymbolView
                 name={group.requiredApproval === true ? "lock.fill" : "link"}
-                size={11}
+                size={10}
                 tintColor={accessPalette.iconColor}
               />
               <Text
-                className="ml-1 text-[12px] font-normal"
+                className="ml-1 text-[10px] font-normal"
                 style={{
                   color: accessPalette.textColor,
                   includeFontPadding: false,
-                  lineHeight: 12,
+                  lineHeight: lineHeightFor(10),
                 }}
               >
                 {getGroupAccessLabel(group.requiredApproval)}
@@ -310,6 +315,18 @@ function CommunityGroupListRow({
         </View>
       </View>
     </Pressable>
+  );
+}
+
+function CommunityGroupListDivider() {
+  return (
+    <View
+      style={{
+        backgroundColor: "#F0EBF4",
+        height: StyleSheet.hairlineWidth,
+        width: "100%",
+      }}
+    />
   );
 }
 
@@ -432,7 +449,7 @@ export default function CommunityGroupsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <LinearGradient
-          className="overflow-hidden rounded-[28px] px-4 py-4"
+          className="overflow-hidden rounded-[14px] px-4 py-4"
           colors={["#FFF4F8", "#FFF0F6", "#FFEAF3"]}
           end={{ x: 1, y: 1 }}
           start={{ x: 0, y: 0 }}
@@ -450,14 +467,20 @@ export default function CommunityGroupsScreen() {
           <View className="flex-row items-center justify-between">
             <View className="max-w-[56%]">
               <Text
-                className="text-[15px] font-semibold text-[#2E2336]"
-                style={{ includeFontPadding: false, lineHeight: 15 }}
+                className="text-[14px] font-normal text-[#2E2336]"
+                style={{
+                  includeFontPadding: false,
+                  lineHeight: lineHeightFor(14),
+                }}
               >
                 Nhóm của bạn
               </Text>
               <Text
-                className="mt-0.5 text-[12px] text-[#7F7488]"
-                style={{ includeFontPadding: false, lineHeight: 12 }}
+                className="mt-0.5 text-[12px] font-normal text-[#7A6F67]"
+                style={{
+                  includeFontPadding: false,
+                  lineHeight: lineHeightFor(12),
+                }}
               >
                 {status === "ready"
                   ? `${groups.length} nhóm đang có sẵn trong tài khoản của bạn`
@@ -483,8 +506,11 @@ export default function CommunityGroupsScreen() {
                     tintColor="#FFFFFF"
                   />
                   <Text
-                    className="ml-1.5 text-[13px] font-medium text-white"
-                    style={{ includeFontPadding: false, lineHeight: 12 }}
+                    className="ml-1.5 text-[12px] font-normal text-white"
+                    style={{
+                      includeFontPadding: false,
+                      lineHeight: lineHeightFor(12),
+                    }}
                   >
                     Tạo nhóm mới
                   </Text>
@@ -507,7 +533,7 @@ export default function CommunityGroupsScreen() {
               tintColor="#ACA3B5"
             />
             <TextInput
-              className="ml-2 flex-1 text-[13px] text-[#2E2336]"
+              className="ml-2 flex-1 text-[12px] text-[#2E2336]"
               onChangeText={setSearchQuery}
               placeholder="Tìm kiếm nhóm..."
               placeholderTextColor="#B1A8BA"
@@ -530,8 +556,11 @@ export default function CommunityGroupsScreen() {
               tintColor="#756B80"
             />
             <Text
-              className="ml-1.5 text-[13px] font-medium text-[#756B80]"
-              style={{ includeFontPadding: false, lineHeight: 13 }}
+              className="ml-1.5 text-[12px] font-normal text-[#756B80]"
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(12),
+              }}
             >
               Bộ lọc
             </Text>
@@ -578,16 +607,18 @@ export default function CommunityGroupsScreen() {
         ) : null}
 
         {filteredGroups.length > 0 ? (
-          <View className="mt-3.5" style={{ rowGap: 8 }}>
-            {filteredGroups.map((group) => (
-              <CommunityGroupListRow
-                key={group.shareToken}
-                group={group}
-                isLeader={isCommunityGroupLeader(group, currentProfileId)}
-                onPress={() => {
-                  openCommunityGroupDetail(group);
-                }}
-              />
+          <View className="mt-2">
+            {filteredGroups.map((group, groupIndex) => (
+              <Fragment key={group.shareToken}>
+                {groupIndex > 0 ? <CommunityGroupListDivider /> : null}
+                <CommunityGroupListRow
+                  group={group}
+                  isLeader={isCommunityGroupLeader(group, currentProfileId)}
+                  onPress={() => {
+                    openCommunityGroupDetail(group);
+                  }}
+                />
+              </Fragment>
             ))}
           </View>
         ) : null}

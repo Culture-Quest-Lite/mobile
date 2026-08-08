@@ -9,6 +9,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from 'react';
 import { AppState, Text, TextInput } from 'react-native';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { warnForInvalidPublicEnv } from '@/constants/env';
@@ -95,53 +96,55 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="community/create" />
-          <Stack.Screen name="community/group-create" />
-          <Stack.Screen name="community/group-created/[shareToken]" />
-          <Stack.Screen name="community/groups" />
-          <Stack.Screen name="community/group/[shareToken]" />
-          <Stack.Screen name="community/group/[shareToken]/manage" />
-          <Stack.Screen name="community/group/[shareToken]/members" />
-          <Stack.Screen name="community/group/[shareToken]/settings" />
-          <Stack.Screen name="community/group/[shareToken]/invite" />
-          <Stack.Screen name="community/leaderboard" />
-          <Stack.Screen name="community/post-visibility" />
-          <Stack.Screen name="community/post/[id]" />
-          <Stack.Screen name="community/profile/[id]" />
-          <Stack.Screen name="join/[shareToken]" />
-          <Stack.Screen name="profile/information" />
-          <Stack.Screen name="profile/menu" />
-          <Stack.Screen name="notifications" />
-          <Stack.Screen name="vouchers/index" />
-          <Stack.Screen name="vouchers/[id]" />
-          <Stack.Screen name="subscription" />
-          <Stack.Screen name="route/[id]" />
-          <Stack.Screen
-            name="route/[id]/review-compose"
-            options={{ presentation: "modal" }}
-          />
-          <Stack.Screen name="route/[id]/group-quest" />
-          <Stack.Screen name="route/custom/plan" />
-          <Stack.Screen name="route/custom/plan/[id]" />
-          <Stack.Screen name="route/custom/record" />
-          <Stack.Screen name="theme/index" />
-          <Stack.Screen name="theme/[slug]" />
-          <Stack.Screen name="checkin/[id]" />
-          <Stack.Screen name="hotspot/[slug]" />
-          <Stack.Screen name="hotspot/[slug]/review-compose" />
-          <Stack.Screen name="hotspot/[slug]/stories" />
-          <Stack.Screen name="hotspots" />
-          <Stack.Screen name="hotspots/search" />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-        <AppToastHost />
-        <RouteSystemAlertHost />
-      </ThemeProvider>
+      <KeyboardProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="community/create" />
+            <Stack.Screen name="community/group-create" />
+            <Stack.Screen name="community/group-created/[shareToken]" />
+            <Stack.Screen name="community/groups" />
+            <Stack.Screen name="community/group/[shareToken]" />
+            <Stack.Screen name="community/group/[shareToken]/manage" />
+            <Stack.Screen name="community/group/[shareToken]/members" />
+            <Stack.Screen name="community/group/[shareToken]/settings" />
+            <Stack.Screen name="community/group/[shareToken]/invite" />
+            <Stack.Screen name="community/leaderboard" />
+            <Stack.Screen name="community/post-visibility" />
+            <Stack.Screen name="community/post/[id]" />
+            <Stack.Screen name="community/profile/[id]" />
+            <Stack.Screen name="join/[shareToken]" />
+            <Stack.Screen name="profile/information" />
+            <Stack.Screen name="profile/menu" />
+            <Stack.Screen name="notifications" />
+            <Stack.Screen name="vouchers/index" />
+            <Stack.Screen name="vouchers/[id]" />
+            <Stack.Screen name="subscription" />
+            <Stack.Screen name="route/[id]" />
+            <Stack.Screen
+              name="route/[id]/review-compose"
+              options={{ presentation: "modal" }}
+            />
+            <Stack.Screen name="route/[id]/group-quest" />
+            <Stack.Screen name="route/custom/plan" />
+            <Stack.Screen name="route/custom/plan/[id]" />
+            <Stack.Screen name="route/custom/record" />
+            <Stack.Screen name="theme/index" />
+            <Stack.Screen name="theme/[slug]" />
+            <Stack.Screen name="checkin/[id]" />
+            <Stack.Screen name="hotspot/[slug]" />
+            <Stack.Screen name="hotspot/[slug]/review-compose" />
+            <Stack.Screen name="hotspot/[slug]/stories" />
+            <Stack.Screen name="hotspots" />
+            <Stack.Screen name="hotspots/search" />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+          <AppToastHost />
+          <RouteSystemAlertHost />
+        </ThemeProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

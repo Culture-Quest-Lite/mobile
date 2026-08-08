@@ -1,3 +1,5 @@
+import { appToast } from "@/components/ui/app-toast";
+import { FieldError, fieldErrorBorderColor } from "@/components/ui/field-error";
 import { SymbolView } from "@/components/ui/symbol-view";
 import {
   getValidAccessToken,
@@ -55,6 +57,7 @@ import {
 } from "react-native-safe-area-context";
 
 import { getPostVisibilityLabel } from "@/lib/post-visibility";
+import { bodyLineHeightFor } from "@/lib/text-scale";
 import {
   CommunityPostSuccessOverlay,
   type CommunityPostSuccessVariant,
@@ -149,8 +152,12 @@ type TagPickerSheetProps = {
 };
 
 const maxPostLength = 2000;
+// Đủ để chặn bài rác kiểu "a", vẫn cho phép caption ngắn như "Đẹp quá!".
+const minPostLength = 5;
+const postLengthWarningThreshold = maxPostLength - 100;
 const maxMediaCount = 6;
 const maxSelectableTags = 6;
+const maxTagLength = 30;
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const avatarFallbackColors = ["#EB489B", "#F58752"] as const;
 const chipBorderColor = "#E7E5EA";
@@ -1645,6 +1652,9 @@ export default function CommunityPostComposeScreen() {
   const [hotspotError, setHotspotError] = useState<string | null>(null);
   const [activeTags, setActiveTags] = useState<ActiveTagDto[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [postSubmitError, setPostSubmitError] = useState<string | null>(null);
+  // Chỉ bật báo lỗi sau lần bấm "Đăng bài" đầu tiên.
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
   const [postSuccessState, setPostSuccessState] =
     useState<PostSuccessState | null>(null);
   const resolvedComposerIdentity =
@@ -1657,20 +1667,41 @@ export default function CommunityPostComposeScreen() {
     [draftText, selectedTags],
   );
   const composedDraftLength = composedDraftText.length;
+  // Phần hashtag được nối vào cuối nội dung khi gửi, nên nó "ăn" vào hạn mức
+  // ký tự. Trừ sẵn để người dùng không gõ được vào vùng chắc chắn sẽ lỗi.
+  const hashtagSuffixLength = useMemo(() => {
+    const hashtags = dedupeStringList(selectedTags)
+      .map(buildHashtagLabel)
+      .join(" ");
+
+    return hashtags ? hashtags.length + 2 : 0;
+  }, [selectedTags]);
+  const draftInputMaxLength = Math.max(
+    minPostLength,
+    maxPostLength - hashtagSuffixLength,
+  );
   const visibilityLabel = getPostVisibilityLabel(postVisibility);
   const routeIdsForSubmit =
     selectedRoute === null ? [] : [selectedRoute.routeId];
   const hotspotIdsForSubmit = selectedHotspots.map(
     (hotspot) => hotspot.hotspotId,
   );
-  const submitDisabledReason = !authSession.isAuthenticated
-    ? "Đăng nhập để đăng bài viết cộng đồng."
-    : !trimmedDraftText
-      ? "Nhập nội dung để bật nút đăng."
+  const contentError = !trimmedDraftText
+    ? "Hãy nhập nội dung cho bài viết."
+    : trimmedDraftText.length < minPostLength
+      ? `Nội dung cần ít nhất ${minPostLength} ký tự (đang ${trimmedDraftText.length}).`
       : composedDraftLength > maxPostLength
-        ? "Nội dung và hashtag đang vượt quá giới hạn."
+        ? `Nội dung kèm ${selectedTags.length} thẻ đang vượt ${maxPostLength} ký tự. Hãy rút gọn hoặc bỏ bớt thẻ.`
         : null;
-  const isSubmitDisabled = submitDisabledReason !== null || isSubmitting;
+  const authError = !authSession.isAuthenticated
+    ? "Bạn cần đăng nhập để đăng bài viết cộng đồng."
+    : null;
+  const submitDisabledReason = authError ?? contentError;
+  const visibleContentError = hasAttemptedSubmit ? contentError : null;
+  const visiblePostSubmitError = visibleContentError ?? postSubmitError;
+  const isContentNearLimit = composedDraftLength >= postLengthWarningThreshold;
+  // Nút luôn bấm được (trừ khi đang gửi) để cú chạm nào cũng có phản hồi.
+  const isSubmitDisabled = isSubmitting;
   const routeSummaryLabel = selectedRoute?.routeName ?? "Chọn tuyến đường";
   const hotspotSummaryLabel =
     selectedHotspots.length === 0
@@ -1688,6 +1719,12 @@ export default function CommunityPostComposeScreen() {
     () => activeTags.map((tag) => tag.tagName),
     [activeTags],
   );
+
+  useEffect(() => {
+    if (postSubmitError && visibleContentError) {
+      setPostSubmitError(null);
+    }
+  }, [visibleContentError, postSubmitError]);
   const selectedTagIdsForSubmit = useMemo(() => {
     const tagLookup = new Map<string, number>();
 
@@ -2013,10 +2050,7 @@ export default function CommunityPostComposeScreen() {
 
   async function handlePickMedia() {
     if (selectedMedia.length >= maxMediaCount) {
-      Alert.alert(
-        "Đã đủ ảnh/video",
-        `Bạn có thể thêm tối đa ${maxMediaCount} tệp.`,
-      );
+      appToast.info(`Bạn chỉ thêm được tối đa ${maxMediaCount} ảnh/video.`);
       return;
     }
 
@@ -2173,6 +2207,8 @@ export default function CommunityPostComposeScreen() {
   }
 
   async function handleSubmit() {
+    setHasAttemptedSubmit(true);
+
     if (!authSession.isAuthenticated) {
       Alert.alert(
         "Cần đăng nhập",
@@ -2181,11 +2217,10 @@ export default function CommunityPostComposeScreen() {
       return;
     }
 
-    if (composedDraftText.length > maxPostLength) {
-      Alert.alert(
-        "Nội dung quá dài",
-        `Bài viết của bạn đang vượt quá ${maxPostLength} ký tự sau khi gắn thẻ.`,
-      );
+    // Lỗi nội dung hiện inline ngay dưới ô nhập; toast để nhắc khi bàn phím
+    // đang che phần lỗi.
+    if (contentError) {
+      appToast.error(contentError);
       return;
     }
 
@@ -2202,6 +2237,7 @@ export default function CommunityPostComposeScreen() {
     setIsSubmitting(true);
 
     try {
+      setPostSubmitError(null);
       const fallbackTagNames = [...selectedTags];
       const fallbackRouteIds = [...routeIdsForSubmit];
       const createdPost = await createPost({
@@ -2248,12 +2284,13 @@ export default function CommunityPostComposeScreen() {
             : "profileOnly",
       });
     } catch (error) {
-      Alert.alert(
-        "Không thể đăng bài",
+      const submitErrorMessage =
         error instanceof Error
           ? error.message
-          : "Đã có lỗi xảy ra khi gửi bài viết cộng đồng.",
-      );
+          : "Đã có lỗi xảy ra khi gửi bài viết cộng đồng.";
+
+      setPostSubmitError(submitErrorMessage);
+      appToast.error(submitErrorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -2357,19 +2394,29 @@ export default function CommunityPostComposeScreen() {
             </View>
 
             <View
-              className="mt-3 rounded-[12px] border bg-white px-3 py-3"
-              style={{ borderColor: "#ECE7EC" }}
+              className="mt-3 rounded-[12px] bg-white px-3 py-3"
+              style={{
+                borderColor: visiblePostSubmitError
+                  ? fieldErrorBorderColor
+                  : "#ECE7EC",
+                borderWidth: visiblePostSubmitError ? 1.4 : 1,
+              }}
             >
               <TextInput
                 multiline
                 maxLength={maxPostLength}
-                onChangeText={setDraftText}
+                onChangeText={(text) => {
+                  setDraftText(text);
+                  if (postSubmitError) {
+                    setPostSubmitError(null);
+                  }
+                }}
                 placeholder="Bạn đang nghĩ gì?"
                 placeholderTextColor="#A09AA8"
                 style={{
                   color: "#111827",
                   fontSize: 14,
-                  lineHeight: 20,
+                  lineHeight: bodyLineHeightFor(14),
                   minHeight: 92,
                   padding: 0,
                   textAlignVertical: "top",
@@ -2383,6 +2430,7 @@ export default function CommunityPostComposeScreen() {
                 </Text>
               </View>
             </View>
+            <FieldError message={visiblePostSubmitError} />
 
             <View className="mt-4">
               <View className="flex-row items-center justify-between">

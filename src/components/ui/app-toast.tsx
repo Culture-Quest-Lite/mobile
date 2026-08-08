@@ -10,6 +10,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SymbolView } from "@/components/ui/symbol-view";
+import { bodyLineHeightFor } from "@/lib/text-scale";
 
 export type AppToastTone = "error" | "info" | "success";
 
@@ -267,7 +268,7 @@ export function AppToastHost() {
                 style={{
                   color: currentTone.textColor,
                   includeFontPadding: false,
-                  lineHeight: 18,
+                  lineHeight: bodyLineHeightFor(13),
                 }}
               >
                 {request.message}

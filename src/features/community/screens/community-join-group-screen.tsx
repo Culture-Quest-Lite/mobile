@@ -19,6 +19,7 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 import { joinCommunityGroup } from "../api/group-api";
 import { cacheCommunityGroupSession } from "../data/community-group-session-store";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 type JoinScreenStatus = "empty" | "error" | "loading" | "pending";
 type JoinFailureAction = "community" | "login" | "retry";
@@ -174,7 +175,7 @@ function JoinFailureCard({
           >
             <Text
               className="text-[30px] font-black text-white"
-              style={{ includeFontPadding: false, lineHeight: 34 }}
+              style={{ includeFontPadding: false, lineHeight: lineHeightFor(30) }}
             >
               !
             </Text>
@@ -183,14 +184,14 @@ function JoinFailureCard({
 
         <Text
           className="mt-5 text-center text-[28px] font-black text-[#1F2430]"
-          style={{ includeFontPadding: false, lineHeight: 34 }}
+          style={{ includeFontPadding: false, lineHeight: lineHeightFor(28) }}
         >
           {presentation.title}
         </Text>
 
         <Text
           className="mt-4 px-2 text-center text-[16px] font-semibold text-[#6D7280]"
-          style={{ includeFontPadding: false, lineHeight: 24 }}
+          style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(16) }}
         >
           {presentation.description}
           {presentation.descriptionAccent ? (
@@ -204,7 +205,7 @@ function JoinFailureCard({
         <View className="mt-5 w-full rounded-[22px] border border-[#FFE6E9] bg-[#FFF6F7] px-4 py-4">
           <Text
             className="text-center text-[14px] font-medium text-[#7D8491]"
-            style={{ includeFontPadding: false, lineHeight: 21 }}
+            style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(14) }}
           >
             {presentation.hint}
           </Text>
@@ -223,7 +224,7 @@ function JoinFailureCard({
         >
           <Text
             className="text-[16px] font-black text-white"
-            style={{ includeFontPadding: false, lineHeight: 20 }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(16) }}
           >
             {presentation.actionLabel}
           </Text>
@@ -296,14 +297,14 @@ function JoinPendingApprovalCard({
 
       <Text
         className="mt-0.5 text-center text-[18px] font-semibold text-[#2A2433]"
-        style={{ includeFontPadding: false, lineHeight: 21 }}
+        style={{ includeFontPadding: false, lineHeight: lineHeightFor(18) }}
       >
         Đã gửi yêu cầu tham gia!
       </Text>
 
       <Text
         className="mt-2 text-center text-[13px] text-[#6F657A]"
-        style={{ includeFontPadding: false, lineHeight: 17 }}
+        style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(13) }}
       >
         Yêu cầu của bạn đã được gửi thành công.{"\n"}
         Vui lòng chờ leader duyệt để tham gia nhóm.
@@ -326,7 +327,7 @@ function JoinPendingApprovalCard({
           >
             <Text
               className="text-[17px] font-black text-[#F4728B]"
-              style={{ includeFontPadding: false, lineHeight: 19 }}
+              style={{ includeFontPadding: false, lineHeight: lineHeightFor(17) }}
             >
               !
             </Text>
@@ -335,13 +336,13 @@ function JoinPendingApprovalCard({
           <View className="flex-1">
             <Text
               className="text-[14px] text-[#FF6D8D]"
-              style={{ includeFontPadding: false, lineHeight: 16 }}
+              style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
             >
               Đang chờ duyệt
             </Text>
             <Text
               className="mt-1 text-[12.5px] text-[#6F657A]"
-              style={{ includeFontPadding: false, lineHeight: 17 }}
+              style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(12.5) }}
             >
               Leader sẽ xem xét yêu cầu của bạn và phản hồi sớm nhất có thể.
             </Text>
@@ -362,7 +363,7 @@ function JoinPendingApprovalCard({
       >
         <Text
           className="text-[14px] text-white"
-          style={{ includeFontPadding: false, lineHeight: 17 }}
+          style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(14) }}
         >
           Quay lại trang chủ
         </Text>

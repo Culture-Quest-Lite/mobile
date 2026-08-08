@@ -32,6 +32,7 @@ import {
   cacheCommunityGroupSession,
   getCachedCommunityGroupSession,
 } from "../data/community-group-session-store";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 const detailTextMaxFontSizeMultiplier = 1.05;
 
@@ -123,7 +124,7 @@ function ApprovalChip({
         className="text-[13px] font-bold"
         style={{
           color: active ? palette.accentStrong : palette.subtleText,
-          lineHeight: 15,
+          lineHeight: bodyLineHeightFor(13),
         }}
       >
         {label}
@@ -401,7 +402,7 @@ export default function CommunityGroupSettingsScreen() {
 
           <Text
             className="text-[18px] font-bold"
-            style={{ color: palette.primaryText, lineHeight: 21 }}
+            style={{ color: palette.primaryText, lineHeight: lineHeightFor(18) }}
           >
             Chỉnh sửa nhóm
           </Text>
@@ -422,7 +423,7 @@ export default function CommunityGroupSettingsScreen() {
             ) : (
               <Text
                 className="text-[16px] font-medium"
-                style={{ color: palette.accentStrong, lineHeight: 18 }}
+                style={{ color: palette.accentStrong, lineHeight: lineHeightFor(16) }}
               >
                 Lưu
               </Text>
@@ -449,7 +450,7 @@ export default function CommunityGroupSettingsScreen() {
           >
             <Text
               className="text-[12px]"
-              style={{ color: "#D97A55", lineHeight: 15 }}
+              style={{ color: "#D97A55", lineHeight: bodyLineHeightFor(12) }}
             >
               {errorMessage}
             </Text>
@@ -459,7 +460,7 @@ export default function CommunityGroupSettingsScreen() {
         <FieldShell>
           <Text
             className="text-[12px]"
-            style={{ color: palette.mutedText, lineHeight: 14 }}
+            style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(12) }}
           >
             Tên nhóm
           </Text>
@@ -478,7 +479,7 @@ export default function CommunityGroupSettingsScreen() {
 
         <Text
           className="mt-2 px-1 text-[12px]"
-          style={{ color: palette.mutedText, lineHeight: 16 }}
+          style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(12) }}
         >
           Bạn chỉ có thể thay đổi tên nhóm khi cần thiết để giữ liên kết và nhận
           diện nhóm ổn định.
@@ -488,7 +489,7 @@ export default function CommunityGroupSettingsScreen() {
           <FieldShell>
             <Text
               className="text-[12px]"
-              style={{ color: palette.mutedText, lineHeight: 14 }}
+              style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(12) }}
             >
               Yêu cầu quyền tham gia
             </Text>

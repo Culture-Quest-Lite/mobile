@@ -15,7 +15,7 @@ function resolveForgotPasswordUrl() {
     return buildApiUrl("/api/auth/forgot-password");
   }
 
-  return "http://13.158.40.56:8080/api/auth/forgot-password";
+  return "https://api.culturequestlite.com/api/auth/forgot-password";
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -132,7 +132,7 @@ export async function forgotPassword({
         platform: "MOBILE",
       }),
       headers: {
-        Accept: "application/json",
+        Accept: "application/json, text/plain, */*",
         "Content-Type": "application/json",
       },
       method: "POST",

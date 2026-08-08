@@ -1,5 +1,5 @@
-import { SymbolView } from "@/components/ui/symbol-view";
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
+import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar, UserAvatarFallback } from "@/components/ui/user-avatar";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
@@ -23,6 +23,7 @@ import {
   RefreshControl,
   Text as RNText,
   ScrollView,
+  StyleSheet,
   TextInput,
   View,
   type TextProps,
@@ -75,6 +76,7 @@ import {
   type PostVisibilityValue,
 } from "@/lib/post-visibility";
 import type { SharedPostSummary } from "@/lib/shared-post";
+import { bodyLineHeightFor, textStyle } from "@/lib/text-scale";
 import { getNewsfeedPosts, type NewsfeedPost } from "../api/get-newsfeed-posts";
 import type { CommunityGroupPayload } from "../api/group-api";
 import {
@@ -263,49 +265,98 @@ function formatCompactCount(value?: number | null) {
   return `${formattedValue >= 10 ? formattedValue.toFixed(0) : formattedValue.toFixed(1)}k`;
 }
 
-function formatCommunityTime(isoTimestamp?: string | null) {
+function parseCommunityTimestamp(value: string) {
+  const normalizedValue = value.trim().replace(" ", "T");
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalizedValue);
+  const date = new Date(hasTimezone ? normalizedValue : `${normalizedValue}Z`);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getElapsedCalendarMonths(fromTime: number, toTime: number) {
+  const fromDate = new Date(fromTime);
+  const toDate = new Date(toTime);
+  let monthDelta =
+    (toDate.getFullYear() - fromDate.getFullYear()) * 12 +
+    (toDate.getMonth() - fromDate.getMonth());
+
+  if (toDate.getDate() < fromDate.getDate()) {
+    monthDelta -= 1;
+  }
+
+  return Math.max(monthDelta, 0);
+}
+
+function getCommunityCreatedAtTime(isoTimestamp?: string | null) {
   const meaningfulValue = readMeaningfulText(isoTimestamp);
 
   if (!meaningfulValue) {
+    return 0;
+  }
+
+  return parseCommunityTimestamp(meaningfulValue)?.getTime() ?? 0;
+}
+
+function formatCommunityTime(isoTimestamp?: string | null) {
+  const createdAtTime = getCommunityCreatedAtTime(isoTimestamp);
+
+  if (!Number.isFinite(createdAtTime) || createdAtTime <= 0) {
     return "Vừa xong";
   }
 
-  const parsedDate = new Date(meaningfulValue);
-  const parsedTime = parsedDate.getTime();
+  const currentTime = Date.now();
+  const elapsedMilliseconds = currentTime - createdAtTime;
 
-  if (Number.isNaN(parsedTime)) {
-    return meaningfulValue;
-  }
-
-  const elapsedMilliseconds = Date.now() - parsedTime;
-
-  if (elapsedMilliseconds < 60 * 1000) {
+  if (elapsedMilliseconds <= 0) {
     return "Vừa xong";
   }
 
-  const elapsedMinutes = Math.floor(elapsedMilliseconds / (60 * 1000));
+  const minuteInMilliseconds = 60 * 1000;
+  const hourInMilliseconds = 60 * minuteInMilliseconds;
+  const dayInMilliseconds = 24 * hourInMilliseconds;
+
+  if (elapsedMilliseconds < minuteInMilliseconds) {
+    return "Vừa xong";
+  }
+
+  function formatElapsedValue(value: number, unit: string) {
+    return `${value} ${unit}`;
+  }
+
+  const elapsedMinutes = Math.floor(elapsedMilliseconds / minuteInMilliseconds);
 
   if (elapsedMinutes < 60) {
-    return `${elapsedMinutes} phút trước`;
+    return formatElapsedValue(elapsedMinutes, "phút");
   }
 
   const elapsedHours = Math.floor(elapsedMinutes / 60);
 
   if (elapsedHours < 24) {
-    return `${elapsedHours} giờ trước`;
+    return formatElapsedValue(elapsedHours, "giờ");
   }
 
-  const elapsedDays = Math.floor(elapsedHours / 24);
+  const elapsedDays = Math.floor(elapsedMilliseconds / dayInMilliseconds);
 
   if (elapsedDays < 7) {
-    return `${elapsedDays} ngày trước`;
+    return formatElapsedValue(elapsedDays, "ngày");
   }
 
-  return `${parsedDate.getDate().toString().padStart(2, "0")}/${(
-    parsedDate.getMonth() + 1
-  )
-    .toString()
-    .padStart(2, "0")}/${parsedDate.getFullYear()}`;
+  if (elapsedDays <= 30) {
+    return formatElapsedValue(Math.floor(elapsedDays / 7), "tuần");
+  }
+
+  const elapsedMonths = getElapsedCalendarMonths(createdAtTime, currentTime);
+
+  if (elapsedMonths < 12) {
+    return formatElapsedValue(Math.max(elapsedMonths, 1), "tháng");
+  }
+
+  return formatElapsedValue(Math.floor(elapsedMonths / 12), "năm");
 }
 
 function isCurrentUserCommunityPost(
@@ -323,14 +374,10 @@ function isCurrentUserCommunityPost(
 }
 
 function getCommunityFeedPostSortTimestamp(post: CommunityFeedPost) {
-  const createdAt = readMeaningfulText(post.createdAt);
+  const createdAtTime = getCommunityCreatedAtTime(post.createdAt);
 
-  if (createdAt) {
-    const parsedCreatedAt = new Date(createdAt).getTime();
-
-    if (!Number.isNaN(parsedCreatedAt)) {
-      return parsedCreatedAt;
-    }
+  if (createdAtTime > 0) {
+    return createdAtTime;
   }
 
   return typeof post.postNumericId === "number" &&
@@ -2178,7 +2225,10 @@ export default function CommunityScreen() {
                   />
                 </Pressable>
 
-                <Text className="text-[20px] font-black tracking-[-0.4px] text-[#EB489B]">
+                <Text
+                  className="text-[20px] font-black tracking-[-0.4px] text-[#EB489B]"
+                  style={textStyle(20)}
+                >
                   {PROJECT_WORDMARK}
                 </Text>
               </View>
@@ -2225,8 +2275,8 @@ export default function CommunityScreen() {
                   onPress={openCommunityComposer}
                 >
                   <Text
-                    className="text-[12px] font-medium text-[#B1A2AB]"
-                    style={{ includeFontPadding: false, lineHeight: 12 }}
+                    className="text-[13px] font-medium text-[#B1A2AB]"
+                    style={textStyle(13)}
                   >
                     {composerPlaceholderText}
                   </Text>
@@ -2266,10 +2316,10 @@ export default function CommunityScreen() {
               />
             </View>
 
-            <View className="mt-4 gap-3">
+            <View className="mt-2">
               {communityFeedStatus === "loading" ? (
                 <View
-                  className="rounded-[28px] border bg-white px-4 py-5"
+                  className="mb-3 rounded-[28px] border bg-white px-4 py-5"
                   style={[
                     cardShadowStyle,
                     {
@@ -2286,24 +2336,28 @@ export default function CommunityScreen() {
 
               {communityFeedStatus === "error" ? (
                 <View
-                  className="rounded-[28px] border bg-[#FFF8FC] px-4 py-4"
+                  className="mb-3 rounded-[28px] border bg-[#FFF8FC] px-4 py-4"
                   style={{
                     borderColor: subtleBorderColor,
                     borderWidth: subtleBorderWidth,
                   }}
                 >
-                  <Text className="text-[15px] font-bold text-[#C2416C]">
+                  <Text
+                    className="text-[15px] font-bold text-[#C2416C]"
+                    style={textStyle(15)}
+                  >
                     {communityFeedError ?? "Không tải được bảng tin cộng đồng."}
                   </Text>
-                  <Text className="mt-1 text-[14px] leading-[17px] text-[#8E869A]">
-                    Đang hiển thị bảng tin mẫu tạm thời để màn hình không bị trống.
+                  <Text className="mt-1 text-[14px] leading-[15px] text-[#8E869A]">
+                    Đang hiển thị bảng tin mẫu tạm thời để màn hình không bị
+                    trống.
                   </Text>
                 </View>
               ) : null}
 
               {communityFeedStatus !== "loading" ? (
                 displayedPosts.length ? (
-                  displayedPosts.map((post) => {
+                  displayedPosts.map((post, postIndex) => {
                     const postNumericId = post.postNumericId ?? null;
                     const isLiking =
                       postNumericId !== null &&
@@ -2332,9 +2386,11 @@ export default function CommunityScreen() {
                         onEditPost={handleEditPost}
                         onEditPostVisibility={handleEditPostVisibility}
                         onMovePostToTrash={handleMovePostToTrash}
+                        pageGutter={gutter}
                         post={post}
                         resolvedHotspots={resolvedHotspots}
                         resolvedRoutes={resolvedRoutes}
+                        showDivider={postIndex < displayedPosts.length - 1}
                         onCommentPost={handleOpenCommentComposer}
                         onLikePost={handleLikePost}
                         onSharePost={handleOpenSharePostComposer}
@@ -2352,10 +2408,13 @@ export default function CommunityScreen() {
                       borderWidth: subtleBorderWidth,
                     }}
                   >
-                    <Text className="text-[18px] font-black text-[#2E2336]">
+                    <Text
+                      className="text-[18px] font-black text-[#2E2336]"
+                      style={textStyle(18)}
+                    >
                       Chưa có cập nhật mới
                     </Text>
-                    <Text className="mt-1 text-[14px] leading-[17px] text-[#8E869A]">
+                    <Text className="mt-1 text-[14px] leading-[15px] text-[#8E869A]">
                       Feed cộng đồng hiện chưa có bài mới. Hãy quay lại sau để
                       xem thêm hoạt động từ các explorer.
                     </Text>
@@ -2441,7 +2500,7 @@ export default function CommunityScreen() {
             <View className="flex-row items-center">
               <Text
                 className="flex-1 text-[14px] font-normal text-white"
-                style={{ includeFontPadding: false, lineHeight: 17 }}
+                style={textStyle(14)}
               >
                 {communityToastMessage}
               </Text>
@@ -2493,13 +2552,16 @@ function CommunityDiscoverGroupsSection({
     <View>
       <View className="flex-row items-center justify-between">
         <Text
-          className="text-[16px] font-normal text-[#2E2336]"
-          style={{ includeFontPadding: false, lineHeight: 18 }}
+          className="text-[16px] font-bold text-[#2E2336]"
+          style={textStyle(16)}
         >
           Nhóm cộng đồng
         </Text>
         <Pressable hitSlop={8} onPress={onOpenAll}>
-          <Text className="text-[13px] font-semibold text-[#D97706]">
+          <Text
+            className="text-[13px] font-semibold text-[#D97706]"
+            style={textStyle(13)}
+          >
             Xem tất cả
           </Text>
         </Pressable>
@@ -2629,7 +2691,7 @@ function CommunityPostMediaGallery({
           <View className="absolute right-3 top-3 rounded-full bg-black/35 px-2.5 py-1">
             <Text
               className="text-[11px] font-semibold text-white"
-              style={{ includeFontPadding: false, lineHeight: 12 }}
+              style={textStyle(11)}
             >
               {`${safeActiveIndex + 1}/${items.length}`}
             </Text>
@@ -2687,10 +2749,7 @@ function CommunityPostFooterAction({
           tintColor={active ? "#F15C9B" : "#7A7380"}
         />
       )}
-      <Text
-        className="ml-1.5 text-[13px] text-[#706775]"
-        style={{ includeFontPadding: false, lineHeight: 12 }}
-      >
+      <Text className="ml-1.5 text-[15px] text-[#706775]" style={textStyle(15)}>
         {label}
       </Text>
     </Pressable>
@@ -2700,10 +2759,7 @@ function CommunityPostFooterAction({
 function CommunityPostTagChip({ label }: { label: string }) {
   return (
     <View className="mr-2 mt-1.5 rounded-full bg-[#F4F1F4] px-3 py-0.5">
-      <Text
-        className="text-[12px] text-[#7D7680]"
-        style={{ includeFontPadding: false, lineHeight: 12 }}
-      >
+      <Text className="text-[14px] text-[#7D7680]" style={textStyle(14)}>
         {label}
       </Text>
     </View>
@@ -2741,15 +2797,15 @@ function CommunityPostRouteCard({
         </View>
         <View className="flex-1 pr-2">
           <Text
-            className="text-[12px] font-semibold text-[#F2608E]"
-            style={{ includeFontPadding: false, lineHeight: 11 }}
+            className="text-[13px] font-semibold text-[#F2608E]"
+            style={textStyle(13)}
           >
             Tuyến đường
           </Text>
           <Text
-            className="text-[13px] font-medium text-[#4B414C]"
+            className="text-[15px] font-medium text-[#4B414C]"
             numberOfLines={2}
-            style={{ includeFontPadding: false, lineHeight: 12 }}
+            style={textStyle(15)}
           >
             {label}
           </Text>
@@ -2809,15 +2865,15 @@ function CommunityPostHotspotCard({
         </View>
         <View className="flex-1 pr-2">
           <Text
-            className="text-[12px] font-semibold text-[#18A7B4]"
-            style={{ includeFontPadding: false, lineHeight: 11 }}
+            className="text-[13px] font-semibold text-[#18A7B4]"
+            style={textStyle(13)}
           >
             {`${count} địa điểm`}
           </Text>
           <Text
-            className="text-[13px] text-[#6D6671]"
+            className="text-[15px] text-[#6D6671]"
             numberOfLines={2}
-            style={{ includeFontPadding: false, lineHeight: 11 }}
+            style={textStyle(15)}
           >
             {subtitle}
           </Text>
@@ -2842,7 +2898,7 @@ function CommunityPostHotspotCard({
                 <View className="-ml-2 h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#E7EEF2]">
                   <Text
                     className="text-[11px] font-semibold text-[#55606C]"
-                    style={{ includeFontPadding: false, lineHeight: 11 }}
+                    style={textStyle(11)}
                   >
                     {`+${remainingCount}`}
                   </Text>
@@ -2973,29 +3029,25 @@ function CommunitySharedPostCard({
 
         <View className="ml-2.5 flex-1 pr-2">
           <Text
-            className="text-[14px] font-bold text-[#2F2432]"
-            numberOfLines={1}
-            style={{ includeFontPadding: false, lineHeight: 14 }}
+            className="text-[16px] font-bold text-[#2F2432]"
+            style={textStyle(16)}
           >
             {author}
           </Text>
 
-          <View className="mt-0.5 flex-row flex-wrap items-center gap-1">
-            <Text
-              className="text-[12px] text-[#8A7D86]"
-              style={{ includeFontPadding: false, lineHeight: 11 }}
-            >
+          <View
+            className="flex-row flex-wrap items-center gap-1"
+            style={{ marginTop: -4 }}
+          >
+            <Text className="text-[14px] text-[#8A7D86]" style={textStyle(14)}>
               {formatCommunityTime(sharedPost.createdAt)}
             </Text>
-            <Text
-              className="text-[12px] text-[#8A7D86]"
-              style={{ includeFontPadding: false, lineHeight: 11 }}
-            >
+            <Text className="text-[14px] text-[#8A7D86]" style={textStyle(14)}>
               •
             </Text>
             <SymbolView
               name={getPostVisibilityIcon(sharedPost.visibility)}
-              size={10}
+              size={12}
               tintColor="#8A7D86"
             />
           </View>
@@ -3065,9 +3117,11 @@ function CommunityPostCard({
   onEditPost,
   onEditPostVisibility,
   onMovePostToTrash,
+  pageGutter,
   post,
   resolvedHotspots,
   resolvedRoutes,
+  showDivider,
   onCommentPost,
   onLikePost,
   onSharePost,
@@ -3081,6 +3135,8 @@ function CommunityPostCard({
   isLiked: boolean;
   isLiking: boolean;
   isSharing: boolean;
+  pageGutter: number;
+  showDivider: boolean;
   onEditPost: (post: CommunityFeedPost) => void;
   onEditPostVisibility: (post: CommunityFeedPost) => void;
   onMovePostToTrash: (post: CommunityFeedPost) => void;
@@ -3162,18 +3218,7 @@ function CommunityPostCard({
 
   return (
     <>
-      <View
-        className="rounded-[24px] border bg-white px-4 pb-2.5 pt-3"
-        style={{
-          borderColor: "#F0E7ED",
-          borderWidth: subtleBorderWidth,
-          shadowColor: "rgba(64, 34, 58, 0.08)",
-          shadowOpacity: 1,
-          shadowRadius: 20,
-          shadowOffset: { width: 0, height: 10 },
-          elevation: 4,
-        }}
-      >
+      <View className="bg-white pb-3 pt-3.5">
         <View className="flex-row items-start">
           <Pressable
             accessibilityLabel={`Mở hồ sơ của ${post.author}`}
@@ -3202,30 +3247,32 @@ function CommunityPostCard({
 
           <View className="ml-3 flex-1 pr-2">
             <Text
-              className="text-[15px] font-bold text-[#2F2432]"
-              numberOfLines={1}
-              style={{ includeFontPadding: false, lineHeight: 12 }}
+              className="text-[17px] font-bold text-[#2F2432]"
+              style={textStyle(17)}
             >
               {post.author}
             </Text>
 
-            <View className="-mt-0.5 flex-row flex-wrap items-center gap-1">
+            <View
+              className="flex-row flex-wrap items-center gap-x-1"
+              style={{ marginTop: -4 }}
+            >
               <Text
-                className="text-[12px] text-[#8A7D86]"
-                style={{ includeFontPadding: false, lineHeight: 11 }}
+                className="text-[14px] text-[#8A7D86]"
+                style={textStyle(14)}
               >
                 {post.time}
               </Text>
               <Text
-                className="text-[12px] text-[#8A7D86]"
-                style={{ includeFontPadding: false, lineHeight: 11 }}
+                className="text-[14px] text-[#8A7D86]"
+                style={textStyle(14)}
               >
                 •
               </Text>
-              <SymbolView name={visibilityIcon} size={10} tintColor="#8A7D86" />
+              <SymbolView name={visibilityIcon} size={12} tintColor="#8A7D86" />
               <Text
-                className="text-[12px] text-[#8A7D86]"
-                style={{ includeFontPadding: false, lineHeight: 11 }}
+                className="text-[14px] text-[#8A7D86]"
+                style={textStyle(14)}
               >
                 {visibilityLabel}
               </Text>
@@ -3256,7 +3303,7 @@ function CommunityPostCard({
           )}
         </View>
 
-        <View className="pt-1.5">
+        <View className="pt-0.5">
           {caption ? <ExpandablePostCaption text={caption} /> : null}
 
           {sharedPost ? (
@@ -3380,6 +3427,16 @@ function CommunityPostCard({
         </View>
       </View>
 
+      {showDivider ? (
+        <View
+          style={{
+            backgroundColor: "#ECE6EA",
+            height: StyleSheet.hairlineWidth,
+            marginHorizontal: -pageGutter,
+          }}
+        />
+      ) : null}
+
       <CommunityPostOptionsSheet
         bottomInset={insets.bottom}
         items={communityPostMenuItems}
@@ -3464,22 +3521,14 @@ function CommunityPostMenuRow({
       <View className="min-w-0 flex-1">
         <Text
           className="text-[15px] font-normal"
-          style={{
-            color: labelColor,
-            includeFontPadding: false,
-            lineHeight: 16,
-          }}
+          style={[textStyle(15), { color: labelColor }]}
         >
           {item.label}
         </Text>
         {item.description ? (
           <Text
             className="mt-0.5 text-[12px]"
-            style={{
-              color: descriptionColor,
-              includeFontPadding: false,
-              lineHeight: 13,
-            }}
+            style={[textStyle(12), { color: descriptionColor }]}
           >
             {item.description}
           </Text>
@@ -3499,10 +3548,7 @@ function ExpandablePostCaption({ text }: { text: string }) {
     : normalizedText;
 
   return (
-    <Text
-      className="text-[13px] text-[#2B232D]"
-      style={{ includeFontPadding: false, lineHeight: 12 }}
-    >
+    <Text className="text-[15px] text-[#2B232D]" style={textStyle(15)}>
       {expanded || !shouldTruncate ? normalizedText : collapsedText}
       {shouldTruncate ? (
         <Text
@@ -3552,38 +3598,28 @@ function CommunityCommentCard({ item }: { item: PostComment }) {
       normalizeLookupText(displayName);
 
   return (
-    <View
-      className="rounded-[24px] border bg-white px-3.5 py-3"
-      style={[
-        cardShadowStyle,
-        {
-          borderColor: subtleBorderColor,
-          borderWidth: subtleBorderWidth,
-        },
-      ]}
-    >
-      <View className="flex-row items-start gap-2.5">
+    <View className="px-0.5 py-1">
+      <View className="flex-row items-start gap-1.5">
         <AvatarMonogram
           colors={getAvatarPalette(`${displayName}-${item.userId}`)}
           initials={getNameInitials(displayName)}
-          size={40}
+          size={42}
         />
 
         <View className="flex-1">
-          <View className="flex-row items-center justify-between gap-3">
+          <View className="flex-row items-center justify-between gap-2">
             <View className="flex-1">
               <Text
-                className="text-[14px] font-bold text-[#2F2337]"
-                numberOfLines={1}
-                style={{ includeFontPadding: false, lineHeight: 15 }}
+                className="text-[15px] font-bold text-[#2E2432]"
+                style={textStyle(15)}
               >
                 {displayName}
               </Text>
               {shouldShowUsername ? (
                 <Text
-                  className="text-[11px] font-medium text-[#A06A85]"
+                  className="text-[12px] font-medium text-[#9B8794]"
                   numberOfLines={1}
-                  style={{ includeFontPadding: false, lineHeight: 12 }}
+                  style={textStyle(12)}
                 >
                   @{normalizedUsername}
                 </Text>
@@ -3591,16 +3627,16 @@ function CommunityCommentCard({ item }: { item: PostComment }) {
             </View>
 
             <Text
-              className="text-[11px] font-medium text-[#94889B]"
-              style={{ includeFontPadding: false, lineHeight: 12 }}
+              className="text-[12px] font-medium text-[#978B98]"
+              style={textStyle(12)}
             >
               {formatCommunityTime(item.createdAt)}
             </Text>
           </View>
 
           <Text
-            className="mt-1.5 text-[14px] text-[#4A3C54]"
-            style={{ includeFontPadding: false, lineHeight: 17 }}
+            className="mt-0.5 text-[15px] text-[#4B4150]"
+            style={textStyle(15)}
           >
             {readMeaningfulText(item.comment) ?? "Đã gửi một bình luận."}
           </Text>
@@ -3640,10 +3676,7 @@ function CommunitySharePostPill({
 
       <Text
         className="ml-[5px] text-[13px] font-normal text-[#2F2337]"
-        style={{
-          includeFontPadding: false,
-          lineHeight: 11,
-        }}
+        style={textStyle(13)}
       >
         {label}
       </Text>
@@ -3705,13 +3738,13 @@ function CommunitySharePostMenuRow({
       <View className="ml-2.5 flex-1">
         <Text
           className="text-[14px] font-semibold text-[#2F2337]"
-          style={{ includeFontPadding: false, lineHeight: 15 }}
+          style={textStyle(14)}
         >
           {label}
         </Text>
         <Text
           className="mt-0.5 text-[12px] text-[#8F8298]"
-          style={{ includeFontPadding: false, lineHeight: 14 }}
+          style={textStyle(12)}
         >
           {description}
         </Text>
@@ -3801,11 +3834,7 @@ function CommunitySharePostModal({
                 <View className="ml-3 flex-1">
                   <Text
                     className="text-[15px] font-bold text-[#2F2337]"
-                    style={{
-                      includeFontPadding: false,
-                      lineHeight: 12,
-                      marginTop: 7,
-                    }}
+                    style={textStyle(15)}
                   >
                     {authorName}
                   </Text>
@@ -3852,8 +3881,8 @@ function CommunitySharePostModal({
                 placeholderTextColor="#B39EAD"
                 style={{
                   color: "#2F242C",
-                  fontSize: 14,
-                  lineHeight: 17,
+                  fontSize: 15,
+                  lineHeight: bodyLineHeightFor(15),
                   marginTop: 12,
                   maxHeight: 96,
                   minHeight: 46,
@@ -3885,7 +3914,7 @@ function CommunitySharePostModal({
                     ) : (
                       <Text
                         className="text-[14px] font-extrabold text-white"
-                        style={{ includeFontPadding: false, lineHeight: 16 }}
+                        style={textStyle(14)}
                       >
                         Chia sẻ ngay
                       </Text>
@@ -3930,6 +3959,7 @@ function CommunityCommentComposerModal({
   const showCommentsLoading = commentsStatus === "loading";
   const showCommentsEmptyState =
     commentsStatus === "ready" && comments.length === 0;
+  const emptyCommentIllustration = require("../../../../assets/images/posttachnen.png");
 
   return (
     <Modal
@@ -3960,10 +3990,16 @@ function CommunityCommentComposerModal({
               >
                 <View className="flex-row items-start justify-between gap-3">
                   <View className="flex-1">
-                    <Text className="text-[20px] font-black text-[#2F2337]">
+                    <Text
+                      className="text-[18px] font-black text-[#2F2337]"
+                      style={textStyle(18)}
+                    >
                       Viết bình luận
                     </Text>
-                    <Text className="mt-0.5 text-[13px] leading-[18px] text-[#8F8298]">
+                    <Text
+                      className="mt-0.5 text-[12px] text-[#8F8298]"
+                      style={textStyle(12)}
+                    >
                       {postAuthor
                         ? `Bình luận cho bài viết của ${postAuthor}.`
                         : "Bình luận cho bài viết cộng đồng."}
@@ -3988,16 +4024,7 @@ function CommunityCommentComposerModal({
                   </Pressable>
                 </View>
 
-                <View
-                  className="mt-3 rounded-[24px] border bg-white px-3.5 py-3.5"
-                  style={[
-                    cardShadowStyle,
-                    {
-                      borderColor: subtleBorderColor,
-                      borderWidth: subtleBorderWidth,
-                    },
-                  ]}
-                >
+                <View className="mt-3 rounded-[24px] bg-white px-3.5 py-3.5">
                   <TextInput
                     editable={!isSubmitting}
                     maxLength={communityCommentMaxLength}
@@ -4008,8 +4035,8 @@ function CommunityCommentComposerModal({
                     style={{
                       color: "#2F242C",
                       fontSize: 15,
-                      lineHeight: 20,
-                      minHeight: 118,
+                      lineHeight: bodyLineHeightFor(15),
+                      minHeight: 104,
                       padding: 0,
                       textAlignVertical: "top",
                     }}
@@ -4018,25 +4045,31 @@ function CommunityCommentComposerModal({
                 </View>
 
                 <View className="mt-1.5 flex-row items-center justify-between">
-                  <Text className="text-[12px] font-medium text-[#A897B2]">
+                  <Text
+                    className="text-[11px] font-medium text-[#A897B2]"
+                    style={textStyle(11)}
+                  >
                     Bình luận sẽ được gửi công khai.
                   </Text>
-                  <Text className="text-[12px] font-medium text-[#A897B2]">
+                  <Text
+                    className="text-[11px] font-medium text-[#A897B2]"
+                    style={textStyle(11)}
+                  >
                     {`${trimmedDraftLength}/${communityCommentMaxLength}`}
                   </Text>
                 </View>
 
                 <View className="mt-3 flex-row gap-2.5">
                   <Pressable
-                    className="flex-1 items-center justify-center rounded-[20px] border bg-white px-4 py-3"
+                    className="flex-1 items-center justify-center rounded-[20px] bg-white px-4 py-3"
                     disabled={isSubmitting}
                     onPress={onClose}
-                    style={{
-                      borderColor: subtleBorderColor,
-                      borderWidth: subtleBorderWidth,
-                    }}
+                    style={pillShadowStyle}
                   >
-                    <Text className="text-[14px] font-bold text-[#8E869A]">
+                    <Text
+                      className="text-[13px] font-bold text-[#8E869A]"
+                      style={textStyle(13)}
+                    >
                       Hủy
                     </Text>
                   </Pressable>
@@ -4064,7 +4097,10 @@ function CommunityCommentComposerModal({
                       {isSubmitting ? (
                         <ActivityIndicator color="#FFFFFF" size="small" />
                       ) : (
-                        <Text className="text-[14px] font-extrabold text-white">
+                        <Text
+                          className="text-[13px] font-extrabold text-white"
+                          style={textStyle(13)}
+                        >
                           Gửi bình luận
                         </Text>
                       )}
@@ -4074,10 +4110,16 @@ function CommunityCommentComposerModal({
 
                 <View className="mt-4">
                   <View className="flex-row items-center justify-between">
-                    <Text className="text-[16px] font-black text-[#2F2337]">
-                      Bình luận gần đây
+                    <Text
+                      className="text-[14px] font-black text-[#2F2337]"
+                      style={textStyle(14)}
+                    >
+                      Bình luận
                     </Text>
-                    <Text className="text-[12px] font-medium text-[#A897B2]">
+                    <Text
+                      className="text-[11px] font-medium text-[#A897B2]"
+                      style={textStyle(11)}
+                    >
                       {commentsStatus === "ready"
                         ? `${comments.length} mục`
                         : `Trang 1 / ${communityPostCommentsPageSize}`}
@@ -4085,16 +4127,7 @@ function CommunityCommentComposerModal({
                   </View>
 
                   {showCommentsLoading ? (
-                    <View
-                      className="mt-2.5 rounded-[22px] border bg-white px-3.5 py-3.5"
-                      style={[
-                        cardShadowStyle,
-                        {
-                          borderColor: subtleBorderColor,
-                          borderWidth: subtleBorderWidth,
-                        },
-                      ]}
-                    >
+                    <View className="mt-3 rounded-[22px] bg-white px-3.5 py-3.5">
                       <View className="items-center">
                         <ActivityIndicator color="#EB489B" size="small" />
                       </View>
@@ -4102,14 +4135,11 @@ function CommunityCommentComposerModal({
                   ) : null}
 
                   {commentsErrorMessage ? (
-                    <View
-                      className="mt-2.5 rounded-[22px] border bg-[#FFF7FB] px-3.5 py-3.5"
-                      style={{
-                        borderColor: subtleBorderColor,
-                        borderWidth: subtleBorderWidth,
-                      }}
-                    >
-                      <Text className="text-[14px] font-bold text-[#C2416C]">
+                    <View className="mt-3 rounded-[22px] bg-[#FFF7FB] px-3.5 py-3.5">
+                      <Text
+                        className="text-[13px] font-bold text-[#C2416C]"
+                        style={textStyle(13)}
+                      >
                         {commentsErrorMessage}
                       </Text>
                       <Pressable
@@ -4117,7 +4147,10 @@ function CommunityCommentComposerModal({
                         onPress={onRetryComments}
                         style={pillShadowStyle}
                       >
-                        <Text className="text-[12px] font-bold text-[#B45384]">
+                        <Text
+                          className="text-[12px] font-bold text-[#B45384]"
+                          style={textStyle(12)}
+                        >
                           Thử tải lại
                         </Text>
                       </Pressable>
@@ -4136,20 +4169,21 @@ function CommunityCommentComposerModal({
                   ) : null}
 
                   {showCommentsEmptyState ? (
-                    <View
-                      className="mt-2.5 rounded-[22px] border bg-white px-3.5 py-3.5"
-                      style={[
-                        cardShadowStyle,
-                        {
-                          borderColor: subtleBorderColor,
-                          borderWidth: subtleBorderWidth,
-                        },
-                      ]}
-                    >
-                      <Text className="text-[15px] font-semibold text-[#43354C]">
+                    <View className="items-center px-3 py-0">
+                      <Image
+                        source={emptyCommentIllustration}
+                        style={{ height: 420, width: 420 }}
+                      />
+                      <Text
+                        className="mt-[-28px] text-[14px] font-semibold text-[#43354C]"
+                        style={textStyle(14)}
+                      >
                         Chưa có bình luận nào
                       </Text>
-                      <Text className="mt-1 text-[13px] leading-[18px] text-[#8F8298]">
+                      <Text
+                        className="mt-[-6px] text-center text-[12px] text-[#8F8298]"
+                        style={textStyle(12)}
+                      >
                         Hãy là người đầu tiên để lại cảm nhận cho bài viết này.
                       </Text>
                     </View>

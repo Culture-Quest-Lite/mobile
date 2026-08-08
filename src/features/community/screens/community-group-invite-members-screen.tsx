@@ -16,6 +16,7 @@ import {
   CommunityGroupStateCard,
   CommunityGroupTopBar,
 } from "../components/community-group-ui";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 export default function CommunityGroupInviteMembersScreen() {
   const router = useRouter();
@@ -113,19 +114,19 @@ export default function CommunityGroupInviteMembersScreen() {
           <View className="rounded-[28px] border border-[#E5E7EB] bg-white px-4 py-4">
             <Text
               className="text-[12px] font-semibold uppercase tracking-[0.3px] text-[#8A94A3]"
-              style={{ includeFontPadding: false, lineHeight: 14 }}
+              style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(12) }}
             >
               Invite Members
             </Text>
             <Text
               className="mt-2 text-[24px] font-black text-[#1F2933]"
-              style={{ includeFontPadding: false, lineHeight: 30 }}
+              style={{ includeFontPadding: false, lineHeight: lineHeightFor(24) }}
             >
               {groupSession.groupName ?? "Nhom du lich"}
             </Text>
             <Text
               className="mt-2 text-[14px] text-[#68737D]"
-              style={{ includeFontPadding: false, lineHeight: 20 }}
+              style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(14) }}
             >
               Man nay khong tu tao them API. Toan bo link moi thanh vien duoc
               suy ra truc tiep tu shareToken backend tra ve.

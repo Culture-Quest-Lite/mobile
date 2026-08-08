@@ -19,6 +19,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { lineHeightFor } from "@/lib/text-scale";
 
 type TextProps = ComponentProps<typeof RNText>;
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
@@ -419,14 +420,14 @@ export function SuccessOverlay({
 
         <Text
           className="mt-2 text-center text-[25px] font-black"
-          style={{ color: titleColor, lineHeight: 26 }}
+          style={{ color: titleColor, lineHeight: lineHeightFor(25) }}
         >
           {title}
         </Text>
 
         <Text
           className="mt-1 text-center text-[14px]"
-          style={{ color: bodyColor, lineHeight: 16, maxWidth: 290 }}
+          style={{ color: bodyColor, lineHeight: lineHeightFor(14), maxWidth: 290 }}
         >
           {description}
         </Text>
@@ -434,7 +435,7 @@ export function SuccessOverlay({
         {rewardText ? (
           <Text
             className="mt-3 text-center text-[30px] font-black"
-            style={{ color: "#F97316", lineHeight: 30 }}
+            style={{ color: "#F97316", lineHeight: lineHeightFor(30) }}
           >
             {rewardText}
           </Text>
@@ -453,7 +454,7 @@ export function SuccessOverlay({
             />
             <Text
               className="ml-1.5 text-center text-[12px]"
-              style={{ color: subtleTextColor, lineHeight: 13 }}
+              style={{ color: subtleTextColor, lineHeight: lineHeightFor(12) }}
             >
               {note}
             </Text>
@@ -488,7 +489,7 @@ export function SuccessOverlay({
           >
             <Text
               className="text-[16px] font-black text-white"
-              style={{ lineHeight: 20 }}
+              style={{ lineHeight: lineHeightFor(16) }}
             >
               {primaryActionLabel}
             </Text>
@@ -519,7 +520,7 @@ export function SuccessOverlay({
           >
             <Text
               className="text-[15px] font-black"
-              style={{ color: titleColor, lineHeight: 19 }}
+              style={{ color: titleColor, lineHeight: lineHeightFor(15) }}
             >
               {secondaryActionLabel}
             </Text>

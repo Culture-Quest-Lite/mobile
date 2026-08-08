@@ -1,7 +1,7 @@
 import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { type Href, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState, type ComponentProps } from "react";
 import {
@@ -21,11 +21,19 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import { appToast } from "@/components/ui/app-toast";
+import {
+  FieldError,
+  fieldErrorBorderColor,
+  fieldErrorColor,
+  fieldWarningColor,
+} from "@/components/ui/field-error";
 import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 import {
   createReview,
   isDuplicateReviewError,
@@ -83,6 +91,9 @@ const starInactiveColor = "#F3CE95";
 const mediaSoftBackgroundColor = "#FAFAFB";
 const mediaSoftBorderColor = "#DCDFE4";
 const maxCommentLength = 2000;
+// Đủ dài để bài đánh giá có thông tin, vẫn ngắn hơn một câu tiếng Việt trung bình.
+const minCommentLength = 10;
+const commentLengthWarningThreshold = maxCommentLength - 100;
 const maxMediaCount = 10;
 const mediaThumbWidth = 88;
 const mediaTileHeight = 104;
@@ -157,7 +168,11 @@ function buildFallbackFileName(
 }
 
 function formatMediaFileSize(fileSize?: number | null) {
-  if (typeof fileSize !== "number" || !Number.isFinite(fileSize) || fileSize <= 0) {
+  if (
+    typeof fileSize !== "number" ||
+    !Number.isFinite(fileSize) ||
+    fileSize <= 0
+  ) {
     return undefined;
   }
 
@@ -179,7 +194,7 @@ function RequiredFieldLabel({ label }: { label: string }) {
   return (
     <Text
       className="text-[14px] font-semibold"
-      style={{ color: primaryTextColor, lineHeight: 18 }}
+      style={{ color: primaryTextColor, lineHeight: bodyLineHeightFor(14) }}
     >
       {`${label} `}
       <Text
@@ -193,7 +208,9 @@ function RequiredFieldLabel({ label }: { label: string }) {
 }
 
 function SectionDivider() {
-  return <View className="mt-2 h-px" style={{ backgroundColor: dividerColor }} />;
+  return (
+    <View className="mt-2 h-px" style={{ backgroundColor: dividerColor }} />
+  );
 }
 
 function ReviewMediaPreview({
@@ -258,7 +275,6 @@ function ReviewMediaPreview({
           tintColor="#FFFFFF"
         />
       </Pressable>
-
     </View>
   );
 }
@@ -282,7 +298,9 @@ export default function HotspotReviewComposeScreen() {
     hotspotId: params.hotspotId,
     slug: resolvedSlug,
   });
-  const resolvedRouteId = resolvePositiveIntegerParam(params.routeId ?? params.id);
+  const resolvedRouteId = resolvePositiveIntegerParam(
+    params.routeId ?? params.id,
+  );
   const resolvedReviewId = resolvePositiveIntegerParam(params.reviewId);
   const editingReview =
     resolvedReviewId !== null
@@ -290,13 +308,12 @@ export default function HotspotReviewComposeScreen() {
       : null;
   const isEditMode = resolvedReviewId !== null;
   const isRouteReviewMode = resolvedRouteId !== null;
-  const resolvedHotspotId =
-    isRouteReviewMode
-      ? null
-      : routeHotspotId ??
-        (editingReview && editingReview.targetId > 0
-          ? editingReview.targetId
-          : null);
+  const resolvedHotspotId = isRouteReviewMode
+    ? null
+    : (routeHotspotId ??
+      (editingReview && editingReview.targetId > 0
+        ? editingReview.targetId
+        : null));
   const routeHotspotTitle = Array.isArray(params.title)
     ? (params.title[0] ?? "")
     : (params.title ?? "");
@@ -308,15 +325,18 @@ export default function HotspotReviewComposeScreen() {
   const fallbackTargetName = isRouteReviewMode
     ? routeHotspotTitle.trim() ||
       (resolvedRouteId !== null ? `Tuyến #${resolvedRouteId}` : "")
-    : hotspot?.title.trim() || routeHotspotTitle.trim() || resolvedSlug.trim() || "";
+    : hotspot?.title.trim() ||
+      routeHotspotTitle.trim() ||
+      resolvedSlug.trim() ||
+      "";
   const authorDisplayName =
     editingReview?.displayName.trim() ||
     authSession.displayName.trim() ||
     authSession.username?.trim() ||
     "Bạn";
-  const composerAvatarUri =
-    editingReview?.avatarUrl.trim() || avatarImageUri;
-  const initialMediaIds = editingReview?.medias.map((media) => media.mediaId) ?? [];
+  const composerAvatarUri = editingReview?.avatarUrl.trim() || avatarImageUri;
+  const initialMediaIds =
+    editingReview?.medias.map((media) => media.mediaId) ?? [];
   const [draftText, setDraftText] = useState(
     () => editingReview?.comment ?? "",
   );
@@ -328,43 +348,64 @@ export default function HotspotReviewComposeScreen() {
       ? initialRating
       : 0;
   });
-  const [selectedMedia, setSelectedMedia] = useState<ComposerMediaItem[]>(() =>
-    editingReview?.medias.map((media, index) => {
-      const normalizedMediaType = media.mediaType.trim().toUpperCase();
-      const normalizedMimeType = media.mimeType.trim();
-      const type =
-        normalizedMediaType === "VIDEO" ||
-        normalizedMimeType.toLowerCase().startsWith("video/")
-          ? ("video" as const)
-          : ("image" as const);
+  const [selectedMedia, setSelectedMedia] = useState<ComposerMediaItem[]>(
+    () =>
+      editingReview?.medias.map((media, index) => {
+        const normalizedMediaType = media.mediaType.trim().toUpperCase();
+        const normalizedMimeType = media.mimeType.trim();
+        const type =
+          normalizedMediaType === "VIDEO" ||
+          normalizedMimeType.toLowerCase().startsWith("video/")
+            ? ("video" as const)
+            : ("image" as const);
 
-      return {
-        fileName:
-          media.fileName.trim() ||
-          buildFallbackFileName(type, normalizedMimeType, index + 1),
-        mediaId: media.mediaId,
-        mimeType:
-          normalizedMimeType ||
-          (type === "video" ? "video/mp4" : "image/jpeg"),
-        sizeLabel: formatMediaFileSize(media.fileSize),
-        type,
-        uri: media.url,
-      };
-    }) ?? [],
+        return {
+          fileName:
+            media.fileName.trim() ||
+            buildFallbackFileName(type, normalizedMimeType, index + 1),
+          mediaId: media.mediaId,
+          mimeType:
+            normalizedMimeType ||
+            (type === "video" ? "video/mp4" : "image/jpeg"),
+          sizeLabel: formatMediaFileSize(media.fileSize),
+          type,
+          uri: media.url,
+        };
+      }) ?? [],
   );
-  const [loadedHotspot, setLoadedHotspot] = useState<LoadedReviewHotspot | null>(
-    null,
-  );
+  const [loadedHotspot, setLoadedHotspot] =
+    useState<LoadedReviewHotspot | null>(null);
   const [reviewSuccessState, setReviewSuccessState] =
     useState<ReviewSuccessState | null>(null);
+  const [reviewSubmitError, setReviewSubmitError] = useState<string | null>(
+    null,
+  );
   const [isDuplicateDialogVisible, setIsDuplicateDialogVisible] =
     useState(false);
+  // Chỉ bật báo lỗi sau lần bấm gửi đầu tiên để không "mắng" người dùng
+  // ngay khi màn hình vừa mở.
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
   const trimmedDraftText = draftText.trim();
-  const resolvedTargetId = isRouteReviewMode ? resolvedRouteId : resolvedHotspotId;
+  const ratingError =
+    rating < minReviewRating ? "Hãy chấm sao cho trải nghiệm này." : null;
+  const commentError = !trimmedDraftText
+    ? "Hãy chia sẻ cảm nhận của bạn."
+    : trimmedDraftText.length < minCommentLength
+      ? `Cảm nhận cần ít nhất ${minCommentLength} ký tự (đang ${trimmedDraftText.length}).`
+      : null;
+  const visibleRatingError = hasAttemptedSubmit ? ratingError : null;
+  const visibleCommentError = hasAttemptedSubmit ? commentError : null;
+  const visibleReviewSubmitError = reviewSubmitError;
+  const isCommentNearLimit = draftText.length >= commentLengthWarningThreshold;
+  const resolvedTargetId = isRouteReviewMode
+    ? resolvedRouteId
+    : resolvedHotspotId;
   const reviewTargetType = isRouteReviewMode ? "ROUTE" : "HOTSPOT";
   const hotspotDetailSlug =
     resolvedSlug.trim() ||
-    (resolvedHotspotId !== null ? getApiHotspotRouteSlug(resolvedHotspotId) : "");
+    (resolvedHotspotId !== null
+      ? getApiHotspotRouteSlug(resolvedHotspotId)
+      : "");
   const targetDetailHref = isRouteReviewMode
     ? (`/route/${resolvedRouteId}` as Href)
     : hotspotDetailSlug
@@ -475,9 +516,8 @@ export default function HotspotReviewComposeScreen() {
 
   const handlePickMedia = async () => {
     if (selectedMedia.length >= maxMediaCount) {
-      Alert.alert(
-        "Đã đủ media",
-        `Bạn có thể thêm tối đa ${maxMediaCount} ảnh hoặc video.`,
+      appToast.info(
+        `Bạn chỉ thêm được tối đa ${maxMediaCount} ảnh hoặc video.`,
       );
       return;
     }
@@ -529,6 +569,16 @@ export default function HotspotReviewComposeScreen() {
   };
 
   const handleSubmit = async () => {
+    setHasAttemptedSubmit(true);
+
+    // Lỗi từng ô hiện inline ngay dưới ô đó; toast chỉ để kéo mắt người dùng
+    // lên phần đang thiếu khi bàn phím đang che nửa màn hình.
+    if (ratingError || commentError) {
+      Keyboard.dismiss();
+      appToast.error(ratingError ?? commentError ?? "");
+      return;
+    }
+
     if (!authSession.isAuthenticated) {
       Alert.alert(
         "Cần đăng nhập",
@@ -553,22 +603,6 @@ export default function HotspotReviewComposeScreen() {
       return;
     }
 
-    if (rating < minReviewRating) {
-      Alert.alert(
-        "Thiếu số sao",
-        "Hãy chọn số sao đánh giá trước khi gửi bài.",
-      );
-      return;
-    }
-
-    if (!trimmedDraftText) {
-      Alert.alert(
-        "Thiếu cảm nhận",
-        "Hãy chia sẻ cảm nhận của bạn trước khi gửi bài đánh giá.",
-      );
-      return;
-    }
-
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
@@ -579,6 +613,7 @@ export default function HotspotReviewComposeScreen() {
       return;
     }
 
+    setReviewSubmitError(null);
     setIsSubmitting(true);
 
     try {
@@ -643,14 +678,15 @@ export default function HotspotReviewComposeScreen() {
         return;
       }
 
-      Alert.alert(
-        isEditMode ? "Không thể cập nhật" : "Không thể đăng bài",
+      const submitErrorMessage =
         error instanceof Error
           ? error.message
           : `Đã có lỗi xảy ra khi ${
               isEditMode ? "cập nhật" : "gửi"
-            } bài đánh giá.`,
-      );
+            } bài đánh giá.`;
+
+      setReviewSubmitError(submitErrorMessage);
+      appToast.error(submitErrorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -660,7 +696,10 @@ export default function HotspotReviewComposeScreen() {
     <View className="flex-1 bg-white">
       <StatusBar style="dark" />
 
-      <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
+      <SafeAreaView
+        className="flex-1 bg-white"
+        edges={["top", "left", "right"]}
+      >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           className="flex-1"
@@ -711,7 +750,12 @@ export default function HotspotReviewComposeScreen() {
               ) : (
                 <Text
                   className="text-[16px] font-bold"
-                  style={{ color: accentColor }}
+                  style={{
+                    // Vẫn bấm được khi form thiếu: bấm là ra lỗi inline, tốt hơn
+                    // một nút chết không nói lý do.
+                    color: accentColor,
+                    opacity: ratingError || commentError ? 0.45 : 1,
+                  }}
                 >
                   {isEditMode ? "Lưu" : "Đăng"}
                 </Text>
@@ -742,7 +786,10 @@ export default function HotspotReviewComposeScreen() {
                 <Text
                   className="text-[15px] font-bold"
                   numberOfLines={1}
-                  style={{ color: primaryTextColor, lineHeight: 16 }}
+                  style={{
+                    color: primaryTextColor,
+                    lineHeight: lineHeightFor(15),
+                  }}
                 >
                   {authorDisplayName}
                 </Text>
@@ -757,9 +804,7 @@ export default function HotspotReviewComposeScreen() {
                 >
                   <SymbolView
                     name={{
-                      ios: isRouteReviewMode
-                        ? "map"
-                        : "mappin.and.ellipse",
+                      ios: isRouteReviewMode ? "map" : "mappin.and.ellipse",
                       android: isRouteReviewMode ? "map" : "location_on",
                       web: isRouteReviewMode ? "map" : "location_on",
                     }}
@@ -769,7 +814,10 @@ export default function HotspotReviewComposeScreen() {
                   <Text
                     className="ml-1 flex-1 text-[13px] font-medium"
                     numberOfLines={1}
-                    style={{ color: accentColor, lineHeight: 15 }}
+                    style={{
+                      color: accentColor,
+                      lineHeight: lineHeightFor(13),
+                    }}
                   >
                     {locationLabel}
                   </Text>
@@ -809,7 +857,9 @@ export default function HotspotReviewComposeScreen() {
                           }
                     }
                     size={26}
-                    tintColor={star <= rating ? starActiveColor : starInactiveColor}
+                    tintColor={
+                      star <= rating ? starActiveColor : starInactiveColor
+                    }
                   />
                 </Pressable>
               ))}
@@ -817,7 +867,10 @@ export default function HotspotReviewComposeScreen() {
               {rating >= minReviewRating ? (
                 <Text
                   className="ml-1.5 text-[13px]"
-                  style={{ color: mutedTextColor, lineHeight: 17 }}
+                  style={{
+                    color: mutedTextColor,
+                    lineHeight: bodyLineHeightFor(13),
+                  }}
                 >
                   <Text
                     className="text-[13px] font-semibold"
@@ -830,12 +883,19 @@ export default function HotspotReviewComposeScreen() {
               ) : (
                 <Text
                   className="ml-1.5 text-[13px]"
-                  style={{ color: subtleTextColor, lineHeight: 17 }}
+                  style={{
+                    color: visibleRatingError
+                      ? fieldErrorColor
+                      : subtleTextColor,
+                    lineHeight: bodyLineHeightFor(13),
+                  }}
                 >
                   Chạm để chấm sao
                 </Text>
               )}
             </View>
+
+            <FieldError message={visibleRatingError} />
 
             <SectionDivider />
 
@@ -843,7 +903,14 @@ export default function HotspotReviewComposeScreen() {
               <RequiredFieldLabel label="Chia sẻ cảm nhận của bạn" />
               <Text
                 className="text-[12px]"
-                style={{ color: subtleTextColor, lineHeight: 16 }}
+                style={{
+                  color: visibleCommentError
+                    ? fieldErrorColor
+                    : isCommentNearLimit
+                      ? fieldWarningColor
+                      : subtleTextColor,
+                  lineHeight: bodyLineHeightFor(12),
+                }}
               >
                 {`${draftText.length}/${maxCommentLength}`}
               </Text>
@@ -851,17 +918,27 @@ export default function HotspotReviewComposeScreen() {
 
             <View
               className="mt-1 rounded-[12px] border bg-white px-3 py-2"
-              style={{ borderColor: fieldBorderColor }}
+              style={{
+                borderColor: visibleCommentError
+                  ? fieldErrorBorderColor
+                  : fieldBorderColor,
+                borderWidth: visibleCommentError ? 1.4 : 1,
+              }}
             >
               <TextInput
                 multiline
                 maxLength={maxCommentLength}
-                onChangeText={setDraftText}
+                onChangeText={(text) => {
+                  setDraftText(text);
+                  if (reviewSubmitError) {
+                    setReviewSubmitError(null);
+                  }
+                }}
                 placeholderTextColor={subtleTextColor}
                 style={{
                   color: primaryTextColor,
                   fontSize: 14,
-                  lineHeight: 18,
+                  lineHeight: bodyLineHeightFor(14),
                   minHeight: 108,
                   padding: 0,
                   textAlignVertical: "top",
@@ -875,9 +952,15 @@ export default function HotspotReviewComposeScreen() {
               />
             </View>
 
+            <FieldError message={visibleCommentError} />
+            <FieldError message={visibleReviewSubmitError} />
+
             <Text
               className="mt-4 text-[14px] font-semibold"
-              style={{ color: primaryTextColor, lineHeight: 18 }}
+              style={{
+                color: primaryTextColor,
+                lineHeight: bodyLineHeightFor(14),
+              }}
             >
               {`Ảnh / Video (${selectedMedia.length}/${maxMediaCount})`}
             </Text>
@@ -923,7 +1006,10 @@ export default function HotspotReviewComposeScreen() {
                   />
                   <Text
                     className="mt-2 text-center text-[11px] font-medium"
-                    style={{ color: mutedTextColor, lineHeight: 14 }}
+                    style={{
+                      color: mutedTextColor,
+                      lineHeight: bodyLineHeightFor(11),
+                    }}
                   >
                     Thêm ảnh / video
                   </Text>
@@ -953,13 +1039,20 @@ export default function HotspotReviewComposeScreen() {
               <View className="ml-2 flex-1">
                 <Text
                   className="text-[13px] font-bold"
-                  style={{ color: primaryTextColor, lineHeight: 16 }}
+                  style={{
+                    color: primaryTextColor,
+                    lineHeight: bodyLineHeightFor(13),
+                  }}
                 >
                   Mẹo viết bài:
                 </Text>
                 <Text
                   className="text-[12px]"
-                  style={{ color: mutedTextColor, lineHeight: 16, marginTop: -4 }}
+                  style={{
+                    color: mutedTextColor,
+                    lineHeight: bodyLineHeightFor(12),
+                    marginTop: -4,
+                  }}
                 >
                   Chia sẻ trải nghiệm thật chi tiết sẽ giúp ích cho cộng đồng
                   khám phá! ❤️

@@ -1,6 +1,7 @@
 import { SymbolView } from "@/components/ui/symbol-view";
 import type { CommunityGroupPayload } from "@/features/community/api/group-api";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { lineHeightFor } from "@/lib/text-scale";
 
 const communityGroupPinImage = require("../../../../assets/images/pin_group.png");
 
@@ -20,9 +21,28 @@ const subtleBorderWidth = 0.8;
 // Card cao cố định để tên nhóm dài không đẩy nút "Mở nhóm" tràn ra ngoài viền.
 const cardHeight = 220;
 const cardMaxFontSizeMultiplier = 1.1;
-const groupNameLineHeight = 15;
+// Toàn bộ chữ trong card đều 13px - lineHeight lấy từ thang chung.
+const cardTextFontSize = 13;
+const cardTextLineHeight = lineHeightFor(cardTextFontSize);
+const groupNameLineHeight = cardTextLineHeight;
 const groupNameMaxLines = 2;
 const groupNameBlockHeight = groupNameLineHeight * groupNameMaxLines;
+
+// Đường kẻ mảnh ngăn giữa các row trong card nhóm.
+const rowDividerColor = "#F1EDF1";
+
+function CommunityGroupRowDivider() {
+  return (
+    <View
+      className="self-stretch"
+      style={{
+        backgroundColor: rowDividerColor,
+        height: StyleSheet.hairlineWidth,
+        marginVertical: 5,
+      }}
+    />
+  );
+}
 
 function readMeaningfulText(value?: string | null) {
   if (typeof value !== "string") {
@@ -117,14 +137,14 @@ export function CommunityCreateGroupCard({
           />
         </View>
         <Text
-          className="mt-3 text-center text-[13px] font-semibold text-[#F43F7E]"
-          style={{ includeFontPadding: false, lineHeight: 16 }}
+          className="mt-3 text-center text-[13px] font-normal text-[#F43F7E]"
+          style={{ includeFontPadding: false, lineHeight: cardTextLineHeight }}
         >
           Nhóm mới
         </Text>
         <Text
-          className="mt-1 text-center text-[10px] font-medium text-[#9F8E99]"
-          style={{ includeFontPadding: false, lineHeight: 13 }}
+          className="mt-1 text-center text-[13px] font-normal text-[#9F8E99]"
+          style={{ includeFontPadding: false, lineHeight: cardTextLineHeight }}
         >
           Tạo nhóm của bạn
         </Text>
@@ -163,14 +183,14 @@ export function CommunityGroupCompactStateCard({
         />
       </View>
       <Text
-        className="mt-3 text-[13px] font-semibold text-[#2E2336]"
-        style={{ includeFontPadding: false, lineHeight: 16 }}
+        className="mt-3 text-[13px] font-normal text-[#2E2336]"
+        style={{ includeFontPadding: false, lineHeight: cardTextLineHeight }}
       >
         {title}
       </Text>
       <Text
-        className="mt-2 text-[10px] text-[#8F8298]"
-        style={{ includeFontPadding: false, lineHeight: 14 }}
+        className="mt-1.5 text-[13px] text-[#8F8298]"
+        style={{ includeFontPadding: false, lineHeight: cardTextLineHeight }}
       >
         {description}
       </Text>
@@ -197,8 +217,8 @@ export function CommunityGroupPlaceholderCard({
       ]}
     >
       <Text
-        className="text-center text-[11px] font-medium text-[#8F8298]"
-        style={{ includeFontPadding: false, lineHeight: 14 }}
+        className="text-center text-[13px] font-normal text-[#8F8298]"
+        style={{ includeFontPadding: false, lineHeight: cardTextLineHeight }}
       >
         Đang tải nhóm...
       </Text>
@@ -264,12 +284,14 @@ export function CommunityGroupListCard({
           </View>
         </View>
 
+        <CommunityGroupRowDivider />
+
         <View
-          className="mt-2 flex-row items-start self-stretch"
+          className="flex-row items-start self-stretch"
           style={{ columnGap: 4, height: groupNameBlockHeight }}
         >
           <Text
-            className="text-[12px] font-medium text-[#2E2336]"
+            className="text-[13px] font-normal text-[#2E2336]"
             maxFontSizeMultiplier={cardMaxFontSizeMultiplier}
             numberOfLines={groupNameMaxLines}
             style={{
@@ -293,7 +315,9 @@ export function CommunityGroupListCard({
           ) : null}
         </View>
 
-        <View className="mt-1.5" style={{ rowGap: 5 }}>
+        <CommunityGroupRowDivider />
+
+        <View className="self-stretch">
           <View className="self-start flex-row items-center">
             <SymbolView
               name={{ ios: "person.2.fill", android: "groups", web: "groups" }}
@@ -301,17 +325,20 @@ export function CommunityGroupListCard({
               tintColor="#7D7488"
             />
             <Text
-              className="ml-1 text-[10.5px] font-normal text-[#7D7488]"
+              className="ml-1 text-[13px] font-normal text-[#7D7488]"
               maxFontSizeMultiplier={cardMaxFontSizeMultiplier}
               numberOfLines={1}
-              style={{ includeFontPadding: false, lineHeight: 13 }}
+              style={{
+                includeFontPadding: false,
+                lineHeight: cardTextLineHeight,
+              }}
             >
               {formatGroupMemberCountLabel(memberCount)}
             </Text>
           </View>
 
           <View
-            className="self-start flex-row items-center rounded-full px-2 py-1"
+            className="self-start flex-row items-center rounded-full px-2 py-0.5"
             style={{ backgroundColor: accessPalette.backgroundColor }}
           >
             <SymbolView
@@ -320,13 +347,13 @@ export function CommunityGroupListCard({
               tintColor={accessPalette.iconColor}
             />
             <Text
-              className="ml-1 text-[10.5px] font-normal"
+              className="ml-1 text-[13px] font-normal"
               maxFontSizeMultiplier={cardMaxFontSizeMultiplier}
               numberOfLines={1}
               style={{
                 color: accessPalette.textColor,
                 includeFontPadding: false,
-                lineHeight: 13,
+                lineHeight: cardTextLineHeight,
               }}
             >
               {getCommunityGroupAccessLabel(group.requiredApproval)}
@@ -336,16 +363,19 @@ export function CommunityGroupListCard({
 
         <View className="mt-auto pt-1.5">
           <Pressable
-            className="self-stretch items-center justify-center rounded-[12px] bg-[#F3F4F6] px-4 py-2"
+            className="self-stretch items-center justify-center rounded-[10px] bg-[#F3F4F6] px-3 py-1"
             onPress={onPress}
             style={({ pressed }) => ({
               opacity: pressed ? 0.86 : 1,
             })}
           >
             <Text
-              className="text-[11px] font-semibold text-[#6B7280]"
+              className="text-[12px] font-normal text-[#6B7280]"
               maxFontSizeMultiplier={cardMaxFontSizeMultiplier}
-              style={{ includeFontPadding: false, lineHeight: 12 }}
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(12),
+              }}
             >
               Mở nhóm
             </Text>

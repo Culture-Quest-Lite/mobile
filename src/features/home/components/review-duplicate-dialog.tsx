@@ -3,6 +3,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { type ComponentProps } from "react";
 import { Pressable, Text as RNText, View } from "react-native";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 type TextProps = ComponentProps<typeof RNText>;
 
@@ -101,14 +102,14 @@ export function ReviewDuplicateDialog({
 
         <Text
           className="text-center text-[19px] font-black"
-          style={{ color: titleColor, lineHeight: 21 }}
+          style={{ color: titleColor, lineHeight: lineHeightFor(19) }}
         >
           Không thể đăng bài
         </Text>
 
         <Text
           className="mt-0.5 text-center text-[13px]"
-          style={{ color: bodyColor, lineHeight: 15 }}
+          style={{ color: bodyColor, lineHeight: bodyLineHeightFor(13) }}
         >
           Bạn đã đánh giá địa điểm này trước đó. Vui lòng chỉnh sửa bài đánh giá
           cũ thay vì tạo bài đăng mới.
@@ -132,7 +133,7 @@ export function ReviewDuplicateDialog({
           />
           <Text
             className="ml-2 flex-1 text-[12px]"
-            style={{ color: bodyColor, lineHeight: 13 }}
+            style={{ color: bodyColor, lineHeight: lineHeightFor(12) }}
           >
             Điều này giúp giữ cho thông tin trên hệ thống luôn chính xác và nhất
             quán.
@@ -174,7 +175,7 @@ export function ReviewDuplicateDialog({
             />
             <Text
               className="ml-2 text-[15px] font-black text-white"
-              style={{ lineHeight: 19 }}
+              style={{ lineHeight: lineHeightFor(15) }}
             >
               Chỉnh sửa đánh giá
             </Text>

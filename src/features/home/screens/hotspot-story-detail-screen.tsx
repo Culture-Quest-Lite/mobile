@@ -56,6 +56,7 @@ import {
   resolveRouteIdParam,
   resolveSelectedHotspotId,
 } from "../utils/resolve-selected-hotspot-id";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type StoryImageSource = ComponentProps<typeof Image>["source"];
@@ -184,7 +185,7 @@ function NotFoundState() {
             </Text>
             <Text
               className="mt-2 text-center text-[15px] text-[#6F657A]"
-              style={{ lineHeight: 18 }}
+              style={{ lineHeight: bodyLineHeightFor(15) }}
             >
               Câu chuyện này không còn trong dữ liệu hiện tại hoặc đường dẫn
               chưa đúng.
@@ -447,7 +448,7 @@ function AudioMetadataChip({
       <SymbolView name={icon} size={12} tintColor="#9C6B3D" />
       <Text
         className="ml-1 text-[12px] font-semibold"
-        style={{ color: "#6D563D", lineHeight: 12 }}
+        style={{ color: "#6D563D", lineHeight: lineHeightFor(12) }}
       >
         {label}
       </Text>
@@ -490,13 +491,13 @@ function StoryAudioOverviewCard({
         <View className="ml-3 flex-1">
           <Text
             className="text-[18px] font-semibold text-[#2D241D]"
-            style={{ lineHeight: 16 }}
+            style={{ lineHeight: lineHeightFor(18) }}
           >
             Nghe câu chuyện
           </Text>
           <Text
             className="mt-[-1px] text-[13px]"
-            style={{ color: "#7A6F67", lineHeight: 14 }}
+            style={{ color: "#7A6F67", lineHeight: lineHeightFor(13) }}
           >
             Nghe thuyết minh để hiểu hơn về câu chuyện.
           </Text>
@@ -958,7 +959,7 @@ export default function HotspotStoryDetailScreen() {
                   <View className="rounded-full bg-[#FFF0F6] px-3 py-1.5">
                     <Text
                       className="text-[13px] font-semibold"
-                      style={{ color: "#D9468B", lineHeight: 14 }}
+                      style={{ color: "#D9468B", lineHeight: lineHeightFor(13) }}
                     >
                       {story.tagLabel}
                     </Text>
@@ -968,7 +969,7 @@ export default function HotspotStoryDetailScreen() {
 
               <Text
                 className="mt-0 text-[22px] font-semibold text-[#2B2233]"
-                style={{ lineHeight: 22 }}
+                style={{ lineHeight: lineHeightFor(22) }}
               >
                 {story.title}
               </Text>
@@ -978,7 +979,7 @@ export default function HotspotStoryDetailScreen() {
                   className="text-[15px] text-[#6F657A]"
                   numberOfLines={isDescriptionExpanded ? undefined : 8}
                   style={{
-                    lineHeight: 17,
+                    lineHeight: lineHeightFor(15),
                     textAlign: "left",
                     paddingBottom: 4,
                   }}
@@ -998,7 +999,7 @@ export default function HotspotStoryDetailScreen() {
                   >
                     <Text
                       className="text-[12px]"
-                      style={{ color: palette.mutedText, lineHeight: 13 }}
+                      style={{ color: palette.mutedText, lineHeight: lineHeightFor(12) }}
                     >
                       {isDescriptionExpanded ? "Rút gọn" : "Xem thêm"}
                     </Text>
@@ -1040,14 +1041,14 @@ export default function HotspotStoryDetailScreen() {
                   </Pressable>
                   <Text
                     className="mt-1 text-center text-[18px] font-semibold text-[#201B18]"
-                    style={{ lineHeight: 20 }}
+                    style={{ lineHeight: lineHeightFor(18) }}
                   >
                     {story.title}
                   </Text>
                   {audioStatusLabel ? (
                     <Text
                       className="mt-1 text-center text-[13px]"
-                      style={{ color: palette.mutedText, lineHeight: 16 }}
+                      style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(13) }}
                     >
                       {audioStatusLabel}
                     </Text>
@@ -1195,7 +1196,7 @@ export default function HotspotStoryDetailScreen() {
                 {audioStatus.error ? (
                   <Text
                     className="mt-3 text-center text-[14px] text-[#C2410C]"
-                    style={{ lineHeight: 16 }}
+                    style={{ lineHeight: lineHeightFor(14) }}
                   >
                     {audioStatus.error}
                   </Text>
@@ -1207,7 +1208,7 @@ export default function HotspotStoryDetailScreen() {
               <View className="mt-3">
                 <Text
                   className="text-[18px] font-semibold text-[#201B18]"
-                  style={{ lineHeight: 20 }}
+                  style={{ lineHeight: lineHeightFor(18) }}
                 >
                   Nội dung audio
                 </Text>
@@ -1220,7 +1221,7 @@ export default function HotspotStoryDetailScreen() {
                     className="text-[15px] text-[#6F657A]"
                     numberOfLines={isAudioScriptExpanded ? undefined : 10}
                     style={{
-                      lineHeight: 17,
+                      lineHeight: lineHeightFor(15),
                       paddingBottom: 2,
                       textAlign: "left",
                     }}
@@ -1240,7 +1241,7 @@ export default function HotspotStoryDetailScreen() {
                     >
                       <Text
                         className="text-[12px]"
-                        style={{ color: palette.mutedText, lineHeight: 13 }}
+                        style={{ color: palette.mutedText, lineHeight: lineHeightFor(12) }}
                       >
                         {isAudioScriptExpanded ? "Rút gọn" : "Xem thêm"}
                       </Text>
@@ -1301,7 +1302,7 @@ export default function HotspotStoryDetailScreen() {
               {videoStatusLabel ? (
                 <Text
                   className="mt-2 text-[15px]"
-                  style={{ color: palette.mutedText, lineHeight: 18 }}
+                  style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(15) }}
                 >
                   {videoStatusLabel}
                 </Text>
@@ -1310,7 +1311,7 @@ export default function HotspotStoryDetailScreen() {
               {videoErrorMessage ? (
                 <Text
                   className="mt-1 text-[14px] text-[#C2410C]"
-                  style={{ lineHeight: 16 }}
+                  style={{ lineHeight: lineHeightFor(14) }}
                 >
                   {videoErrorMessage}
                 </Text>

@@ -5,6 +5,7 @@ import { type ColorValue, Image, Platform, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuthSession } from "@/features/auth/hooks/use-auth-session";
+import { lineHeightFor } from "@/lib/text-scale";
 
 const HOME_LOGO = require("../../../assets/images/logo3.png");
 const TAB_ACTIVE_COLOR = "#EC4899";
@@ -29,7 +30,7 @@ type TabConfig = {
 const TAB_ICON_SLOT_SIZE = 28;
 const TAB_ICON_RENDER_SIZE = 18;
 const TAB_LABEL_FONT_SIZE = 12;
-const TAB_LABEL_LINE_HEIGHT = 14;
+const TAB_LABEL_LINE_HEIGHT = lineHeightFor(TAB_LABEL_FONT_SIZE);
 
 const TAB_CONFIG: Record<VisibleTabName, TabConfig> = {
   bookings: {
