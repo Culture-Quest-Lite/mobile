@@ -319,6 +319,7 @@ export default function CheckinScreen() {
           hotspotId: Number(hotspotId),
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
           tokenType: session.tokenType,
         });
 
@@ -447,7 +448,7 @@ export default function CheckinScreen() {
                     GPS xác minh
                   </Text>
                   <Text className="text-[13px] font-semibold text-white">
-                    Bạn cách 12m · trong bán kính 50m ✓
+                    Vị trí của bạn sẽ được kiểm tra khi check-in
                   </Text>
                 </View>
               </View>

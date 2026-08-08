@@ -10,6 +10,10 @@ export type HotspotDetail = NearbyPlaceCard & {
   bestTimeLabel: string;
   checkinMode?: "always-ready" | "gps";
   coordinate?: HotspotCoordinate | null;
+  /** Bán kính vùng check-in (mét) do curator đặt riêng cho hotspot này. */
+  checkInRadius?: number | null;
+  /** Ranh giới GeoJSON Polygon; nếu có thì được ưu tiên hơn bán kính. */
+  boundaryGeoJson?: string | null;
   district: string;
   gallery: string[];
   highlights: string[];
