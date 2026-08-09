@@ -35,6 +35,7 @@ function Text({
 }
 
 export function ReviewDeleteDialog({
+  borderlessButtons = false,
   confirmIcon = {
     ios: "trash",
     android: "delete_outline",
@@ -48,6 +49,7 @@ export function ReviewDeleteDialog({
   title = "Xóa bài đánh giá?",
   visible,
 }: {
+  borderlessButtons?: boolean;
   confirmIcon?: SymbolName;
   confirmLabel?: string;
   description?: string;
@@ -100,7 +102,7 @@ export function ReviewDeleteDialog({
 
           <View className="px-4 pb-4 pt-3">
             <Text
-              className="text-center text-[17px] font-black text-[#241D22]"
+              className="text-center text-[17px] font-normal text-[#241D22]"
               style={{ lineHeight: lineHeightFor(17) }}
             >
               {title}
@@ -116,14 +118,17 @@ export function ReviewDeleteDialog({
             <View className="mt-3 flex-row gap-2">
               <Pressable
                 accessibilityRole="button"
-                className="h-[42px] flex-1 items-center justify-center rounded-[8px] border border-[#DDD7DC] bg-white"
+                className="h-[42px] flex-1 items-center justify-center rounded-[8px]"
                 disabled={isDeleting}
                 onPress={handleClose}
                 style={({ pressed }) => ({
+                  backgroundColor: borderlessButtons ? "#D1D5DB" : "#F1F0F4",
+                  borderColor: "#DDD7DC",
+                  borderWidth: borderlessButtons ? 0 : 1,
                   opacity: isDeleting ? 0.55 : pressed ? 0.78 : 1,
                 })}
               >
-                <Text className="text-[13px] font-black text-[#4F454C]">
+                <Text className="text-[13px] font-normal text-[#4F454C]">
                   Hủy
                 </Text>
               </Pressable>
@@ -135,12 +140,14 @@ export function ReviewDeleteDialog({
                 disabled={isDeleting}
                 onPress={onConfirm}
                 style={({ pressed }) => ({
-                  elevation: 5,
+                  elevation: borderlessButtons ? 0 : 5,
                   opacity: pressed ? 0.9 : 1,
-                  shadowColor: "rgba(216, 62, 104, 0.34)",
+                  shadowColor: borderlessButtons
+                    ? "transparent"
+                    : "rgba(216, 62, 104, 0.34)",
                   shadowOffset: { width: 0, height: 8 },
-                  shadowOpacity: 1,
-                  shadowRadius: 14,
+                  shadowOpacity: borderlessButtons ? 0 : 1,
+                  shadowRadius: borderlessButtons ? 0 : 14,
                 })}
               >
                 <LinearGradient
@@ -163,7 +170,7 @@ export function ReviewDeleteDialog({
                         size={15}
                         tintColor="#FFFFFF"
                       />
-                      <Text className="ml-1.5 text-[13px] font-black text-white">
+                      <Text className="ml-1.5 text-[13px] font-bold text-white">
                         {confirmLabel}
                       </Text>
                     </>
@@ -227,7 +234,7 @@ export function DeleteSuccessDialog({
 
           <View className="px-4 pb-4 pt-3">
             <Text
-              className="text-center text-[17px] font-black text-[#241D22]"
+              className="text-center text-[17px] font-normal text-[#241D22]"
               style={{ lineHeight: lineHeightFor(17) }}
             >
               {title}
@@ -273,7 +280,7 @@ export function DeleteSuccessDialog({
                   size={16}
                   tintColor="#FFFFFF"
                 />
-                <Text className="ml-1.5 text-[13px] font-black text-white">
+                <Text className="ml-1.5 text-[13px] font-normal text-white">
                   {buttonLabel}
                 </Text>
               </LinearGradient>

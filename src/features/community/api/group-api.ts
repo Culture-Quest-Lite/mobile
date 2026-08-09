@@ -7,6 +7,7 @@ export type CommunityGroupPayload = {
   createdBy: string | null;
   groupId: string | null;
   groupName: string | null;
+  imageUrl: string | null;
   inviteLink: string | null;
   leaderId: string | null;
   requiredApproval: boolean | null;
@@ -32,9 +33,16 @@ type AuthenticatedGroupRequest = {
   tokenType?: string | null;
 };
 
+export type CommunityGroupImageFile = {
+  mimeType?: string | null;
+  name?: string | null;
+  uri: string;
+};
+
 export type CreateCommunityGroupRequest = AuthenticatedGroupRequest & {
   groupName: string;
   userIds?: (number | string)[];
+  imageFile?: CommunityGroupImageFile | null;
 };
 
 export type JoinCommunityGroupRequest = AuthenticatedGroupRequest & {
@@ -43,20 +51,21 @@ export type JoinCommunityGroupRequest = AuthenticatedGroupRequest & {
 
 export type GetCommunityGroupsRequest = Partial<AuthenticatedGroupRequest>;
 
-export type GetCommunityGroupByIdRequest = Partial<AuthenticatedGroupRequest> & {
-  groupId: string;
-};
+export type GetCommunityGroupByIdRequest =
+  Partial<AuthenticatedGroupRequest> & {
+    groupId: string;
+  };
 
-export type GetCommunityGroupMembersRequest = Partial<
-  AuthenticatedGroupRequest
-> & {
-  action?: string | null;
-  groupId: string;
-};
+export type GetCommunityGroupMembersRequest =
+  Partial<AuthenticatedGroupRequest> & {
+    action?: string | null;
+    groupId: string;
+  };
 
 export type UpdateCommunityGroupRequest = AuthenticatedGroupRequest & {
   groupId: string;
   groupName: string;
+  imageFile?: CommunityGroupImageFile | null;
   requiredApproval: boolean;
 };
 
@@ -68,15 +77,20 @@ export type LeaveCommunityGroupRequest = AuthenticatedGroupRequest & {
   groupId: string;
 };
 
+export type DeleteCommunityGroupRequest = AuthenticatedGroupRequest & {
+  groupId: string;
+};
+
 export type KickCommunityGroupMemberRequest = AuthenticatedGroupRequest & {
   groupId: string;
   userId: string;
 };
 
-export type UpdateCommunityGroupParticipantRequest = AuthenticatedGroupRequest & {
-  action: "DENIED" | "JOIN";
-  participantId: string;
-};
+export type UpdateCommunityGroupParticipantRequest =
+  AuthenticatedGroupRequest & {
+    action: "DENIED" | "JOIN";
+    participantId: string;
+  };
 
 function resolveGroupUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
@@ -153,6 +167,44 @@ function normalizeCreateGroupUserIds(userIds?: (number | string)[]) {
   }
 
   return normalizedUserIds;
+}
+
+const imageMimeTypeByExtension: Record<string, string> = {
+  gif: "image/gif",
+  heic: "image/heic",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
+
+// RN gui multipart tu object { uri, name, type }; Blob/expo File khong dung duoc
+// vi FormData cua RN spread object nen mat cac getter tren prototype.
+function buildImageFilePart(imageFile?: CommunityGroupImageFile | null) {
+  const uri = readMeaningfulText(imageFile?.uri);
+
+  if (
+    !uri ||
+    !(
+      uri.startsWith("file:") ||
+      uri.startsWith("content:") ||
+      uri.startsWith("/")
+    )
+  ) {
+    return null;
+  }
+
+  const extension =
+    uri.split("?")[0].split("#")[0].split(".").pop()?.toLowerCase() ?? "";
+  const name =
+    readMeaningfulText(imageFile?.name) ??
+    `group-image.${extension in imageMimeTypeByExtension ? extension : "jpg"}`;
+  const type =
+    readMeaningfulText(imageFile?.mimeType) ??
+    imageMimeTypeByExtension[extension] ??
+    "image/jpeg";
+
+  return { name, type, uri };
 }
 
 async function parseResponseBody(response: Response) {
@@ -259,7 +311,9 @@ function parseCommunityGroupPayload(
   body: unknown,
   fallbackShareToken?: string | null,
 ): CommunityGroupPayload {
-  const parsedInviteLink = isObject(body) ? readMeaningfulText(body.inviteLink) : null;
+  const parsedInviteLink = isObject(body)
+    ? readMeaningfulText(body.inviteLink)
+    : null;
   const parsedShareToken =
     (isObject(body) ? readMeaningfulText(body.shareToken) : null) ??
     readShareTokenFromInviteLink(parsedInviteLink) ??
@@ -274,11 +328,14 @@ function parseCommunityGroupPayload(
     createdBy: isObject(body) ? readIdentifier(body.createdBy) : null,
     groupId: isObject(body) ? readIdentifier(body.groupId) : null,
     groupName: isObject(body) ? readMeaningfulText(body.groupName) : null,
+    imageUrl: isObject(body) ? readMeaningfulText(body.imageUrl) : null,
     inviteLink: parsedInviteLink,
     leaderId: isObject(body)
-      ? readIdentifier(body.leaderId) ?? readIdentifier(body.createdBy)
+      ? (readIdentifier(body.leaderId) ?? readIdentifier(body.createdBy))
       : null,
-    requiredApproval: isObject(body) ? readBoolean(body.requiredApproval) : null,
+    requiredApproval: isObject(body)
+      ? readBoolean(body.requiredApproval)
+      : null,
     shareToken: parsedShareToken,
     status: isObject(body) ? readMeaningfulText(body.status) : null,
     totalMembers: isObject(body) ? readNumber(body.totalMembers) : null,
@@ -369,7 +426,7 @@ async function requestGroup(
     accessToken?: string | null;
     body?: unknown;
     errorMessageFactory?: (body: unknown, status: number) => string;
-    method: "GET" | "POST" | "PUT";
+    method: "DELETE" | "GET" | "POST" | "PUT";
     tokenType?: string | null;
   },
 ) {
@@ -377,7 +434,8 @@ async function requestGroup(
 
   try {
     response = await fetch(url, {
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body:
+        options.body === undefined ? undefined : JSON.stringify(options.body),
       headers: {
         Accept: "application/json",
         "X-Client-Type": "mobile",
@@ -425,6 +483,7 @@ async function requestGroup(
 export async function createCommunityGroup({
   accessToken,
   groupName,
+  imageFile,
   tokenType,
   userIds,
 }: CreateCommunityGroupRequest) {
@@ -435,17 +494,62 @@ export async function createCommunityGroup({
     throw new Error("Hay nhap ten nhom truoc khi tao.");
   }
 
-  const body = await requestGroup(resolveGroupUrl("/api/v1/groups"), {
-    accessToken,
-    body: {
-      groupName: trimmedGroupName,
-      userIds: normalizedUserIds,
-    },
-    method: "POST",
-    tokenType,
-  });
+  const url = resolveGroupUrl("/api/v1/groups");
+  // POST /api/v1/groups chi nhan multipart/form-data (GroupRequest:
+  // groupName, userIds[], imageFile). Body JSON se lam backend tra 500.
+  const formData = new FormData();
 
-  return parseCommunityGroupPayload(body);
+  formData.append("groupName", trimmedGroupName);
+
+  for (const userId of normalizedUserIds) {
+    formData.append("userIds", `${userId}`);
+  }
+
+  const imageFilePart = buildImageFilePart(imageFile);
+
+  if (imageFilePart) {
+    formData.append("imageFile", imageFilePart as unknown as Blob);
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      body: formData,
+      // Khong tu set Content-Type: de fetch tu sinh boundary cho multipart.
+      headers: {
+        Accept: "application/json",
+        ...(accessToken
+          ? {
+              Authorization: `${tokenType ?? "Bearer"} ${accessToken}`,
+            }
+          : null),
+        "X-Client-Type": "mobile",
+      },
+      method: "POST",
+    });
+  } catch (error) {
+    console.warn("[community] group network failure", {
+      error,
+      method: "POST",
+      url,
+    });
+    throw new Error(getConnectionErrorMessage(url));
+  }
+
+  const responseBody = await parseResponseBody(response);
+
+  if (!response.ok) {
+    console.warn("[community] group request rejected", {
+      body: responseBody,
+      method: "POST",
+      status: response.status,
+      url,
+    });
+    throw new Error(getDefaultErrorMessage(responseBody, response.status));
+  }
+
+  return parseCommunityGroupPayload(responseBody);
 }
 
 export async function joinCommunityGroup({
@@ -460,7 +564,9 @@ export async function joinCommunityGroup({
   }
 
   const body = await requestGroup(
-    resolveGroupUrl(`/api/v1/groups/join/${encodeURIComponent(normalizedShareToken)}`),
+    resolveGroupUrl(
+      `/api/v1/groups/join/${encodeURIComponent(normalizedShareToken)}`,
+    ),
     {
       accessToken,
       errorMessageFactory: getJoinGroupErrorMessage,
@@ -568,6 +674,7 @@ export async function updateCommunityGroup({
   accessToken,
   groupId,
   groupName,
+  imageFile,
   requiredApproval,
   tokenType,
 }: UpdateCommunityGroupRequest) {
@@ -582,20 +689,61 @@ export async function updateCommunityGroup({
     throw new Error("Hay nhap ten nhom truoc khi luu.");
   }
 
-  const body = await requestGroup(
-    resolveGroupUrl(`/api/v1/groups/${encodeURIComponent(normalizedGroupId)}`),
-    {
-      accessToken,
-      body: {
-        groupName: trimmedGroupName,
-        requiredApproval,
+  const url = resolveGroupUrl(
+    `/api/v1/groups/${encodeURIComponent(normalizedGroupId)}`,
+  );
+  // PUT /api/v1/groups/{id} chi nhan multipart/form-data (groupName,
+  // requiredApproval, imageFile). Body JSON se lam backend tra 500.
+  const formData = new FormData();
+
+  formData.append("groupName", trimmedGroupName);
+  formData.append("requiredApproval", `${requiredApproval}`);
+
+  const imageFilePart = buildImageFilePart(imageFile);
+
+  if (imageFilePart) {
+    formData.append("imageFile", imageFilePart as unknown as Blob);
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      body: formData,
+      // Khong tu set Content-Type: de fetch tu sinh boundary cho multipart.
+      headers: {
+        Accept: "application/json",
+        ...(accessToken
+          ? {
+              Authorization: `${tokenType ?? "Bearer"} ${accessToken}`,
+            }
+          : null),
+        "X-Client-Type": "mobile",
       },
       method: "PUT",
-      tokenType,
-    },
-  );
+    });
+  } catch (error) {
+    console.warn("[community] group network failure", {
+      error,
+      method: "PUT",
+      url,
+    });
+    throw new Error(getConnectionErrorMessage(url));
+  }
 
-  return parseCommunityGroupPayload(body);
+  const responseBody = await parseResponseBody(response);
+
+  if (!response.ok) {
+    console.warn("[community] group request rejected", {
+      body: responseBody,
+      method: "PUT",
+      status: response.status,
+      url,
+    });
+    throw new Error(getDefaultErrorMessage(responseBody, response.status));
+  }
+
+  return parseCommunityGroupPayload(responseBody);
 }
 
 export async function refreshCommunityGroupToken({
@@ -635,7 +783,9 @@ export async function leaveCommunityGroup({
   }
 
   const body = await requestGroup(
-    resolveGroupUrl(`/api/v1/groups/${encodeURIComponent(normalizedGroupId)}/leave`),
+    resolveGroupUrl(
+      `/api/v1/groups/${encodeURIComponent(normalizedGroupId)}/leave`,
+    ),
     {
       accessToken,
       method: "PUT",
@@ -644,6 +794,27 @@ export async function leaveCommunityGroup({
   );
 
   return parseCommunityGroupPayload(body);
+}
+
+export async function deleteCommunityGroup({
+  accessToken,
+  groupId,
+  tokenType,
+}: DeleteCommunityGroupRequest): Promise<void> {
+  const normalizedGroupId = readIdentifier(groupId);
+
+  if (!normalizedGroupId) {
+    throw new Error("Khong tim thay ID nhom hop le.");
+  }
+
+  await requestGroup(
+    resolveGroupUrl(`/api/v1/groups/${encodeURIComponent(normalizedGroupId)}`),
+    {
+      accessToken,
+      method: "DELETE",
+      tokenType,
+    },
+  );
 }
 
 export async function kickCommunityGroupMember({

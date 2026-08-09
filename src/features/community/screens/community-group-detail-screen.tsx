@@ -34,9 +34,10 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 import { getMyProfile } from "@/features/profile/api/get-me";
 import { getUserProfileById } from "@/features/profile/api/get-user-by-id";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 import {
-  getCommunityGroupMembers,
   getCommunityGroupById,
+  getCommunityGroupMembers,
   leaveCommunityGroup,
   refreshCommunityGroupToken,
   type CommunityGroupPayload,
@@ -48,7 +49,6 @@ import {
   removeCachedCommunityGroupSession,
 } from "../data/community-group-session-store";
 import { buildCommunityInviteWebUrl } from "../lib/community-group-invite-links";
-import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 const HERO_IMAGE = require("../../../../assets/images/hero.jpg");
 const detailTextMaxFontSizeMultiplier = 1.05;
@@ -124,6 +124,15 @@ function padDatePart(value: number) {
   return `${value}`.padStart(2, "0");
 }
 
+function parseGroupDateValue(value: string) {
+  const normalized = value.replace(" ", "T");
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+
+  // Backend tra ve timestamp UTC nhung khong kem timezone, neu parse truc
+  // tiep se bi hieu nham la gio local va lech theo UTC offset cua may.
+  return new Date(hasTimezone ? normalized : `${normalized}Z`);
+}
+
 function formatGroupDate(value?: string | null) {
   const normalizedDateValue = normalizeDateValue(value);
 
@@ -131,7 +140,7 @@ function formatGroupDate(value?: string | null) {
     return "Chưa cập nhật";
   }
 
-  const date = new Date(normalizedDateValue);
+  const date = parseGroupDateValue(normalizedDateValue);
 
   if (Number.isNaN(date.getTime())) {
     return normalizedDateValue.replace("T", " ");
@@ -142,32 +151,6 @@ function formatGroupDate(value?: string | null) {
   )}/${date.getFullYear()} ${padDatePart(date.getHours())}:${padDatePart(
     date.getMinutes(),
   )}:${padDatePart(date.getSeconds())}`;
-}
-
-function resolveStatusChipPalette(status?: string | null) {
-  switch ((status ?? "").trim().toUpperCase()) {
-    case "ACTIVE":
-      return {
-        backgroundColor: "#EAF8EE",
-        dotColor: "#39C16C",
-        textColor: "#21A453",
-      };
-    default:
-      return {
-        backgroundColor: "#F8EEF4",
-        dotColor: palette.accentStrong,
-        textColor: "#8A5570",
-      };
-  }
-}
-
-function getLocalizedStatusLabel(status?: string | null) {
-  switch ((status ?? "").trim().toUpperCase()) {
-    case "ACTIVE":
-      return "Đang hoạt động";
-    default:
-      return "Chưa cập nhật";
-  }
 }
 
 function GroupSection({
@@ -197,18 +180,24 @@ function GroupSection({
 }
 
 function GroupInfoRow({
-  accentValue = false,
   hideDivider = false,
   icon,
   label,
+  tone,
   value,
 }: {
-  accentValue?: boolean;
   hideDivider?: boolean;
   icon: string;
   label: string;
+  tone?: "pending" | "success";
   value: string;
 }) {
+  const badgeTone =
+    tone === "success"
+      ? { background: "#EAF8EE", text: "#25B45B" }
+      : tone === "pending"
+        ? { background: "#FDEAF2", text: palette.accentStrong }
+        : null;
   return (
     <View
       className="flex-row items-center py-2.5"
@@ -227,21 +216,38 @@ function GroupInfoRow({
       <View className="flex-1">
         <Text
           className="text-[12px]"
-          style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(12) }}
+          style={{
+            color: palette.mutedText,
+            lineHeight: bodyLineHeightFor(12),
+          }}
         >
           {label}
         </Text>
       </View>
 
-      <Text
-        className="ml-3 text-right text-[12.5px] font-semibold"
-        style={{
-          color: accentValue ? "#25B45B" : palette.primaryText,
-          lineHeight: lineHeightFor(12.5),
-        }}
-      >
-        {value}
-      </Text>
+      {badgeTone ? (
+        <View
+          className="ml-3 rounded-full px-2 py-1"
+          style={{ backgroundColor: badgeTone.background }}
+        >
+          <Text
+            className="text-right text-[12.5px] font-semibold"
+            style={{ color: badgeTone.text, lineHeight: lineHeightFor(12.5) }}
+          >
+            {value}
+          </Text>
+        </View>
+      ) : (
+        <Text
+          className="ml-3 text-right text-[12.5px] font-semibold"
+          style={{
+            color: palette.primaryText,
+            lineHeight: lineHeightFor(12.5),
+          }}
+        >
+          {value}
+        </Text>
+      )}
     </View>
   );
 }
@@ -289,9 +295,12 @@ function GroupInviteSection({
             ) : (
               <Text
                 className="text-[12px] font-extrabold"
-                style={{ color: palette.accentStrong, lineHeight: bodyLineHeightFor(12) }}
+                style={{
+                  color: palette.accentStrong,
+                  lineHeight: bodyLineHeightFor(12),
+                }}
               >
-                Làm mới link
+                Làm mới liên kết
               </Text>
             )}
           </Pressable>
@@ -349,7 +358,10 @@ function GroupInviteSection({
         />
         <Text
           className="ml-1.5 text-[13px] font-extrabold"
-          style={{ color: palette.accentStrong, lineHeight: bodyLineHeightFor(13) }}
+          style={{
+            color: palette.accentStrong,
+            lineHeight: bodyLineHeightFor(13),
+          }}
         >
           {copied ? "Đã sao chép liên kết" : "Sao chép liên kết"}
         </Text>
@@ -583,14 +595,19 @@ export default function CommunityGroupDetailScreen() {
                 Boolean(currentUserId) &&
                 readMeaningfulText(nextGroupDetail.createdBy) === currentUserId;
 
-              if (!resolvedIsLeader && currentUserId && nextGroupDetail.groupId) {
+              if (
+                !resolvedIsLeader &&
+                currentUserId &&
+                nextGroupDetail.groupId
+              ) {
                 const groupMembers = await getCommunityGroupMembers({
                   accessToken,
                   groupId: nextGroupDetail.groupId,
                   tokenType: authSession.tokenType ?? undefined,
                 });
                 const currentMember = groupMembers.find(
-                  (member) => readMeaningfulText(member.userId) === currentUserId,
+                  (member) =>
+                    readMeaningfulText(member.userId) === currentUserId,
                 );
 
                 resolvedIsLeader =
@@ -656,7 +673,11 @@ export default function CommunityGroupDetailScreen() {
     ? null
     : (cachedGroupSession?.inviteWebUrl ??
       buildCommunityInviteWebUrl(displayGroup.shareToken));
-  const effectiveGroupId = readMeaningfulText(displayGroup?.groupId) ?? resolvedGroupId;
+  const effectiveGroupId =
+    readMeaningfulText(displayGroup?.groupId) ?? resolvedGroupId;
+  const heroImageSource = readMeaningfulText(displayGroup?.imageUrl)
+    ? { uri: displayGroup?.imageUrl as string }
+    : HERO_IMAGE;
   const closeGroupMenu = () => {
     setIsGroupMenuVisible(false);
   };
@@ -769,23 +790,19 @@ export default function CommunityGroupDetailScreen() {
   };
 
   const handleConfirmLeaveGroup = () => {
-    Alert.alert(
-      "Rời nhóm",
-      "Bạn có chắc muốn rời khỏi nhóm này không?",
-      [
-        {
-          style: "cancel",
-          text: "Ở lại",
+    Alert.alert("Rời nhóm", "Bạn có chắc muốn rời khỏi nhóm này không?", [
+      {
+        style: "cancel",
+        text: "Ở lại",
+      },
+      {
+        onPress: () => {
+          void handleLeaveGroup();
         },
-        {
-          onPress: () => {
-            void handleLeaveGroup();
-          },
-          style: "destructive",
-          text: "Rời nhóm",
-        },
-      ],
-    );
+        style: "destructive",
+        text: "Rời nhóm",
+      },
+    ]);
   };
 
   const handleRefreshInviteLink = async () => {
@@ -897,8 +914,6 @@ export default function CommunityGroupDetailScreen() {
     : displayGroup.createdBy
       ? `Explorer #${displayGroup.createdBy}`
       : "Chưa cập nhật";
-  const statusChipPalette = resolveStatusChipPalette(displayGroup.status);
-  const statusLabel = getLocalizedStatusLabel(displayGroup.status);
   const totalMembersLabel =
     typeof displayGroup.totalMembers === "number"
       ? `${displayGroup.totalMembers} thành viên`
@@ -907,8 +922,8 @@ export default function CommunityGroupDetailScreen() {
     displayGroup.requiredApproval === null
       ? "Chưa cập nhật"
       : displayGroup.requiredApproval
-        ? "Có"
-        : "Không";
+        ? "Cần duyệt để tham gia"
+        : "Tham gia tự do";
   const groupMenuActions = [
     {
       icon: "groups" as SymbolName,
@@ -950,8 +965,8 @@ export default function CommunityGroupDetailScreen() {
       >
         <View>
           <ImageBackground
-            source={HERO_IMAGE}
-            style={{ height: 210 + insets.top }}
+            source={heroImageSource}
+            style={{ height: 230 + insets.top }}
           >
             <LinearGradient
               colors={["rgba(255,250,252,0.18)", "rgba(252,246,248,0.96)"]}
@@ -1021,28 +1036,13 @@ export default function CommunityGroupDetailScreen() {
               <Text
                 className="flex-1 text-[17px] font-extrabold"
                 numberOfLines={2}
-                style={{ color: palette.primaryText, lineHeight: lineHeightFor(17) }}
+                style={{
+                  color: palette.primaryText,
+                  lineHeight: lineHeightFor(17),
+                }}
               >
                 {displayGroup.groupName ?? "Nhóm cộng đồng"}
               </Text>
-
-              <View
-                className="rounded-full px-2 py-1"
-                style={{ backgroundColor: statusChipPalette.backgroundColor }}
-              >
-                <View className="flex-row items-center">
-                  <View
-                    className="mr-1.5 h-2 w-2 rounded-full"
-                    style={{ backgroundColor: statusChipPalette.dotColor }}
-                  />
-                  <Text
-                    className="text-[10px] font-extrabold"
-                    style={{ color: statusChipPalette.textColor, lineHeight: lineHeightFor(10) }}
-                  >
-                    {statusLabel}
-                  </Text>
-                </View>
-              </View>
             </View>
 
             <View className="mt-1.5 flex-row items-center">
@@ -1057,7 +1057,10 @@ export default function CommunityGroupDetailScreen() {
               />
               <Text
                 className="ml-1.5 text-[13px]"
-                style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(13) }}
+                style={{
+                  color: palette.mutedText,
+                  lineHeight: bodyLineHeightFor(13),
+                }}
               >
                 {totalMembersLabel}
               </Text>
@@ -1074,7 +1077,10 @@ export default function CommunityGroupDetailScreen() {
             >
               <Text
                 className="text-[12px]"
-                style={{ color: palette.warmText, lineHeight: bodyLineHeightFor(12) }}
+                style={{
+                  color: palette.warmText,
+                  lineHeight: bodyLineHeightFor(12),
+                }}
               >
                 {errorMessage}
               </Text>
@@ -1098,21 +1104,27 @@ export default function CommunityGroupDetailScreen() {
                 }
               />
               <GroupInfoRow
-                accentValue={requiredApprovalLabel === "Không"}
+                icon="badge"
+                label="Vai trò của bạn"
+                value={isLeader ? "Nhóm trưởng" : "Thành viên"}
+              />
+              <GroupInfoRow
                 icon="shield"
                 label="Yêu cầu duyệt tham gia"
+                tone={
+                  requiredApprovalLabel === "Tham gia tự do"
+                    ? "success"
+                    : requiredApprovalLabel === "Cần duyệt để tham gia"
+                      ? "pending"
+                      : undefined
+                }
                 value={requiredApprovalLabel}
               />
               <GroupInfoRow
+                hideDivider
                 icon="event"
                 label="Ngày tạo"
                 value={formatGroupDate(displayGroup.createdAt)}
-              />
-              <GroupInfoRow
-                hideDivider
-                icon="update"
-                label="Cập nhật lần cuối"
-                value={formatGroupDate(displayGroup.updatedAt)}
               />
             </GroupSection>
           </View>
@@ -1136,13 +1148,6 @@ export default function CommunityGroupDetailScreen() {
               />
             </View>
           ) : null}
-
-          <Text
-            className="mt-4 text-center text-[11px]"
-            style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(11) }}
-          >
-            Nhóm được tạo và quản lý bởi CultureQuest Lite
-          </Text>
         </View>
       </ScrollView>
 

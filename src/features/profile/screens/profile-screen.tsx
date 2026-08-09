@@ -167,40 +167,12 @@ const postMenuSections: {
     key: "primary",
     items: [
       {
-        label: "Ghim bài viết",
-        icon: { ios: "pin", android: "push_pin", web: "push_pin" },
-      },
-      {
-        label: "Lưu bài viết",
-        icon: {
-          ios: "bookmark",
-          android: "bookmark_border",
-          web: "bookmark_border",
-        },
-      },
-      {
-        label: "Chia sẻ lên cộng đồng",
-        icon: { ios: "camera", android: "photo_camera", web: "photo_camera" },
-      },
-      {
         label: "Chỉnh sửa bài viết",
         icon: { ios: "pencil", android: "edit", web: "edit" },
       },
       {
         label: "Chỉnh sửa quyền riêng tư",
         icon: { ios: "lock", android: "lock", web: "lock" },
-      },
-      {
-        label: "Ai có thể bình luận về bài viết này?",
-        icon: {
-          ios: "bubble.left.and.bubble.right",
-          android: "forum",
-          web: "forum",
-        },
-      },
-      {
-        label: "Chuyển vào kho lưu trữ",
-        icon: { ios: "archivebox", android: "inventory_2", web: "inventory_2" },
       },
       {
         label: "Chuyển vào thùng rác",
@@ -218,27 +190,6 @@ const postMenuSections: {
           ios: "bell",
           android: "notifications_none",
           web: "notifications_none",
-        },
-      },
-    ],
-  },
-  {
-    key: "secondary",
-    items: [
-      {
-        label: "Thêm vào album",
-        icon: {
-          ios: "square.stack",
-          android: "photo_album",
-          web: "photo_album",
-        },
-      },
-      {
-        label: "Thêm ảnh/video khác vào bài viết này",
-        icon: {
-          ios: "plus.square.on.square",
-          android: "add_photo_alternate",
-          web: "add_photo_alternate",
         },
       },
     ],
@@ -302,14 +253,27 @@ function getProfileInitials(name: string, username: string) {
   return `${firstInitial}${lastInitial}`.toUpperCase();
 }
 
-function formatPostTimestamp(value: string | null) {
-  if (!value) {
-    return fallbackPostTimestamp;
+// Backend trả timestamp dạng "yyyy-MM-ddTHH:mm:ss" không kèm timezone (giờ
+// UTC của server). new Date(value) trực tiếp sẽ bị JS hiểu nhầm là giờ local
+// của máy, làm lệch ngày hiển thị — nên phải ép về UTC bằng cách thêm "Z"
+// trước khi parse, giống cách các màn hình khác trong app đã xử lý.
+function parseApiTimestamp(value: string) {
+  const normalizedValue = value.trim().replace(" ", "T");
+
+  if (!normalizedValue) {
+    return null;
   }
 
-  const parsedDate = new Date(value);
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalizedValue);
+  const date = new Date(hasTimezone ? normalizedValue : `${normalizedValue}Z`);
 
-  if (Number.isNaN(parsedDate.getTime())) {
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatPostTimestamp(value: string | null) {
+  const parsedDate = value ? parseApiTimestamp(value) : null;
+
+  if (!parsedDate) {
     return fallbackPostTimestamp;
   }
 
@@ -323,9 +287,9 @@ function formatPostTimestamp(value: string | null) {
 }
 
 function formatRouteParticipantDate(value: string | null) {
-  const parsedDate = new Date(value ?? "");
+  const parsedDate = value ? parseApiTimestamp(value) : null;
 
-  if (Number.isNaN(parsedDate.getTime())) {
+  if (!parsedDate) {
     return "";
   }
 

@@ -7,6 +7,7 @@ import type { Profile } from "../types";
 type UpdateMyProfileRequest = {
   accessToken: string;
   avatarUrl: string | null;
+  backgroundUrl: string | null;
   displayName: string;
   autoPlayAudio: boolean;
   tokenType?: string | null;
@@ -196,6 +197,7 @@ function mapGetMeResponseToProfile(response: GetMeResponse): Profile {
 export async function updateMyProfile({
   accessToken,
   avatarUrl,
+  backgroundUrl,
   displayName,
   autoPlayAudio,
   tokenType,
@@ -207,6 +209,7 @@ export async function updateMyProfile({
     response = await fetch(updateMeUrl, {
       body: JSON.stringify({
         avatarUrl,
+        backgroundUrl,
         autoPlayAudio,
         displayName,
       }),

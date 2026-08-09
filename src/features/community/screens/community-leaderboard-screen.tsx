@@ -9,6 +9,7 @@ import {
   type UserLeaderboardEntryDto,
 } from "@/features/home/api/get-user-leaderboard";
 import { LeaderRankingCard } from "@/features/home/components/leader-ranking-card";
+import { textStyle } from "@/lib/text-scale";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -224,7 +225,7 @@ export default function CommunityLeaderboardScreen() {
           />
         </Pressable>
 
-        <Text className="text-[16px] font-semibold text-[#1F2940]">
+        <Text className="text-[16px] text-[#2E2336]" style={textStyle(16)}>
           Bảng xếp hạng
         </Text>
 
@@ -234,7 +235,7 @@ export default function CommunityLeaderboardScreen() {
       {status === "loading" && entries.length === 0 ? (
         <View className="flex-1 items-center justify-center px-6">
           <ActivityIndicator color="#FF5F87" />
-          <Text className="mt-3 text-center text-[13px] text-[#8F8290]">
+          <Text className="mt-3 text-center text-[12px] text-[#8F8298]" style={textStyle(12)}>
             Đang tải bảng xếp hạng cộng đồng...
           </Text>
         </View>
@@ -244,10 +245,10 @@ export default function CommunityLeaderboardScreen() {
             className="rounded-[24px] border border-[#F6D8E5] bg-white px-5 py-6"
             style={leaderboardCardShadow}
           >
-            <Text className="text-[17px] font-semibold text-[#1F2940]">
+            <Text className="text-[18px] text-[#2F2337]" style={textStyle(18)}>
               Không tải được bảng xếp hạng
             </Text>
-            <Text className="mt-2 text-[13px] leading-5 text-[#8F8290]">
+            <Text className="mt-2 text-[12px] text-[#8F8298]" style={textStyle(12)}>
               {errorMessage ?? "Vui lòng thử lại sau."}
             </Text>
 
@@ -257,7 +258,7 @@ export default function CommunityLeaderboardScreen() {
                 setRetryNonce((currentValue) => currentValue + 1);
               }}
             >
-              <Text className="text-center text-[13px] font-semibold text-white">
+              <Text className="text-center text-[13px] text-white" style={textStyle(13)}>
                 Thử lại
               </Text>
             </Pressable>
@@ -271,10 +272,18 @@ export default function CommunityLeaderboardScreen() {
         >
           {/* LeaderRankingCard tự chứa padding 16px hai bên nên bù lại bằng
               margin âm để khớp với padding của ScrollView */}
-          <View style={{ marginHorizontal: -16 }}>
+          <View style={{ marginHorizontal: -16, marginTop: 14 }}>
             <LeaderRankingCard
-              description={summaryContent.note}
-              title={summaryContent.title}
+              topEntries={entries
+                .filter((entry) => entry.rank >= 1 && entry.rank <= 3)
+                .map((entry) => ({
+                  avatarUri: readMeaningfulText(entry.avatarUrl) ?? null,
+                  isCurrentUser: entry.isCurrentUser,
+                  name: getCommunityLeaderboardDisplayName(entry),
+                  points: `${formatCommunityXp(entry.totalXp)} XP`,
+                  rank: entry.rank,
+                  subtitle: getCommunityLeaderboardSubtitle(entry),
+                }))}
               xp={summaryContent.totalXp}
             />
           </View>
@@ -297,18 +306,14 @@ export default function CommunityLeaderboardScreen() {
                   style={[
                     leaderboardCardShadow,
                     {
-                      backgroundColor: isChampion
-                        ? "#FFF9EC"
-                        : isCurrentUserEntry
-                          ? "#FFF7FA"
-                          : "#FFFFFF",
-                      borderColor: isChampion
-                        ? "#F4D493"
-                        : isCurrentUserEntry
-                          ? "#F8D8E3"
-                          : "#EEF1F4",
-                      borderWidth: 1,
-                    },
+                      backgroundColor: isCurrentUserEntry
+                        ? "#FFF7FA"
+                        : "#FFFFFF",
+                      borderColor: isCurrentUserEntry
+                        ? "#F8D8E3"
+                        : "#EEF1F4",
+                        borderWidth: 1,
+                      },
                   ]}
                 >
                   <View className="mr-2.5 w-7 items-center justify-center">
@@ -364,12 +369,15 @@ export default function CommunityLeaderboardScreen() {
                       }}
                     >
                       <Text
-                        className="text-[11px] font-medium leading-[13px]"
-                        style={{
-                          color: getCommunityLeaderboardBadgeTextColor(
-                            entry.rank,
-                          ),
-                        }}
+                        className="text-[11px] text-[#2F2337]"
+                        style={[
+                          textStyle(11),
+                          {
+                            color: getCommunityLeaderboardBadgeTextColor(
+                              entry.rank,
+                            ),
+                          },
+                        ]}
                       >
                         {entry.rank}
                       </Text>
@@ -392,13 +400,15 @@ export default function CommunityLeaderboardScreen() {
 
                   <View className="flex-1 pr-2">
                     <Text
-                      className="text-[12px] font-medium leading-[14px] text-[#2B2233]"
+                      className="text-[14px] text-[#2F2337]"
+                      style={textStyle(14)}
                       numberOfLines={1}
                     >
                       {getCommunityLeaderboardDisplayName(entry)}
                     </Text>
                     <Text
-                      className="text-[10px] font-normal leading-[12px] text-[#9A93A5]"
+                      className="text-[12px] text-[#8F8298]"
+                      style={textStyle(12)}
                       numberOfLines={1}
                     >
                       {getCommunityLeaderboardSubtitle(entry)}
@@ -415,7 +425,7 @@ export default function CommunityLeaderboardScreen() {
                       size={10}
                       tintColor="#FF5F87"
                     />
-                    <Text className="ml-1 text-[10px] font-medium leading-[13px] text-[#2B2233]">
+                    <Text className="ml-1 text-[13px] text-[#2F2337]" style={textStyle(13)}>
                       {formatCommunityXp(entry.totalXp)} XP
                     </Text>
                   </View>

@@ -52,7 +52,9 @@ function isBlank(value: string) {
 }
 
 export function hasAnyFieldError(errors: Record<string, string | undefined>) {
-  return Object.values(errors).some((value) => typeof value === "string" && value.length > 0);
+  return Object.values(errors).some(
+    (value) => typeof value === "string" && value.length > 0,
+  );
 }
 
 export function validateLoginForm({
@@ -63,9 +65,9 @@ export function validateLoginForm({
   const normalizedUsername = username.trim();
 
   if (!normalizedUsername) {
-    errors.username = "Vui lòng nhập username.";
+    errors.username = "Vui lòng nhập tên đăng nhập.";
   } else if (/\s/.test(normalizedUsername)) {
-    errors.username = "Username không được chứa khoảng trắng.";
+    errors.username = "Tên đăng nhập không được chứa khoảng trắng.";
   }
 
   if (isBlank(password)) {
@@ -88,13 +90,14 @@ export function validateRegisterForm({
   const normalizedEmail = email.trim().toLowerCase();
 
   if (!normalizedUsername) {
-    errors.username = "Vui lòng nhập username.";
+    errors.username = "Vui lòng nhập tên đăng nhập.";
   } else if (normalizedUsername.length < 3) {
-    errors.username = "Username cần ít nhất 3 ký tự.";
+    errors.username = "Tên đăng nhập cần ít nhất 3 ký tự.";
   } else if (normalizedUsername.length > 30) {
-    errors.username = "Username tối đa 30 ký tự.";
+    errors.username = "Tên đăng nhập tối đa 30 ký tự.";
   } else if (!usernamePattern.test(normalizedUsername)) {
-    errors.username = "Username chỉ được gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.";
+    errors.username =
+      "Tên đăng nhập chỉ được gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.";
   }
 
   if (!normalizedDisplayName) {

@@ -27,9 +27,12 @@ type GetUserProfilePostsRequest = FetchProfilePostsRequest & {
   userId: number;
 };
 
-type ParsedPostsResponse = {
+export type ProfilePostsPage = {
   content: ProfilePost[];
+  empty: boolean;
   isLast: boolean;
+  number: number;
+  numberOfElements: number;
   size: number;
 };
 
@@ -200,7 +203,7 @@ function parsePost(value: unknown): ProfilePost | null {
   };
 }
 
-function parsePostsResponse(value: unknown): ParsedPostsResponse | null {
+function parsePostsResponse(value: unknown): ProfilePostsPage | null {
   if (!isObject(value) || !Array.isArray(value.content)) {
     return null;
   }
@@ -214,7 +217,10 @@ function parsePostsResponse(value: unknown): ParsedPostsResponse | null {
 
   return {
     content: posts,
+    empty: readBoolean(value.empty),
     isLast: readBoolean(value.last),
+    number: readNumber(value.number) ?? 0,
+    numberOfElements: readNumber(value.numberOfElements) ?? posts.length,
     size,
   };
 }
@@ -297,7 +303,7 @@ async function fetchProfilePostsPage({
   accessToken?: string | null;
   tokenType?: string | null;
   url: string;
-}): Promise<ParsedPostsResponse> {
+}): Promise<ProfilePostsPage> {
   let response: Response;
 
   try {
@@ -380,6 +386,22 @@ async function getAllProfilePosts({
   return posts;
 }
 
+async function getProfilePostsPage({
+  accessToken,
+  page = 0,
+  resolvePageUrl,
+  size = 20,
+  tokenType,
+}: FetchProfilePostsRequest & {
+  resolvePageUrl: (nextPage: number) => string;
+}): Promise<ProfilePostsPage> {
+  return fetchProfilePostsPage({
+    accessToken,
+    tokenType,
+    url: resolvePageUrl(page),
+  });
+}
+
 export async function getMyProfilePosts({
   accessToken,
   page,
@@ -389,6 +411,27 @@ export async function getMyProfilePosts({
   tokenType,
 }: GetMyProfilePostsRequest): Promise<ProfilePost[]> {
   return getAllProfilePosts({
+    accessToken,
+    page,
+    resolvePageUrl: (nextPage) =>
+      resolveProfilePostsUrl(
+        "/api/posts",
+        buildPostsQuery({ page: nextPage, size, sort, status }),
+      ),
+    size,
+    tokenType,
+  });
+}
+
+export async function getMyProfilePostsPage({
+  accessToken,
+  page,
+  size,
+  status,
+  sort,
+  tokenType,
+}: GetMyProfilePostsRequest): Promise<ProfilePostsPage> {
+  return getProfilePostsPage({
     accessToken,
     page,
     resolvePageUrl: (nextPage) =>

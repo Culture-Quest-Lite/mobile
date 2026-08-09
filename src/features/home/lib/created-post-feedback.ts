@@ -10,9 +10,9 @@ function formatPointReward(value: number) {
 
 export function getCreatedPostRewardPoints(createdPost: CreatedPostResponse) {
   const resolvedReward =
-    typeof createdPost.pointRemaining === "number" &&
-    Number.isFinite(createdPost.pointRemaining)
-      ? Math.max(0, Math.round(createdPost.pointRemaining))
+    typeof createdPost.pointEarned === "number" &&
+    Number.isFinite(createdPost.pointEarned)
+      ? Math.max(0, Math.round(createdPost.pointEarned))
       : 0;
 
   if (resolvedReward <= 0) {

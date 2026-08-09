@@ -17,14 +17,18 @@ import {
 } from "@/features/community/api/get-mutual-follow-users";
 import {
   createCommunityGroup,
+  type CommunityGroupImageFile,
   type CommunityGroupPayload,
 } from "@/features/community/api/group-api";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -40,8 +44,8 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
-import { cacheCommunityGroupSession } from "../data/community-group-session-store";
 import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
+import { cacheCommunityGroupSession } from "../data/community-group-session-store";
 
 const screenPalette = {
   accent: "#FF5A87",
@@ -116,19 +120,27 @@ function matchesInviteCandidate(candidate: MutualFollowUser, query: string) {
   ).includes(normalizedQuery);
 }
 
-function GroupAvatarPlaceholder({ compact }: { compact: boolean }) {
+function GroupAvatarPlaceholder({
+  compact,
+  groupImageUri,
+  onPress,
+}: {
+  compact: boolean;
+  groupImageUri?: string;
+  onPress?: () => void;
+}) {
   const avatarSize = compact ? 58 : 62;
-  const iconSize = compact ? 27 : 29;
-  const sparkleSize = compact ? 10 : 11;
 
   return (
-    <View
-      style={[
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
         styles.groupAvatarOuter,
         {
           borderRadius: avatarSize / 2,
           height: avatarSize,
           width: avatarSize,
+          opacity: pressed ? 0.82 : 1,
         },
       ]}
     >
@@ -143,37 +155,43 @@ function GroupAvatarPlaceholder({ compact }: { compact: boolean }) {
           },
         ]}
       >
-        <SymbolView
-          name={{
-            ios: "person.3.fill",
-            android: "groups",
-            web: "groups",
-          }}
-          size={iconSize}
-          tintColor="#FF7AA3"
-        />
-
-        <View
-          style={[
-            styles.groupAvatarSparkle,
-            {
-              right: compact ? 8 : 9,
-              top: compact ? 8 : 9,
-            },
-          ]}
-        >
-          <SymbolView
-            name={{
-              ios: "sparkles",
-              android: "auto_awesome",
-              web: "auto_awesome",
-            }}
-            size={sparkleSize}
-            tintColor="#FF9ABB"
+        {groupImageUri ? (
+          <Image
+            source={{ uri: groupImageUri }}
+            contentFit="cover"
+            style={[
+              styles.groupAvatarImage,
+              {
+                borderRadius: (avatarSize - 4) / 2,
+                height: avatarSize - 4,
+                width: avatarSize - 4,
+              },
+            ]}
           />
-        </View>
+        ) : (
+          <View
+            style={[
+              styles.groupAvatarCameraPlaceholder,
+              {
+                height: avatarSize - 22,
+                width: avatarSize - 22,
+                borderRadius: (avatarSize - 22) / 2,
+              },
+            ]}
+          >
+            <SymbolView
+              name={{
+                ios: "camera",
+                android: "photo_camera",
+                web: "camera_alt",
+              }}
+              size={compact ? 16 : 18}
+              tintColor="#FF5A87"
+            />
+          </View>
+        )}
       </LinearGradient>
-    </View>
+    </Pressable>
   );
 }
 
@@ -305,6 +323,8 @@ export default function CommunityGroupCreateScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedInviteIds, setSelectedInviteIds] = useState<string[]>([]);
+  const [groupImageFile, setGroupImageFile] =
+    useState<CommunityGroupImageFile | null>(null);
 
   const isCompactScreen = width < 380;
   const contentHorizontalPadding = ScreenHorizontalPadding;
@@ -343,7 +363,17 @@ export default function CommunityGroupCreateScreen() {
   const resolvedInviteCandidatesErrorMessage = authSession.isAuthenticated
     ? inviteCandidatesErrorMessage
     : "Bạn cần đăng nhập để xem danh sách bạn bè.";
+  const resolvedIsInviteCandidatesLoading =
+    authSession.isAuthenticated && isInviteCandidatesLoading;
   const selectedInviteCount = selectedUserIds.length;
+
+  const selectedUserIdsError =
+    selectedInviteCount === 0
+      ? "Bạn cần chọn ít nhất 1 thành viên để tạo nhóm."
+      : null;
+  const visibleSelectedUserIdsError = hasAttemptedSubmit
+    ? selectedUserIdsError
+    : null;
 
   const visibleInviteCandidates = useMemo(
     () =>
@@ -361,6 +391,40 @@ export default function CommunityGroupCreateScreen() {
     router.push("/login?entry=home" as Href);
   };
 
+  const handleSelectGroupAvatar = async () => {
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Alert.alert(
+        "Cần cấp quyền",
+        "Hãy cho phép truy cập thư viện ảnh để chọn ảnh nhóm.",
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      mediaTypes: ["images"],
+      quality: 0.8,
+    });
+
+    if (result.canceled || result.assets.length === 0) {
+      return;
+    }
+
+    const selectedAsset = result.assets[0];
+
+    if (selectedAsset.uri) {
+      setGroupImageFile({
+        mimeType: selectedAsset.mimeType,
+        name: selectedAsset.fileName,
+        uri: selectedAsset.uri,
+      });
+    }
+  };
+
   const toggleInviteCandidate = (candidateId: string) => {
     setSelectedInviteIds((currentValue) =>
       currentValue.includes(candidateId)
@@ -372,10 +436,10 @@ export default function CommunityGroupCreateScreen() {
   useEffect(() => {
     let isCancelled = false;
 
+    // Khi chưa đăng nhập, các giá trị resolved* bên dưới đã tự trả về rỗng,
+    // nên effect chỉ cần bỏ qua việc gọi API thay vì setState trực tiếp.
     if (!authSession.isAuthenticated) {
-      setInviteCandidates([]);
-      setInviteCandidatesErrorMessage(null);
-      return undefined;
+      return;
     }
 
     const trimmedSearchQuery = searchQuery.trim();
@@ -454,6 +518,11 @@ export default function CommunityGroupCreateScreen() {
       return;
     }
 
+    if (selectedInviteCount === 0) {
+      setErrorMessage(null);
+      return;
+    }
+
     if (!authSession.isAuthenticated) {
       setErrorMessage("Bạn cần đăng nhập để tạo nhóm mới.");
       return;
@@ -472,6 +541,7 @@ export default function CommunityGroupCreateScreen() {
       const createdGroup = await createCommunityGroup({
         accessToken,
         groupName: trimmedGroupName,
+        imageFile: groupImageFile,
         tokenType: authSession.tokenType,
         userIds: selectedUserIds,
       });
@@ -486,7 +556,9 @@ export default function CommunityGroupCreateScreen() {
       }
 
       router.replace(
-        `/community/group-created/${encodeURIComponent(cachedSession.shareToken)}` as Href,
+        `/community/group-created/${encodeURIComponent(
+          cachedSession.shareToken,
+        )}` as Href,
       );
     } catch (error) {
       setErrorMessage(
@@ -552,7 +624,11 @@ export default function CommunityGroupCreateScreen() {
           }}
         >
           <View className="flex-row items-start">
-            <GroupAvatarPlaceholder compact={isCompactScreen} />
+            <GroupAvatarPlaceholder
+              compact={isCompactScreen}
+              groupImageUri={groupImageFile?.uri}
+              onPress={handleSelectGroupAvatar}
+            />
 
             <View
               className="flex-1"
@@ -650,6 +726,8 @@ export default function CommunityGroupCreateScreen() {
             </Text>
           </View>
 
+          <FieldError message={visibleSelectedUserIdsError} />
+
           <View
             className="mt-2.5 flex-row items-center"
             style={[
@@ -700,7 +778,7 @@ export default function CommunityGroupCreateScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {isInviteCandidatesLoading ? (
+            {resolvedIsInviteCandidatesLoading ? (
               <View className="items-center px-4 py-8">
                 <ActivityIndicator color={screenPalette.accent} size="small" />
                 <Text
@@ -819,7 +897,9 @@ export default function CommunityGroupCreateScreen() {
                     fontSize: isCompactScreen ? 11.5 : 12.5,
                     fontWeight: "400",
                     includeFontPadding: false,
-                    lineHeight: bodyLineHeightFor(isCompactScreen ? 11.5 : 12.5),
+                    lineHeight: bodyLineHeightFor(
+                      isCompactScreen ? 11.5 : 12.5,
+                    ),
                   }}
                 >
                   Hãy thử tìm bằng tên khác hoặc tài khoản khác.
@@ -984,13 +1064,21 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     backgroundColor: screenPalette.surface,
     borderColor: screenPalette.accentSoft,
-    borderWidth: 1.2,
+    borderWidth: 2,
     marginTop: 16,
     overflow: "hidden",
     padding: 1,
   },
   groupAvatarSparkle: {
     position: "absolute",
+  },
+  groupAvatarCameraPlaceholder: {
+    alignItems: "center",
+    backgroundColor: "#FFF1F7",
+    justifyContent: "center",
+  },
+  groupAvatarImage: {
+    overflow: "hidden",
   },
   groupNameInput: {
     backgroundColor: screenPalette.surface,

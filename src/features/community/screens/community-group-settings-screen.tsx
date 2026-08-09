@@ -1,8 +1,11 @@
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   Text as RNText,
   ScrollView,
@@ -25,6 +28,7 @@ import {
 import {
   getCommunityGroupById,
   updateCommunityGroup,
+  type CommunityGroupImageFile,
   type CommunityGroupPayload,
 } from "../api/group-api";
 import { CommunityGroupStateCard } from "../components/community-group-ui";
@@ -121,7 +125,7 @@ function ApprovalChip({
       }}
     >
       <Text
-        className="text-[13px] font-bold"
+        className="text-[13px] font-semibold"
         style={{
           color: active ? palette.accentStrong : palette.subtleText,
           lineHeight: bodyLineHeightFor(13),
@@ -153,6 +157,8 @@ export default function CommunityGroupSettingsScreen() {
     boolean | null
   >(cachedGroupSession?.requiredApproval ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [groupImageFile, setGroupImageFile] =
+    useState<CommunityGroupImageFile | null>(null);
   const [groupDetail, setGroupDetail] = useState<CommunityGroupPayload | null>(
     null,
   );
@@ -240,6 +246,40 @@ export default function CommunityGroupSettingsScreen() {
     ]),
   );
 
+  const handleSelectGroupImage = async () => {
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Alert.alert(
+        "Cần cấp quyền",
+        "Hãy cho phép truy cập thư viện ảnh để chọn ảnh nhóm.",
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      mediaTypes: ["images"],
+      quality: 0.8,
+    });
+
+    if (result.canceled || result.assets.length === 0) {
+      return;
+    }
+
+    const selectedAsset = result.assets[0];
+
+    if (selectedAsset.uri) {
+      setGroupImageFile({
+        mimeType: selectedAsset.mimeType,
+        name: selectedAsset.fileName,
+        uri: selectedAsset.uri,
+      });
+    }
+  };
+
   const displayGroup = groupDetail ?? cachedGroupSession;
   const normalizedEditableGroupName = editableGroupName.trim();
   const effectiveGroupId = displayGroup?.groupId ?? resolvedGroupId;
@@ -282,6 +322,7 @@ export default function CommunityGroupSettingsScreen() {
         accessToken,
         groupId: effectiveGroupId,
         groupName: normalizedEditableGroupName,
+        imageFile: groupImageFile,
         requiredApproval: editableRequiredApproval,
         tokenType: authSession.tokenType ?? undefined,
       });
@@ -401,8 +442,8 @@ export default function CommunityGroupSettingsScreen() {
           </Pressable>
 
           <Text
-            className="text-[18px] font-bold"
-            style={{ color: palette.primaryText, lineHeight: lineHeightFor(18) }}
+            className="text-[16px] font-bold"
+            style={{ color: palette.primaryText, lineHeight: lineHeightFor(16) }}
           >
             Chỉnh sửa nhóm
           </Text>
@@ -422,8 +463,8 @@ export default function CommunityGroupSettingsScreen() {
               <ActivityIndicator color={palette.accent} size="small" />
             ) : (
               <Text
-                className="text-[16px] font-medium"
-                style={{ color: palette.accentStrong, lineHeight: lineHeightFor(16) }}
+                className="text-[13px] font-semibold"
+                style={{ color: palette.accentStrong, lineHeight: lineHeightFor(13) }}
               >
                 Lưu
               </Text>
@@ -457,25 +498,78 @@ export default function CommunityGroupSettingsScreen() {
           </View>
         ) : null}
 
-        <FieldShell>
-          <Text
-            className="text-[12px]"
-            style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(12) }}
-          >
-            Tên nhóm
-          </Text>
-          <TextInput
-            className="mt-1 px-0 py-0 text-[16px] font-medium"
-            onChangeText={setEditableGroupName}
-            placeholder="Nhập tên nhóm"
-            placeholderTextColor="#AAA3B2"
-            style={{
-              color: palette.primaryText,
-              minHeight: 30,
+        <View className="flex-row items-center">
+          <Pressable
+            className="h-20 w-20 items-center justify-center overflow-hidden rounded-[22px]"
+            onPress={() => {
+              void handleSelectGroupImage();
             }}
-            value={editableGroupName}
-          />
-        </FieldShell>
+            style={({ pressed }) => ({
+              backgroundColor: palette.accentSoft,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            {groupImageFile?.uri || readMeaningfulText(displayGroup.imageUrl) ? (
+              <Image
+                contentFit="cover"
+                source={{
+                  uri: groupImageFile?.uri ?? (displayGroup.imageUrl as string),
+                }}
+                style={{ height: "100%", width: "100%" }}
+              />
+            ) : (
+              <SymbolView
+                name={{
+                  android: "image",
+                  ios: "photo.fill",
+                  web: "image",
+                }}
+                size={26}
+                tintColor={palette.accentStrong}
+              />
+            )}
+
+            <View
+              className="absolute bottom-1 right-1 h-6 w-6 items-center justify-center rounded-full border-2 border-white"
+              style={{ backgroundColor: palette.accentStrong }}
+            >
+              <SymbolView
+                name={{
+                  android: "edit",
+                  ios: "pencil",
+                  web: "edit",
+                }}
+                size={11}
+                tintColor="#FFFFFF"
+              />
+            </View>
+          </Pressable>
+
+          <View className="ml-3 flex-1">
+            <Text
+              className="px-1 text-[16px] font-semibold"
+              style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(16) }}
+            >
+              Tên nhóm
+            </Text>
+
+            <View className="mt-1.5">
+              <FieldShell>
+                <TextInput
+                  className="px-0 py-0 text-[14px] font-normal"
+                  onChangeText={setEditableGroupName}
+                  placeholder="Nhập tên nhóm"
+                  placeholderTextColor="#AAA3B2"
+                  style={{
+                    color: palette.primaryText,
+                    minHeight: 30,
+                  }}
+                  value={editableGroupName}
+                />
+              </FieldShell>
+            </View>
+          </View>
+        </View>
 
         <Text
           className="mt-2 px-1 text-[12px]"
@@ -486,30 +580,28 @@ export default function CommunityGroupSettingsScreen() {
         </Text>
 
         <View className="mt-4">
-          <FieldShell>
-            <Text
-              className="text-[12px]"
-              style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(12) }}
-            >
-              Yêu cầu quyền tham gia
-            </Text>
-            <View className="mt-3 flex-row gap-2">
-              <ApprovalChip
-                active={editableRequiredApproval === true}
-                label="Bật duyệt"
-                onPress={() => {
-                  setEditableRequiredApproval(true);
-                }}
-              />
-              <ApprovalChip
-                active={editableRequiredApproval === false}
-                label="Tắt duyệt"
-                onPress={() => {
-                  setEditableRequiredApproval(false);
-                }}
-              />
-            </View>
-          </FieldShell>
+          <Text
+            className="px-1 text-[16px] font-semibold"
+            style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(16) }}
+          >
+            Yêu cầu quyền tham gia
+          </Text>
+          <View className="mt-1.5 flex-row gap-2">
+            <ApprovalChip
+              active={editableRequiredApproval === true}
+              label="Bật duyệt"
+              onPress={() => {
+                setEditableRequiredApproval(true);
+              }}
+            />
+            <ApprovalChip
+              active={editableRequiredApproval === false}
+              label="Tắt duyệt"
+              onPress={() => {
+                setEditableRequiredApproval(false);
+              }}
+            />
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
