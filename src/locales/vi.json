@@ -1035,7 +1035,7 @@
         "address": "Địa chỉ shop *",
         "addressPlaceholder": "Nhập tên đường, địa điểm hoặc tên shop",
         "selectLocation": "Chọn vị trí shop",
-        "locationSelected": "✅ Đã chọn vị trí shop",
+        "locationSelected": "Đã chọn vị trí shop",
         "tapToSelect": "Chạm vào bản đồ để chọn vị trí shop",
         "selectOnMap": "Chọn vị trí trên bản đồ",
         "reselectLocation": "Chọn lại vị trí",
@@ -1044,10 +1044,10 @@
       },
       "verification": {
         "title": "Hồ sơ xác minh",
-        "selectDocument": "📄 Chọn ảnh giấy tờ xác minh *",
-        "documentSelected": "✅ Đã chọn: {{name}}",
-        "selectShopImages": "🖼️ Chọn thêm ảnh shop (tuỳ chọn)",
-        "imagesSelected": "🖼️ Đã chọn {{count}} ảnh shop"
+        "selectDocument": "Chọn ảnh giấy tờ xác minh *",
+        "documentSelected": "Đã chọn: {{name}}",
+        "selectShopImages": "Chọn thêm ảnh shop (tuỳ chọn)",
+        "imagesSelected": "Đã chọn {{count}} ảnh shop"
       },
       "payment": {
         "method": "Phương thức thanh toán",
@@ -1066,7 +1066,7 @@
       "actions": {
         "continueToPayment": "Tiếp tục đến bước thanh toán",
         "backToInfo": "Quay lại thông tin đăng ký",
-        "registerAndPay": "🏪 Đăng ký và thanh toán"
+        "registerAndPay": "Đăng ký và thanh toán"
       },
       "status": {
         "notRegistered": "Chưa đăng ký",

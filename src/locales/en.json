@@ -1020,7 +1020,7 @@
         "address": "Shop Address *",
         "addressPlaceholder": "Enter street name, location or shop name",
         "selectLocation": "Select shop location",
-        "locationSelected": "✅ Shop location selected",
+        "locationSelected": "Shop location selected",
         "tapToSelect": "Tap on map to select shop location",
         "selectOnMap": "Select location on map",
         "reselectLocation": "Select location again",
@@ -1029,10 +1029,10 @@
       },
       "verification": {
         "title": "Verification Documents",
-        "selectDocument": "📄 Select verification document photo *",
-        "documentSelected": "✅ Selected: {{name}}",
-        "selectShopImages": "🖼️ Add shop photos (optional)",
-        "imagesSelected": "🖼️ Selected {{count}} shop photos"
+        "selectDocument": "Select verification document photo *",
+        "documentSelected": "Selected: {{name}}",
+        "selectShopImages": "Add shop photos (optional)",
+        "imagesSelected": "Selected {{count}} shop photos"
       },
       "payment": {
         "method": "Payment Method",
@@ -1051,7 +1051,7 @@
       "actions": {
         "continueToPayment": "Continue to payment step",
         "backToInfo": "Back to registration info",
-        "registerAndPay": "🏪 Register and Pay"
+        "registerAndPay": "Register and Pay"
       },
       "status": {
         "notRegistered": "Not Registered",
