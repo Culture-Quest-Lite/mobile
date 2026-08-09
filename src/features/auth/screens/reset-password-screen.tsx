@@ -2,6 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Image,
   KeyboardAvoidingView,
@@ -55,6 +56,7 @@ const buttonShadowStyle = {
 } as const;
 
 export default function ResetPasswordScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { token: tokenParam } = useLocalSearchParams<{ token?: string }>();
   const {
@@ -172,7 +174,7 @@ export default function ResetPasswordScreen() {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "Không thể đổi mật khẩu. Vui lòng thử lại.",
+          : t("auth.resetPassword.errorCannotReset"),
       );
     } finally {
       setIsSubmitting(false);
@@ -269,10 +271,10 @@ export default function ResetPasswordScreen() {
                         className="text-center font-extrabold text-[#EB489B]"
                         style={{ fontSize: titleSize }}
                       >
-                        Đổi mật khẩu thành công
+                        {t("auth.resetPassword.successTitle")}
                       </Text>
                       <Text className="text-center text-[14px] leading-6 text-[#8E869A]">
-                        Hãy đăng nhập lại bằng mật khẩu mới của bạn.
+                        {t("auth.resetPassword.successSubtitle")}
                       </Text>
                     </View>
 
@@ -290,7 +292,7 @@ export default function ResetPasswordScreen() {
                           className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
                         >
                           <Text className="text-[16px] font-extrabold text-white">
-                            Về đăng nhập
+                            {t("auth.resetPassword.backToLogin")}
                           </Text>
                         </LinearGradient>
                       </Pressable>
@@ -303,12 +305,12 @@ export default function ResetPasswordScreen() {
                         className="font-extrabold text-[#EB489B]"
                         style={{ fontSize: titleSize }}
                       >
-                        Đặt lại mật khẩu
+                        {t("auth.resetPassword.title")}
                       </Text>
                       <Text className="text-center text-[14px] leading-6 text-[#8E869A]">
                         {token
-                          ? "Nhập mật khẩu mới cho tài khoản của bạn"
-                          : "Liên kết đổi mật khẩu không hợp lệ hoặc đã hết hạn"}
+                          ? t("auth.resetPassword.subtitle")
+                          : t("auth.resetPassword.invalidTokenSubtitle")}
                       </Text>
                     </View>
 
@@ -322,12 +324,14 @@ export default function ResetPasswordScreen() {
                             editable={!isSubmitting}
                             errorMessage={newPasswordError}
                             inputClassName={fieldHeightClassName}
-                            label="Mật khẩu mới"
-                            placeholder="Nhập mật khẩu mới"
+                            label={t("auth.resetPassword.newPassword")}
+                            placeholder={t("auth.resetPassword.newPasswordPlaceholder")}
                             rightAccessory={
                               <Pressable
                                 accessibilityLabel={
-                                  isNewPasswordVisible ? "Ẩn mật khẩu" : "Hiện mật khẩu"
+                                  isNewPasswordVisible
+                                    ? t("auth.login.hidePassword")
+                                    : t("auth.login.showPassword")
                                 }
                                 className="h-9 w-9 items-center justify-center"
                                 disabled={isSubmitting}
@@ -368,16 +372,18 @@ export default function ResetPasswordScreen() {
                             editable={!isSubmitting}
                             errorMessage={confirmPasswordError}
                             inputClassName={fieldHeightClassName}
-                            label="Nhập lại mật khẩu mới"
+                            label={t("auth.resetPassword.confirmPassword")}
                             onSubmitEditing={() => {
                               void handleSubmit();
                             }}
-                            placeholder="Nhập lại mật khẩu mới"
+                            placeholder={t("auth.resetPassword.confirmPasswordPlaceholder")}
                             returnKeyType="done"
                             rightAccessory={
                               <Pressable
                                 accessibilityLabel={
-                                  isConfirmPasswordVisible ? "Ẩn mật khẩu" : "Hiện mật khẩu"
+                                  isConfirmPasswordVisible
+                                    ? t("auth.login.hidePassword")
+                                    : t("auth.login.showPassword")
                                 }
                                 className="h-9 w-9 items-center justify-center"
                                 disabled={isSubmitting}
@@ -431,8 +437,8 @@ export default function ResetPasswordScreen() {
                             >
                               <Text className="text-[16px] font-extrabold text-white">
                                 {isSubmitting
-                                  ? "Đang đổi mật khẩu..."
-                                  : "Đổi mật khẩu"}
+                                  ? t("auth.resetPassword.submitting")
+                                  : t("auth.resetPassword.submitButton")}
                               </Text>
                             </LinearGradient>
                           </Pressable>
@@ -449,7 +455,7 @@ export default function ResetPasswordScreen() {
                           className={`${secondaryButtonHeightClassName} items-center justify-center rounded-[18px] border border-[#F2E4EB] bg-[#FFF9FC]`}
                         >
                           <Text className="text-[15px] font-bold text-[#F58752]">
-                            Gửi lại email khôi phục
+                            {t("auth.resetPassword.resendRecoveryEmail")}
                           </Text>
                         </Pressable>
                       )}

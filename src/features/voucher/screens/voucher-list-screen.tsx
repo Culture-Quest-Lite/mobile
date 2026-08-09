@@ -18,6 +18,7 @@ import {
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 import {
+  filterVouchersByKeyword,
   getAvailableVouchers,
   getVoucherImage,
   type Voucher,
@@ -67,7 +68,8 @@ export default function VoucherListScreen() {
           { search: keyword, size: 50 },
           token,
         );
-        setItems(page.content ?? []);
+        // Backend `/available` chưa lọc theo từ khoá nên phải lọc lại ở client.
+        setItems(filterVouchersByKeyword(page.content ?? [], keyword));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Không thể tải voucher.");
       } finally {

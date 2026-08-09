@@ -47,7 +47,8 @@ import {
   type Href,
 } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -469,6 +470,7 @@ function buildComposerIdentityFromSession(
   isAuthenticated: boolean,
   displayName: string,
   username: string | null,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): ComposerIdentity {
   const normalizedDisplayName = readMeaningfulText(displayName);
   const normalizedUsername =
@@ -482,8 +484,10 @@ function buildComposerIdentityFromSession(
     accountKey,
     avatarUri: null,
     displayName: isAuthenticated
-      ? (normalizedDisplayName ?? normalizedUsername ?? "Bạn")
-      : "Khách",
+      ? (normalizedDisplayName ??
+        normalizedUsername ??
+        t("community.feed.composerIdentity.you"))
+      : t("community.feed.composerIdentity.guest"),
     username: normalizedUsername,
   };
 }
@@ -574,18 +578,21 @@ function dedupeComposerMediaItems(values: ComposerMediaItem[]) {
 
 function mapRouteHotspotToComposerHotspot(
   hotspot: RouteHotspotDto,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): ComposerHotspotOption | null {
   if (!Number.isInteger(hotspot.hotspotId) || hotspot.hotspotId <= 0) {
     return null;
   }
 
   return {
-    address: readMeaningfulText(hotspot.address) ?? "Đang cập nhật địa chỉ",
+    address:
+      readMeaningfulText(hotspot.address) ??
+      t("community.postCompose.addressPendingFallback"),
     distanceLabel: null,
     hotspotId: hotspot.hotspotId,
     hotspotName:
       readMeaningfulText(hotspot.hotspotName) ??
-      `Hotspot #${hotspot.hotspotId}`,
+      t("community.feed.hotspotFallbackName", { id: hotspot.hotspotId }),
     imageUri: getRouteHotspotImageUri(hotspot),
     tagNames: [],
   };
@@ -593,17 +600,18 @@ function mapRouteHotspotToComposerHotspot(
 
 function mapNearbyHotspotToComposerHotspot(
   hotspot: NearbyHotspotDto,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): ComposerHotspotOption {
   return {
     address:
       readMeaningfulText(hotspot.address) ??
       readMeaningfulText(hotspot.description) ??
-      "Đang cập nhật địa chỉ",
+      t("community.postCompose.addressPendingFallback"),
     distanceLabel: null,
     hotspotId: hotspot.hotspotId,
     hotspotName:
       readMeaningfulText(hotspot.hotspotName) ??
-      `Địa điểm #${hotspot.hotspotId}`,
+      t("community.feed.hotspotFallbackName", { id: hotspot.hotspotId }),
     imageUri: getNearbyHotspotImageUri(hotspot),
     tagNames: hotspot.tags
       .map((tag) => readMeaningfulText(tag.tagName))
@@ -612,24 +620,38 @@ function mapNearbyHotspotToComposerHotspot(
   };
 }
 
-function buildRouteMetaLabel(route: RouteDto) {
+function buildRouteMetaLabel(
+  route: RouteDto,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   const segments = [
-    route.hotspots.length > 0 ? `${route.hotspots.length} điểm dừng` : null,
-    route.totalDistance > 0 ? `${route.totalDistance} km` : null,
-    route.estimateTime > 0 ? `${route.estimateTime} phút` : null,
+    route.hotspots.length > 0
+      ? t("community.postCompose.stopsCountLabel", {
+          count: route.hotspots.length,
+        })
+      : null,
+    route.totalDistance > 0
+      ? t("home.stats.distance", { value: route.totalDistance })
+      : null,
+    route.estimateTime > 0
+      ? t("home.stats.duration", { value: route.estimateTime })
+      : null,
   ].filter((segment): segment is string => Boolean(segment));
 
-  return segments.join(" · ") || "Tuyến đường văn hóa";
+  return segments.join(" · ") || t("community.postCompose.routeMetaFallback");
 }
 
-function mapRouteToComposerRoute(route: RouteDto): ComposerRouteOption | null {
+function mapRouteToComposerRoute(
+  route: RouteDto,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): ComposerRouteOption | null {
   if (!Number.isInteger(route.routeId) || route.routeId <= 0) {
     return null;
   }
 
   const mappedHotspots = dedupeHotspots(
     route.hotspots
-      .map(mapRouteHotspotToComposerHotspot)
+      .map((hotspot) => mapRouteHotspotToComposerHotspot(hotspot, t))
       .filter((hotspot): hotspot is ComposerHotspotOption => hotspot !== null),
   );
 
@@ -637,12 +659,13 @@ function mapRouteToComposerRoute(route: RouteDto): ComposerRouteOption | null {
     coverUri: readMeaningfulText(getRouteCoverUrl(route)) ?? defaultImageUri,
     description:
       readMeaningfulText(route.description) ??
-      "Tuyến khám phá từ Culture Quest.",
+      t("community.postCompose.routeDescriptionFallback"),
     hotspots: mappedHotspots,
-    metaLabel: buildRouteMetaLabel(route),
+    metaLabel: buildRouteMetaLabel(route, t),
     routeId: route.routeId,
     routeName:
-      readMeaningfulText(route.routeName) ?? `Tuyến đường #${route.routeId}`,
+      readMeaningfulText(route.routeName) ??
+      t("community.feed.routeFallbackName", { id: route.routeId }),
     tagNames: route.tags
       .map((tag) => readMeaningfulText(tag.tagName))
       .filter((tag): tag is string => Boolean(tag))
@@ -667,21 +690,16 @@ function sortHotspotsByProminence(
 function buildCreatedPostLocationLabel(
   hotspotIds: number[],
   routeIds: number[],
+  t: (key: string, options?: Record<string, unknown>) => string,
 ) {
-  if (hotspotIds.length === 1) {
-    return "1 địa điểm được gắn";
+  if (hotspotIds.length > 0) {
+    return t("community.feed.location.hotspotTagged", {
+      count: hotspotIds.length,
+    });
   }
 
-  if (hotspotIds.length > 1) {
-    return `${hotspotIds.length} địa điểm được gắn`;
-  }
-
-  if (routeIds.length === 1) {
-    return "1 tuyến đường được gắn";
-  }
-
-  if (routeIds.length > 1) {
-    return `${routeIds.length} tuyến đường được gắn`;
+  if (routeIds.length > 0) {
+    return t("community.feed.location.routeTagged", { count: routeIds.length });
   }
 
   return "";
@@ -689,6 +707,7 @@ function buildCreatedPostLocationLabel(
 
 function mapCreatedPostToCommunityFeedPost(
   createdPost: CreatedPostResponse,
+  t: (key: string, options?: Record<string, unknown>) => string,
   options?: {
     fallbackRouteIds?: number[];
     fallbackTagNames?: string[];
@@ -697,7 +716,7 @@ function mapCreatedPostToCommunityFeedPost(
   const author =
     readMeaningfulText(createdPost.displayName) ??
     readMeaningfulText(createdPost.username) ??
-    "Người dùng";
+    t("community.feed.fallbackUserName");
   const mergedRouteIds = Array.from(
     new Set([
       ...(createdPost.routeIds ?? []),
@@ -726,8 +745,8 @@ function mapCreatedPostToCommunityFeedPost(
   const firstMediaItem = mediaItems[0] ?? null;
   const statusLabel =
     readMeaningfulText(createdPost.status)?.toUpperCase() === "PENDING"
-      ? "Đang chờ duyệt"
-      : "Cập nhật mới từ cộng đồng";
+      ? t("community.groupsScreen.status.pending")
+      : t("community.feed.defaultMood");
   const visibilityValue =
     readMeaningfulText(createdPost.visibility) ?? "PUBLIC";
 
@@ -738,21 +757,23 @@ function mapCreatedPostToCommunityFeedPost(
     initials: getNameInitials(author),
     role: readMeaningfulText(createdPost.username)
       ? `@${createdPost.username.trim()}`
-      : "Explorer community",
-    time: "Vừa xong",
+      : t("community.feed.fallbackRole"),
+    time: t("community.time.justNow"),
     caption:
-      readMeaningfulText(createdPost.content) ?? "Bài viết mới từ cộng đồng.",
+      readMeaningfulText(createdPost.content) ??
+      t("community.feed.fallbackCaption"),
     location: buildCreatedPostLocationLabel(
       createdPost.hotspotIds,
       mergedRouteIds,
+      t,
     ),
     mood: `${statusLabel} · ${getPostVisibilityLabel(visibilityValue)}`,
     badge:
       createdPost.hotspotIds.length > 0
-        ? "Hotspot"
+        ? t("community.feed.badge.location")
         : mergedRouteIds.length > 0
-          ? "Route"
-          : "Newsfeed",
+          ? t("community.feed.badge.route")
+          : t("community.feed.badge.feed"),
     hotScore: "0",
     views: formatCompactCount(createdPost.pointRemaining),
     likes: formatCompactCount(createdPost.likeCount),
@@ -846,6 +867,8 @@ function MediaAddTile({
   count: number;
   onPress: () => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <Pressable
       className="items-center justify-center rounded-[16px] border border-dashed bg-[#FFF7FA]"
@@ -870,7 +893,9 @@ function MediaAddTile({
         />
       </View>
       <Text className="mt-2 text-center text-[10px] font-normal text-[#F43F78]">
-        {count === 0 ? "Thêm ảnh/video" : "Thêm nữa"}
+        {count === 0
+          ? t("community.postCompose.addMediaLabel")
+          : t("community.postCompose.addMoreMediaLabel")}
       </Text>
     </Pressable>
   );
@@ -1147,6 +1172,8 @@ function RoutePickerSheet({
   selectedRouteId,
   visible,
 }: RoutePickerSheetProps) {
+  const { t } = useTranslation();
+
   return (
     <Modal
       animationType="slide"
@@ -1173,7 +1200,7 @@ function RoutePickerSheet({
               <View className="mt-3 flex-row items-center justify-between">
                 <View className="w-10" />
                 <Text className="text-[15px] font-medium text-[#111827]">
-                  Chọn tuyến đường
+                  {t("community.postCompose.selectRouteTitle")}
                 </Text>
                 <Pressable
                   className="h-9 w-9 items-center justify-center rounded-full bg-[#FAFAFB]"
@@ -1193,7 +1220,7 @@ function RoutePickerSheet({
 
               <SheetSearchField
                 onChangeText={onChangeQuery}
-                placeholder="Tìm tuyến đường..."
+                placeholder={t("community.postCompose.searchRoutePlaceholder")}
                 value={query}
               />
 
@@ -1203,7 +1230,7 @@ function RoutePickerSheet({
                   onPress={onClearSelection}
                 >
                   <Text className="text-[11px] font-normal text-[#F43F78]">
-                    Bỏ chọn tuyến đường
+                    {t("community.postCompose.clearRouteSelection")}
                   </Text>
                 </Pressable>
               ) : null}
@@ -1212,7 +1239,7 @@ function RoutePickerSheet({
                 <View className="flex-1 items-center justify-center py-8">
                   <ActivityIndicator color="#F43F78" />
                   <Text className="mt-2 text-[12px] font-normal text-[#8B7280]">
-                    Đang tải tuyến đường...
+                    {t("community.postCompose.loadingRoutes")}
                   </Text>
                 </View>
               ) : errorMessage ? (
@@ -1291,7 +1318,7 @@ function RoutePickerSheet({
                   ) : (
                     <View className="items-center rounded-[22px] border border-dashed border-[#E5E7EB] px-4 py-8">
                       <Text className="text-[13px] font-normal text-[#8B7280]">
-                        Không tìm thấy tuyến đường phù hợp.
+                        {t("community.postCompose.noRoutesFound")}
                       </Text>
                     </View>
                   )}
@@ -1319,6 +1346,7 @@ function HotspotPickerSheet({
   selectedHotspotIds,
   visible,
 }: HotspotPickerSheetProps) {
+  const { t } = useTranslation();
   const selectedIdSet = useMemo(
     () => new Set(selectedHotspotIds),
     [selectedHotspotIds],
@@ -1350,7 +1378,7 @@ function HotspotPickerSheet({
               <View className="mt-3 flex-row items-center justify-between">
                 <View className="w-10" />
                 <Text className="text-[15px] font-medium text-[#111827]">
-                  Chọn địa điểm
+                  {t("community.postCompose.selectHotspotTitle")}
                 </Text>
                 <Pressable
                   className="h-9 w-9 items-center justify-center rounded-full bg-[#FAFAFB]"
@@ -1370,7 +1398,7 @@ function HotspotPickerSheet({
 
               <SheetSearchField
                 onChangeText={onChangeQuery}
-                placeholder="Tìm tên địa điểm..."
+                placeholder={t("community.postCompose.searchHotspotPlaceholder")}
                 value={query}
               />
 
@@ -1379,8 +1407,8 @@ function HotspotPickerSheet({
                   <ActivityIndicator color="#F43F78" />
                   <Text className="mt-2 text-[12px] font-normal text-[#8B7280]">
                     {isShowingSearchResults
-                      ? "Đang tìm địa điểm..."
-                      : "Đang tải địa điểm..."}
+                      ? t("community.postCompose.searchingHotspots")
+                      : t("community.postCompose.loadingHotspots")}
                   </Text>
                 </View>
               ) : null}
@@ -1476,8 +1504,8 @@ function HotspotPickerSheet({
                     <View className="items-center rounded-[22px] border border-dashed border-[#E5E7EB] px-4 py-8">
                       <Text className="text-[13px] font-normal text-[#8B7280]">
                         {isShowingSearchResults
-                          ? "Không tìm thấy địa điểm phù hợp."
-                          : "Chưa có địa điểm để chọn."}
+                          ? t("community.postCompose.noHotspotsFoundSearch")
+                          : t("community.postCompose.noHotspotsAvailable")}
                       </Text>
                     </View>
                   )}
@@ -1486,7 +1514,9 @@ function HotspotPickerSheet({
 
               <View className="mt-3 flex-row items-center justify-between gap-3 border-t border-[#F1F5F9] pt-3">
                 <Text className="text-[12px] font-normal text-[#111827]">
-                  Đã chọn {selectedHotspotIds.length} địa điểm
+                  {t("community.postCompose.selectedHotspotCountLabel", {
+                    count: selectedHotspotIds.length,
+                  })}
                 </Text>
 
                 <Pressable
@@ -1504,7 +1534,7 @@ function HotspotPickerSheet({
                     }}
                   >
                     <Text className="text-center text-[13px] font-normal text-white">
-                      Xác nhận
+                      {t("common.confirm")}
                     </Text>
                   </LinearGradient>
                 </Pressable>
@@ -1528,6 +1558,8 @@ function TagPickerSheet({
   suggestedTags,
   visible,
 }: TagPickerSheetProps) {
+  const { t } = useTranslation();
+
   return (
     <Modal
       animationType="slide"
@@ -1554,7 +1586,7 @@ function TagPickerSheet({
               <View className="mt-3 flex-row items-center justify-between">
                 <View className="w-10" />
                 <Text className="text-[15px] font-medium text-[#111827]">
-                  Chọn thẻ
+                  {t("community.postCompose.selectTagTitle")}
                 </Text>
                 <Pressable
                   className="h-9 w-9 items-center justify-center rounded-full bg-[#FAFAFB]"
@@ -1580,7 +1612,7 @@ function TagPickerSheet({
                   className="flex-1 text-[13px] text-[#111827]"
                   onChangeText={onChangeDraft}
                   onSubmitEditing={onAddTag}
-                  placeholder="Nhập tag..."
+                  placeholder={t("community.postCompose.tagInputPlaceholder")}
                   placeholderTextColor="#9CA3AF"
                   returnKeyType="done"
                   value={draft}
@@ -1590,7 +1622,7 @@ function TagPickerSheet({
                   onPress={onAddTag}
                 >
                   <Text className="text-[11px] font-normal text-[#F43F78]">
-                    Thêm
+                    {t("community.postCompose.addTagAction")}
                   </Text>
                 </Pressable>
               </View>
@@ -1598,7 +1630,7 @@ function TagPickerSheet({
               {selectedTags.length > 0 ? (
                 <View className="mt-4">
                   <Text className="text-[12px] font-normal text-[#6B7280]">
-                    Đã chọn
+                    {t("community.postCompose.selectedLabel")}
                   </Text>
                   <View className="mt-2 flex-row flex-wrap gap-2">
                     {selectedTags.map((tagName) => (
@@ -1622,7 +1654,7 @@ function TagPickerSheet({
                 showsVerticalScrollIndicator={false}
               >
                 <Text className="text-[12px] font-normal text-[#6B7280]">
-                  Gợi ý
+                  {t("community.postCompose.suggestedLabel")}
                 </Text>
 
                 {suggestedTags.length > 0 ? (
@@ -1641,7 +1673,7 @@ function TagPickerSheet({
                 ) : (
                   <View className="mt-3 rounded-[14px] border border-dashed border-[#E5E7EB] px-4 py-6">
                     <Text className="text-center text-[12px] font-normal text-[#8B7280]">
-                      Chưa có thẻ gợi ý.
+                      {t("community.postCompose.noSuggestedTags")}
                     </Text>
                   </View>
                 )}
@@ -1649,7 +1681,9 @@ function TagPickerSheet({
 
               <View className="mt-3 flex-row items-center justify-between gap-3 border-t border-[#F1F5F9] pt-3">
                 <Text className="text-[12px] font-normal text-[#111827]">
-                  Đã chọn {selectedTags.length} thẻ
+                  {t("community.postCompose.selectedTagCountLabel", {
+                    count: selectedTags.length,
+                  })}
                 </Text>
 
                 <Pressable
@@ -1667,7 +1701,7 @@ function TagPickerSheet({
                     }}
                   >
                     <Text className="text-center text-[13px] font-normal text-white">
-                      Xác nhận
+                      {t("common.confirm")}
                     </Text>
                   </LinearGradient>
                 </Pressable>
@@ -1681,6 +1715,7 @@ function TagPickerSheet({
 }
 
 export default function CommunityPostComposeScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const authSession = useAuthSession();
@@ -1700,6 +1735,7 @@ export default function CommunityPostComposeScreen() {
     authSession.isAuthenticated,
     authSession.displayName,
     authSession.username,
+    t,
   );
   const [composerIdentity, setComposerIdentity] = useState<ComposerIdentity>(
     fallbackComposerIdentity,
@@ -1780,14 +1816,20 @@ export default function CommunityPostComposeScreen() {
     (hotspot) => hotspot.hotspotId,
   );
   const contentError = !trimmedDraftText
-    ? "Hãy nhập nội dung cho bài viết."
+    ? t("community.postCompose.contentRequiredError")
     : trimmedDraftText.length < minPostLength
-      ? `Nội dung cần ít nhất ${minPostLength} ký tự (đang ${trimmedDraftText.length}).`
+      ? t("community.postCompose.contentTooShortError", {
+          min: minPostLength,
+          current: trimmedDraftText.length,
+        })
       : composedDraftLength > maxPostLength
-        ? `Nội dung kèm ${selectedTags.length} thẻ đang vượt ${maxPostLength} ký tự. Hãy rút gọn hoặc bỏ bớt thẻ.`
+        ? t("community.postCompose.contentTooLongError", {
+            tagCount: selectedTags.length,
+            max: maxPostLength,
+          })
         : null;
   const authError = !authSession.isAuthenticated
-    ? "Bạn cần đăng nhập để đăng bài viết cộng đồng."
+    ? t("community.postCompose.loginRequiredSubmitMessage")
     : null;
   const submitDisabledReason = authError ?? contentError;
   const visibleContentError = hasAttemptedSubmit ? contentError : null;
@@ -1799,16 +1841,21 @@ export default function CommunityPostComposeScreen() {
   const routeSummaryLabel = selectedRoute?.routeName ?? "Chọn tuyến đường";
   const hotspotSummaryLabel =
     selectedHotspots.length === 0
-      ? "Chọn địa điểm liên quan"
+      ? t("community.postCompose.selectHotspotSummary")
       : selectedHotspots.length === 1
-        ? (selectedHotspots[0]?.hotspotName ?? "1 địa điểm")
-        : `${selectedHotspots.length} địa điểm đã chọn`;
+        ? (selectedHotspots[0]?.hotspotName ??
+          t("community.postCompose.oneHotspotLabel"))
+        : t("community.postCompose.hotspotSelectedCountLabel", {
+            count: selectedHotspots.length,
+          });
   const tagSummaryLabel =
     selectedTags.length === 0
-      ? "Thêm thẻ"
+      ? t("community.postCompose.addTagSummary")
       : selectedTags.length === 1
         ? buildHashtagLabel(selectedTags[0] ?? "")
-        : `${selectedTags.length} thẻ`;
+        : t("community.postCompose.tagSelectedCountLabel", {
+            count: selectedTags.length,
+          });
   const activeTagNames = useMemo(
     () => activeTags.map((tag) => tag.tagName),
     [activeTags],
@@ -2143,7 +2190,7 @@ export default function CommunityPostComposeScreen() {
           const status = readMeaningfulText(route.status)?.toUpperCase();
           return !status || status === "PUBLISHED" || status === "APPROVED";
         })
-        .map(mapRouteToComposerRoute)
+        .map((route) => mapRouteToComposerRoute(route, t))
         .filter((route): route is ComposerRouteOption => route !== null);
 
       setRouteOptions(mappedRoutes);
@@ -2151,12 +2198,12 @@ export default function CommunityPostComposeScreen() {
       setRouteError(
         error instanceof Error
           ? error.message
-          : "Không thể tải danh sách tuyến đường.",
+          : t("community.postCompose.loadRoutesErrorFallback"),
       );
     } finally {
       setIsRouteLoading(false);
     }
-  }, [resolveOptionalAuth]);
+  }, [resolveOptionalAuth, t]);
 
   const loadHotspotOptions = useCallback(async () => {
     setIsHotspotLoading(true);
@@ -2170,19 +2217,19 @@ export default function CommunityPostComposeScreen() {
         dedupeHotspots(
           [...hotspots]
             .sort(sortHotspotsByProminence)
-            .map((hotspot) => mapNearbyHotspotToComposerHotspot(hotspot)),
+            .map((hotspot) => mapNearbyHotspotToComposerHotspot(hotspot, t)),
         ),
       );
     } catch (error) {
       setHotspotError(
         error instanceof Error
           ? error.message
-          : "Không thể tải danh sách địa điểm.",
+          : t("community.postCompose.loadHotspotsErrorFallback"),
       );
     } finally {
       setIsHotspotLoading(false);
     }
-  }, [resolveOptionalAuth]);
+  }, [resolveOptionalAuth, t]);
 
   useEffect(() => {
     if (activeSheet !== "hotspot") {
@@ -2225,7 +2272,7 @@ export default function CommunityPostComposeScreen() {
 
         const mappedHotspots = dedupeHotspots(
           response.content.map((hotspot) =>
-            mapNearbyHotspotToComposerHotspot(hotspot),
+            mapNearbyHotspotToComposerHotspot(hotspot, t),
           ),
         ).filter((hotspot) => matchesHotspotSearchQuery(hotspot, keyword));
 
@@ -2236,7 +2283,9 @@ export default function CommunityPostComposeScreen() {
         }
 
         setHotspotError(
-          error instanceof Error ? error.message : "Không thể tìm địa điểm.",
+          error instanceof Error
+            ? error.message
+            : t("community.postCompose.searchHotspotsErrorFallback"),
         );
         setHotspotSearchResults(
           sortHotspotsForSearch(
@@ -2257,11 +2306,13 @@ export default function CommunityPostComposeScreen() {
       isActive = false;
       clearTimeout(timeout);
     };
-  }, [activeSheet, hotspotOptions, hotspotSearchQuery, resolveOptionalAuth]);
+  }, [activeSheet, hotspotOptions, hotspotSearchQuery, resolveOptionalAuth, t]);
 
   async function handlePickMedia() {
-    if (totalMediaCount >= maxMediaCount) {
-      appToast.info(`Bạn chỉ thêm được tối đa ${maxMediaCount} ảnh/video.`);
+    if (selectedMedia.length >= maxMediaCount) {
+      appToast.info(
+        t("community.postCompose.maxMediaInfo", { count: maxMediaCount }),
+      );
       return;
     }
 
@@ -2270,8 +2321,8 @@ export default function CommunityPostComposeScreen() {
 
     if (!permissionResult.granted) {
       Alert.alert(
-        "Cần cấp quyền",
-        "Hãy cho phép truy cập thư viện để thêm ảnh hoặc video vào bài viết.",
+        t("community.postCompose.permissionRequiredTitle"),
+        t("community.postCompose.permissionRequiredMessage"),
       );
       return;
     }
@@ -2561,8 +2612,8 @@ export default function CommunityPostComposeScreen() {
 
     if (!authSession.isAuthenticated) {
       Alert.alert(
-        "Cần đăng nhập",
-        "Bạn cần đăng nhập để đăng bài viết cộng đồng.",
+        t("community.feed.loginRequiredTitle"),
+        t("community.postCompose.loginRequiredSubmitMessage"),
       );
       return;
     }
@@ -2578,8 +2629,8 @@ export default function CommunityPostComposeScreen() {
 
     if (!accessToken) {
       Alert.alert(
-        "Phiên đăng nhập hết hạn",
-        "Vui lòng đăng nhập lại trước khi đăng bài viết cộng đồng.",
+        t("community.feed.sessionExpiredTitle"),
+        t("community.postCompose.sessionExpiredSubmitMessage"),
       );
       return;
     }
@@ -2625,6 +2676,7 @@ export default function CommunityPostComposeScreen() {
       if (shouldAppearInCommunityFeed) {
         const communityFeedPost = mapCreatedPostToCommunityFeedPost(
           createdPost,
+          t,
           {
             fallbackRouteIds,
             fallbackTagNames,
@@ -2647,7 +2699,7 @@ export default function CommunityPostComposeScreen() {
       const submitErrorMessage =
         error instanceof Error
           ? error.message
-          : "Đã có lỗi xảy ra khi gửi bài viết cộng đồng.";
+          : t("community.postCompose.submitErrorFallback");
 
       setPostSubmitError(submitErrorMessage);
       appToast.error(submitErrorMessage);
@@ -2691,7 +2743,7 @@ export default function CommunityPostComposeScreen() {
             </Pressable>
 
             <Text className="text-[18px] font-semibold text-[#111827]">
-              {isEditMode ? "Chỉnh sửa bài viết" : "Tạo bài viết"}
+              {t("community.posts.create")}
             </Text>
 
             <View className="h-9 w-9" />
@@ -2765,7 +2817,7 @@ export default function CommunityPostComposeScreen() {
                     setPostSubmitError(null);
                   }
                 }}
-                placeholder="Bạn đang nghĩ gì?"
+                placeholder={t("community.postCompose.contentPlaceholder")}
                 placeholderTextColor="#A09AA8"
                 style={{
                   color: "#111827",
@@ -2789,7 +2841,7 @@ export default function CommunityPostComposeScreen() {
             <View className="mt-4">
               <View className="flex-row items-center justify-between">
                 <Text className="text-[13px] font-medium text-[#111827]">
-                  Ảnh / video
+                  {t("community.postCompose.mediaSectionTitle")}
                 </Text>
                 <Text className="text-[11px] font-normal text-[#9CA3AF]">
                   {totalMediaCount}/{maxMediaCount}
@@ -2869,9 +2921,10 @@ export default function CommunityPostComposeScreen() {
                   }}
                   onPress={openRouteSheet}
                   subtitle={
-                    selectedRoute?.metaLabel ?? "Gắn bài viết với một lộ trình"
+                    selectedRoute?.metaLabel ??
+                    t("community.postCompose.routeSubtitleFallback")
                   }
-                  title="Chọn tuyến đường"
+                  title={t("community.postCompose.selectRouteTitle")}
                   value={routeSummaryLabel}
                 />
 
@@ -2898,10 +2951,12 @@ export default function CommunityPostComposeScreen() {
                   onPress={openHotspotSheet}
                   subtitle={
                     selectedHotspots.length > 0
-                      ? `Đã chọn ${selectedHotspots.length} địa điểm`
-                      : "Chọn địa điểm liên quan đến bài viết"
+                      ? t("community.postCompose.selectedHotspotCountLabel", {
+                          count: selectedHotspots.length,
+                        })
+                      : t("community.postCompose.hotspotSubtitleFallback")
                   }
-                  title="Gắn địa điểm"
+                  title={t("community.postCompose.attachHotspotTitle")}
                   value={hotspotSummaryLabel}
                 />
 
@@ -2936,10 +2991,12 @@ export default function CommunityPostComposeScreen() {
                   onPress={openTagSheet}
                   subtitle={
                     selectedTags.length > 0
-                      ? `Đã chọn ${selectedTags.length} thẻ`
-                      : "Thêm các thẻ liên quan"
+                      ? t("community.postCompose.selectedTagCountLabel", {
+                          count: selectedTags.length,
+                        })
+                      : t("community.postCompose.tagSubtitleFallback")
                   }
-                  title="Chọn thẻ"
+                  title={t("community.postCompose.selectTagTitle")}
                   value={tagSummaryLabel}
                 />
 
@@ -3031,7 +3088,7 @@ export default function CommunityPostComposeScreen() {
                       <ActivityIndicator color="#FFFFFF" size="small" />
                     ) : (
                       <Text className="text-[14px] font-normal text-white">
-                        {isEditMode ? "Cập nhật" : "Đăng bài"}
+                        {t("community.postCompose.submitButton")}
                       </Text>
                     )}
                   </View>
@@ -3042,7 +3099,11 @@ export default function CommunityPostComposeScreen() {
             <View className="mt-1.5 flex-row items-center justify-between gap-4">
               <Text className="flex-1 text-[10px] font-normal text-[#9CA3AF]">
                 {submitDisabledReason ??
-                  `Sẽ gắn ${routeIdsForSubmit.length} tuyến đường, ${hotspotIdsForSubmit.length} địa điểm và ${selectedTags.length} thẻ.`}
+                  t("community.postCompose.submitSummary", {
+                    routes: routeIdsForSubmit.length,
+                    hotspots: hotspotIdsForSubmit.length,
+                    tags: selectedTags.length,
+                  })}
               </Text>
               <Text className="text-[10px] font-normal text-[#9CA3AF]">
                 {totalMediaCount}/{maxMediaCount}

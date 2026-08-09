@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 import { getValidAccessToken, useAuthSession } from '@/features/auth/hooks/use-auth-session';
 import { AppMap } from '@/features/map/components/app-map';
@@ -119,8 +120,6 @@ type MissionCard = {
   subtitle: string;
 };
 
-const categories = ['Tất cả', 'Lịch sử', 'Kiến trúc', 'Văn hoá', 'Ẩm thực', 'Di sản'];
-
 const missions: MissionCard[] = [
   {
     icon: { ios: 'figure.walk', android: 'directions_walk', web: 'directions_walk' },
@@ -161,16 +160,18 @@ const cardShadowStyle = {
   elevation: 7,
 } as const;
 
-function getDifficultyLabel(difficulty?: string) {
+function getDifficultyLabel(difficulty?: string, t?: (key: string) => string) {
+  if (!t) return difficulty || 'Easy';
+
   switch (difficulty?.toUpperCase()) {
     case 'EASY':
-      return 'Dễ';
+      return t('home.difficulty.easy');
     case 'MEDIUM':
-      return 'Vừa';
+      return t('home.difficulty.medium');
     case 'HARD':
-      return 'Khó';
+      return t('home.difficulty.hard');
     default:
-      return difficulty || 'Dễ';
+      return difficulty || t('home.difficulty.easy');
   }
 }
 
@@ -187,13 +188,13 @@ function getRouteImage(route: RouteDto) {
   return getRouteCoverUrl(route) || fallbackRouteImage;
 }
 
-function mapHotspotToPlace(hotspot: NearbyHotspotDto): ApiPlaceCard {
-  const firstTag = hotspot.tags[0]?.tagName || 'Di sản';
+function mapHotspotToPlace(hotspot: NearbyHotspotDto, t: (key: string) => string): ApiPlaceCard {
+  const firstTag = hotspot.tags[0]?.tagName || t('explore.categories.heritage');
 
   return {
     badge: hotspot.status || 'PUBLISHED',
     category: firstTag,
-    distance: 'Gần bạn',
+    distance: t('explore.places.nearYou'),
     id: String(hotspot.hotspotId),
     imageUri: getHotspotImage(hotspot),
     latitude: hotspot.latitude,
@@ -260,7 +261,8 @@ export default function ExploreScreen() {
   const session = useAuthSession();
   const { requirePremium } = usePremiumStatus();
   const { width } = useWindowDimensions();
-  const [activeCategory, setActiveCategory] = useState<string>('Tất cả');
+  const { t } = useTranslation();
+  const [activeCategory, setActiveCategory] = useState<string>('all');
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
   const [apiRoutes, setApiRoutes] = useState<RouteDto[]>([]);
   const [nearbyPlaces, setNearbyPlaces] = useState<ApiPlaceCard[]>([]);
@@ -278,10 +280,21 @@ export default function ExploreScreen() {
   const snapInterval = safeWidth;
   const routeCardWidth = Math.max(contentWidth, 280);
 
+  const categories = useMemo(() => [
+    { key: 'all', label: t('explore.categories.all') },
+    { key: 'history', label: t('explore.categories.history') },
+    { key: 'architecture', label: t('explore.categories.architecture') },
+    { key: 'culture', label: t('explore.categories.culture') },
+    { key: 'cuisine', label: t('explore.categories.cuisine') },
+    { key: 'heritage', label: t('explore.categories.heritage') },
+  ], [t]);
+
   const filteredPlaces = useMemo(() => {
-    if (activeCategory === 'Tất cả') return nearbyPlaces;
-    return nearbyPlaces.filter((p) => p.category === activeCategory);
-  }, [activeCategory, nearbyPlaces]);
+    if (activeCategory === 'all') return nearbyPlaces;
+    const selectedCategory = categories.find(c => c.key === activeCategory);
+    if (!selectedCategory) return nearbyPlaces;
+    return nearbyPlaces.filter((p) => p.category === selectedCategory.label);
+  }, [activeCategory, nearbyPlaces, categories]);
 
   const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const nextIndex = Math.round(event.nativeEvent.contentOffset.x / snapInterval);
@@ -428,7 +441,7 @@ export default function ExploreScreen() {
         });
 
         if (cancelled) return;
-        setNearbyPlaces(hotspots.map(mapHotspotToPlace));
+        setNearbyPlaces(hotspots.map((h) => mapHotspotToPlace(h, t)));
       } catch (error) {
         if (cancelled) return;
         setNearbyPlaces([]);
@@ -495,10 +508,10 @@ export default function ExploreScreen() {
                   className="text-[15px] font-extrabold tracking-[-0.3px] text-[#2B2233]"
                   numberOfLines={1}
                 >
-                  Chào {explorerName}
+                  {t('explore.greeting', { name: explorerName })}
                 </Text>
                 <Text className="text-[11px] leading-4 text-[#8E869A]">
-                  Sẵn sàng khám phá
+                  {t('explore.readyToExplore')}
                 </Text>
               </View>
             </View>
@@ -549,7 +562,7 @@ export default function ExploreScreen() {
             <View className="flex-row items-center justify-between">
               <View className="flex-1 pr-3">
                 <Text className="text-[13px] font-semibold uppercase tracking-[1px] text-[#8A7D6D]">
-                  Nổi bật hôm nay
+                  {t('explore.featured.title')}
                 </Text>
                 <Text className="mt-1 text-[18px] font-bold text-[#2B2233]">
                   {apiRoutes[0]?.routeName || 'Khám phá ẩm thực Sài Gòn'}
@@ -572,7 +585,7 @@ export default function ExploreScreen() {
                 tintColor="#AA9FB0"
               />
               <Text className="ml-2 text-[15px] text-[#AA9FB0]">
-                Tìm điểm, tuyến, thử thách...
+                {t('explore.search.placeholder')}
               </Text>
             </View>
             <Pressable className="h-11 w-11 items-center justify-center rounded-[18px] bg-[#FFF4EF]">
@@ -605,7 +618,7 @@ export default function ExploreScreen() {
                 />
               </View>
               <Text className="text-center text-[11px] font-extrabold text-[#2B2233]">
-                User Plan
+                {t('explore.features.userPlan')}
               </Text>
               <View className="rounded-full bg-[#7C3AED] px-1.5 py-0.5">
                 <Text className="text-[8px] font-extrabold text-white">PRO</Text>
@@ -631,7 +644,7 @@ export default function ExploreScreen() {
                 />
               </View>
               <Text className="text-center text-[11px] font-extrabold text-[#2B2233]">
-                Record
+                {t('explore.features.record')}
               </Text>
               <View className="rounded-full bg-[#EB489B] px-1.5 py-0.5">
                 <Text className="text-[8px] font-extrabold text-white">PRO</Text>
@@ -654,7 +667,7 @@ export default function ExploreScreen() {
                 />
               </View>
               <Text className="text-center text-[11px] font-bold text-[#2B2233]">
-                Tuyến đường
+                {t('explore.features.routes')}
               </Text>
             </Pressable>
 
@@ -682,7 +695,7 @@ export default function ExploreScreen() {
                       tintColor="#7C3AED"
                     />
                     <Text className="text-[10px] font-extrabold uppercase tracking-[1px] text-[#7C3AED]">
-                      Premium Explorer
+                      {t('explore.premium.explorer')}
                     </Text>
                   </View>
 
@@ -729,12 +742,12 @@ export default function ExploreScreen() {
                       tintColor="#7C3AED"
                     />
                     <Text className="text-[10px] font-extrabold uppercase tracking-[1px] text-[#7C3AED]">
-                      CultureQuest Premium
+                      {t('explore.premium.title')}
                     </Text>
                   </View>
 
                   <Text className="text-[22px] font-black leading-7 text-[#2B2233]">
-                    Khám phá nhiều hơn
+                    {t('explore.premium.subtitle')}
                   </Text>
                   <Text className="mt-2 text-[13px] leading-5 text-[#6F6678]">
                     Mở khóa hành trình độc quyền, nhận thêm XP và tận hưởng trải nghiệm không quảng cáo.
@@ -772,7 +785,7 @@ export default function ExploreScreen() {
             <View className="flex-row items-center justify-between">
               <View className="flex-1 pr-3">
                 <Text className="text-[12px] font-semibold uppercase tracking-[1px] text-[#8A7D6D]">
-                  Nổi bật hôm nay
+                  {t('explore.featured.title')}
                 </Text>
                 <Text className="mt-1 text-[17px] font-bold text-[#2B2233]">
                   {apiRoutes[0]?.routeName || 'Khám phá ẩm thực Sài Gòn'}
@@ -797,11 +810,11 @@ export default function ExploreScreen() {
               contentContainerStyle={{ paddingVertical: 2 }}
             >
               {categories.map((category) => {
-                const selected = category === activeCategory;
+                const selected = category.key === activeCategory;
                 return (
                   <Pressable
-                    key={category}
-                    onPress={() => setActiveCategory(category)}
+                    key={category.key}
+                    onPress={() => setActiveCategory(category.key)}
                     className={`mr-2.5 rounded-full border px-4 py-2 ${
                       selected ? 'border-[#BB8B4D] bg-[#FBF1E5]' : 'border-[#E5DFD2] bg-white'
                     }`}
@@ -811,7 +824,7 @@ export default function ExploreScreen() {
                         selected ? 'text-[#A2672B]' : 'text-[#6E6B62]'
                       }`}
                     >
-                      {category}
+                      {category.label}
                     </Text>
                   </Pressable>
                 );
@@ -843,7 +856,7 @@ export default function ExploreScreen() {
         <View className="gap-6 px-4">
           <View className="gap-4">
             <View className="flex-row items-center justify-between">
-              <Text className="text-[22px] font-bold text-[#2B2233]">Tuyến gợi ý</Text>
+              <Text className="text-[22px] font-bold text-[#2B2233]">{t('explore.routes.title')}</Text>
               {!isRoutesLoading ? (
                 <Text className="text-[12px] font-semibold text-[#8A7D6D]">
                   {`${apiRoutes.length} tuyến`}
@@ -904,7 +917,7 @@ export default function ExploreScreen() {
                       >
                         <View className="flex-1 justify-end gap-3">
                           <Text className="text-[12px] font-semibold uppercase tracking-[0.8px] text-[#E9D7C5]">
-                            Tuyến di sản · {getDifficultyLabel(route.difficulty)}
+                            Tuyến di sản · {getDifficultyLabel(route.difficulty, t)}
                           </Text>
                           <Text className="text-[28px] font-extrabold leading-[36px] text-white" numberOfLines={2}>
                             {route.routeName}
@@ -914,7 +927,7 @@ export default function ExploreScreen() {
                           </Text>
                           <View className="flex-row flex-wrap gap-2 pt-1">
                             {[
-                              `${getRouteStopCount(route)} điểm dừng`,
+                              `${getRouteStopCount(route)} ${t('explore.routes.stops')}`,
                               `${route.totalDistance || 0} km`,
                               `${route.estimateTime || 0} phút`,
                             ].map((tag) => (
@@ -964,7 +977,7 @@ export default function ExploreScreen() {
 
           <View className="gap-4">
             <View className="flex-row items-center justify-between">
-              <Text className="text-[19px] font-bold text-[#2B2233]">Gần bạn</Text>
+              <Text className="text-[19px] font-bold text-[#2B2233]">{t('explore.places.nearYou')}</Text>
               <Pressable className="rounded-full bg-[#FFF4EF] px-3 py-2">
                 <Text className="text-[14px] font-semibold text-[#F58752]">Xem bản đồ</Text>
               </Pressable>

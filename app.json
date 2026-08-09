@@ -9,6 +9,7 @@
     "scheme": ["culturequestlitemobile", "culturequest"],
     "userInterfaceStyle": "automatic",
       "android": {
+        "googleServicesFile": "./google-services.json",
         "package": "com.anonymous.Culture_quest_lite_mobile",
         "icon": "./assets/images/logo2-app-icon-android-smaller.png",
         "adaptiveIcon": {

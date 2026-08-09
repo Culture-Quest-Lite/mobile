@@ -12,6 +12,7 @@ import {
   useState,
   type ComponentProps,
 } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -48,6 +49,7 @@ import {
   type PostComment,
 } from "@/features/home/api/get-post-comments";
 import { likePost } from "@/features/home/api/like-post";
+import { reportPost } from "@/features/home/api/report-post";
 import { sharePost } from "@/features/home/api/share-post";
 import { ReviewDeleteDialog } from "@/features/home/components/review-delete-dialog";
 import {
@@ -157,12 +159,25 @@ type ResolvedRoutePreview = {
   routeId: number;
   routeName: string;
 };
-type CommunityPostMenuItem = {
+type CommunityMenuRowItem = {
   description?: string;
   icon: SymbolName;
   isDestructive?: boolean;
-  key: "edit-post" | "edit-visibility" | "move-to-trash" | "toggle-notifications";
   label: string;
+};
+type CommunityPostMenuItem = CommunityMenuRowItem & {
+  key:
+    | "edit-post"
+    | "edit-visibility"
+    | "move-to-trash"
+    | "toggle-notifications"
+    | "report-post";
+};
+type CommunityReportReasonItem = CommunityMenuRowItem & {
+  /** Nội dung gửi lên `comment` của POST /api/posts/{id}/reports. */
+  key: string;
+  /** Mở ô nhập tự do thay vì gửi thẳng `key`. */
+  isFreeText?: boolean;
 };
 type ComposerIdentity = {
   accountKey: string | null;
@@ -190,38 +205,90 @@ const communityFeedPageSize = 10;
 const communityPostCommentsPageSize = 10;
 const communityCommentMaxLength = 320;
 const communitySharePostMaxLength = 500;
-const communityPostMenuItems: readonly CommunityPostMenuItem[] = [
-  {
-    key: "edit-post",
-    label: "Chỉnh sửa bài viết",
-    icon: { ios: "pencil", android: "edit", web: "edit" },
-  },
-  {
-    key: "edit-visibility",
-    label: "Chỉnh sửa quyền riêng tư",
-    icon: { ios: "lock", android: "lock", web: "lock" },
-  },
-  {
-    key: "move-to-trash",
-    label: "Chuyển vào thùng rác",
+const communityReportReasonMaxLength = 300;
 
-    icon: {
-      ios: "trash",
-      android: "delete_outline",
-      web: "delete_outline",
+/**
+ * Bài của chính mình thì hiện các thao tác quản lý; bài của người khác chỉ có
+ * thể báo cáo (POST /api/posts/{id}/reports).
+ */
+function buildCommunityPostMenuItems(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  canManagePost: boolean,
+): readonly CommunityPostMenuItem[] {
+  if (!canManagePost) {
+    return [
+      {
+        key: "report-post",
+        label: t("community.feed.menu.reportPost"),
+        icon: {
+          ios: "exclamationmark.bubble",
+          android: "report_problem",
+          web: "report_problem",
+        },
+        isDestructive: true,
+      },
+    ] as const;
+  }
+
+  return [
+    {
+      key: "edit-post",
+      label: t("community.posts.edit"),
+      icon: { ios: "pencil", android: "edit", web: "edit" },
     },
-    isDestructive: true,
-  },
-  {
-    key: "toggle-notifications",
-    label: "Nhận thông báo về bài viết này",
-    icon: {
-      ios: "bell",
-      android: "notifications_none",
-      web: "notifications_none",
+    {
+      key: "edit-visibility",
+      label: t("community.feed.menu.editVisibility"),
+      icon: { ios: "lock", android: "lock", web: "lock" },
     },
-  },
-] as const;
+    {
+      key: "move-to-trash",
+      label: t("community.feed.menu.moveToTrash"),
+      icon: {
+        ios: "trash",
+        android: "delete_outline",
+        web: "delete_outline",
+      },
+      isDestructive: true,
+    },
+  ] as const;
+}
+
+/**
+ * Danh sách lý do dựng sẵn — `key` chính là chuỗi gửi lên `comment`, nên không
+ * cần thêm màn nhập liệu mới.
+ */
+function buildCommunityReportReasonItems(
+  t: (key: string, options?: Record<string, unknown>) => string,
+): readonly CommunityReportReasonItem[] {
+  const presetReasons: CommunityReportReasonItem[] = (
+    [
+      "spam",
+      "harassment",
+      "misinformation",
+      "violence",
+      "sensitiveContent",
+    ] as const
+  ).map((reasonKey) => ({
+    key: t(`community.feed.report.reasons.${reasonKey}`),
+    label: t(`community.feed.report.reasons.${reasonKey}`),
+    icon: {
+      ios: "exclamationmark.triangle",
+      android: "report_problem",
+      web: "report_problem",
+    },
+  }));
+
+  return [
+    ...presetReasons,
+    {
+      key: "",
+      label: t("community.feed.report.reasons.other"),
+      icon: { ios: "square.and.pencil", android: "edit", web: "edit" },
+      isFreeText: true,
+    },
+  ];
+}
 const avatarPalettes = [
   ["#EB489B", "#F58752"],
   ["#F58752", "#FFC93C"],
@@ -305,18 +372,21 @@ function getCommunityCreatedAtTime(isoTimestamp?: string | null) {
   return parseCommunityTimestamp(meaningfulValue)?.getTime() ?? 0;
 }
 
-function formatCommunityTime(isoTimestamp?: string | null) {
+function formatCommunityTime(
+  isoTimestamp: string | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   const createdAtTime = getCommunityCreatedAtTime(isoTimestamp);
 
   if (!Number.isFinite(createdAtTime) || createdAtTime <= 0) {
-    return "Vừa xong";
+    return t("community.time.justNow");
   }
 
   const currentTime = Date.now();
   const elapsedMilliseconds = currentTime - createdAtTime;
 
   if (elapsedMilliseconds <= 0) {
-    return "Vừa xong";
+    return t("community.time.justNow");
   }
 
   const minuteInMilliseconds = 60 * 1000;
@@ -324,42 +394,44 @@ function formatCommunityTime(isoTimestamp?: string | null) {
   const dayInMilliseconds = 24 * hourInMilliseconds;
 
   if (elapsedMilliseconds < minuteInMilliseconds) {
-    return "Vừa xong";
-  }
-
-  function formatElapsedValue(value: number, unit: string) {
-    return `${value} ${unit}`;
+    return t("community.time.justNow");
   }
 
   const elapsedMinutes = Math.floor(elapsedMilliseconds / minuteInMilliseconds);
 
   if (elapsedMinutes < 60) {
-    return formatElapsedValue(elapsedMinutes, "phút");
+    return t("community.feed.time.minutes", { count: elapsedMinutes });
   }
 
   const elapsedHours = Math.floor(elapsedMinutes / 60);
 
   if (elapsedHours < 24) {
-    return formatElapsedValue(elapsedHours, "giờ");
+    return t("community.feed.time.hours", { count: elapsedHours });
   }
 
   const elapsedDays = Math.floor(elapsedMilliseconds / dayInMilliseconds);
 
   if (elapsedDays < 7) {
-    return formatElapsedValue(elapsedDays, "ngày");
+    return t("community.feed.time.days", { count: elapsedDays });
   }
 
   if (elapsedDays <= 30) {
-    return formatElapsedValue(Math.floor(elapsedDays / 7), "tuần");
+    return t("community.feed.time.weeks", {
+      count: Math.floor(elapsedDays / 7),
+    });
   }
 
   const elapsedMonths = getElapsedCalendarMonths(createdAtTime, currentTime);
 
   if (elapsedMonths < 12) {
-    return formatElapsedValue(Math.max(elapsedMonths, 1), "tháng");
+    return t("community.feed.time.months", {
+      count: Math.max(elapsedMonths, 1),
+    });
   }
 
-  return formatElapsedValue(Math.floor(elapsedMonths / 12), "năm");
+  return t("community.feed.time.years", {
+    count: Math.floor(elapsedMonths / 12),
+  });
 }
 
 function isCurrentUserCommunityPost(
@@ -449,6 +521,7 @@ function getAvatarPalette(seed: string) {
 
 function buildComposerIdentityFromSession(
   authSession: AuthSession,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): ComposerIdentity {
   const normalizedDisplayName = readMeaningfulText(authSession.displayName);
   const normalizedUsername =
@@ -462,8 +535,10 @@ function buildComposerIdentityFromSession(
     accountKey,
     avatarUri: null,
     displayName: authSession.isAuthenticated
-      ? (normalizedDisplayName ?? normalizedUsername ?? "Bạn")
-      : "Khách",
+      ? (normalizedDisplayName ??
+        normalizedUsername ??
+        t("community.feed.composerIdentity.you"))
+      : t("community.feed.composerIdentity.guest"),
     username: normalizedUsername,
   };
 }
@@ -528,33 +603,35 @@ function resolveTopicFromNewsfeed(
   return "culture";
 }
 
-function buildNewsfeedLocation(post: {
-  hotspotIds: number[];
-  routeIds: number[];
-}) {
-  if (post.hotspotIds.length === 1) {
-    return "1 địa điểm được gắn";
+function buildNewsfeedLocation(
+  post: {
+    hotspotIds: number[];
+    routeIds: number[];
+  },
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  if (post.hotspotIds.length >= 1) {
+    return t("community.feed.location.hotspotTagged", {
+      count: post.hotspotIds.length,
+    });
   }
 
-  if (post.hotspotIds.length > 1) {
-    return `${post.hotspotIds.length} địa điểm được gắn`;
-  }
-
-  if (post.routeIds.length === 1) {
-    return "1 tuyến đường được gắn";
-  }
-
-  if (post.routeIds.length > 1) {
-    return `${post.routeIds.length} tuyến đường được gắn`;
+  if (post.routeIds.length >= 1) {
+    return t("community.feed.location.routeTagged", {
+      count: post.routeIds.length,
+    });
   }
 
   return "";
 }
 
-function buildNewsfeedMood(post: { status: string; visibility: string }) {
+function buildNewsfeedMood(
+  post: { status: string; visibility: string },
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   const statusLabel =
     readMeaningfulText(post.status)?.toUpperCase() === "APPROVED"
-      ? "Đã duyệt"
+      ? t("community.status.approved")
       : readMeaningfulText(post.status);
   const visibilityValue = readMeaningfulText(post.visibility);
   const visibilityLabel = visibilityValue
@@ -564,22 +641,25 @@ function buildNewsfeedMood(post: { status: string; visibility: string }) {
     (value): value is string => Boolean(value),
   );
 
-  return segments.join(" · ") || "Cập nhật mới từ cộng đồng";
+  return segments.join(" · ") || t("community.feed.defaultMood");
 }
 
-function buildNewsfeedBadge(post: {
-  isTaggedHotspot: boolean;
-  isTaggedRoute: boolean;
-}) {
+function buildNewsfeedBadge(
+  post: {
+    isTaggedHotspot: boolean;
+    isTaggedRoute: boolean;
+  },
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   if (post.isTaggedHotspot) {
-    return "Địa điểm";
+    return t("community.feed.badge.location");
   }
 
   if (post.isTaggedRoute) {
-    return "Tuyến đường";
+    return t("community.feed.badge.route");
   }
 
-  return "Bảng tin";
+  return t("community.feed.badge.feed");
 }
 
 function replaceCommunityFeedPostLikeState(
@@ -695,7 +775,10 @@ function stripTrailingHashtagBlock(content: string) {
     .trimEnd();
 }
 
-function formatRouteEstimateLabel(estimateTimeMinutes?: number | null) {
+function formatRouteEstimateLabel(
+  estimateTimeMinutes: number | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   if (
     typeof estimateTimeMinutes !== "number" ||
     !Number.isFinite(estimateTimeMinutes) ||
@@ -706,15 +789,17 @@ function formatRouteEstimateLabel(estimateTimeMinutes?: number | null) {
 
   if (estimateTimeMinutes >= 480) {
     const dayCount = Math.max(1, Math.round(estimateTimeMinutes / 480));
-    return `${dayCount} ngày`;
+    return t("community.feed.routeEstimate.days", { count: dayCount });
   }
 
   if (estimateTimeMinutes >= 60) {
     const hourCount = Math.max(1, Math.round(estimateTimeMinutes / 60));
-    return `${hourCount} giờ`;
+    return t("community.feed.routeEstimate.hours", { count: hourCount });
   }
 
-  return `${Math.round(estimateTimeMinutes)} phút`;
+  return t("community.feed.routeEstimate.minutes", {
+    count: Math.round(estimateTimeMinutes),
+  });
 }
 
 function mergeCommunityFeedPostsWithCache(posts: CommunityFeedPost[]) {
@@ -802,11 +887,12 @@ function dedupeCommunityFeedPosts(posts: CommunityFeedPost[]) {
 
 function mapNewsfeedPostToCommunityFeedPost(
   post: NewsfeedPost,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): CommunityFeedPost {
   const author =
     readMeaningfulText(post.displayName) ??
     readMeaningfulText(post.username) ??
-    "Người dùng";
+    t("community.feed.fallbackUserName");
   const tags = buildNewsfeedTags(post);
   const topic = resolveTopicFromNewsfeed(post, tags);
   const mediaItems: CommunityFeedMediaItem[] = post.medias
@@ -835,14 +921,14 @@ function mapNewsfeedPostToCommunityFeedPost(
     initials: getNameInitials(author),
     role: readMeaningfulText(post.username)
       ? `@${post.username.trim()}`
-      : "Cộng đồng khám phá",
-    time: formatCommunityTime(post.createdAt),
+      : t("community.feed.fallbackRole"),
+    time: formatCommunityTime(post.createdAt, t),
     caption:
       readMeaningfulText(stripTrailingHashtagBlock(post.text)) ??
-      (post.sharedPost ? "" : "Bài viết mới từ cộng đồng."),
-    location: buildNewsfeedLocation(post),
-    mood: buildNewsfeedMood(post),
-    badge: post.sharedPost ? "Chia sẻ" : buildNewsfeedBadge(post),
+      (post.sharedPost ? "" : t("community.feed.fallbackCaption")),
+    location: buildNewsfeedLocation(post, t),
+    mood: buildNewsfeedMood(post, t),
+    badge: post.sharedPost ? t("community.feed.badge.shared") : buildNewsfeedBadge(post, t),
     hotScore: formatCompactCount(engagementTotal),
     views: formatCompactCount(post.pointRemaining ?? 0),
     likes: formatCompactCount(post.likeCount),
@@ -875,11 +961,12 @@ function mapNewsfeedPostToCommunityFeedPost(
 
 function mapSharedPostToCommunityFeedPost(
   sharedPost: CreatedPostResponse,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): CommunityFeedPost {
   const author =
     readMeaningfulText(sharedPost.displayName) ??
     readMeaningfulText(sharedPost.username) ??
-    "Người dùng";
+    t("community.feed.fallbackUserName");
   const tags = sharedPost.tags
     .map((tag) => readMeaningfulText(tag.tagName))
     .filter((tag): tag is string => Boolean(tag));
@@ -910,16 +997,21 @@ function mapSharedPostToCommunityFeedPost(
     initials: getNameInitials(author),
     role: readMeaningfulText(sharedPost.username)
       ? `@${sharedPost.username.trim()}`
-      : "Cộng đồng khám phá",
-    time: formatCommunityTime(sharedPost.createdAt),
+      : t("community.feed.fallbackRole"),
+    time: formatCommunityTime(sharedPost.createdAt, t),
     caption:
       readMeaningfulText(stripTrailingHashtagBlock(sharedPost.content)) ?? "",
-    location: buildNewsfeedLocation(sharedPost),
-    mood: buildNewsfeedMood({
-      status: sharedPost.status,
-      visibility: normalizedVisibility,
-    }),
-    badge: originalPost ? "Chia sẻ" : buildNewsfeedBadge(sharedPost),
+    location: buildNewsfeedLocation(sharedPost, t),
+    mood: buildNewsfeedMood(
+      {
+        status: sharedPost.status,
+        visibility: normalizedVisibility,
+      },
+      t,
+    ),
+    badge: originalPost
+      ? t("community.feed.badge.shared")
+      : buildNewsfeedBadge(sharedPost, t),
     hotScore: formatCompactCount(likeCount + commentCount + shareCount),
     views: formatCompactCount(sharedPost.pointRemaining ?? 0),
     likes: formatCompactCount(likeCount),
@@ -959,6 +1051,7 @@ function CommunityLoadingState() {
 }
 
 export default function CommunityScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
@@ -972,7 +1065,7 @@ export default function CommunityScreen() {
     ? authSession.username?.trim() || authSession.displayName.trim() || null
     : null;
   const fallbackComposerIdentity =
-    buildComposerIdentityFromSession(authSession);
+    buildComposerIdentityFromSession(authSession, t);
   const [communityFeedPosts, setCommunityFeedPosts] = useState<
     CommunityFeedPost[]
   >([]);
@@ -1004,6 +1097,15 @@ export default function CommunityScreen() {
     useState<CommunityFeedPost | null>(null);
   const [postOptionsTarget, setPostOptionsTarget] =
     useState<CommunityFeedPost | null>(null);
+  // Giữ lại cả sau khi đóng sheet để danh sách menu không đổi giữa chừng lúc
+  // modal đang trượt xuống.
+  const [canManagePostOptionsTarget, setCanManagePostOptionsTarget] =
+    useState(false);
+  const [reportPostTarget, setReportPostTarget] =
+    useState<CommunityFeedPost | null>(null);
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [isReportDraftVisible, setIsReportDraftVisible] = useState(false);
+  const [reportDraft, setReportDraft] = useState("");
   const [communityToastMessage, setCommunityToastMessage] = useState<
     string | null
   >(null);
@@ -1079,6 +1181,17 @@ export default function CommunityScreen() {
     };
   }, [communityToastMessage]);
 
+  // Menu đổi theo chủ sở hữu bài: bài mình thì sửa/đổi quyền/xoá, bài người
+  // khác thì chỉ có "Báo cáo bài viết".
+  const communityPostMenuItems = useMemo(
+    () => buildCommunityPostMenuItems(t, canManagePostOptionsTarget),
+    [canManagePostOptionsTarget, t],
+  );
+  const communityReportReasonItems = useMemo(
+    () => buildCommunityReportReasonItems(t),
+    [t],
+  );
+
   const showCommunityToast = useCallback(
     (
       message: string,
@@ -1110,12 +1223,12 @@ export default function CommunityScreen() {
       .filter(
         (post) => normalizePostVisibilityValue(post.visibility) !== "PRIVATE",
       )
-      .map(mapNewsfeedPostToCommunityFeedPost);
+      .map((post) => mapNewsfeedPostToCommunityFeedPost(post, t));
 
     mappedPosts.forEach(cacheCommunityExplorerProfile);
 
     return mergeCommunityFeedPostsWithCache(mappedPosts);
-  }, [authSession.isAuthenticated, authSession.tokenType]);
+  }, [authSession.isAuthenticated, authSession.tokenType, t]);
 
   useEffect(() => {
     let isActive = true;
@@ -1153,7 +1266,7 @@ export default function CommunityScreen() {
         setCommunityFeedError(
           error instanceof Error
             ? error.message
-            : "Không tải được bản tin cộng đồng.",
+            : t("community.feed.loadError"),
         );
         setCommunityFeedStatus("error");
       }
@@ -1164,7 +1277,7 @@ export default function CommunityScreen() {
     return () => {
       isActive = false;
     };
-  }, [communitySessionKey, fetchCommunityNewsfeed]);
+  }, [communitySessionKey, fetchCommunityNewsfeed, t]);
 
   useEffect(() => {
     communityFeedPosts.forEach(cacheCommunityExplorerProfile);
@@ -1334,6 +1447,7 @@ export default function CommunityScreen() {
               hotspotCount: result.value.hotspots.length,
               routeDurationLabel: formatRouteEstimateLabel(
                 result.value.estimateTime,
+                t,
               ),
               routeId: result.value.routeId,
               routeName,
@@ -1354,7 +1468,12 @@ export default function CommunityScreen() {
     return () => {
       isActive = false;
     };
-  }, [authSession.isAuthenticated, authSession.tokenType, routeIdsToResolve]);
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    routeIdsToResolve,
+    t,
+  ]);
 
   const displayedPosts = useMemo<CommunityFeedPost[]>(
     () =>
@@ -1383,7 +1502,9 @@ export default function CommunityScreen() {
     composerIdentity.accountKey === fallbackComposerIdentity.accountKey
       ? composerIdentity
       : fallbackComposerIdentity;
-
+  const composerPlaceholderText = authSession.isAuthenticated
+    ? t("community.feed.composerPlaceholder.authenticated")
+    : t("community.feed.composerPlaceholder.guest");
   const previewCommunityGroups = useMemo(
     () => communityGroups.slice(0, 3),
     [communityGroups],
@@ -1417,21 +1538,21 @@ export default function CommunityScreen() {
         setCommunityFeedError(
           error instanceof Error
             ? error.message
-            : "Không tải được bản tin cộng đồng.",
+            : t("community.feed.loadError"),
         );
         setCommunityFeedStatus("error");
       } else {
         Alert.alert(
-          "Không thể làm mới",
+          t("community.feed.refreshErrorTitle"),
           error instanceof Error
             ? error.message
-            : "Không thể làm mới bản tin cộng đồng.",
+            : t("community.feed.refreshError"),
         );
       }
     } finally {
       setIsRefreshing(false);
     }
-  }, [fetchCommunityNewsfeed, isRefreshing, reloadCommunityGroups]);
+  }, [fetchCommunityNewsfeed, isRefreshing, reloadCommunityGroups, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1475,7 +1596,7 @@ export default function CommunityScreen() {
             setCommunityFeedError(
               error instanceof Error
                 ? error.message
-                : "Không tải được bảng tin cộng đồng.",
+                : t("community.feed.loadError"),
             );
             setCommunityFeedStatus("error");
             return;
@@ -1484,7 +1605,7 @@ export default function CommunityScreen() {
           setCommunityFeedError(
             error instanceof Error
               ? error.message
-              : "Không thể làm mới bảng tin cộng đồng.",
+              : t("community.feed.refreshError"),
           );
           setCommunityFeedStatus("ready");
         }
@@ -1495,7 +1616,7 @@ export default function CommunityScreen() {
       return () => {
         isActive = false;
       };
-    }, [fetchCommunityNewsfeed]),
+    }, [fetchCommunityNewsfeed, t]),
   );
 
   useFocusEffect(
@@ -1600,7 +1721,10 @@ export default function CommunityScreen() {
     });
 
     if (!cachedGroup) {
-      Alert.alert("Không mở được nhóm", "Dữ liệu nhóm này chưa hợp lệ.");
+      Alert.alert(
+        t("community.groupsCommon.openErrorTitle"),
+        t("community.groupsCommon.openErrorMessage"),
+      );
       return;
     }
 
@@ -1676,7 +1800,7 @@ export default function CommunityScreen() {
       setCommunityPostCommentsError(
         error instanceof Error
           ? error.message
-          : "Không tải được bình luận của bài viết cộng đồng.",
+          : t("community.feed.commentsLoadError"),
       );
       setCommunityPostCommentsStatus("error");
     }
@@ -1723,7 +1847,7 @@ export default function CommunityScreen() {
         setCommunityPostCommentsError(
           error instanceof Error
             ? error.message
-            : "Không tải được bình luận của bài viết cộng đồng.",
+            : t("community.feed.commentsLoadError"),
         );
         setCommunityPostCommentsStatus("error");
       }
@@ -1738,6 +1862,7 @@ export default function CommunityScreen() {
     authSession.isAuthenticated,
     authSession.tokenType,
     commentTargetPost?.postNumericId,
+    t,
   ]);
 
   function handleOpenCommentComposer(post: CommunityFeedPost) {
@@ -1787,8 +1912,8 @@ export default function CommunityScreen() {
 
     if (!trimmedComment) {
       Alert.alert(
-        "Thiếu nội dung",
-        "Hãy nhập nội dung trước khi gửi bình luận.",
+        t("community.feed.missingContentTitle"),
+        t("community.feed.missingCommentMessage"),
       );
       return;
     }
@@ -1797,8 +1922,8 @@ export default function CommunityScreen() {
 
     if (!accessToken) {
       Alert.alert(
-        "Phiên đăng nhập hết hạn",
-        "Vui lòng đăng nhập lại trước khi gửi bình luận.",
+        t("community.feed.sessionExpiredTitle"),
+        t("community.feed.sessionExpiredComment"),
       );
       return;
     }
@@ -1832,10 +1957,10 @@ export default function CommunityScreen() {
       await handleReloadPostComments(postNumericId);
     } catch (error) {
       Alert.alert(
-        "Không thể gửi bình luận",
+        t("community.feed.commentSubmitErrorTitle"),
         error instanceof Error
           ? error.message
-          : "Đã có lỗi xảy ra khi gửi bình luận cho bài viết cộng đồng.",
+          : t("community.feed.commentSubmitErrorMessage"),
       );
     } finally {
       setIsCommentSubmitting(false);
@@ -1859,8 +1984,8 @@ export default function CommunityScreen() {
 
     if (!authSession.isAuthenticated) {
       Alert.alert(
-        "Cần đăng nhập",
-        "Bạn cần đăng nhập để thả tim bài viết cộng đồng.",
+        t("community.feed.loginRequiredTitle"),
+        t("community.feed.loginRequiredLike"),
       );
       return;
     }
@@ -1869,8 +1994,8 @@ export default function CommunityScreen() {
 
     if (!accessToken) {
       Alert.alert(
-        "Phiên đăng nhập hết hạn",
-        "Vui lòng đăng nhập lại trước khi thả tim bài viết cộng đồng.",
+        t("community.feed.sessionExpiredTitle"),
+        t("community.feed.sessionExpiredLike"),
       );
       return;
     }
@@ -1952,10 +2077,10 @@ export default function CommunityScreen() {
       }
 
       Alert.alert(
-        "Không thể thả tim",
+        t("community.feed.likeErrorTitle"),
         error instanceof Error
           ? error.message
-          : "Đã có lỗi xảy ra khi thả tim bài viết cộng đồng.",
+          : t("community.feed.likeErrorMessage"),
       );
     } finally {
       setLikingPostIds((current) =>
@@ -1969,16 +2094,16 @@ export default function CommunityScreen() {
 
     if (typeof postNumericId !== "number" || postNumericId <= 0) {
       Alert.alert(
-        "Không thể chia sẻ",
-        "Bài viết này chưa có mã hợp lệ để chia sẻ.",
+        t("community.feed.shareErrorTitle"),
+        t("community.feed.shareInvalidIdMessage"),
       );
       return;
     }
 
     if (!authSession.isAuthenticated) {
       Alert.alert(
-        "Cần đăng nhập",
-        "Bạn cần đăng nhập để chia sẻ bài viết cộng đồng.",
+        t("community.feed.loginRequiredTitle"),
+        t("community.feed.loginRequiredShare"),
       );
       return;
     }
@@ -2010,8 +2135,8 @@ export default function CommunityScreen() {
 
     if (!accessToken) {
       Alert.alert(
-        "Phiên đăng nhập hết hạn",
-        "Vui lòng đăng nhập lại trước khi chia sẻ bài viết cộng đồng.",
+        t("community.feed.sessionExpiredTitle"),
+        t("community.feed.sessionExpiredShare"),
       );
       return;
     }
@@ -2029,7 +2154,7 @@ export default function CommunityScreen() {
       const sharedVisibility = normalizePostVisibilityValue(
         sharedPost.visibility,
       );
-      const sharedFeedPost = mapSharedPostToCommunityFeedPost(sharedPost);
+      const sharedFeedPost = mapSharedPostToCommunityFeedPost(sharedPost, t);
       const nextShareCount =
         Math.max(0, Math.round(post.shareCountValue ?? 0)) + 1;
 
@@ -2073,15 +2198,15 @@ export default function CommunityScreen() {
       setShareVisibility("PUBLIC");
       showCommunityToast(
         sharedVisibility === "PRIVATE"
-          ? "Đã chia sẻ vào mục riêng tư trong hồ sơ của bạn"
-          : "Đã chia sẻ bài viết lên cộng đồng",
+          ? t("community.feed.sharedPrivateToast")
+          : t("community.feed.sharedPublicToast"),
       );
     } catch (error) {
       Alert.alert(
-        "Không thể chia sẻ",
+        t("community.feed.shareErrorTitle"),
         error instanceof Error
           ? error.message
-          : "Đã có lỗi xảy ra khi chia sẻ bài viết cộng đồng.",
+          : t("community.feed.shareErrorMessage"),
       );
     } finally {
       setIsSharingPost(false);
@@ -2093,8 +2218,8 @@ export default function CommunityScreen() {
 
     if (typeof postNumericId !== "number" || postNumericId <= 0) {
       Alert.alert(
-        "Không thể chỉnh sửa",
-        "Không xác định được bài viết cần chỉnh sửa.",
+        t("community.feed.editErrorTitle"),
+        t("community.feed.editUnknownPostMessage"),
       );
       return;
     }
@@ -2114,8 +2239,8 @@ export default function CommunityScreen() {
 
     if (typeof postNumericId !== "number" || postNumericId <= 0) {
       Alert.alert(
-        "Không thể chỉnh sửa",
-        "Không xác định được bài viết cần chỉnh sửa quyền riêng tư.",
+        t("community.feed.editErrorTitle"),
+        t("community.feed.editVisibilityUnknownPostMessage"),
       );
       return;
     }
@@ -2135,8 +2260,8 @@ export default function CommunityScreen() {
 
     if (typeof postNumericId !== "number" || postNumericId <= 0) {
       Alert.alert(
-        "Không thể chuyển bài viết",
-        "Bài viết này chưa có mã hợp lệ để chuyển vào thùng rác.",
+        t("community.feed.trashErrorTitle"),
+        t("community.feed.trashInvalidIdMessage"),
       );
       return;
     }
@@ -2149,6 +2274,9 @@ export default function CommunityScreen() {
   }
 
   function handleOpenPostOptions(post: CommunityFeedPost) {
+    setCanManagePostOptionsTarget(
+      isCurrentUserCommunityPost(post.authorId, currentProfileId),
+    );
     setPostOptionsTarget(post);
   }
 
@@ -2176,12 +2304,108 @@ export default function CommunityScreen() {
         return;
       }
 
+      if (item.key === "report-post") {
+        handleOpenReportPost(selectedPost);
+        return;
+      }
+
       if (item.key === "toggle-notifications") {
         return;
       }
 
       handleMovePostToTrash(selectedPost);
     });
+  }
+
+  function handleOpenReportPost(post: CommunityFeedPost) {
+    if (!authSession.isAuthenticated) {
+      Alert.alert(
+        t("community.feed.loginRequiredTitle"),
+        t("community.feed.report.loginRequired"),
+      );
+      return;
+    }
+
+    setReportDraft("");
+    setIsReportDraftVisible(false);
+    setReportPostTarget(post);
+  }
+
+  function handleCloseReportPost() {
+    if (isSubmittingReport) {
+      return;
+    }
+
+    setReportPostTarget(null);
+    setIsReportDraftVisible(false);
+    setReportDraft("");
+  }
+
+  function handleSelectReportReason(reason: CommunityReportReasonItem) {
+    // "Lý do khác" mở ô nhập tự do, các lý do dựng sẵn gửi thẳng.
+    if (reason.isFreeText) {
+      setIsReportDraftVisible(true);
+      return;
+    }
+
+    void handleSubmitReportPost(reason.key);
+  }
+
+  async function handleSubmitReportPost(comment: string) {
+    const post = reportPostTarget;
+    const postNumericId = post?.postNumericId;
+    const normalizedComment = comment.trim();
+
+    if (!normalizedComment) {
+      return;
+    }
+
+    if (typeof postNumericId !== "number" || postNumericId <= 0) {
+      setReportPostTarget(null);
+      setIsReportDraftVisible(false);
+      Alert.alert(
+        t("community.feed.report.failureTitle"),
+        t("community.feed.report.invalidPost"),
+      );
+      return;
+    }
+
+    const accessToken = await getValidAccessToken();
+
+    if (!accessToken) {
+      setReportPostTarget(null);
+      setIsReportDraftVisible(false);
+      Alert.alert(
+        t("community.feed.sessionExpiredTitle"),
+        t("community.feed.report.sessionExpired"),
+      );
+      return;
+    }
+
+    setIsSubmittingReport(true);
+
+    try {
+      await reportPost({
+        accessToken,
+        comment: normalizedComment,
+        postId: postNumericId,
+        tokenType: authSession.tokenType,
+      });
+
+      setReportPostTarget(null);
+      setIsReportDraftVisible(false);
+      setReportDraft("");
+      showCommunityToast(t("community.feed.report.successToast"));
+    } catch (error) {
+      Alert.alert(
+        t("community.feed.report.failureTitle"),
+        error instanceof Error
+          ? error.message
+          : t("community.feed.report.failureDescription"),
+      );
+    } finally {
+      setIsSubmittingReport(false);
+    }
   }
 
   async function confirmMovePostToTrash() {
@@ -2197,8 +2421,8 @@ export default function CommunityScreen() {
     if (!authSession.isAuthenticated) {
       setPostPendingDeletion(null);
       Alert.alert(
-        "Cần đăng nhập",
-        "Bạn cần đăng nhập để chuyển bài viết vào thùng rác.",
+        t("community.feed.loginRequiredTitle"),
+        t("community.feed.loginRequiredTrash"),
       );
       return;
     }
@@ -2208,8 +2432,8 @@ export default function CommunityScreen() {
     if (!accessToken) {
       setPostPendingDeletion(null);
       Alert.alert(
-        "Phiên đăng nhập hết hạn",
-        "Vui lòng đăng nhập lại trước khi chuyển bài viết vào thùng rác.",
+        t("community.feed.sessionExpiredTitle"),
+        t("community.feed.sessionExpiredTrash"),
       );
       return;
     }
@@ -2250,18 +2474,13 @@ export default function CommunityScreen() {
       }
 
       setPostPendingDeletion(null);
-      showCommunityToast("Đang chuyển bài viết vào thùng rác", {
-        label: "Đi đến thùng rác",
-        onPress: () => {
-          router.push("/community/trash" as Href);
-        },
-      });
+      setCommunityToastMessage(t("community.feed.trashSuccessToast"));
     } catch (error) {
       Alert.alert(
-        "Không thể chuyển bài viết",
+        t("community.feed.trashErrorTitle"),
         error instanceof Error
           ? error.message
-          : "Đã có lỗi xảy ra khi chuyển bài viết vào thùng rác.",
+          : t("community.feed.trashErrorMessage"),
       );
     } finally {
       setDeletingPostIds((current) =>
@@ -2486,11 +2705,10 @@ export default function CommunityScreen() {
                     className="text-[15px] font-bold text-[#C2416C]"
                     style={textStyle(15)}
                   >
-                    {communityFeedError ?? "Không tải được bảng tin cộng đồng."}
+                    {communityFeedError ?? t("community.feed.loadError")}
                   </Text>
                   <Text className="mt-1 text-[14px] leading-[15px] text-[#8E869A]">
-                    Đang hiển thị bảng tin mẫu tạm thời để màn hình không bị
-                    trống.
+                    {t("community.feed.demoFallbackNotice")}
                   </Text>
                 </View>
               ) : null}
@@ -2550,11 +2768,10 @@ export default function CommunityScreen() {
                       className="text-[18px] font-black text-[#2E2336]"
                       style={textStyle(18)}
                     >
-                      Chưa có cập nhật mới
+                      {t("community.empty.noUpdates")}
                     </Text>
                     <Text className="mt-1 text-[14px] leading-[15px] text-[#8E869A]">
-                      Feed cộng đồng hiện chưa có bài mới. Hãy quay lại sau để
-                      xem thêm hoạt động từ các explorer.
+                      {t("community.feed.emptyFeedDescription")}
                     </Text>
                   </View>
                 )
@@ -2603,9 +2820,38 @@ export default function CommunityScreen() {
         visible={postOptionsTarget !== null}
       />
 
+      <CommunityPostOptionsSheet
+        bottomInset={insets.bottom}
+        isSubmitting={isSubmittingReport}
+        items={communityReportReasonItems}
+        onClose={handleCloseReportPost}
+        onSelectItem={handleSelectReportReason}
+        title={t("community.feed.report.sheetTitle")}
+        visible={reportPostTarget !== null && !isReportDraftVisible}
+      />
+
+      <CommunityReportReasonComposer
+        bottomInset={insets.bottom}
+        draft={reportDraft}
+        isSubmitting={isSubmittingReport}
+        onBack={() => {
+          if (isSubmittingReport) {
+            return;
+          }
+
+          setIsReportDraftVisible(false);
+        }}
+        onChangeDraft={setReportDraft}
+        onClose={handleCloseReportPost}
+        onSubmit={() => {
+          void handleSubmitReportPost(reportDraft);
+        }}
+        visible={reportPostTarget !== null && isReportDraftVisible}
+      />
+
       <ReviewDeleteDialog
-        confirmLabel="Chuyển bài"
-        description="Bài viết và toàn bộ ảnh, video đính kèm sẽ được chuyển vào thùng rác của bạn. Các mục trong thùng rác sẽ bị xóa vĩnh viễn sau 30 ngày."
+        confirmLabel={t("community.feed.trashConfirmLabel")}
+        description={t("community.feed.trashConfirmDescription")}
         isDeleting={
           postPendingDeletion !== null &&
           deletingPostIdsSet.has(postPendingDeletion.postNumericId ?? -1)
@@ -2616,7 +2862,7 @@ export default function CommunityScreen() {
         onConfirm={() => {
           void confirmMovePostToTrash();
         }}
-        title="Chuyển bài viết vào thùng rác?"
+        title={t("community.feed.trashConfirmTitle")}
         visible={postPendingDeletion !== null}
       />
 
@@ -2713,6 +2959,7 @@ function CommunityDiscoverGroupsSection({
   pageGutter: number;
   status: CommunityGroupsStatus;
 }) {
+  const { t } = useTranslation();
   const showEmptyState = status === "ready" && groups.length === 0;
   const showErrorState = status === "error" && groups.length === 0;
   const showLoadingState = status === "loading" && groups.length === 0;
@@ -2724,14 +2971,14 @@ function CommunityDiscoverGroupsSection({
           className="text-[16px] font-bold text-[#2E2336]"
           style={textStyle(16)}
         >
-          Nhóm khám phá
+          {t("community.groups.title")}
         </Text>
         <Pressable hitSlop={8} onPress={onOpenAll}>
           <Text
             className="text-[13px] font-semibold text-[#D97706]"
             style={textStyle(13)}
           >
-            Xem tất cả
+            {t("community.groups.viewAll")}
           </Text>
         </Pressable>
       </View>
@@ -2765,16 +3012,14 @@ function CommunityDiscoverGroupsSection({
         {showLoadingState ? <CommunityGroupPlaceholderCard /> : null}
         {showErrorState ? (
           <CommunityGroupCompactStateCard
-            description={
-              errorMessage ?? "Không tải được danh sách nhóm cộng đồng."
-            }
-            title="Không tải được nhóm"
+            description={errorMessage ?? t("community.groupsCommon.loadError")}
+            title={t("community.groupsCommon.loadErrorTitle")}
           />
         ) : null}
         {showEmptyState ? (
           <CommunityGroupCompactStateCard
-            description="Hiện chưa có nhóm nào để hiển thị."
-            title="Chưa có nhóm"
+            description={t("community.groupsCommon.emptyDescription")}
+            title={t("community.groupsCommon.emptyTitle")}
           />
         ) : null}
       </ScrollView>
@@ -2948,6 +3193,7 @@ function CommunityPostRouteCard({
   label: string;
   onPress?: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Pressable
       className="rounded-[16px] bg-[#FFF4F8] px-2.5 py-1.5"
@@ -2975,7 +3221,7 @@ function CommunityPostRouteCard({
             className="text-[13px] font-semibold text-[#F2608E]"
             style={textStyle(13)}
           >
-            Tuyến đường
+            {t("community.feed.badge.route")}
           </Text>
           <Text
             className="text-[16px] font-medium text-[#4B414C]"
@@ -3010,6 +3256,7 @@ function CommunityPostHotspotCard({
   onPress?: () => void;
   subtitle: string;
 }) {
+  const { t } = useTranslation();
   const previewImageUris = imageUris.slice(0, 3);
   const remainingCount = Math.max(
     imageUris.length - previewImageUris.length,
@@ -3043,7 +3290,7 @@ function CommunityPostHotspotCard({
             className="text-[13px] font-semibold text-[#18A7B4]"
             style={textStyle(13)}
           >
-            {`${count} địa điểm`}
+            {t("community.feed.hotspotCountLabel", { count })}
           </Text>
           <Text
             className="text-[15px] text-[#6D6671]"
@@ -3129,10 +3376,11 @@ function CommunitySharedPostCard({
   sharedPost: SharedPostSummary;
   withTopSpacing: boolean;
 }) {
+  const { t } = useTranslation();
   const author =
     readMeaningfulText(sharedPost.displayName) ??
     readMeaningfulText(sharedPost.username) ??
-    "Người dùng";
+    t("community.feed.fallbackUserName");
   const caption = readMeaningfulText(
     stripTrailingHashtagBlock(sharedPost.content),
   );
@@ -3156,7 +3404,8 @@ function CommunitySharedPostCard({
     .map((routeId) => ({
       id: routeId,
       label:
-        resolvedRoutes[routeId]?.routeName?.trim() || `Tuyến đường #${routeId}`,
+        resolvedRoutes[routeId]?.routeName?.trim() ||
+        t("community.feed.routeFallbackName", { id: routeId }),
     }));
   const hotspotItems = sharedPost.hotspotIds
     .filter((hotspotId) => Number.isInteger(hotspotId) && hotspotId > 0)
@@ -3165,12 +3414,12 @@ function CommunitySharedPostCard({
       imageUri: resolvedHotspots[hotspotId]?.imageUri ?? null,
       label:
         resolvedHotspots[hotspotId]?.hotspotName?.trim() ||
-        `Địa điểm #${hotspotId}`,
+        t("community.feed.hotspotFallbackName", { id: hotspotId }),
     }));
   const primaryRouteLabel =
     routeItems.length <= 1
       ? (routeItems[0]?.label ?? null)
-      : `${routeItems[0]?.label ?? "Tuyến đường"} +${routeItems.length - 1}`;
+      : `${routeItems[0]?.label ?? t("community.feed.badge.route")} +${routeItems.length - 1}`;
   const hotspotSubtitle =
     hotspotItems.length === 0
       ? null
@@ -3178,7 +3427,11 @@ function CommunitySharedPostCard({
         ? (hotspotItems[0]?.label ?? null)
         : hotspotItems.length === 2
           ? `${hotspotItems[0]?.label ?? ""}, ${hotspotItems[1]?.label ?? ""}`
-          : `${hotspotItems[0]?.label ?? ""}, ${hotspotItems[1]?.label ?? ""} và ${hotspotItems.length - 2} địa điểm khác`;
+          : t("community.feed.hotspotMoreLabel", {
+              count: hotspotItems.length - 2,
+              first: hotspotItems[0]?.label ?? "",
+              second: hotspotItems[1]?.label ?? "",
+            });
   const hotspotImageUris = hotspotItems
     .map((item) => item.imageUri)
     .filter((imageUri): imageUri is string => Boolean(imageUri));
@@ -3214,7 +3467,7 @@ function CommunitySharedPostCard({
             style={{ marginTop: -4 }}
           >
             <Text className="text-[14px] text-[#8A7D86]" style={textStyle(14)}>
-              {formatCommunityTime(sharedPost.createdAt)}
+              {formatCommunityTime(sharedPost.createdAt, t)}
             </Text>
             <Text className="text-[14px] text-[#8A7D86]" style={textStyle(14)}>
               •
@@ -3320,6 +3573,7 @@ function CommunityPostCard({
   onOpenHotspot: (hotspotId: number) => void;
   onOpenRoute: (routeId: number) => void;
 }) {
+  const { t } = useTranslation();
   const mediaItems = buildCommunityPostMediaItems(post);
   const sharedPost = post.sharedPost ?? null;
   const caption = readMeaningfulText(post.caption);
@@ -3338,7 +3592,8 @@ function CommunityPostCard({
     id: routeId,
     hotspotCount: resolvedRoutes[routeId]?.hotspotCount ?? 0,
     label:
-      resolvedRoutes[routeId]?.routeName?.trim() || `Tuyến đường #${routeId}`,
+      resolvedRoutes[routeId]?.routeName?.trim() ||
+      t("community.feed.routeFallbackName", { id: routeId }),
     routeDurationLabel: resolvedRoutes[routeId]?.routeDurationLabel ?? null,
   }));
   const hotspotItems = hotspotIds.map((hotspotId) => ({
@@ -3346,12 +3601,12 @@ function CommunityPostCard({
     imageUri: resolvedHotspots[hotspotId]?.imageUri ?? null,
     label:
       resolvedHotspots[hotspotId]?.hotspotName?.trim() ||
-      `Địa điểm #${hotspotId}`,
+      t("community.feed.hotspotFallbackName", { id: hotspotId }),
   }));
   const primaryRouteLabel =
     routeItems.length <= 1
       ? (routeItems[0]?.label ?? null)
-      : `${routeItems[0]?.label ?? "Tuyến đường"} +${routeItems.length - 1}`;
+      : `${routeItems[0]?.label ?? t("community.feed.badge.route")} +${routeItems.length - 1}`;
   const hotspotSubtitle =
     hotspotItems.length === 0
       ? null
@@ -3359,7 +3614,11 @@ function CommunityPostCard({
         ? (hotspotItems[0]?.label ?? null)
         : hotspotItems.length === 2
           ? `${hotspotItems[0]?.label ?? ""}, ${hotspotItems[1]?.label ?? ""}`
-          : `${hotspotItems[0]?.label ?? ""}, ${hotspotItems[1]?.label ?? ""} và ${hotspotItems.length - 2} địa điểm khác`;
+          : t("community.feed.hotspotMoreLabel", {
+              count: hotspotItems.length - 2,
+              first: hotspotItems[0]?.label ?? "",
+              second: hotspotItems[1]?.label ?? "",
+            });
   const hotspotImageUris = hotspotItems
     .map((item) => item.imageUri)
     .filter((imageUri): imageUri is string => Boolean(imageUri));
@@ -3369,7 +3628,9 @@ function CommunityPostCard({
       <View className="bg-white pb-3 pt-3.5">
         <View className="flex-row items-start">
           <Pressable
-            accessibilityLabel={`Mở hồ sơ của ${post.author}`}
+            accessibilityLabel={t("community.feed.openProfileA11y", {
+              name: post.author,
+            })}
             accessibilityRole={
               post.canOpenProfile === false ? undefined : "button"
             }
@@ -3427,28 +3688,32 @@ function CommunityPostCard({
             </View>
           </View>
 
-          {canManagePost ? (
-            <Pressable
-              className="h-8 w-8 items-center justify-center rounded-full"
-              disabled={isDeleting}
-              hitSlop={8}
-              onPress={() => {
-                onOpenPostOptions(post);
+          {/* Bài của người khác vẫn mở được menu — chỉ khác là menu chứa
+              "Báo cáo bài viết" thay cho các thao tác quản lý. */}
+          <Pressable
+            accessibilityLabel={
+              canManagePost
+                ? t("community.feed.menu.openOptionsA11y")
+                : t("community.feed.menu.openReportA11y")
+            }
+            accessibilityRole="button"
+            className="h-8 w-8 items-center justify-center rounded-full"
+            disabled={isDeleting}
+            hitSlop={8}
+            onPress={() => {
+              onOpenPostOptions(post);
+            }}
+          >
+            <SymbolView
+              name={{
+                ios: "ellipsis",
+                android: "more_horiz",
+                web: "more_horiz",
               }}
-            >
-              <SymbolView
-                name={{
-                  ios: "ellipsis",
-                  android: "more_horiz",
-                  web: "more_horiz",
-                }}
-                size={20}
-                tintColor="#554C56"
-              />
-            </Pressable>
-          ) : (
-            <View className="h-8 w-8" />
-          )}
+              size={20}
+              tintColor="#554C56"
+            />
+          </Pressable>
         </View>
 
         <View className="pt-0.5">
@@ -3589,17 +3854,21 @@ function CommunityPostCard({
   );
 }
 
-function CommunityPostOptionsSheet({
+function CommunityPostOptionsSheet<TItem extends CommunityMenuRowItem>({
   bottomInset,
+  isSubmitting = false,
   items,
   onClose,
   onSelectItem,
+  title,
   visible,
 }: {
   bottomInset: number;
-  items: readonly CommunityPostMenuItem[];
+  isSubmitting?: boolean;
+  items: readonly TItem[];
   onClose: () => void;
-  onSelectItem: (item: CommunityPostMenuItem) => void;
+  onSelectItem: (item: TItem) => void;
+  title?: string;
   visible: boolean;
 }) {
   return (
@@ -3621,6 +3890,20 @@ function CommunityPostOptionsSheet({
             <View className="h-1.5 w-14 rounded-full bg-[#D3D2DC]" />
           </View>
 
+          {title ? (
+            <View className="flex-row items-center justify-between px-2 pb-2">
+              <Text
+                className="text-[15px] font-bold text-[#2F2432]"
+                style={textStyle(15)}
+              >
+                {title}
+              </Text>
+              {isSubmitting ? (
+                <ActivityIndicator color="#D4578F" size="small" />
+              ) : null}
+            </View>
+          ) : null}
+
           <View className="rounded-[22px] bg-[#F7F6FB] px-4 py-0.5">
             {items.map((item, index) => (
               <CommunityPostMenuRow
@@ -3628,6 +3911,10 @@ function CommunityPostOptionsSheet({
                 isLast={index === items.length - 1}
                 item={item}
                 onPress={() => {
+                  if (isSubmitting) {
+                    return;
+                  }
+
                   onSelectItem(item);
                 }}
               />
@@ -3639,13 +3926,128 @@ function CommunityPostOptionsSheet({
   );
 }
 
+/**
+ * Ô nhập lý do tự do cho mục "Lý do khác" — dùng lại đúng khung bottom sheet
+ * của menu bài viết nên không phát sinh thiết kế mới.
+ */
+function CommunityReportReasonComposer({
+  bottomInset,
+  draft,
+  isSubmitting,
+  onBack,
+  onChangeDraft,
+  onClose,
+  onSubmit,
+  visible,
+}: {
+  bottomInset: number;
+  draft: string;
+  isSubmitting: boolean;
+  onBack: () => void;
+  onChangeDraft: (value: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+  visible: boolean;
+}) {
+  const { t } = useTranslation();
+  const canSubmit = draft.trim().length > 0 && !isSubmitting;
+
+  return (
+    <Modal
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
+      transparent
+      visible={visible}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        className="flex-1"
+      >
+        <View className="flex-1 bg-black/35">
+          <Pressable className="flex-1" onPress={onClose} />
+
+          <View
+            className="rounded-t-[28px] bg-white px-4 pt-3"
+            style={{ paddingBottom: Math.max(bottomInset, 14) }}
+          >
+            <View className="items-center pb-2">
+              <View className="h-1.5 w-14 rounded-full bg-[#D3D2DC]" />
+            </View>
+
+            <View className="flex-row items-center gap-2 pb-2">
+              <Pressable hitSlop={8} onPress={onBack}>
+                <SymbolView
+                  name={{
+                    ios: "chevron.left",
+                    android: "arrow_back",
+                    web: "arrow_back",
+                  }}
+                  size={18}
+                  tintColor="#554C56"
+                />
+              </Pressable>
+              <Text
+                className="text-[15px] font-bold text-[#2F2432]"
+                style={textStyle(15)}
+              >
+                {t("community.feed.report.reasons.other")}
+              </Text>
+            </View>
+
+            <TextInput
+              autoFocus
+              className="min-h-[96px] rounded-[18px] bg-[#F7F6FB] px-4 py-3 text-[15px] text-[#2B232D]"
+              editable={!isSubmitting}
+              maxLength={communityReportReasonMaxLength}
+              multiline
+              onChangeText={onChangeDraft}
+              placeholder={t("community.feed.report.draftPlaceholder")}
+              placeholderTextColor="#A79FAE"
+              style={textStyle(15)}
+              textAlignVertical="top"
+              value={draft}
+            />
+
+            <View className="mt-3 flex-row items-center justify-between">
+              <Text
+                className="text-[12px] text-[#8E869A]"
+                style={textStyle(12)}
+              >
+                {draft.trim().length}/{communityReportReasonMaxLength}
+              </Text>
+
+              <Pressable
+                className={`rounded-full px-5 py-2.5 ${canSubmit ? "bg-[#D4578F]" : "bg-[#E7E5EF]"}`}
+                disabled={!canSubmit}
+                onPress={onSubmit}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text
+                    className={`text-[14px] font-bold ${canSubmit ? "text-white" : "text-[#A79FAE]"}`}
+                    style={textStyle(14)}
+                  >
+                    {t("community.feed.report.submit")}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 function CommunityPostMenuRow({
   isLast,
   item,
   onPress,
 }: {
   isLast: boolean;
-  item: CommunityPostMenuItem;
+  item: CommunityMenuRowItem;
   onPress: () => void;
 }) {
   const labelColor = item.isDestructive ? "#C24F3B" : "#202124";
@@ -3680,6 +4082,7 @@ function CommunityPostMenuRow({
 }
 
 function ExpandablePostCaption({ text }: { text: string }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const normalizedText = text.trim();
   const maxLength = 150;
@@ -3698,7 +4101,8 @@ function ExpandablePostCaption({ text }: { text: string }) {
             setExpanded((current) => !current);
           }}
         >
-          {expanded ? " Rút gọn" : " Xem thêm"}
+          {" "}
+          {expanded ? t("community.feed.showLess") : t("community.feed.showMore")}
         </Text>
       ) : null}
     </Text>
@@ -3717,10 +4121,11 @@ function AvatarMonogram({
 }
 
 function CommunityCommentCard({ item }: { item: PostComment }) {
+  const { t } = useTranslation();
   const displayName =
     readMeaningfulText(item.displayName) ??
     readMeaningfulText(item.username) ??
-    "Người dùng";
+    t("community.feed.fallbackUserName");
   const normalizedUsername =
     readMeaningfulText(item.username)?.replace(/^@/, "") ?? null;
   const shouldShowUsername =
@@ -3761,7 +4166,7 @@ function CommunityCommentCard({ item }: { item: PostComment }) {
               className="text-[12px] font-medium text-[#978B98]"
               style={textStyle(12)}
             >
-              {formatCommunityTime(item.createdAt)}
+              {formatCommunityTime(item.createdAt, t)}
             </Text>
           </View>
 
@@ -3769,7 +4174,8 @@ function CommunityCommentCard({ item }: { item: PostComment }) {
             className="mt-0.5 text-[15px] text-[#4B4150]"
             style={textStyle(15)}
           >
-            {readMeaningfulText(item.comment) ?? "Đã gửi một bình luận."}
+            {readMeaningfulText(item.comment) ??
+              t("community.feed.defaultCommentText")}
           </Text>
         </View>
       </View>
@@ -3921,6 +4327,7 @@ function CommunitySharePostModal({
   visibility: PostVisibilityValue;
   visible: boolean;
 }) {
+  const { t } = useTranslation();
   const [isVisibilityMenuOpen, setIsVisibilityMenuOpen] = useState(false);
 
   return (
@@ -4002,7 +4409,7 @@ function CommunitySharePostModal({
                 maxLength={communitySharePostMaxLength}
                 multiline
                 onChangeText={onChangeDraft}
-                placeholder="Hãy nói gì đó về nội dung này..."
+                placeholder={t("community.feed.sharePlaceholder")}
                 placeholderTextColor="#B39EAD"
                 style={{
                   color: "#2F242C",
@@ -4041,7 +4448,7 @@ function CommunitySharePostModal({
                         className="text-[14px] font-extrabold text-white"
                         style={textStyle(14)}
                       >
-                        Chia sẻ ngay
+                        {t("community.feed.shareNowButton")}
                       </Text>
                     )}
                   </LinearGradient>
@@ -4080,6 +4487,7 @@ function CommunityCommentComposerModal({
   postAuthor: string | null;
   visible: boolean;
 }) {
+  const { t } = useTranslation();
   const trimmedDraftLength = draft.trim().length;
   const showCommentsLoading = commentsStatus === "loading";
   const showCommentsEmptyState =
@@ -4119,15 +4527,17 @@ function CommunityCommentComposerModal({
                       className="text-[18px] font-black text-[#2F2337]"
                       style={textStyle(18)}
                     >
-                      Viết bình luận
+                      {t("community.feed.writeCommentTitle")}
                     </Text>
                     <Text
                       className="mt-0.5 text-[12px] text-[#8F8298]"
                       style={textStyle(12)}
                     >
                       {postAuthor
-                        ? `Bình luận cho bài viết của ${postAuthor}.`
-                        : "Bình luận cho bài viết cộng đồng."}
+                        ? t("community.feed.commentForAuthor", {
+                            author: postAuthor,
+                          })
+                        : t("community.feed.commentForPost")}
                     </Text>
                   </View>
 
@@ -4155,7 +4565,7 @@ function CommunityCommentComposerModal({
                     maxLength={communityCommentMaxLength}
                     multiline
                     onChangeText={onChangeDraft}
-                    placeholder="Chia sẻ cảm nhận của bạn về bài viết này..."
+                    placeholder={t("community.feed.commentPlaceholder")}
                     placeholderTextColor="#B39EAD"
                     style={{
                       color: "#2F242C",
@@ -4174,7 +4584,7 @@ function CommunityCommentComposerModal({
                     className="text-[11px] font-medium text-[#A897B2]"
                     style={textStyle(11)}
                   >
-                    Bình luận sẽ được gửi công khai.
+                    {t("community.feed.commentPublicNotice")}
                   </Text>
                   <Text
                     className="text-[11px] font-medium text-[#A897B2]"
@@ -4195,7 +4605,7 @@ function CommunityCommentComposerModal({
                       className="text-[13px] font-bold text-[#8E869A]"
                       style={textStyle(13)}
                     >
-                      Hủy
+                      {t("common.cancel")}
                     </Text>
                   </Pressable>
 
@@ -4226,7 +4636,7 @@ function CommunityCommentComposerModal({
                           className="text-[13px] font-extrabold text-white"
                           style={textStyle(13)}
                         >
-                          Gửi bình luận
+                          {t("community.feed.submitCommentButton")}
                         </Text>
                       )}
                     </LinearGradient>
@@ -4239,15 +4649,19 @@ function CommunityCommentComposerModal({
                       className="text-[14px] font-black text-[#2F2337]"
                       style={textStyle(14)}
                     >
-                      Bình luận
+                      {t("community.posts.comment")}
                     </Text>
                     <Text
                       className="text-[11px] font-medium text-[#A897B2]"
                       style={textStyle(11)}
                     >
                       {commentsStatus === "ready"
-                        ? `${comments.length} mục`
-                        : `Trang 1 / ${communityPostCommentsPageSize}`}
+                        ? t("community.feed.commentCountLabel", {
+                            count: comments.length,
+                          })
+                        : t("community.feed.commentsPagePlaceholder", {
+                            size: communityPostCommentsPageSize,
+                          })}
                     </Text>
                   </View>
 
@@ -4276,7 +4690,7 @@ function CommunityCommentComposerModal({
                           className="text-[12px] font-bold text-[#B45384]"
                           style={textStyle(12)}
                         >
-                          Thử tải lại
+                          {t("community.feed.retryLoad")}
                         </Text>
                       </Pressable>
                     </View>
@@ -4303,13 +4717,13 @@ function CommunityCommentComposerModal({
                         className="mt-[-28px] text-[14px] font-semibold text-[#43354C]"
                         style={textStyle(14)}
                       >
-                        Chưa có bình luận nào
+                        {t("community.feed.noCommentsTitle")}
                       </Text>
                       <Text
                         className="mt-[-6px] text-center text-[12px] text-[#8F8298]"
                         style={textStyle(12)}
                       >
-                        Hãy là người đầu tiên để lại cảm nhận cho bài viết này.
+                        {t("community.feed.noCommentsDescription")}
                       </Text>
                     </View>
                   ) : null}

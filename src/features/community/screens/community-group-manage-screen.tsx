@@ -6,6 +6,7 @@ import {
 } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Image,
@@ -93,6 +94,18 @@ function readMeaningfulText(value?: string | null) {
 
 function isNumericIdentifier(value?: string | null) {
   return typeof value === "string" && /^\d+$/.test(value.trim());
+}
+
+function getLocalizedStatusLabel(
+  status: string | null | undefined,
+  t: (key: string) => string,
+) {
+  switch ((status ?? "").trim().toUpperCase()) {
+    case "ACTIVE":
+      return t("community.groupDetail.statusActive");
+    default:
+      return t("community.groupDetail.notUpdated");
+  }
 }
 
 function getInitials(name?: string | null) {
@@ -344,6 +357,7 @@ function DangerActionRow({
 
 export default function CommunityGroupManageScreen() {
   const authSession = useAuthSession();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { shareToken } = useLocalSearchParams<{ shareToken?: string }>();
@@ -373,17 +387,15 @@ export default function CommunityGroupManageScreen() {
 
       async function loadGroupDetail() {
         if (!resolvedRouteValue) {
-          setErrorMessage(
-            "Không đọc được thông tin nhóm từ đường dẫn hiện tại.",
-          );
+          setErrorMessage(t("community.groupDetail.missingRouteError"));
+          setKickedMembersCount(null);
           setStatus("error");
           return;
         }
 
         if (!resolvedGroupId) {
-          setErrorMessage(
-            "Không xác định được ID nhóm để tải giao diện quản lý.",
-          );
+          setErrorMessage(t("community.groupManage.missingGroupIdError"));
+          setKickedMembersCount(null);
           setStatus("error");
           return;
         }
@@ -420,7 +432,7 @@ export default function CommunityGroupManageScreen() {
           setErrorMessage(
             error instanceof Error
               ? error.message
-              : "Không tải được giao diện quản lý nhóm.",
+              : t("community.groupManage.loadError"),
           );
           setStatus("error");
         }
@@ -439,6 +451,7 @@ export default function CommunityGroupManageScreen() {
       resolvedGroupId,
       resolvedRouteValue,
       retryNonce,
+      t,
     ]),
   );
 
@@ -459,7 +472,7 @@ export default function CommunityGroupManageScreen() {
     const nextGroupId = displayGroup?.groupId ?? resolvedGroupId;
 
     if (!nextShareToken || !nextGroupId) {
-      appToast.error("Không xác định được nhóm để mở danh sách thành viên.");
+      appToast.error(t("community.groupDetail.missingGroupForMembers"));
       return;
     }
 
@@ -473,12 +486,12 @@ export default function CommunityGroupManageScreen() {
     const nextGroupId = displayGroup?.groupId ?? resolvedGroupId;
 
     if (!nextShareToken || !nextGroupId) {
-      appToast.error("Không xác định được nhóm để mở yêu cầu tham gia.");
+      appToast.error(t("community.groupManage.missingGroupForPending"));
       return;
     }
 
     router.push(
-      `/community/group/${encodeURIComponent(nextShareToken)}/members?groupId=${encodeURIComponent(nextGroupId)}&action=PENDING&screenTitle=${encodeURIComponent("Duyệt yêu cầu tham gia")}` as Href,
+      `/community/group/${encodeURIComponent(nextShareToken)}/members?groupId=${encodeURIComponent(nextGroupId)}&action=PENDING&screenTitle=${encodeURIComponent(t("community.groupManage.pendingRequestsScreenTitle"))}` as Href,
     );
   };
 
@@ -551,9 +564,9 @@ export default function CommunityGroupManageScreen() {
         <StatusBar style="dark" />
         <View className="flex-1 px-4" style={{ paddingTop: insets.top + 24 }}>
           <CommunityGroupStateCard
-            description="Không đọc được tham số nhóm từ đường dẫn hiện tại."
+            description={t("community.groupDetail.routeInvalidDescription")}
             icon="link_off"
-            title="Link nhóm không hợp lệ"
+            title={t("community.groupDetail.routeInvalidTitle")}
             variant="empty"
           />
         </View>
@@ -565,7 +578,7 @@ export default function CommunityGroupManageScreen() {
     return (
       <AppLoadingScreen
         edges={["left", "right"]}
-        message="Đang tải quản lý nhóm"
+        message={t("community.groupManage.loadingMessage")}
       />
     );
   }
@@ -580,16 +593,16 @@ export default function CommunityGroupManageScreen() {
         <StatusBar style="dark" />
         <View className="flex-1 px-4" style={{ paddingTop: insets.top + 24 }}>
           <CommunityGroupStateCard
-            actionLabel="Thử lại"
+            actionLabel={t("common.retry")}
             description={
               errorMessage ??
-              "Không có dữ liệu chi tiết để hiển thị giao diện quản lý."
+              t("community.groupManage.loadErrorFallbackDescription")
             }
             icon="error"
             onPress={() => {
               setRetryNonce((currentValue) => currentValue + 1);
             }}
-            title="Không tải được quản lý nhóm"
+            title={t("community.groupManage.loadErrorTitle")}
             variant="error"
           />
         </View>
@@ -598,7 +611,10 @@ export default function CommunityGroupManageScreen() {
   }
 
   const totalMembersValue = displayGroup.totalMembers ?? 0;
-  const totalMembersLabel = `${totalMembersValue} thành viên`;
+  const totalMembersLabel = t("community.groupsScreen.memberCountLabel", {
+    count: totalMembersValue,
+  });
+  const statusLabel = getLocalizedStatusLabel(displayGroup.status, t);
 
   return (
     <SafeAreaView
@@ -640,7 +656,7 @@ export default function CommunityGroupManageScreen() {
               className="text-[17px] font-semibold"
               style={{ color: palette.primaryText, lineHeight: lineHeightFor(17) }}
             >
-              Quản lý nhóm
+              {t("community.groupManage.headerTitle")}
             </Text>
 
             <View className="h-10 w-10" />
@@ -680,14 +696,16 @@ export default function CommunityGroupManageScreen() {
                   numberOfLines={2}
                   style={{ color: palette.primaryText, lineHeight: lineHeightFor(19) }}
                 >
-                  {displayGroup.groupName ?? "Nhóm cộng đồng"}
+                  {displayGroup.groupName ??
+                    t("community.groupsScreen.status.default")}
                 </Text>
 
                 <Text
                   className="mt-0.5 text-[12px]"
                   style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(12) }}
                 >
-                  Nhóm cộng đồng • {totalMembersLabel}
+                  {t("community.groupsScreen.status.default")} •{" "}
+                  {totalMembersLabel}
                 </Text>
 
                 {displayGroup.requiredApproval === false ? (
@@ -734,31 +752,52 @@ export default function CommunityGroupManageScreen() {
           ) : null}
 
           <View className="mt-3">
-            <SectionCard title="Quản lý thành viên">
+            <SectionCard title={t("community.groupManage.memberManagementTitle")}>
               <ManagementActionRow
-                badge={displayGroup.requiredApproval ? "0 chờ" : "Tắt duyệt"}
-                description="Xem danh sách chờ và phê duyệt thành viên mới."
+                badge={
+                  displayGroup.requiredApproval
+                    ? t("community.groupManage.pendingBadgeZero")
+                    : t("community.groupManage.pendingBadgeOff")
+                }
+                description={t(
+                  "community.groupManage.pendingRequestsDescription",
+                )}
                 icon="person-add-alt-1"
-                label="Duyệt yêu cầu tham gia"
+                label={t("community.groupManage.pendingRequestsScreenTitle")}
                 onPress={handleOpenPendingMembers}
               />
               <ManagementActionRow
                 badge={`${totalMembersValue}`}
-                description="Xem toàn bộ thành viên, quyền hiện tại và vai trò."
-                hideDivider
+                description={t("community.groupManage.membersListDescription")}
                 icon="groups"
-                label="Danh sách thành viên"
+                label={t("community.groupManage.membersListLabel")}
                 onPress={handleOpenGroupMembers}
+              />
+              <ManagementActionRow
+                badge={
+                  kickedMembersCount === null
+                    ? undefined
+                    : `${kickedMembersCount}`
+                }
+                description={t(
+                  "community.groupManage.kickedMembersDescription",
+                )}
+                hideDivider
+                icon="person-remove"
+                label={t("community.groupManage.kickedMembersLabel")}
+                onPress={handleOpenKickedMembers}
               />
             </SectionCard>
           </View>
 
           <View className="mt-3">
-            <SectionCard title="Cài đặt">
+            <SectionCard title={t("community.groupManage.settingsTitle")}>
               <SettingsEntryRow
-                description="Quản lý tên nhóm và yêu cầu quyền tham gia."
+                description={t(
+                  "community.groupManage.groupSettingsDescription",
+                )}
                 icon="settings"
-                label="Cài đặt nhóm"
+                label={t("community.groupManage.groupSettingsLabel")}
                 onPress={handleOpenGroupSettings}
               />
               <DangerActionRow

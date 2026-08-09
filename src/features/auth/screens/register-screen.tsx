@@ -2,6 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Image,
   KeyboardAvoidingView,
@@ -64,6 +65,7 @@ const buttonShadowStyle = {
 } as const;
 
 export default function RegisterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{
     displayName?: string;
@@ -223,7 +225,7 @@ export default function RegisterScreen() {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "Không thể đăng ký. Vui lòng thử lại.",
+          : t("auth.register.errorCannotRegister"),
       );
     } finally {
       setIsSubmitting(false);
@@ -254,7 +256,9 @@ export default function RegisterScreen() {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : `Không thể đăng ký với ${provider === "facebook" ? "Facebook" : "Google"}. Vui lòng thử lại.`,
+          : t("auth.register.errorCannotRegisterWithProvider", {
+              provider: provider === "facebook" ? "Facebook" : "Google",
+            }),
       );
     } finally {
       setPendingSocialProvider(null);
@@ -355,10 +359,10 @@ export default function RegisterScreen() {
                     className="font-extrabold text-[#EB489B]"
                     style={{ fontSize: titleSize }}
                   >
-                    Đăng ký
+                    {t("auth.register.title")}
                   </Text>
                   <Text className="text-[14px] text-[#8E869A]">
-                    Tạo tài khoản để bắt đầu hành trình
+                    {t("auth.register.subtitle")}
                   </Text>
                 </View>
 
@@ -372,8 +376,8 @@ export default function RegisterScreen() {
                       editable={!isSubmitting}
                       errorMessage={usernameError}
                       inputClassName={fieldHeightClassName}
-                      label="Username"
-                      placeholder="Chọn username"
+                      label={t("auth.register.username")}
+                      placeholder={t("auth.register.usernamePlaceholder")}
                       textContentType="username"
                       value={username}
                       onBlur={() => markFieldTouched("username")}
@@ -389,8 +393,8 @@ export default function RegisterScreen() {
                       editable={!isSubmitting}
                       errorMessage={displayNameError}
                       inputClassName={fieldHeightClassName}
-                      label="Tên hiển thị"
-                      placeholder="Chọn tên hiển thị"
+                      label={t("auth.register.displayName")}
+                      placeholder={t("auth.register.displayNamePlaceholder")}
                       textContentType="nickname"
                       value={displayName}
                       onBlur={() => markFieldTouched("displayName")}
@@ -407,8 +411,8 @@ export default function RegisterScreen() {
                       errorMessage={emailError}
                       inputClassName={fieldHeightClassName}
                       keyboardType="email-address"
-                      label="Email"
-                      placeholder="Nhập địa chỉ email"
+                      label={t("auth.register.email")}
+                      placeholder={t("auth.register.emailPlaceholder")}
                       textContentType="emailAddress"
                       value={email}
                       onBlur={() => markFieldTouched("email")}
@@ -424,8 +428,8 @@ export default function RegisterScreen() {
                       editable={!isSubmitting}
                       errorMessage={passwordError}
                       inputClassName={fieldHeightClassName}
-                      label="Mật khẩu"
-                      placeholder="Nhập mật khẩu"
+                      label={t("auth.register.password")}
+                      placeholder={t("auth.register.passwordPlaceholder")}
                       secureTextEntry
                       textContentType="newPassword"
                       value={password}
@@ -442,11 +446,11 @@ export default function RegisterScreen() {
                       editable={!isSubmitting}
                       errorMessage={confirmPasswordError}
                       inputClassName={fieldHeightClassName}
-                      label="Nhập lại mật khẩu"
+                      label={t("auth.register.confirmPassword")}
                       onSubmitEditing={() => {
                         void handleRegister();
                       }}
-                      placeholder="Nhập lại mật khẩu"
+                      placeholder={t("auth.register.confirmPasswordPlaceholder")}
                       returnKeyType="done"
                       secureTextEntry
                       textContentType="password"
@@ -477,7 +481,9 @@ export default function RegisterScreen() {
                         className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
                       >
                         <Text className="text-[16px] font-extrabold text-white">
-                          {isSubmitting ? "Đang tạo tài khoản..." : "Tạo tài khoản"}
+                          {isSubmitting
+                            ? t("auth.register.creatingAccount")
+                            : t("auth.register.createAccountButton")}
                         </Text>
                       </LinearGradient>
                     </Pressable>
@@ -493,7 +499,7 @@ export default function RegisterScreen() {
                     <View className="flex-row items-center justify-center gap-3">
                       <View className="h-px flex-1 bg-[#F0E8F4]" />
                       <Text className="text-[13px] font-medium text-[#AA9FB0]">
-                        Hoặc đăng ký với
+                        {t("auth.register.orSignUpWith")}
                       </Text>
                       <View className="h-px flex-1 bg-[#F0E8F4]" />
                     </View>
@@ -519,11 +525,11 @@ export default function RegisterScreen() {
 
                     <View className="flex-row items-center justify-center gap-1.5">
                       <Text className="text-[14px] text-[#8E869A]">
-                        Bạn đã có tài khoản?
+                        {t("auth.register.haveAccount")}
                       </Text>
                       <Pressable onPress={() => router.push("/login?entry=home")}>
                         <Text className="text-[14px] font-extrabold text-[#F58752]">
-                          Đăng nhập
+                          {t("auth.register.signIn")}
                         </Text>
                       </Pressable>
                     </View>
