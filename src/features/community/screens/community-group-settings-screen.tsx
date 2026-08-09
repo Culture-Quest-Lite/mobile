@@ -1,6 +1,7 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Pressable,
@@ -134,6 +135,7 @@ function ApprovalChip({
 }
 
 export default function CommunityGroupSettingsScreen() {
+  const { t } = useTranslation();
   const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -169,15 +171,13 @@ export default function CommunityGroupSettingsScreen() {
 
       async function loadGroupDetail() {
         if (!resolvedRouteValue) {
-          setErrorMessage(
-            "Không đọc được thông tin nhóm từ đường dẫn hiện tại.",
-          );
+          setErrorMessage(t("community.groupDetail.missingRouteError"));
           setStatus("error");
           return;
         }
 
         if (!resolvedGroupId) {
-          setErrorMessage("Không xác định được ID nhóm để tải cài đặt.");
+          setErrorMessage(t("community.groupSettings.missingGroupIdError"));
           setStatus("error");
           return;
         }
@@ -218,7 +218,7 @@ export default function CommunityGroupSettingsScreen() {
           setErrorMessage(
             error instanceof Error
               ? error.message
-              : "Không tải được cài đặt nhóm.",
+              : t("community.groupSettings.loadError"),
           );
           setStatus("error");
         }
@@ -251,17 +251,17 @@ export default function CommunityGroupSettingsScreen() {
 
   const handleSave = async () => {
     if (!effectiveGroupId) {
-      appToast.error("Không tìm thấy ID nhóm hợp lệ để cập nhật.");
+      appToast.error(t("community.groupSettings.missingGroupIdSaveError"));
       return;
     }
 
     if (!normalizedEditableGroupName) {
-      appToast.info("Vui lòng nhập tên nhóm trước khi lưu.");
+      appToast.info(t("community.groupSettings.nameRequiredInfo"));
       return;
     }
 
     if (editableRequiredApproval === null) {
-      appToast.info("Vui lòng chọn yêu cầu quyền tham gia trước khi lưu.");
+      appToast.info(t("community.groupSettings.approvalRequiredInfo"));
       return;
     }
 
@@ -270,7 +270,7 @@ export default function CommunityGroupSettingsScreen() {
       : null;
 
     if (!accessToken) {
-      appToast.error("Bạn cần đăng nhập để cập nhật cài đặt nhóm.");
+      appToast.error(t("community.groupSettings.loginRequiredSave"));
       return;
     }
 
@@ -293,13 +293,13 @@ export default function CommunityGroupSettingsScreen() {
 
       setGroupDetail(cachedUpdatedGroup ?? updatedGroup);
       setErrorMessage(null);
-      appToast.success("Cài đặt nhóm đã được cập nhật.");
+      appToast.success(t("community.groupSettings.saveSuccessToast"));
       router.back();
     } catch (error) {
       const nextErrorMessage =
         error instanceof Error
           ? error.message
-          : "Không thể cập nhật cài đặt nhóm.";
+          : t("community.groupSettings.saveErrorFallback");
 
       appToast.error(nextErrorMessage);
       setErrorMessage(
@@ -320,9 +320,9 @@ export default function CommunityGroupSettingsScreen() {
         <StatusBar style="dark" />
         <View className="flex-1 px-4" style={{ paddingTop: insets.top + 24 }}>
           <CommunityGroupStateCard
-            description="Không đọc được tham số nhóm từ đường dẫn hiện tại."
+            description={t("community.groupDetail.routeInvalidDescription")}
             icon="link_off"
-            title="Link nhóm không hợp lệ"
+            title={t("community.groupDetail.routeInvalidTitle")}
             variant="empty"
           />
         </View>
@@ -334,7 +334,7 @@ export default function CommunityGroupSettingsScreen() {
     return (
       <AppLoadingScreen
         edges={["left", "right"]}
-        message="Đang tải cài đặt nhóm"
+        message={t("community.groupSettings.loadingMessage")}
       />
     );
   }
@@ -349,15 +349,15 @@ export default function CommunityGroupSettingsScreen() {
         <StatusBar style="dark" />
         <View className="flex-1 px-4" style={{ paddingTop: insets.top + 24 }}>
           <CommunityGroupStateCard
-            actionLabel="Thử lại"
+            actionLabel={t("common.retry")}
             description={
-              errorMessage ?? "Không có dữ liệu để hiển thị cài đặt nhóm."
+              errorMessage ?? t("community.groupSettings.noDataErrorDescription")
             }
             icon="error"
             onPress={() => {
               setRetryNonce((currentValue) => currentValue + 1);
             }}
-            title="Không tải được cài đặt"
+            title={t("community.groupSettings.loadErrorTitle")}
             variant="error"
           />
         </View>
@@ -404,7 +404,7 @@ export default function CommunityGroupSettingsScreen() {
             className="text-[18px] font-bold"
             style={{ color: palette.primaryText, lineHeight: lineHeightFor(18) }}
           >
-            Chỉnh sửa nhóm
+            {t("community.groupSettings.headerTitle")}
           </Text>
 
           <Pressable
@@ -425,7 +425,7 @@ export default function CommunityGroupSettingsScreen() {
                 className="text-[16px] font-medium"
                 style={{ color: palette.accentStrong, lineHeight: lineHeightFor(16) }}
               >
-                Lưu
+                {t("common.save")}
               </Text>
             )}
           </Pressable>
@@ -462,12 +462,12 @@ export default function CommunityGroupSettingsScreen() {
             className="text-[12px]"
             style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(12) }}
           >
-            Tên nhóm
+            {t("community.groupCreate.groupNameLabel")}
           </Text>
           <TextInput
             className="mt-1 px-0 py-0 text-[16px] font-medium"
             onChangeText={setEditableGroupName}
-            placeholder="Nhập tên nhóm"
+            placeholder={t("community.groupSettings.groupNamePlaceholder")}
             placeholderTextColor="#AAA3B2"
             style={{
               color: palette.primaryText,
@@ -481,8 +481,7 @@ export default function CommunityGroupSettingsScreen() {
           className="mt-2 px-1 text-[12px]"
           style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(12) }}
         >
-          Bạn chỉ có thể thay đổi tên nhóm khi cần thiết để giữ liên kết và nhận
-          diện nhóm ổn định.
+          {t("community.groupSettings.groupNameHelperText")}
         </Text>
 
         <View className="mt-4">
@@ -491,19 +490,19 @@ export default function CommunityGroupSettingsScreen() {
               className="text-[12px]"
               style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(12) }}
             >
-              Yêu cầu quyền tham gia
+              {t("community.groupSettings.requiredApprovalLabel")}
             </Text>
             <View className="mt-3 flex-row gap-2">
               <ApprovalChip
                 active={editableRequiredApproval === true}
-                label="Bật duyệt"
+                label={t("community.groupSettings.approvalOnLabel")}
                 onPress={() => {
                   setEditableRequiredApproval(true);
                 }}
               />
               <ApprovalChip
                 active={editableRequiredApproval === false}
-                label="Tắt duyệt"
+                label={t("community.groupSettings.approvalOffLabel")}
                 onPress={() => {
                   setEditableRequiredApproval(false);
                 }}

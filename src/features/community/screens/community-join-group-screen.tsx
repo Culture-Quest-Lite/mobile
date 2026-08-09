@@ -11,6 +11,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
+import { useTranslation } from "react-i18next";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
@@ -67,9 +68,11 @@ function isJoinPendingApprovalMessage(message: string) {
 function resolveJoinFailurePresentation({
   isAuthenticated,
   message,
+  t,
 }: {
   isAuthenticated: boolean;
   message: string;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }): JoinFailurePresentation {
   const normalizedMessage = normalizeLookupText(message);
 
@@ -81,10 +84,10 @@ function resolveJoinFailurePresentation({
   ) {
     return {
       action: "login",
-      actionLabel: "Dang nhap",
-      description: "Ban can dang nhap de tham gia nhom tu invite link nay.",
-      hint: "Sau khi dang nhap xong, he thong se tu thu tham gia nhom lai.",
-      title: "Can dang nhap",
+      actionLabel: t("community.joinGroup.login.actionLabel"),
+      description: t("community.joinGroup.login.description"),
+      hint: t("community.joinGroup.login.hint"),
+      title: t("community.joinGroup.login.title"),
     };
   }
 
@@ -95,10 +98,10 @@ function resolveJoinFailurePresentation({
   ) {
     return {
       action: "community",
-      actionLabel: "Ve cong dong",
-      description: "Tai khoan nay da la thanh vien cua nhom roi.",
-      hint: "Mo muc Cong dong de xem lai nhom hien tai.",
-      title: "Ban da o trong nhom",
+      actionLabel: t("community.joinGroup.alreadyMember.actionLabel"),
+      description: t("community.joinGroup.alreadyMember.description"),
+      hint: t("community.joinGroup.alreadyMember.hint"),
+      title: t("community.joinGroup.alreadyMember.title"),
     };
   }
 
@@ -108,10 +111,10 @@ function resolveJoinFailurePresentation({
   ) {
     return {
       action: "retry",
-      actionLabel: "Thu lai",
-      description: "Invite link nay da het han va khong con hieu luc.",
-      hint: "Hay xin leader mot link moi roi thu tham gia lai.",
-      title: "Link da het han",
+      actionLabel: t("common.retry"),
+      description: t("community.joinGroup.expired.description"),
+      hint: t("community.joinGroup.expired.hint"),
+      title: t("community.joinGroup.expired.title"),
     };
   }
 
@@ -122,19 +125,19 @@ function resolveJoinFailurePresentation({
   ) {
     return {
       action: "retry",
-      actionLabel: "Thu lai",
-      description: "Invite link nay khong hop le hoac da bi thay doi.",
-      hint: "Kiem tra lai link duoc chia se, sau do thu lai.",
-      title: "Link khong hop le",
+      actionLabel: t("common.retry"),
+      description: t("community.joinGroup.invalid.description"),
+      hint: t("community.joinGroup.invalid.hint"),
+      title: t("community.joinGroup.invalid.title"),
     };
   }
 
   return {
     action: "retry",
-    actionLabel: "Thu lai",
+    actionLabel: t("common.retry"),
     description: message,
-    hint: "Vui long thu lai sau hoac lien he quan tri vien de duoc ho tro.",
-    title: "Khong the tham gia nhom",
+    hint: t("community.joinGroup.generic.hint"),
+    title: t("community.joinGroup.generic.title"),
   };
 }
 
@@ -239,6 +242,7 @@ function JoinPendingApprovalCard({
 }: {
   onPress: () => void;
 }) {
+  const { t } = useTranslation();
   const heroFloat = useSharedValue(0);
   const heroScale = useSharedValue(1);
 
@@ -299,15 +303,14 @@ function JoinPendingApprovalCard({
         className="mt-0.5 text-center text-[18px] font-semibold text-[#2A2433]"
         style={{ includeFontPadding: false, lineHeight: lineHeightFor(18) }}
       >
-        Đã gửi yêu cầu tham gia!
+        {t("community.joinGroup.pending.title")}
       </Text>
 
       <Text
         className="mt-2 text-center text-[13px] text-[#6F657A]"
         style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(13) }}
       >
-        Yêu cầu của bạn đã được gửi thành công.{"\n"}
-        Vui lòng chờ leader duyệt để tham gia nhóm.
+        {t("community.joinGroup.pending.description")}
       </Text>
 
       <View
@@ -338,13 +341,13 @@ function JoinPendingApprovalCard({
               className="text-[14px] text-[#FF6D8D]"
               style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
             >
-              Đang chờ duyệt
+              {t("community.joinGroup.pending.statusLabel")}
             </Text>
             <Text
               className="mt-1 text-[12.5px] text-[#6F657A]"
               style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(12.5) }}
             >
-              Leader sẽ xem xét yêu cầu của bạn và phản hồi sớm nhất có thể.
+              {t("community.joinGroup.pending.statusHint")}
             </Text>
           </View>
         </View>
@@ -365,7 +368,7 @@ function JoinPendingApprovalCard({
           className="text-[14px] text-white"
           style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(14) }}
         >
-          Quay lại trang chủ
+          {t("community.joinGroup.pending.backHome")}
         </Text>
       </Pressable>
     </View>
@@ -373,6 +376,7 @@ function JoinPendingApprovalCard({
 }
 
 export default function CommunityJoinGroupScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const authSession = useAuthSession();
   const { shareToken } = useLocalSearchParams<{ shareToken?: string }>();
@@ -386,11 +390,13 @@ export default function CommunityJoinGroupScreen() {
   const invalidLinkPresentation = resolveJoinFailurePresentation({
     isAuthenticated: authSession.isAuthenticated,
     message: "Link khong hop le.",
+    t,
   });
   const errorPresentation = errorMessage
     ? resolveJoinFailurePresentation({
         isAuthenticated: authSession.isAuthenticated,
         message: errorMessage,
+        t,
       })
     : null;
 
@@ -447,7 +453,7 @@ export default function CommunityJoinGroupScreen() {
         const accessToken = await getValidAccessToken();
 
         if (!accessToken) {
-          throw new Error("Phien dang nhap da het han. Vui long dang nhap lai.");
+          throw new Error(t("community.joinGroup.sessionExpiredError"));
         }
 
         const joinedGroup = await joinCommunityGroup({
@@ -462,7 +468,7 @@ export default function CommunityJoinGroupScreen() {
         });
 
         if (!cachedGroup) {
-          throw new Error("Khong the luu du lieu nhom vua tham gia.");
+          throw new Error(t("community.joinGroup.saveGroupError"));
         }
 
         if (!isActive) {
@@ -482,7 +488,7 @@ export default function CommunityJoinGroupScreen() {
         const resolvedErrorMessage =
           error instanceof Error
             ? error.message
-            : "Khong the tham gia nhom tu invite link nay.";
+            : t("community.joinGroup.genericJoinError");
 
         if (isJoinPendingApprovalMessage(resolvedErrorMessage)) {
           setErrorMessage(null);
@@ -506,6 +512,7 @@ export default function CommunityJoinGroupScreen() {
     resolvedShareToken,
     retryNonce,
     router,
+    t,
   ]);
 
   return (

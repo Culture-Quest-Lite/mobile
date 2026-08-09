@@ -2,6 +2,7 @@ import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Alert, ScrollView, Share, Text, View } from "react-native";
 import {
   SafeAreaView,
@@ -20,6 +21,7 @@ import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 export default function CommunityGroupInviteMembersScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { shareToken } = useLocalSearchParams<{ shareToken?: string }>();
   const resolvedShareToken =
@@ -59,14 +61,14 @@ export default function CommunityGroupInviteMembersScreen() {
     try {
       await Share.share({
         message: shareMessage,
-        title: "Invite Members",
+        title: t("community.groupInvite.headerTitle"),
       });
     } catch (error) {
       Alert.alert(
-        "Khong the share",
+        t("community.feed.shareErrorTitle"),
         error instanceof Error
           ? error.message
-          : "Khong the mo native share luc nay.",
+          : t("community.groupInvite.shareErrorFallback"),
       );
     } finally {
       setIsSharePending(false);
@@ -81,24 +83,24 @@ export default function CommunityGroupInviteMembersScreen() {
         onBack={() => {
           router.back();
         }}
-        title="Invite Members"
+        title={t("community.groupInvite.headerTitle")}
       />
 
       {!resolvedShareToken ? (
         <View className="flex-1 px-4 pt-6">
           <CommunityGroupStateCard
-            description="Khong doc duoc shareToken de hien thi link moi thanh vien."
+            description={t("community.groupInvite.invalidTokenDescription")}
             icon="link_off"
-            title="Link moi khong hop le"
+            title={t("community.groupInvite.invalidTokenTitle")}
             variant="empty"
           />
         </View>
       ) : !groupSession ? (
         <View className="flex-1 px-4 pt-6">
           <CommunityGroupStateCard
-            description="Khong tim thay du lieu nhom trong phien hien tai. Hay quay lai Group Detail hoac tao/join nhom lai."
+            description={t("community.groupInvite.missingSessionDescription")}
             icon="groups"
-            title="Chua co du lieu nhom"
+            title={t("community.groupInvite.missingSessionTitle")}
             variant="empty"
           />
         </View>
@@ -116,34 +118,34 @@ export default function CommunityGroupInviteMembersScreen() {
               className="text-[12px] font-semibold uppercase tracking-[0.3px] text-[#8A94A3]"
               style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(12) }}
             >
-              Invite Members
+              {t("community.groupInvite.headerTitle")}
             </Text>
             <Text
               className="mt-2 text-[24px] font-black text-[#1F2933]"
               style={{ includeFontPadding: false, lineHeight: lineHeightFor(24) }}
             >
-              {groupSession.groupName ?? "Nhom du lich"}
+              {groupSession.groupName ??
+                t("community.groupInvite.defaultGroupName")}
             </Text>
             <Text
               className="mt-2 text-[14px] text-[#68737D]"
               style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(14) }}
             >
-              Man nay khong tu tao them API. Toan bo link moi thanh vien duoc
-              suy ra truc tiep tu shareToken backend tra ve.
+              {t("community.groupInvite.screenDescription")}
             </Text>
           </View>
 
           <View className="mt-4 flex-row gap-3">
             <CommunityGroupMetricCard
-              label="Total Members"
+              label={t("community.groupInvite.totalMembersLabel")}
               value={
                 groupSession.totalMembers !== null
                   ? `${groupSession.totalMembers}`
-                  : "Dang cap nhat"
+                  : t("home.stats.updating")
               }
             />
             <CommunityGroupMetricCard
-              label="Share Token"
+              label={t("community.groupInvite.shareTokenLabel")}
               value={groupSession.shareToken}
             />
           </View>

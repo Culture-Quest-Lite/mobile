@@ -4,6 +4,8 @@ import { lineHeightFor } from "@/lib/text-scale";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   Image,
   KeyboardAvoidingView,
@@ -52,11 +54,11 @@ const buttonShadowStyle = {
   elevation: 6,
 } as const;
 
-function maskEmailAddress(email: string) {
+function maskEmailAddress(email: string, t: TFunction) {
   const normalizedEmail = email.trim().toLowerCase();
 
   if (!normalizedEmail) {
-    return "email của bạn";
+    return t("auth.forgotPasswordSuccess.emailFallback");
   }
 
   const [localPart, domain] = normalizedEmail.split("@");
@@ -72,6 +74,7 @@ function maskEmailAddress(email: string) {
 }
 
 export default function ForgotPasswordSuccessScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { email, entry, message } = useLocalSearchParams<{
     email?: string;
@@ -103,8 +106,9 @@ export default function ForgotPasswordSuccessScreen() {
   const secondaryButtonHeightClassName = isCompactScreen ? "h-11" : "h-12";
   const footerGapClassName = isCompactScreen ? "gap-4 pt-5" : "gap-5 pt-6";
   const emailValue = email?.trim() ?? "";
-  const maskedEmail = maskEmailAddress(emailValue);
-  const successMessage = message?.trim() || "Chúng tôi đã gửi hướng dẫn khôi phục mật khẩu tới email của bạn.";
+  const maskedEmail = maskEmailAddress(emailValue, t);
+  const successMessage =
+    message?.trim() || t("auth.forgotPasswordSuccess.defaultMessage");
 
   useEffect(() => {
     if (entry !== "home") {
@@ -248,10 +252,10 @@ export default function ForgotPasswordSuccessScreen() {
                     className="text-center font-semibold text-[#EB489B]"
                     style={{ fontSize: titleSize, lineHeight: titleLineHeight }}
                   >
-                    Kiểm tra email
+                    {t("auth.forgotPasswordSuccess.title")}
                   </Text>
                   <Text className="text-center text-[14px] leading-[18px] text-[#8E869A]">
-                    Chúng tôi đã gửi email khôi phục mật khẩu tới{" "}
+                    {t("auth.forgotPasswordSuccess.sentToPrefix")}{" "}
                     <Text className="font-semibold text-[#322A3D]">
                       {maskedEmail}
                     </Text>
@@ -276,7 +280,7 @@ export default function ForgotPasswordSuccessScreen() {
                       className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
                     >
                       <Text className="text-[16px] font-semibold text-white">
-                        Về đăng nhập
+                        {t("auth.forgotPasswordSuccess.backToLogin")}
                       </Text>
                     </LinearGradient>
                   </Pressable>
@@ -286,7 +290,7 @@ export default function ForgotPasswordSuccessScreen() {
                     className={`${secondaryButtonHeightClassName} items-center justify-center rounded-[18px] border border-[#F2E4EB] bg-[#FFF9FC]`}
                   >
                     <Text className="text-[15px] font-medium text-[#F58752]">
-                      Gửi lại email khác
+                      {t("auth.forgotPasswordSuccess.resendDifferentEmail")}
                     </Text>
                   </Pressable>
                 </View>

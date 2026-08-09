@@ -26,6 +26,7 @@ import {
 } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -137,6 +138,7 @@ function VisibilityOptionRow({
 }
 
 export default function CommunityPostVisibilityScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<CommunityPostVisibilityParams>();
   const authSession = useAuthSession();
@@ -169,7 +171,7 @@ export default function CommunityPostVisibilityScreen() {
           return;
         }
 
-        setLoadError("Không xác định được bài viết cần cập nhật quyền riêng tư.");
+        setLoadError(t("community.postVisibility.missingPostIdError"));
         setIsLoadingPost(false);
         return;
       }
@@ -181,9 +183,7 @@ export default function CommunityPostVisibilityScreen() {
           return;
         }
 
-        setLoadError(
-          "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại trước khi chỉnh sửa quyền riêng tư.",
-        );
+        setLoadError(t("community.postVisibility.sessionExpiredLoadError"));
         setIsLoadingPost(false);
         return;
       }
@@ -212,7 +212,7 @@ export default function CommunityPostVisibilityScreen() {
         setLoadError(
           error instanceof Error
             ? error.message
-            : "Không thể tải bài viết để cập nhật quyền riêng tư.",
+            : t("community.postVisibility.loadErrorFallback"),
         );
       } finally {
         if (isActive) {
@@ -226,7 +226,7 @@ export default function CommunityPostVisibilityScreen() {
     return () => {
       isActive = false;
     };
-  }, [authSession.tokenType, isEditMode, resolvedPostId]);
+  }, [authSession.tokenType, isEditMode, resolvedPostId, t]);
 
   async function handleSubmit() {
     if (!isEditMode) {
@@ -237,24 +237,24 @@ export default function CommunityPostVisibilityScreen() {
 
     if (!authSession.isAuthenticated) {
       Alert.alert(
-        "Cần đăng nhập",
-        "Bạn cần đăng nhập để chỉnh sửa quyền riêng tư bài viết.",
+        t("community.feed.loginRequiredTitle"),
+        t("community.postVisibility.loginRequiredMessage"),
       );
       return;
     }
 
     if (!Number.isInteger(resolvedPostId) || resolvedPostId <= 0) {
       Alert.alert(
-        "Không thể cập nhật",
-        "Không xác định được bài viết cần chỉnh sửa quyền riêng tư.",
+        t("community.postVisibility.cannotUpdateTitle"),
+        t("community.postVisibility.missingPostIdSubmitError"),
       );
       return;
     }
 
     if (editingPostContent === null) {
       Alert.alert(
-        "Không thể cập nhật",
-        "Dữ liệu bài viết chưa sẵn sàng. Vui lòng thử lại.",
+        t("community.postVisibility.cannotUpdateTitle"),
+        t("community.postVisibility.postDataNotReadyError"),
       );
       return;
     }
@@ -263,8 +263,8 @@ export default function CommunityPostVisibilityScreen() {
 
     if (!accessToken) {
       Alert.alert(
-        "Phiên đăng nhập hết hạn",
-        "Vui lòng đăng nhập lại trước khi chỉnh sửa quyền riêng tư bài viết.",
+        t("community.feed.sessionExpiredTitle"),
+        t("community.postVisibility.sessionExpiredSubmitMessage"),
       );
       return;
     }
@@ -284,10 +284,10 @@ export default function CommunityPostVisibilityScreen() {
       router.back();
     } catch (error) {
       Alert.alert(
-        "Không thể cập nhật",
+        t("community.postVisibility.cannotUpdateTitle"),
         error instanceof Error
           ? error.message
-          : "Đã có lỗi xảy ra khi cập nhật quyền riêng tư bài viết.",
+          : t("community.postVisibility.updateErrorFallback"),
       );
     } finally {
       setIsSubmitting(false);
@@ -336,16 +336,16 @@ export default function CommunityPostVisibilityScreen() {
               style={{ lineHeight: lineHeightFor(16) }}
             >
               {isEditMode
-                ? "Ai có thể xem bài viết này?"
-                : "Ai có thể xem bài viết của bạn?"}
+                ? t("community.postVisibility.titleEdit")
+                : t("community.postVisibility.titleCreate")}
             </Text>
             <Text
               className="mt-1 text-[13px] text-[#6F657A]"
               style={{ lineHeight: bodyLineHeightFor(13) }}
             >
               {isEditMode
-                ? "Chọn đối tượng có thể xem bài viết này."
-                : "Chọn đối tượng có thể xem bài viết bạn đang soạn trên cộng đồng."}
+                ? t("community.postVisibility.subtitleEdit")
+                : t("community.postVisibility.subtitleCreate")}
             </Text>
           </View>
 
@@ -353,7 +353,7 @@ export default function CommunityPostVisibilityScreen() {
             <View className="mt-8 items-center justify-center px-5">
               <ActivityIndicator color="#2563EB" size="small" />
               <Text className="mt-3 text-[13px] font-normal text-[#6B7280]">
-                Đang tải quyền riêng tư bài viết...
+                {t("community.postVisibility.loadingLabel")}
               </Text>
             </View>
           ) : loadError ? (
@@ -389,8 +389,8 @@ export default function CommunityPostVisibilityScreen() {
         >
           <Text className="mb-3 text-[10px] text-[#9CA3AF]">
             {isEditMode
-              ? "Thiết lập này sẽ cập nhật ngay cho bài viết."
-              : "Thiết lập này áp dụng cho bài viết bạn đang soạn."}
+              ? t("community.postVisibility.footerNoteEdit")
+              : t("community.postVisibility.footerNoteCreate")}
           </Text>
 
           <Pressable
@@ -411,7 +411,9 @@ export default function CommunityPostVisibilityScreen() {
             {isSubmitting ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text className="text-[13px] font-semibold text-white">Xong</Text>
+              <Text className="text-[13px] font-semibold text-white">
+                {t("common.done")}
+              </Text>
             )}
           </Pressable>
         </View>

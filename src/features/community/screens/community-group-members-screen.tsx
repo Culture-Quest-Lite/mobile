@@ -8,6 +8,7 @@ import {
 } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Image,
@@ -128,11 +129,14 @@ function padDatePart(value: number) {
   return `${value}`.padStart(2, "0");
 }
 
-function formatGroupCreatedDate(value?: string | null) {
+function formatGroupCreatedDate(
+  value: string | null | undefined,
+  t: (key: string) => string,
+) {
   const normalizedDateValue = normalizeDateValue(value);
 
   if (!normalizedDateValue) {
-    return "Chưa cập nhật";
+    return t("community.groupDetail.notUpdated");
   }
 
   const date = new Date(normalizedDateValue);
@@ -144,55 +148,62 @@ function formatGroupCreatedDate(value?: string | null) {
   return `${padDatePart(date.getDate())}/${padDatePart(date.getMonth() + 1)}/${date.getFullYear()}`;
 }
 
-function formatRequestElapsedTime(value?: string | null) {
+function formatRequestElapsedTime(
+  value: string | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   const normalizedDateValue = normalizeDateValue(value);
+  const justSentLabel = t("community.groupMembers.justSentRequest");
 
   if (!normalizedDateValue) {
-    return "Vừa gửi yêu cầu";
+    return justSentLabel;
   }
 
   const date = new Date(normalizedDateValue);
   const timestamp = date.getTime();
 
   if (Number.isNaN(timestamp)) {
-    return "Vừa gửi yêu cầu";
+    return justSentLabel;
   }
 
   const elapsedMilliseconds = Math.max(0, Date.now() - timestamp);
 
   if (elapsedMilliseconds < 60 * 1000) {
-    return "Vừa gửi yêu cầu";
+    return justSentLabel;
   }
 
   const elapsedMinutes = Math.floor(elapsedMilliseconds / (60 * 1000));
 
   if (elapsedMinutes < 60) {
-    return `${elapsedMinutes} phút trước`;
+    return t("community.time.minutesAgo", { count: elapsedMinutes });
   }
 
   const elapsedHours = Math.floor(elapsedMinutes / 60);
 
   if (elapsedHours < 24) {
-    return `${elapsedHours} giờ trước`;
+    return t("community.time.hoursAgo", { count: elapsedHours });
   }
 
   const elapsedDays = Math.floor(elapsedHours / 24);
 
   if (elapsedDays < 7) {
-    return `${elapsedDays} ngày trước`;
+    return t("community.time.daysAgo", { count: elapsedDays });
   }
 
-  return formatGroupCreatedDate(normalizedDateValue);
+  return formatGroupCreatedDate(normalizedDateValue, t);
 }
 
-function getRoleLabel(role?: string | null) {
+function getRoleLabel(
+  role: string | null | undefined,
+  t: (key: string) => string,
+) {
   switch ((role ?? "").trim().toUpperCase()) {
     case "LEADER":
-      return "Trưởng nhóm";
+      return t("community.groupMembers.roleLeader");
     case "MEMBER":
-      return "Thành viên";
+      return t("community.groupMembers.roleMember");
     default:
-      return "Explorer";
+      return t("community.groupMembers.roleExplorer");
   }
 }
 
@@ -225,6 +236,8 @@ function MemberRow({
   onPress: () => void;
   roleLabel: string;
 }) {
+  const { t } = useTranslation();
+
   return (
     <View
       className="flex-row items-center gap-2.5 py-2.5"
@@ -273,7 +286,9 @@ function MemberRow({
 
       {onActionPress ? (
         <Pressable
-          accessibilityLabel={`Kích ${displayName} khỏi nhóm`}
+          accessibilityLabel={t("community.groupMembers.kickMemberA11y", {
+            name: displayName,
+          })}
           className="ml-2 rounded-full px-3 py-2"
           disabled={actionPending}
           hitSlop={8}
@@ -287,7 +302,9 @@ function MemberRow({
             className="text-[12px] font-bold"
             style={{ color: "#D95B8D", lineHeight: bodyLineHeightFor(12) }}
           >
-            {actionPending ? "Đang kích..." : (actionLabel ?? "Kích")}
+            {actionPending
+              ? t("community.groupMembers.kickingAction")
+              : (actionLabel ?? t("community.groupMembers.kickAction"))}
           </Text>
         </Pressable>
       ) : null}
@@ -422,6 +439,8 @@ function PendingRequestRow({
 }
 
 function PendingRequestsEmptyState() {
+  const { t } = useTranslation();
+
   return (
     <View className="items-center px-2 py-5">
       <Image
@@ -437,20 +456,22 @@ function PendingRequestsEmptyState() {
         className="mt-2 text-center text-[17px]"
         style={{ color: palette.primaryText, lineHeight: lineHeightFor(17) }}
       >
-        Chưa có yêu cầu tham gia
+        {t("community.groupMembers.pendingEmptyTitle")}
       </Text>
 
       <Text
         className="mt-1 text-center text-[13px]"
         style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(13), maxWidth: 240 }}
       >
-        Khi có người gửi yêu cầu tham gia, danh sách sẽ hiện ở đây.
+        {t("community.groupMembers.pendingEmptyDescription")}
       </Text>
     </View>
   );
 }
 
 function KickedMembersEmptyState() {
+  const { t } = useTranslation();
+
   return (
     <View className="items-center px-2 py-5">
       <Image
@@ -466,14 +487,14 @@ function KickedMembersEmptyState() {
         className="mt-2 text-center text-[17px]"
         style={{ color: palette.primaryText, lineHeight: lineHeightFor(17) }}
       >
-        Chưa có thành viên nào bị kích
+        {t("community.groupMembers.kickedEmptyTitle")}
       </Text>
 
       <Text
         className="mt-1 text-center text-[13px]"
         style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(13), maxWidth: 260 }}
       >
-        Khi leader kích thành viên khỏi nhóm, danh sách sẽ hiển thị tại đây.
+        {t("community.groupMembers.kickedEmptyDescription")}
       </Text>
     </View>
   );
@@ -492,6 +513,8 @@ function KickMemberConfirmModal({
   onConfirm: () => void;
   visible: boolean;
 }) {
+  const { t } = useTranslation();
+
   return (
     <Modal
       animationType="fade"
@@ -562,7 +585,7 @@ function KickMemberConfirmModal({
               className="mt-3 text-center text-[16px] font-bold"
               style={{ color: palette.primaryText, lineHeight: lineHeightFor(16) }}
             >
-              Kích thành viên
+              {t("community.groupMembers.kickModalTitle")}
             </Text>
 
             <View
@@ -574,14 +597,14 @@ function KickMemberConfirmModal({
               className="mt-3 text-center text-[13px]"
               style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(13) }}
             >
-              Bạn có chắc chắn muốn kích{" "}
+              {t("community.groupMembers.kickConfirmPrefix")}{" "}
               <Text
                 className="text-[13px] font-bold"
                 style={{ color: palette.primaryText, lineHeight: bodyLineHeightFor(13) }}
               >
-                {memberName ?? "thành viên này"}
+                {memberName ?? t("community.groupMembers.kickConfirmDefaultName")}
               </Text>{" "}
-              khỏi nhóm không?
+              {t("community.groupMembers.kickConfirmSuffix")}
             </Text>
           </View>
 
@@ -612,8 +635,7 @@ function KickMemberConfirmModal({
               className="flex-1 text-[11px]"
               style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(11) }}
             >
-              Thành viên bị kích sẽ không còn truy cập được nhóm và nội dung liên
-              quan.
+              {t("community.groupMembers.kickWarningNote")}
             </Text>
           </View>
 
@@ -642,7 +664,7 @@ function KickMemberConfirmModal({
                 numberOfLines={1}
                 style={{ color: "#8F8698", lineHeight: lineHeightFor(11) }}
               >
-                HỦY
+                {t("community.groupMembers.cancelActionUppercase")}
               </Text>
             </Pressable>
 
@@ -670,7 +692,7 @@ function KickMemberConfirmModal({
                     numberOfLines={1}
                     style={{ lineHeight: lineHeightFor(10) }}
                   >
-                    KÍCH THÀNH VIÊN
+                    {t("community.groupMembers.kickConfirmActionUppercase")}
                   </Text>
                 )}
               </LinearGradient>
@@ -683,6 +705,7 @@ function KickMemberConfirmModal({
 }
 
 export default function CommunityGroupMembersScreen() {
+  const { t } = useTranslation();
   const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -745,9 +768,7 @@ export default function CommunityGroupMembersScreen() {
 
       async function loadGroupMembers() {
         if (!resolvedRouteValue) {
-          setErrorMessage(
-            "Không đọc được thông tin nhóm từ đường dẫn hiện tại.",
-          );
+          setErrorMessage(t("community.groupDetail.missingRouteError"));
           setCurrentUserId(null);
           setGroupMembers([]);
           setMemberProfiles({});
@@ -758,10 +779,10 @@ export default function CommunityGroupMembersScreen() {
         if (!resolvedGroupId) {
           setErrorMessage(
             isPendingRequestsView
-              ? "Không xác định được ID nhóm để tải yêu cầu tham gia."
+              ? t("community.groupMembers.missingGroupIdForPendingError")
               : isKickedMembersView
-                ? "Không xác định được ID nhóm để tải danh sách đã bị kích."
-                : "Không xác định được ID nhóm để tải thành viên.",
+                ? t("community.groupMembers.missingGroupIdForKickedError")
+                : t("community.groupMembers.missingGroupIdForMembersError"),
           );
           setCurrentUserId(null);
           setGroupMembers([]);
@@ -811,7 +832,8 @@ export default function CommunityGroupMembersScreen() {
                   {
                     avatarUri: readMeaningfulText(profile.avatar),
                     displayName:
-                      readMeaningfulText(profile.name) ?? `Explorer #${userId}`,
+                      readMeaningfulText(profile.name) ??
+                      t("community.groupDetail.creatorFallback", { id: userId }),
                     userId,
                   } satisfies MemberProfileSummary,
                 ] as const;
@@ -847,10 +869,10 @@ export default function CommunityGroupMembersScreen() {
             error instanceof Error
               ? error.message
               : isPendingRequestsView
-                ? "Không tải được danh sách chờ duyệt."
+                ? t("community.groupMembers.loadPendingError")
                 : isKickedMembersView
-                  ? "Không tải được danh sách đã bị kích."
-                  : "Không tải được danh sách thành viên.",
+                  ? t("community.groupMembers.loadKickedError")
+                  : t("community.groupMembers.loadMembersError"),
           );
           setCurrentUserId(null);
           setGroupMembers([]);
@@ -900,19 +922,19 @@ export default function CommunityGroupMembersScreen() {
     }
 
     if (!resolvedGroupId) {
-      appToast.error("Không xác định được ID nhóm để kích thành viên.");
+      appToast.error(t("community.groupMembers.missingGroupIdKickError"));
       return;
     }
 
     if (!authSession.isAuthenticated) {
-      appToast.error("Bạn cần đăng nhập để kích thành viên.");
+      appToast.error(t("community.groupMembers.loginRequiredKick"));
       return;
     }
 
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      appToast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      appToast.error(t("community.joinGroup.sessionExpiredError"));
       return;
     }
 
@@ -936,12 +958,14 @@ export default function CommunityGroupMembersScreen() {
         return nextProfiles;
       });
       setKickConfirmTarget(null);
-      appToast.success(`Đã kích ${displayName} khỏi nhóm.`);
+      appToast.success(
+        t("community.groupMembers.kickSuccessToast", { name: displayName }),
+      );
     } catch (error) {
       appToast.error(
         error instanceof Error
           ? error.message
-          : "Không thể kích thành viên lúc này.",
+          : t("community.groupMembers.kickErrorFallback"),
       );
     } finally {
       setKickingUserId(null);
@@ -979,14 +1003,14 @@ export default function CommunityGroupMembersScreen() {
     }
 
     if (!authSession.isAuthenticated) {
-      appToast.error("Bạn cần đăng nhập để duyệt yêu cầu tham gia.");
+      appToast.error(t("community.groupMembers.loginRequiredReview"));
       return;
     }
 
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      appToast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      appToast.error(t("community.joinGroup.sessionExpiredError"));
       return;
     }
 
@@ -1017,16 +1041,16 @@ export default function CommunityGroupMembersScreen() {
       }
       appToast.success(
         action === "JOIN"
-          ? `Đã duyệt ${displayName} tham gia nhóm.`
-          : `Đã từ chối yêu cầu của ${displayName}.`,
+          ? t("community.groupMembers.approveSuccessToast", { name: displayName })
+          : t("community.groupMembers.rejectSuccessToast", { name: displayName }),
       );
     } catch (error) {
       appToast.error(
         error instanceof Error
           ? error.message
           : action === "JOIN"
-            ? "Không thể duyệt yêu cầu lúc này."
-            : "Không thể từ chối yêu cầu lúc này.",
+            ? t("community.groupMembers.approveErrorFallback")
+            : t("community.groupMembers.rejectErrorFallback"),
       );
     } finally {
       setPendingParticipantAction(null);
@@ -1043,9 +1067,9 @@ export default function CommunityGroupMembersScreen() {
         <StatusBar style="dark" />
         <View className="flex-1 px-4" style={{ paddingTop: insets.top + 24 }}>
           <CommunityGroupStateCard
-            description="Không đọc được tham số nhóm từ đường dẫn hiện tại."
+            description={t("community.groupDetail.routeInvalidDescription")}
             icon="link_off"
-            title="Link nhóm không hợp lệ"
+            title={t("community.groupDetail.routeInvalidTitle")}
             variant="empty"
           />
         </View>
@@ -1057,19 +1081,20 @@ export default function CommunityGroupMembersScreen() {
     return <AppLoadingScreen edges={["left", "right"]} />;
   }
 
-  const groupName = cachedGroupSession?.groupName ?? "Nhóm cộng đồng";
+  const groupName =
+    cachedGroupSession?.groupName ?? t("community.groupDetail.defaultGroupName");
   const screenTitle =
     resolvedScreenTitle ??
     (isPendingRequestsView
-      ? "Duyệt yêu cầu tham gia"
+      ? t("community.groupManage.pendingRequestsScreenTitle")
       : isKickedMembersView
-        ? "Thành viên đã bị kích"
-        : "Danh sách thành viên");
+        ? t("community.groupManage.kickedMembersLabel")
+        : t("community.groupManage.membersListLabel"));
   const sectionTitle = isPendingRequestsView
-    ? "Yêu cầu đang chờ"
+    ? t("community.groupMembers.pendingSectionTitle")
     : isKickedMembersView
-      ? "Danh sách đã bị kích"
-      : "Thành viên hiện tại";
+      ? t("community.groupMembers.kickedSectionTitle")
+      : t("community.groupMembers.currentSectionTitle");
   const isCurrentUserLeader = groupMembers.some((member) => {
     if (!currentUserId) {
       return false;
@@ -1085,12 +1110,13 @@ export default function CommunityGroupMembersScreen() {
     (normalizeRouteValue(cachedGroupSession?.leaderId) === currentUserId ||
       isCurrentUserLeader);
   const totalGroupMembersLabel = isPendingRequestsView
-    ? `${groupMembers.length} chờ duyệt`
+    ? t("community.groupMembers.pendingCountLabel", { count: groupMembers.length })
     : isKickedMembersView
-      ? `${groupMembers.length} đã bị kích`
-      : `${groupMembers.length} thành viên`;
+      ? t("community.groupMembers.kickedCountLabel", { count: groupMembers.length })
+      : t("community.groupsScreen.memberCountLabel", { count: groupMembers.length });
   const createdDateLabel = formatGroupCreatedDate(
     cachedGroupSession?.createdAt,
+    t,
   );
   const inviteLink = cachedGroupSession?.inviteWebUrl
     ? cachedGroupSession.inviteWebUrl
@@ -1100,14 +1126,14 @@ export default function CommunityGroupMembersScreen() {
 
   const handleCopyInviteLink = async () => {
     if (!inviteLink) {
-      appToast.info("Nhóm này chưa có link mời.");
+      appToast.info(t("community.groupMembers.noInviteLinkInfo"));
       return;
     }
 
     try {
       await Clipboard.setStringAsync(inviteLink);
       setCopiedInviteLink(true);
-      appToast.success("Đã sao chép link mời.");
+      appToast.success(t("community.groupMembers.copyLinkSuccess"));
 
       setTimeout(() => {
         setCopiedInviteLink(false);
@@ -1116,7 +1142,7 @@ export default function CommunityGroupMembersScreen() {
       appToast.error(
         error instanceof Error
           ? error.message
-          : "Không sao chép được link mời.",
+          : t("community.groupMembers.copyLinkErrorFallback"),
       );
     }
   };
@@ -1238,7 +1264,9 @@ export default function CommunityGroupMembersScreen() {
                       className="ml-1 text-[11px]"
                       style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(11) }}
                     >
-                      {`Tạo ngày ${createdDateLabel}`}
+                      {t("community.groupMembers.createdDateLabel", {
+                        date: createdDateLabel,
+                      })}
                     </Text>
                   </View>
                 </View>
@@ -1269,7 +1297,7 @@ export default function CommunityGroupMembersScreen() {
                     className="text-[12px]"
                     style={{ color: palette.primaryText, lineHeight: bodyLineHeightFor(12) }}
                   >
-                    Link mời tham gia
+                    {t("community.groupMembers.inviteLinkLabel")}
                   </Text>
                   <Text
                     className="mt-1 text-[11px]"
@@ -1421,6 +1449,7 @@ export default function CommunityGroupMembersScreen() {
                         }
                         submittedAtLabel={formatRequestElapsedTime(
                           member.createdAt,
+                          t,
                         )}
                       />
                     );
@@ -1428,7 +1457,7 @@ export default function CommunityGroupMembersScreen() {
 
                   return (
                     <MemberRow
-                      actionLabel="Kích"
+                      actionLabel={t("community.groupMembers.kickAction")}
                       actionPending={normalizedUserId === kickingUserId}
                       key={
                         member.groupParticipantId ??
@@ -1450,7 +1479,7 @@ export default function CommunityGroupMembersScreen() {
                       onPress={() => {
                         handleOpenMemberProfile(normalizedUserId);
                       }}
-                      roleLabel={getRoleLabel(member.role)}
+                      roleLabel={getRoleLabel(member.role, t)}
                     />
                   );
                 })
@@ -1461,22 +1490,22 @@ export default function CommunityGroupMembersScreen() {
                   <KickedMembersEmptyState />
                 ) : (
                   <CommunityGroupStateCard
-                    description="Nhóm này chưa có thành viên nào để hiển thị."
+                    description={t("community.groupMembers.emptyMembersDescription")}
                     icon="groups"
-                    title="Chưa có thành viên"
+                    title={t("community.groupMembers.emptyMembersTitle")}
                     variant="empty"
                   />
                 )
               ) : (
                 <CommunityGroupStateCard
-                  actionLabel="Thử lại"
+                  actionLabel={t("common.retry")}
                   description={
                     errorMessage ??
                     (isPendingRequestsView
-                      ? "Không tải được danh sách yêu cầu tham gia của nhóm."
+                      ? t("community.groupMembers.loadPendingErrorDescription")
                       : isKickedMembersView
-                        ? "Không tải được danh sách thành viên đã bị kích của nhóm."
-                        : "Không tải được danh sách thành viên của nhóm.")
+                        ? t("community.groupMembers.loadKickedErrorDescription")
+                        : t("community.groupMembers.loadMembersErrorDescription"))
                   }
                   icon="error"
                   onPress={() => {
@@ -1484,10 +1513,10 @@ export default function CommunityGroupMembersScreen() {
                   }}
                   title={
                     isPendingRequestsView
-                      ? "Không tải được yêu cầu tham gia"
+                      ? t("community.groupMembers.loadPendingErrorTitle")
                       : isKickedMembersView
-                        ? "Không tải được danh sách đã bị kích"
-                        : "Không tải được thành viên"
+                        ? t("community.groupMembers.loadKickedErrorTitle")
+                        : t("community.groupMembers.loadMembersErrorTitle")
                   }
                   variant="error"
                 />

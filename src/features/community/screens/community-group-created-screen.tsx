@@ -5,6 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState, type ComponentProps } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Image,
   Pressable,
@@ -188,6 +189,8 @@ function InviteCard({
   memberCount: number;
   onCopy: () => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <View className="w-full px-1">
       <View style={[styles.inviteCard, cardShadowStyle]}>
@@ -222,7 +225,9 @@ function InviteCard({
                   android: "person",
                   web: "person",
                 }}
-                label={`${memberCount} thành viên`}
+                label={t("community.groupsScreen.memberCountLabel", {
+                  count: memberCount,
+                })}
               />
             </View>
           </View>
@@ -232,7 +237,7 @@ function InviteCard({
           className="mt-3 text-[11px] font-black uppercase tracking-[0.35px]"
           style={{ color: pagePalette.body, lineHeight: lineHeightFor(11) }}
         >
-          Link mời
+          {t("community.groupCreated.inviteLinkLabel")}
         </Text>
 
         <View
@@ -286,6 +291,7 @@ function InviteCard({
 
 export default function CommunityGroupCreatedScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { shareToken } = useLocalSearchParams<{ shareToken?: string }>();
@@ -371,11 +377,11 @@ export default function CommunityGroupCreatedScreen() {
             style={{ paddingHorizontal: horizontalPadding }}
           >
             <CommunityGroupStateCard
-              actionLabel="Về bảng tin"
-              description="Khong doc duoc shareToken tu route hien tai."
+              actionLabel={t("community.groupCreated.backToFeed")}
+              description={t("community.groupCreated.missingTokenDescription")}
               icon="link_off"
               onPress={navigateToFeed}
-              title="Thieu du lieu link moi"
+              title={t("community.groupCreated.missingTokenTitle")}
               variant="empty"
             />
           </View>
@@ -385,11 +391,11 @@ export default function CommunityGroupCreatedScreen() {
             style={{ paddingHorizontal: horizontalPadding }}
           >
             <CommunityGroupStateCard
-              actionLabel="Về bảng tin"
-              description="Phien tao nhom da khong con trong bo nho. Hay tao lai nhom de lay link moi moi nhat."
+              actionLabel={t("community.groupCreated.backToFeed")}
+              description={t("community.groupCreated.missingSessionDescription")}
               icon="groups"
               onPress={navigateToFeed}
-              title="Khong tim thay du lieu nhom"
+              title={t("community.groupCreated.missingSessionTitle")}
               variant="empty"
             />
           </View>
@@ -416,7 +422,7 @@ export default function CommunityGroupCreatedScreen() {
                   className="mt-1 text-center text-[22px] font-black"
                   style={{ color: pagePalette.title, lineHeight: lineHeightFor(22) }}
                 >
-                  Tạo nhóm thành công!
+                  {t("community.groupCreated.successTitle")}
                 </Text>
 
                 <LinearGradient
@@ -430,15 +436,17 @@ export default function CommunityGroupCreatedScreen() {
                   className="mt-1.5 text-center text-[13px]"
                   style={{ color: pagePalette.body, lineHeight: bodyLineHeightFor(13), maxWidth: descriptionMaxWidth }}
                 >
-                  Cộng đồng của bạn đã sẵn sàng. Hãy mời những người cùng sở
-                  thích tham gia nhé.
+                  {t("community.groupCreated.successSubtitle")}
                 </Text>
               </View>
 
               <View className="mt-5 w-full">
                 <InviteCard
                   copied={copied}
-                  groupName={groupSession.groupName ?? "Nhóm mới"}
+                  groupName={
+                    groupSession.groupName ??
+                    t("community.groupCreated.defaultGroupName")
+                  }
                   inviteUrl={groupSession.inviteWebUrl}
                   memberCount={memberCount}
                   onCopy={() => {
@@ -482,7 +490,7 @@ export default function CommunityGroupCreatedScreen() {
                         className="ml-2 text-[15px] font-black text-white"
                         style={{ lineHeight: lineHeightFor(15) }}
                       >
-                        Xem chi tiết
+                        {t("community.groupCreated.viewDetails")}
                       </Text>
                     </View>
 
@@ -532,7 +540,7 @@ export default function CommunityGroupCreatedScreen() {
                       className="ml-2 text-[15px] font-black"
                       style={{ color: pagePalette.body, lineHeight: lineHeightFor(15) }}
                     >
-                      Về bảng tin
+                      {t("community.groupCreated.backToFeed")}
                     </Text>
                   </View>
                 </Pressable>

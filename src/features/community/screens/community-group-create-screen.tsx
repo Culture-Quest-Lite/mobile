@@ -23,6 +23,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -94,14 +95,17 @@ function getInviteAvatarColors(userId: number) {
   ] as readonly [string, string];
 }
 
-function buildInviteCandidateSubtitle(candidate: MutualFollowUser) {
+function buildInviteCandidateSubtitle(
+  candidate: MutualFollowUser,
+  t: (key: string) => string,
+) {
   const username = normalizeUsername(candidate.username);
 
   if (username) {
     return `@${username}`;
   }
 
-  return "Tài khoản người dùng";
+  return t("community.groupCreate.defaultUserAccount");
 }
 
 function matchesInviteCandidate(candidate: MutualFollowUser, query: string) {
@@ -227,6 +231,7 @@ function InviteCandidateRow({
   selected: boolean;
 }) {
   const avatarSize = compact ? 36 : 38;
+  const { t } = useTranslation();
 
   return (
     <Pressable
@@ -276,7 +281,7 @@ function InviteCandidateRow({
             lineHeight: lineHeightFor(compact ? 11 : 11.5),
           }}
         >
-          {buildInviteCandidateSubtitle(candidate)}
+          {buildInviteCandidateSubtitle(candidate, t)}
         </Text>
       </View>
 
@@ -290,6 +295,7 @@ export default function CommunityGroupCreateScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const authSession = useAuthSession();
+  const { t } = useTranslation();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [groupName, setGroupName] = useState("");
   // Chỉ báo lỗi tên nhóm sau lần bấm "Tạo nhóm" đầu tiên.
@@ -310,11 +316,11 @@ export default function CommunityGroupCreateScreen() {
   const contentHorizontalPadding = ScreenHorizontalPadding;
   const trimmedGroupName = groupName.trim();
   const groupNameError = !trimmedGroupName
-    ? "Hãy đặt tên cho nhóm."
+    ? t("community.groupCreate.nameRequired")
     : trimmedGroupName.length < minGroupNameLength
-      ? `Tên nhóm cần ít nhất ${minGroupNameLength} ký tự.`
+      ? t("community.groupCreate.nameTooShort", { min: minGroupNameLength })
       : trimmedGroupName.length > maxGroupNameLength
-        ? `Tên nhóm tối đa ${maxGroupNameLength} ký tự.`
+        ? t("community.groupCreate.nameTooLong", { max: maxGroupNameLength })
         : null;
   const visibleGroupNameError = hasAttemptedSubmit ? groupNameError : null;
   const isGroupNameNearLimit = groupName.length >= groupNameWarningThreshold;
@@ -342,7 +348,7 @@ export default function CommunityGroupCreateScreen() {
   ]);
   const resolvedInviteCandidatesErrorMessage = authSession.isAuthenticated
     ? inviteCandidatesErrorMessage
-    : "Bạn cần đăng nhập để xem danh sách bạn bè.";
+    : t("community.groupCreate.loginRequiredFriends");
   const selectedInviteCount = selectedUserIds.length;
 
   const visibleInviteCandidates = useMemo(
@@ -389,9 +395,7 @@ export default function CommunityGroupCreateScreen() {
         const accessToken = await getValidAccessToken();
 
         if (!accessToken) {
-          throw new Error(
-            "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
-          );
+          throw new Error(t("community.joinGroup.sessionExpiredError"));
         }
 
         const response = await getMutualFollowUsers({
@@ -421,7 +425,7 @@ export default function CommunityGroupCreateScreen() {
         setInviteCandidatesErrorMessage(
           error instanceof Error
             ? error.message
-            : "Không thể tải danh sách bạn bè lúc này.",
+            : t("community.groupCreate.loadFriendsError"),
         );
       } finally {
         if (!isCancelled) {
@@ -440,6 +444,7 @@ export default function CommunityGroupCreateScreen() {
     authSession.tokenType,
     inviteRefreshNonce,
     searchQuery,
+    t,
   ]);
 
   const handleSubmit = async () => {
@@ -455,7 +460,7 @@ export default function CommunityGroupCreateScreen() {
     }
 
     if (!authSession.isAuthenticated) {
-      setErrorMessage("Bạn cần đăng nhập để tạo nhóm mới.");
+      setErrorMessage(t("community.groupCreate.loginRequiredSubmit"));
       return;
     }
 
@@ -466,7 +471,7 @@ export default function CommunityGroupCreateScreen() {
       const accessToken = await getValidAccessToken();
 
       if (!accessToken) {
-        throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        throw new Error(t("community.joinGroup.sessionExpiredError"));
       }
 
       const createdGroup = await createCommunityGroup({
@@ -482,7 +487,7 @@ export default function CommunityGroupCreateScreen() {
       );
 
       if (!cachedSession) {
-        throw new Error("Không thể lưu dữ liệu nhóm vừa tạo.");
+        throw new Error(t("community.groupCreate.saveError"));
       }
 
       router.replace(
@@ -492,7 +497,7 @@ export default function CommunityGroupCreateScreen() {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "Không thể tạo nhóm lúc này. Vui lòng thử lại.",
+          : t("community.groupCreate.createError"),
       );
     } finally {
       setIsSubmitting(false);
@@ -532,7 +537,7 @@ export default function CommunityGroupCreateScreen() {
             lineHeight: lineHeightFor(isCompactScreen ? 16 : 17),
           }}
         >
-          Tạo nhóm tham gia
+          {t("community.groupCreate.headerTitle")}
         </Text>
 
         <View
@@ -568,7 +573,7 @@ export default function CommunityGroupCreateScreen() {
                     lineHeight: lineHeightFor(isCompactScreen ? 12 : 12.5),
                   }}
                 >
-                  {"Tên nhóm "}
+                  {`${t("community.groupCreate.groupNameLabel")} `}
                   <Text style={{ color: fieldErrorColor }}>*</Text>
                 </Text>
 
@@ -598,7 +603,7 @@ export default function CommunityGroupCreateScreen() {
                 onSubmitEditing={() => {
                   void handleSubmit();
                 }}
-                placeholder="Đặt tên nhóm"
+                placeholder={t("community.groupCreate.groupNamePlaceholder")}
                 placeholderTextColor="#99A2AE"
                 returnKeyType="done"
                 selectionColor={screenPalette.accent}
@@ -634,7 +639,7 @@ export default function CommunityGroupCreateScreen() {
                 lineHeight: lineHeightFor(isCompactScreen ? 14 : 15),
               }}
             >
-              Mời bạn bè
+              {t("community.groupCreate.inviteFriends")}
             </Text>
 
             <Text
@@ -646,7 +651,9 @@ export default function CommunityGroupCreateScreen() {
                 lineHeight: lineHeightFor(isCompactScreen ? 12 : 13),
               }}
             >
-              {`Đã chọn: ${selectedInviteCount}`}
+              {t("community.groupCreate.selectedCount", {
+                count: selectedInviteCount,
+              })}
             </Text>
           </View>
 
@@ -676,7 +683,7 @@ export default function CommunityGroupCreateScreen() {
               autoCorrect={false}
               editable={!isSubmitting}
               onChangeText={setSearchQuery}
-              placeholder="Tìm tên hoặc tài khoản"
+              placeholder={t("community.groupCreate.searchPlaceholder")}
               placeholderTextColor="#9CA5B0"
               returnKeyType="search"
               selectionColor={screenPalette.accent}
@@ -713,7 +720,7 @@ export default function CommunityGroupCreateScreen() {
                     lineHeight: lineHeightFor(isCompactScreen ? 12 : 13),
                   }}
                 >
-                  Đang tải danh sách bạn bè...
+                  {t("community.groupCreate.loadingFriends")}
                 </Text>
               </View>
             ) : resolvedInviteCandidatesErrorMessage ? (
@@ -765,7 +772,9 @@ export default function CommunityGroupCreateScreen() {
                       lineHeight: bodyLineHeightFor(13),
                     }}
                   >
-                    {authSession.isAuthenticated ? "Thử lại" : "Đăng nhập"}
+                    {authSession.isAuthenticated
+                      ? t("common.retry")
+                      : t("community.groupCreate.loginAction")}
                   </Text>
                 </Pressable>
               </View>
@@ -810,7 +819,7 @@ export default function CommunityGroupCreateScreen() {
                     lineHeight: lineHeightFor(isCompactScreen ? 13 : 14),
                   }}
                 >
-                  Không tìm thấy bạn bè phù hợp
+                  {t("community.groupCreate.noFriendsFound")}
                 </Text>
                 <Text
                   className="mt-1 text-center"
@@ -822,7 +831,7 @@ export default function CommunityGroupCreateScreen() {
                     lineHeight: bodyLineHeightFor(isCompactScreen ? 11.5 : 12.5),
                   }}
                 >
-                  Hãy thử tìm bằng tên khác hoặc tài khoản khác.
+                  {t("community.groupCreate.noFriendsFoundSubtitle")}
                 </Text>
               </View>
             )}
@@ -870,7 +879,7 @@ export default function CommunityGroupCreateScreen() {
                       lineHeight: bodyLineHeightFor(13),
                     }}
                   >
-                    Đăng nhập
+                    {t("community.groupCreate.loginAction")}
                   </Text>
                 </Pressable>
               ) : null}
@@ -906,7 +915,7 @@ export default function CommunityGroupCreateScreen() {
                     lineHeight: lineHeightFor(isCompactScreen ? 15 : 16),
                   }}
                 >
-                  Tạo nhóm
+                  {t("community.groupCreate.submitButton")}
                 </Text>
               </View>
             ) : (
@@ -934,7 +943,7 @@ export default function CommunityGroupCreateScreen() {
                       lineHeight: lineHeightFor(isCompactScreen ? 15 : 16),
                     }}
                   >
-                    Tạo nhóm
+                    {t("community.groupCreate.submitButton")}
                   </Text>
                 )}
               </LinearGradient>

@@ -8,6 +8,7 @@ import {
 } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -124,11 +125,14 @@ function padDatePart(value: number) {
   return `${value}`.padStart(2, "0");
 }
 
-function formatGroupDate(value?: string | null) {
+function formatGroupDate(
+  value: string | null | undefined,
+  t: (key: string) => string,
+) {
   const normalizedDateValue = normalizeDateValue(value);
 
   if (!normalizedDateValue) {
-    return "Chưa cập nhật";
+    return t("community.groupDetail.notUpdated");
   }
 
   const date = new Date(normalizedDateValue);
@@ -161,12 +165,15 @@ function resolveStatusChipPalette(status?: string | null) {
   }
 }
 
-function getLocalizedStatusLabel(status?: string | null) {
+function getLocalizedStatusLabel(
+  status: string | null | undefined,
+  t: (key: string) => string,
+) {
   switch ((status ?? "").trim().toUpperCase()) {
     case "ACTIVE":
-      return "Đang hoạt động";
+      return t("community.groupDetail.statusActive");
     default:
-      return "Chưa cập nhật";
+      return t("community.groupDetail.notUpdated");
   }
 }
 
@@ -259,6 +266,8 @@ function GroupInviteSection({
   onCopy: () => void;
   onRefresh?: (() => void) | undefined;
 }) {
+  const { t } = useTranslation();
+
   return (
     <View
       className="rounded-[22px] border px-4 py-3"
@@ -272,11 +281,11 @@ function GroupInviteSection({
           className="flex-1 text-[15px] font-extrabold"
           style={{ color: palette.primaryText, lineHeight: lineHeightFor(15) }}
         >
-          Mời thành viên tham gia
+          {t("community.groupDetail.inviteSectionTitle")}
         </Text>
         {onRefresh ? (
           <Pressable
-            accessibilityLabel="Làm mới liên kết tham gia"
+            accessibilityLabel={t("community.groupDetail.refreshLinkA11y")}
             disabled={isRefreshing}
             hitSlop={8}
             onPress={onRefresh}
@@ -291,7 +300,7 @@ function GroupInviteSection({
                 className="text-[12px] font-extrabold"
                 style={{ color: palette.accentStrong, lineHeight: bodyLineHeightFor(12) }}
               >
-                Làm mới link
+                {t("community.groupDetail.refreshLinkAction")}
               </Text>
             )}
           </Pressable>
@@ -328,7 +337,7 @@ function GroupInviteSection({
       </View>
 
       <Pressable
-        accessibilityLabel="Sao chép liên kết tham gia"
+        accessibilityLabel={t("community.groupDetail.copyLinkA11y")}
         className="mt-1.5 flex-row items-center justify-center rounded-[16px] px-3 py-2.5"
         hitSlop={8}
         onPress={onCopy}
@@ -351,7 +360,9 @@ function GroupInviteSection({
           className="ml-1.5 text-[13px] font-extrabold"
           style={{ color: palette.accentStrong, lineHeight: bodyLineHeightFor(13) }}
         >
-          {copied ? "Đã sao chép liên kết" : "Sao chép liên kết"}
+          {copied
+            ? t("community.groupDetail.linkCopied")
+            : t("community.groupDetail.copyLink")}
         </Text>
       </Pressable>
     </View>
@@ -419,6 +430,8 @@ function GroupOverflowSheet({
   onClose: () => void;
   visible: boolean;
 }) {
+  const { t } = useTranslation();
+
   return (
     <Modal
       animationType="fade"
@@ -435,7 +448,7 @@ function GroupOverflowSheet({
         }}
       >
         <Pressable
-          accessibilityLabel="Đóng menu nhóm"
+          accessibilityLabel={t("community.groupDetail.closeMenuA11y")}
           onPress={onClose}
           style={{
             bottom: 0,
@@ -484,6 +497,7 @@ function GroupOverflowSheet({
 export default function CommunityGroupDetailScreen() {
   const authSession = useAuthSession();
   const router = useRouter();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { shareToken } = useLocalSearchParams<{ shareToken?: string }>();
   const resolvedRouteValue =
@@ -518,15 +532,13 @@ export default function CommunityGroupDetailScreen() {
 
       async function loadGroupDetail() {
         if (!resolvedRouteValue) {
-          setErrorMessage(
-            "Không đọc được thông tin nhóm từ đường dẫn hiện tại.",
-          );
+          setErrorMessage(t("community.groupDetail.missingRouteError"));
           setStatus("error");
           return;
         }
 
         if (!resolvedGroupId) {
-          setErrorMessage("Không xác định được ID nhóm để tải chi tiết.");
+          setErrorMessage(t("community.groupDetail.missingGroupIdError"));
           setStatus("error");
           return;
         }
@@ -629,7 +641,7 @@ export default function CommunityGroupDetailScreen() {
           setErrorMessage(
             error instanceof Error
               ? error.message
-              : "Không tải được chi tiết nhóm cộng đồng.",
+              : t("community.groupDetail.loadError"),
           );
           setStatus("error");
         }
@@ -648,6 +660,7 @@ export default function CommunityGroupDetailScreen() {
       resolvedGroupId,
       resolvedRouteValue,
       retryNonce,
+      t,
     ]),
   );
 
@@ -702,7 +715,7 @@ export default function CommunityGroupDetailScreen() {
     const nextShareToken = displayGroup?.shareToken ?? resolvedRouteValue;
 
     if (!nextShareToken || !effectiveGroupId) {
-      appToast.error("Không xác định được nhóm để mở danh sách thành viên.");
+      appToast.error(t("community.groupDetail.missingGroupForMembers"));
       return;
     }
 
@@ -729,19 +742,19 @@ export default function CommunityGroupDetailScreen() {
     }
 
     if (!effectiveGroupId) {
-      appToast.error("Không xác định được ID nhóm để rời nhóm.");
+      appToast.error(t("community.groupDetail.missingGroupIdForLeave"));
       return;
     }
 
     if (!authSession.isAuthenticated) {
-      appToast.error("Bạn cần đăng nhập để rời nhóm.");
+      appToast.error(t("community.groupDetail.loginRequiredLeave"));
       return;
     }
 
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      appToast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      appToast.error(t("community.joinGroup.sessionExpiredError"));
       return;
     }
 
@@ -757,11 +770,13 @@ export default function CommunityGroupDetailScreen() {
       removeCachedCommunityGroupSession(displayGroup?.shareToken);
       removeCachedCommunityGroupSession(leftGroup.shareToken);
       setIsGroupMenuVisible(false);
-      appToast.success("Đã rời nhóm.");
+      appToast.success(t("community.groupDetail.leaveSuccess"));
       router.replace("/bookings" as Href);
     } catch (error) {
       appToast.error(
-        error instanceof Error ? error.message : "Không thể rời nhóm lúc này.",
+        error instanceof Error
+          ? error.message
+          : t("community.groupDetail.leaveError"),
       );
     } finally {
       setIsLeavePending(false);
@@ -770,19 +785,19 @@ export default function CommunityGroupDetailScreen() {
 
   const handleConfirmLeaveGroup = () => {
     Alert.alert(
-      "Rời nhóm",
-      "Bạn có chắc muốn rời khỏi nhóm này không?",
+      t("community.groupDetail.leaveConfirmTitle"),
+      t("community.groupDetail.leaveConfirmDescription"),
       [
         {
           style: "cancel",
-          text: "Ở lại",
+          text: t("community.groupDetail.stayAction"),
         },
         {
           onPress: () => {
             void handleLeaveGroup();
           },
           style: "destructive",
-          text: "Rời nhóm",
+          text: t("community.groupDetail.leaveConfirmTitle"),
         },
       ],
     );
@@ -790,12 +805,12 @@ export default function CommunityGroupDetailScreen() {
 
   const handleRefreshInviteLink = async () => {
     if (!effectiveGroupId) {
-      appToast.error("Không xác định được ID nhóm để làm mới link mời.");
+      appToast.error(t("community.groupDetail.missingGroupIdForRefresh"));
       return;
     }
 
     if (!isLeader) {
-      appToast.info("Chỉ leader mới có thể làm mới link mời.");
+      appToast.info(t("community.groupDetail.leaderOnlyRefresh"));
       return;
     }
 
@@ -804,7 +819,7 @@ export default function CommunityGroupDetailScreen() {
       : null;
 
     if (!accessToken) {
-      appToast.error("Bạn cần đăng nhập để làm mới link mời.");
+      appToast.error(t("community.groupDetail.loginRequiredRefresh"));
       return;
     }
 
@@ -823,7 +838,7 @@ export default function CommunityGroupDetailScreen() {
 
       setGroupDetail(cachedRefreshedGroup ?? refreshedGroup);
       setCopiedInviteLink(false);
-      appToast.success("Đã làm mới link mời.");
+      appToast.success(t("community.groupDetail.refreshSuccess"));
 
       if (refreshedGroup.shareToken !== resolvedRouteValue) {
         router.replace(
@@ -834,7 +849,7 @@ export default function CommunityGroupDetailScreen() {
       appToast.error(
         error instanceof Error
           ? error.message
-          : "Không thể làm mới link mời lúc này.",
+          : t("community.groupDetail.refreshError"),
       );
     } finally {
       setIsRefreshPending(false);
@@ -851,9 +866,9 @@ export default function CommunityGroupDetailScreen() {
         <StatusBar style="dark" />
         <View className="flex-1 px-4" style={{ paddingTop: insets.top + 24 }}>
           <CommunityGroupStateCard
-            description="Không đọc được tham số nhóm từ đường dẫn hiện tại."
+            description={t("community.groupDetail.routeInvalidDescription")}
             icon="link_off"
-            title="Link nhóm không hợp lệ"
+            title={t("community.groupDetail.routeInvalidTitle")}
             variant="empty"
           />
         </View>
@@ -875,16 +890,16 @@ export default function CommunityGroupDetailScreen() {
         <StatusBar style="dark" />
         <View className="flex-1 px-4" style={{ paddingTop: insets.top + 24 }}>
           <CommunityGroupStateCard
-            actionLabel="Thử lại"
+            actionLabel={t("common.retry")}
             description={
               errorMessage ??
-              "Không có dữ liệu chi tiết để hiển thị cho nhóm này."
+              t("community.groupDetail.loadErrorFallbackDescription")
             }
             icon="error"
             onPress={() => {
               setRetryNonce((currentValue) => currentValue + 1);
             }}
-            title="Không tải được nhóm"
+            title={t("community.groupDetail.loadErrorTitle")}
             variant="error"
           />
         </View>
@@ -895,25 +910,29 @@ export default function CommunityGroupDetailScreen() {
   const creatorLabel = creatorDisplayName
     ? creatorDisplayName
     : displayGroup.createdBy
-      ? `Explorer #${displayGroup.createdBy}`
-      : "Chưa cập nhật";
+      ? t("community.groupDetail.creatorFallback", {
+          id: displayGroup.createdBy,
+        })
+      : t("community.groupDetail.notUpdated");
   const statusChipPalette = resolveStatusChipPalette(displayGroup.status);
-  const statusLabel = getLocalizedStatusLabel(displayGroup.status);
+  const statusLabel = getLocalizedStatusLabel(displayGroup.status, t);
   const totalMembersLabel =
     typeof displayGroup.totalMembers === "number"
-      ? `${displayGroup.totalMembers} thành viên`
-      : "Chưa có dữ liệu";
+      ? t("community.groupsScreen.memberCountLabel", {
+          count: displayGroup.totalMembers,
+        })
+      : t("community.groupDetail.noDataYet");
   const requiredApprovalLabel =
     displayGroup.requiredApproval === null
-      ? "Chưa cập nhật"
+      ? t("community.groupDetail.notUpdated")
       : displayGroup.requiredApproval
-        ? "Có"
-        : "Không";
+        ? t("community.groupDetail.requiredApprovalYes")
+        : t("community.groupDetail.requiredApprovalNo");
   const groupMenuActions = [
     {
       icon: "groups" as SymbolName,
       key: "view-members",
-      label: "Xem thành viên nhóm",
+      label: t("community.groupDetail.viewMembersAction"),
       onPress: () => {
         runAfterClosingGroupMenu(handleOpenGroupMembers);
       },
@@ -927,7 +946,9 @@ export default function CommunityGroupDetailScreen() {
         web: "logout",
       } as SymbolName,
       key: "leave-group",
-      label: isLeavePending ? "Đang rời nhóm..." : "Rời nhóm",
+      label: isLeavePending
+        ? t("community.groupDetail.leavingAction")
+        : t("community.groupDetail.leaveConfirmTitle"),
       onPress: () => {
         runAfterClosingGroupMenu(handleConfirmLeaveGroup);
       },
@@ -1023,7 +1044,8 @@ export default function CommunityGroupDetailScreen() {
                 numberOfLines={2}
                 style={{ color: palette.primaryText, lineHeight: lineHeightFor(17) }}
               >
-                {displayGroup.groupName ?? "Nhóm cộng đồng"}
+                {displayGroup.groupName ??
+                  t("community.groupDetail.defaultGroupName")}
               </Text>
 
               <View
@@ -1082,37 +1104,37 @@ export default function CommunityGroupDetailScreen() {
           ) : null}
 
           <View className="mt-3.5">
-            <GroupSection title="Thông tin nhóm">
+            <GroupSection title={t("community.groupDetail.infoSectionTitle")}>
               <GroupInfoRow
                 icon="person"
-                label="Người tạo"
+                label={t("community.groupDetail.creatorLabel")}
                 value={creatorLabel}
               />
               <GroupInfoRow
                 icon="groups"
-                label="Tổng số thành viên"
+                label={t("community.groupDetail.totalMembersLabel")}
                 value={
                   displayGroup.totalMembers !== null
                     ? `${displayGroup.totalMembers}`
-                    : "Chưa cập nhật"
+                    : t("community.groupDetail.notUpdated")
                 }
               />
               <GroupInfoRow
-                accentValue={requiredApprovalLabel === "Không"}
+                accentValue={displayGroup.requiredApproval === false}
                 icon="shield"
-                label="Yêu cầu duyệt tham gia"
+                label={t("community.groupDetail.requiredApprovalLabel")}
                 value={requiredApprovalLabel}
               />
               <GroupInfoRow
                 icon="event"
-                label="Ngày tạo"
-                value={formatGroupDate(displayGroup.createdAt)}
+                label={t("community.groupDetail.createdAtLabel")}
+                value={formatGroupDate(displayGroup.createdAt, t)}
               />
               <GroupInfoRow
                 hideDivider
                 icon="update"
-                label="Cập nhật lần cuối"
-                value={formatGroupDate(displayGroup.updatedAt)}
+                label={t("community.groupDetail.updatedAtLabel")}
+                value={formatGroupDate(displayGroup.updatedAt, t)}
               />
             </GroupSection>
           </View>
@@ -1141,7 +1163,7 @@ export default function CommunityGroupDetailScreen() {
             className="mt-4 text-center text-[11px]"
             style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(11) }}
           >
-            Nhóm được tạo và quản lý bởi CultureQuest Lite
+            {t("community.groupDetail.footerNote")}
           </Text>
         </View>
       </ScrollView>
