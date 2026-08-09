@@ -49,6 +49,7 @@ import {
   type PostComment,
 } from "@/features/home/api/get-post-comments";
 import { likePost } from "@/features/home/api/like-post";
+import { reportPost } from "@/features/home/api/report-post";
 import { sharePost } from "@/features/home/api/share-post";
 import { ReviewDeleteDialog } from "@/features/home/components/review-delete-dialog";
 import {
@@ -158,12 +159,25 @@ type ResolvedRoutePreview = {
   routeId: number;
   routeName: string;
 };
-type CommunityPostMenuItem = {
+type CommunityMenuRowItem = {
   description?: string;
   icon: SymbolName;
   isDestructive?: boolean;
-  key: "edit-post" | "edit-visibility" | "move-to-trash" | "toggle-notifications";
   label: string;
+};
+type CommunityPostMenuItem = CommunityMenuRowItem & {
+  key:
+    | "edit-post"
+    | "edit-visibility"
+    | "move-to-trash"
+    | "toggle-notifications"
+    | "report-post";
+};
+type CommunityReportReasonItem = CommunityMenuRowItem & {
+  /** Nội dung gửi lên `comment` của POST /api/posts/{id}/reports. */
+  key: string;
+  /** Mở ô nhập tự do thay vì gửi thẳng `key`. */
+  isFreeText?: boolean;
 };
 type ComposerIdentity = {
   accountKey: string | null;
@@ -191,10 +205,31 @@ const communityFeedPageSize = 10;
 const communityPostCommentsPageSize = 10;
 const communityCommentMaxLength = 320;
 const communitySharePostMaxLength = 500;
+const communityReportReasonMaxLength = 300;
 
+/**
+ * Bài của chính mình thì hiện các thao tác quản lý; bài của người khác chỉ có
+ * thể báo cáo (POST /api/posts/{id}/reports).
+ */
 function buildCommunityPostMenuItems(
   t: (key: string, options?: Record<string, unknown>) => string,
+  canManagePost: boolean,
 ): readonly CommunityPostMenuItem[] {
+  if (!canManagePost) {
+    return [
+      {
+        key: "report-post",
+        label: t("community.feed.menu.reportPost"),
+        icon: {
+          ios: "exclamationmark.bubble",
+          android: "report_problem",
+          web: "report_problem",
+        },
+        isDestructive: true,
+      },
+    ] as const;
+  }
+
   return [
     {
       key: "edit-post",
@@ -217,6 +252,42 @@ function buildCommunityPostMenuItems(
       isDestructive: true,
     },
   ] as const;
+}
+
+/**
+ * Danh sách lý do dựng sẵn — `key` chính là chuỗi gửi lên `comment`, nên không
+ * cần thêm màn nhập liệu mới.
+ */
+function buildCommunityReportReasonItems(
+  t: (key: string, options?: Record<string, unknown>) => string,
+): readonly CommunityReportReasonItem[] {
+  const presetReasons: CommunityReportReasonItem[] = (
+    [
+      "spam",
+      "harassment",
+      "misinformation",
+      "violence",
+      "sensitiveContent",
+    ] as const
+  ).map((reasonKey) => ({
+    key: t(`community.feed.report.reasons.${reasonKey}`),
+    label: t(`community.feed.report.reasons.${reasonKey}`),
+    icon: {
+      ios: "exclamationmark.triangle",
+      android: "report_problem",
+      web: "report_problem",
+    },
+  }));
+
+  return [
+    ...presetReasons,
+    {
+      key: "",
+      label: t("community.feed.report.reasons.other"),
+      icon: { ios: "square.and.pencil", android: "edit", web: "edit" },
+      isFreeText: true,
+    },
+  ];
 }
 const avatarPalettes = [
   ["#EB489B", "#F58752"],
@@ -1026,6 +1097,15 @@ export default function CommunityScreen() {
     useState<CommunityFeedPost | null>(null);
   const [postOptionsTarget, setPostOptionsTarget] =
     useState<CommunityFeedPost | null>(null);
+  // Giữ lại cả sau khi đóng sheet để danh sách menu không đổi giữa chừng lúc
+  // modal đang trượt xuống.
+  const [canManagePostOptionsTarget, setCanManagePostOptionsTarget] =
+    useState(false);
+  const [reportPostTarget, setReportPostTarget] =
+    useState<CommunityFeedPost | null>(null);
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [isReportDraftVisible, setIsReportDraftVisible] = useState(false);
+  const [reportDraft, setReportDraft] = useState("");
   const [communityToastMessage, setCommunityToastMessage] = useState<
     string | null
   >(null);
@@ -1100,6 +1180,17 @@ export default function CommunityScreen() {
       }
     };
   }, [communityToastMessage]);
+
+  // Menu đổi theo chủ sở hữu bài: bài mình thì sửa/đổi quyền/xoá, bài người
+  // khác thì chỉ có "Báo cáo bài viết".
+  const communityPostMenuItems = useMemo(
+    () => buildCommunityPostMenuItems(t, canManagePostOptionsTarget),
+    [canManagePostOptionsTarget, t],
+  );
+  const communityReportReasonItems = useMemo(
+    () => buildCommunityReportReasonItems(t),
+    [t],
+  );
 
   const showCommunityToast = useCallback(
     (
@@ -2183,6 +2274,9 @@ export default function CommunityScreen() {
   }
 
   function handleOpenPostOptions(post: CommunityFeedPost) {
+    setCanManagePostOptionsTarget(
+      isCurrentUserCommunityPost(post.authorId, currentProfileId),
+    );
     setPostOptionsTarget(post);
   }
 
@@ -2210,12 +2304,108 @@ export default function CommunityScreen() {
         return;
       }
 
+      if (item.key === "report-post") {
+        handleOpenReportPost(selectedPost);
+        return;
+      }
+
       if (item.key === "toggle-notifications") {
         return;
       }
 
       handleMovePostToTrash(selectedPost);
     });
+  }
+
+  function handleOpenReportPost(post: CommunityFeedPost) {
+    if (!authSession.isAuthenticated) {
+      Alert.alert(
+        t("community.feed.loginRequiredTitle"),
+        t("community.feed.report.loginRequired"),
+      );
+      return;
+    }
+
+    setReportDraft("");
+    setIsReportDraftVisible(false);
+    setReportPostTarget(post);
+  }
+
+  function handleCloseReportPost() {
+    if (isSubmittingReport) {
+      return;
+    }
+
+    setReportPostTarget(null);
+    setIsReportDraftVisible(false);
+    setReportDraft("");
+  }
+
+  function handleSelectReportReason(reason: CommunityReportReasonItem) {
+    // "Lý do khác" mở ô nhập tự do, các lý do dựng sẵn gửi thẳng.
+    if (reason.isFreeText) {
+      setIsReportDraftVisible(true);
+      return;
+    }
+
+    void handleSubmitReportPost(reason.key);
+  }
+
+  async function handleSubmitReportPost(comment: string) {
+    const post = reportPostTarget;
+    const postNumericId = post?.postNumericId;
+    const normalizedComment = comment.trim();
+
+    if (!normalizedComment) {
+      return;
+    }
+
+    if (typeof postNumericId !== "number" || postNumericId <= 0) {
+      setReportPostTarget(null);
+      setIsReportDraftVisible(false);
+      Alert.alert(
+        t("community.feed.report.failureTitle"),
+        t("community.feed.report.invalidPost"),
+      );
+      return;
+    }
+
+    const accessToken = await getValidAccessToken();
+
+    if (!accessToken) {
+      setReportPostTarget(null);
+      setIsReportDraftVisible(false);
+      Alert.alert(
+        t("community.feed.sessionExpiredTitle"),
+        t("community.feed.report.sessionExpired"),
+      );
+      return;
+    }
+
+    setIsSubmittingReport(true);
+
+    try {
+      await reportPost({
+        accessToken,
+        comment: normalizedComment,
+        postId: postNumericId,
+        tokenType: authSession.tokenType,
+      });
+
+      setReportPostTarget(null);
+      setIsReportDraftVisible(false);
+      setReportDraft("");
+      showCommunityToast(t("community.feed.report.successToast"));
+    } catch (error) {
+      Alert.alert(
+        t("community.feed.report.failureTitle"),
+        error instanceof Error
+          ? error.message
+          : t("community.feed.report.failureDescription"),
+      );
+    } finally {
+      setIsSubmittingReport(false);
+    }
   }
 
   async function confirmMovePostToTrash() {
@@ -2628,6 +2818,35 @@ export default function CommunityScreen() {
         onClose={handleClosePostOptions}
         onSelectItem={handleSelectPostOption}
         visible={postOptionsTarget !== null}
+      />
+
+      <CommunityPostOptionsSheet
+        bottomInset={insets.bottom}
+        isSubmitting={isSubmittingReport}
+        items={communityReportReasonItems}
+        onClose={handleCloseReportPost}
+        onSelectItem={handleSelectReportReason}
+        title={t("community.feed.report.sheetTitle")}
+        visible={reportPostTarget !== null && !isReportDraftVisible}
+      />
+
+      <CommunityReportReasonComposer
+        bottomInset={insets.bottom}
+        draft={reportDraft}
+        isSubmitting={isSubmittingReport}
+        onBack={() => {
+          if (isSubmittingReport) {
+            return;
+          }
+
+          setIsReportDraftVisible(false);
+        }}
+        onChangeDraft={setReportDraft}
+        onClose={handleCloseReportPost}
+        onSubmit={() => {
+          void handleSubmitReportPost(reportDraft);
+        }}
+        visible={reportPostTarget !== null && isReportDraftVisible}
       />
 
       <ReviewDeleteDialog
@@ -3355,9 +3574,6 @@ function CommunityPostCard({
   onOpenRoute: (routeId: number) => void;
 }) {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-  const [isPostOptionsVisible, setIsPostOptionsVisible] = useState(false);
-  const postMenuItems = useMemo(() => buildCommunityPostMenuItems(t), [t]);
   const mediaItems = buildCommunityPostMediaItems(post);
   const sharedPost = post.sharedPost ?? null;
   const caption = readMeaningfulText(post.caption);
@@ -3472,28 +3688,32 @@ function CommunityPostCard({
             </View>
           </View>
 
-          {canManagePost ? (
-            <Pressable
-              className="h-8 w-8 items-center justify-center rounded-full"
-              disabled={isDeleting}
-              hitSlop={8}
-              onPress={() => {
-                onOpenPostOptions(post);
+          {/* Bài của người khác vẫn mở được menu — chỉ khác là menu chứa
+              "Báo cáo bài viết" thay cho các thao tác quản lý. */}
+          <Pressable
+            accessibilityLabel={
+              canManagePost
+                ? t("community.feed.menu.openOptionsA11y")
+                : t("community.feed.menu.openReportA11y")
+            }
+            accessibilityRole="button"
+            className="h-8 w-8 items-center justify-center rounded-full"
+            disabled={isDeleting}
+            hitSlop={8}
+            onPress={() => {
+              onOpenPostOptions(post);
+            }}
+          >
+            <SymbolView
+              name={{
+                ios: "ellipsis",
+                android: "more_horiz",
+                web: "more_horiz",
               }}
-            >
-              <SymbolView
-                name={{
-                  ios: "ellipsis",
-                  android: "more_horiz",
-                  web: "more_horiz",
-                }}
-                size={20}
-                tintColor="#554C56"
-              />
-            </Pressable>
-          ) : (
-            <View className="h-8 w-8" />
-          )}
+              size={20}
+              tintColor="#554C56"
+            />
+          </Pressable>
         </View>
 
         <View className="pt-0.5">
@@ -3630,28 +3850,25 @@ function CommunityPostCard({
         />
       ) : null}
 
-      <CommunityPostOptionsSheet
-        bottomInset={insets.bottom}
-        items={postMenuItems}
-        onClose={handleClosePostOptions}
-        onSelectItem={handleSelectPostOption}
-        visible={isPostOptionsVisible}
-      />
     </>
   );
 }
 
-function CommunityPostOptionsSheet({
+function CommunityPostOptionsSheet<TItem extends CommunityMenuRowItem>({
   bottomInset,
+  isSubmitting = false,
   items,
   onClose,
   onSelectItem,
+  title,
   visible,
 }: {
   bottomInset: number;
-  items: readonly CommunityPostMenuItem[];
+  isSubmitting?: boolean;
+  items: readonly TItem[];
   onClose: () => void;
-  onSelectItem: (item: CommunityPostMenuItem) => void;
+  onSelectItem: (item: TItem) => void;
+  title?: string;
   visible: boolean;
 }) {
   return (
@@ -3673,6 +3890,20 @@ function CommunityPostOptionsSheet({
             <View className="h-1.5 w-14 rounded-full bg-[#D3D2DC]" />
           </View>
 
+          {title ? (
+            <View className="flex-row items-center justify-between px-2 pb-2">
+              <Text
+                className="text-[15px] font-bold text-[#2F2432]"
+                style={textStyle(15)}
+              >
+                {title}
+              </Text>
+              {isSubmitting ? (
+                <ActivityIndicator color="#D4578F" size="small" />
+              ) : null}
+            </View>
+          ) : null}
+
           <View className="rounded-[22px] bg-[#F7F6FB] px-4 py-0.5">
             {items.map((item, index) => (
               <CommunityPostMenuRow
@@ -3680,6 +3911,10 @@ function CommunityPostOptionsSheet({
                 isLast={index === items.length - 1}
                 item={item}
                 onPress={() => {
+                  if (isSubmitting) {
+                    return;
+                  }
+
                   onSelectItem(item);
                 }}
               />
@@ -3691,13 +3926,128 @@ function CommunityPostOptionsSheet({
   );
 }
 
+/**
+ * Ô nhập lý do tự do cho mục "Lý do khác" — dùng lại đúng khung bottom sheet
+ * của menu bài viết nên không phát sinh thiết kế mới.
+ */
+function CommunityReportReasonComposer({
+  bottomInset,
+  draft,
+  isSubmitting,
+  onBack,
+  onChangeDraft,
+  onClose,
+  onSubmit,
+  visible,
+}: {
+  bottomInset: number;
+  draft: string;
+  isSubmitting: boolean;
+  onBack: () => void;
+  onChangeDraft: (value: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+  visible: boolean;
+}) {
+  const { t } = useTranslation();
+  const canSubmit = draft.trim().length > 0 && !isSubmitting;
+
+  return (
+    <Modal
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
+      transparent
+      visible={visible}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        className="flex-1"
+      >
+        <View className="flex-1 bg-black/35">
+          <Pressable className="flex-1" onPress={onClose} />
+
+          <View
+            className="rounded-t-[28px] bg-white px-4 pt-3"
+            style={{ paddingBottom: Math.max(bottomInset, 14) }}
+          >
+            <View className="items-center pb-2">
+              <View className="h-1.5 w-14 rounded-full bg-[#D3D2DC]" />
+            </View>
+
+            <View className="flex-row items-center gap-2 pb-2">
+              <Pressable hitSlop={8} onPress={onBack}>
+                <SymbolView
+                  name={{
+                    ios: "chevron.left",
+                    android: "arrow_back",
+                    web: "arrow_back",
+                  }}
+                  size={18}
+                  tintColor="#554C56"
+                />
+              </Pressable>
+              <Text
+                className="text-[15px] font-bold text-[#2F2432]"
+                style={textStyle(15)}
+              >
+                {t("community.feed.report.reasons.other")}
+              </Text>
+            </View>
+
+            <TextInput
+              autoFocus
+              className="min-h-[96px] rounded-[18px] bg-[#F7F6FB] px-4 py-3 text-[15px] text-[#2B232D]"
+              editable={!isSubmitting}
+              maxLength={communityReportReasonMaxLength}
+              multiline
+              onChangeText={onChangeDraft}
+              placeholder={t("community.feed.report.draftPlaceholder")}
+              placeholderTextColor="#A79FAE"
+              style={textStyle(15)}
+              textAlignVertical="top"
+              value={draft}
+            />
+
+            <View className="mt-3 flex-row items-center justify-between">
+              <Text
+                className="text-[12px] text-[#8E869A]"
+                style={textStyle(12)}
+              >
+                {draft.trim().length}/{communityReportReasonMaxLength}
+              </Text>
+
+              <Pressable
+                className={`rounded-full px-5 py-2.5 ${canSubmit ? "bg-[#D4578F]" : "bg-[#E7E5EF]"}`}
+                disabled={!canSubmit}
+                onPress={onSubmit}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text
+                    className={`text-[14px] font-bold ${canSubmit ? "text-white" : "text-[#A79FAE]"}`}
+                    style={textStyle(14)}
+                  >
+                    {t("community.feed.report.submit")}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 function CommunityPostMenuRow({
   isLast,
   item,
   onPress,
 }: {
   isLast: boolean;
-  item: CommunityPostMenuItem;
+  item: CommunityMenuRowItem;
   onPress: () => void;
 }) {
   const labelColor = item.isDestructive ? "#C24F3B" : "#202124";

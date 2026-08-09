@@ -363,7 +363,12 @@
     },
     "vouchers": {
       "title": "Ưu đãi đặc biệt",
-      "viewAll": "Xem tất cả voucher"
+      "viewAll": "Xem tất cả voucher",
+      "points": "{{points}} điểm",
+      "loading": "Đang tải ưu đãi...",
+      "empty": "Chưa có ưu đãi nào đang mở. Chạm để tải lại.",
+      "error": "Không tải được ưu đãi. Chạm để thử lại.",
+      "guest": "Đăng nhập để xem ưu đãi từ đối tác"
     },
     "nearby": {
       "title": "Gần bạn",
@@ -567,7 +572,10 @@
     "feed": {
       "menu": {
         "editVisibility": "Chỉnh sửa quyền riêng tư",
-        "moveToTrash": "Chuyển vào thùng rác"
+        "moveToTrash": "Chuyển vào thùng rác",
+        "reportPost": "Báo cáo bài viết",
+        "openOptionsA11y": "Mở tuỳ chọn bài viết",
+        "openReportA11y": "Báo cáo bài viết này"
       },
       "time": {
         "minutes": "{{count}} phút",
@@ -660,7 +668,26 @@
       "commentsPagePlaceholder": "Trang 1 / {{size}}",
       "retryLoad": "Thử tải lại",
       "noCommentsTitle": "Chưa có bình luận nào",
-      "noCommentsDescription": "Hãy là người đầu tiên để lại cảm nhận cho bài viết này."
+      "noCommentsDescription": "Hãy là người đầu tiên để lại cảm nhận cho bài viết này.",
+      "report": {
+        "sheetTitle": "Lý do báo cáo",
+        "loginRequired": "Bạn cần đăng nhập để báo cáo bài viết.",
+        "sessionExpired": "Vui lòng đăng nhập lại trước khi báo cáo bài viết.",
+        "successToast": "Đã gửi báo cáo tới quản trị viên",
+        "failureTitle": "Không gửi được báo cáo",
+        "failureDescription": "Vui lòng thử lại sau ít phút.",
+        "reasons": {
+          "spam": "Spam hoặc quảng cáo",
+          "harassment": "Quấy rối, xúc phạm người khác",
+          "misinformation": "Thông tin sai sự thật",
+          "violence": "Bạo lực hoặc nguy hiểm",
+          "sensitiveContent": "Nội dung nhạy cảm, không phù hợp",
+          "other": "Lý do khác"
+        },
+        "draftPlaceholder": "Mô tả cụ thể vấn đề của bài viết này...",
+        "submit": "Gửi báo cáo",
+        "invalidPost": "Không xác định được bài viết cần báo cáo."
+      }
     },
     "explorerProfile": {
       "tabs": {
@@ -1006,7 +1033,7 @@
     "partner": {
       "title": "Đăng ký Partner",
       "subtitle": "Hiển thị shop lên bản đồ CultureQuest, phát hành voucher & thu hút khách du lịch",
-      "packageLabel": "GÓI PARTNER SHOP",
+      "packageLabel": "Gói Partner",
       "steps": {
         "step": "Bước",
         "information": "Thông tin đăng ký",
@@ -1019,7 +1046,6 @@
         "verifiedBadge": "Tích xanh Xác minh Partner chính thức"
       },
       "selectPlan": "Chọn gói Partner",
-      "packageLabel": "Gói Partner",
       "billingCycle": {
         "title": "Chu kỳ thanh toán",
         "monthly": "Theo tháng",

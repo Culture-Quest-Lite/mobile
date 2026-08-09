@@ -363,7 +363,12 @@
     },
     "vouchers": {
       "title": "Special Offers",
-      "viewAll": "View all vouchers"
+      "viewAll": "View all vouchers",
+      "points": "{{points}} pts",
+      "loading": "Loading offers...",
+      "empty": "No offers available yet. Tap to reload.",
+      "error": "Could not load offers. Tap to retry.",
+      "guest": "Sign in to see partner offers"
     },
     "nearby": {
       "title": "Near You",
@@ -552,7 +557,10 @@
     "feed": {
       "menu": {
         "editVisibility": "Edit privacy",
-        "moveToTrash": "Move to trash"
+        "moveToTrash": "Move to trash",
+        "reportPost": "Report post",
+        "openOptionsA11y": "Open post options",
+        "openReportA11y": "Report this post"
       },
       "time": {
         "minutes": "{{count}} minutes",
@@ -645,7 +653,26 @@
       "commentsPagePlaceholder": "Page 1 / {{size}}",
       "retryLoad": "Retry loading",
       "noCommentsTitle": "No comments yet",
-      "noCommentsDescription": "Be the first to share your thoughts on this post."
+      "noCommentsDescription": "Be the first to share your thoughts on this post.",
+      "report": {
+        "sheetTitle": "Reason for reporting",
+        "loginRequired": "You need to sign in to report a post.",
+        "sessionExpired": "Please sign in again before reporting this post.",
+        "successToast": "Report sent to the moderators",
+        "failureTitle": "Could not send the report",
+        "failureDescription": "Please try again in a few minutes.",
+        "reasons": {
+          "spam": "Spam or advertising",
+          "harassment": "Harassment or abuse",
+          "misinformation": "False information",
+          "violence": "Violence or danger",
+          "sensitiveContent": "Sensitive or inappropriate content",
+          "other": "Other reason"
+        },
+        "draftPlaceholder": "Describe what is wrong with this post...",
+        "submit": "Send report",
+        "invalidPost": "Could not identify the post to report."
+      }
     },
     "explorerProfile": {
       "tabs": {
@@ -991,7 +1018,7 @@
     "partner": {
       "title": "Partner Registration",
       "subtitle": "Display shop on CultureQuest map, issue vouchers & attract tourists",
-      "packageLabel": "PARTNER SHOP PACKAGE",
+      "packageLabel": "Partner Package",
       "steps": {
         "step": "Step",
         "information": "Registration Info",
@@ -1004,7 +1031,6 @@
         "verifiedBadge": "Verified Official Partner badge"
       },
       "selectPlan": "Select Partner Package",
-      "packageLabel": "Partner Package",
       "billingCycle": {
         "title": "Billing Cycle",
         "monthly": "Monthly",

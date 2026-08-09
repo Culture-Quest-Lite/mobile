@@ -1,19 +1,19 @@
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 
 export type VoucherDiscountType = "PERCENTAGE" | "FIXED_AMOUNT" | string;
-export type VoucherStatus = "ACTIVE" | "PENDING" | "INACTIVE" | "DELETED" | string;
+export type VoucherStatus =
+  | "ACTIVE"
+  | "PENDING"
+  | "INACTIVE"
+  | "EXPIRED"
+  | "DELETED"
+  | string;
 
-export type VoucherMedia = {
-  mediaId?: number;
-  url?: string;
-  mediaUrl?: string;
-  fileUrl?: string;
-  type?: string;
-};
-
+/** Khớp `VoucherResponse.java`. */
 export type Voucher = {
   voucherId: number;
-  medias?: VoucherMedia[];
+  /** Backend trả về MỘT ảnh ở `imageUrl`, không có mảng `medias`. */
+  imageUrl?: string | null;
   partnerId: number;
   partnerName: string;
   voucherCode: string;
@@ -43,6 +43,7 @@ export type VoucherPage = {
   last?: boolean;
 };
 
+/** Khớp `VoucherUsageResponse.java`. */
 export type VoucherUsage = {
   voucherUsageId: number;
   voucherId: number;
@@ -52,12 +53,14 @@ export type VoucherUsage = {
   pointsRequired: number;
   redeemedAt: string;
   usedAt?: string | null;
-  expiredAt: string;
+  expiredAt?: string | null;
   isUsed: boolean;
 };
 
+/** Khớp `VoucherFilter.java`. */
 export type AvailableVoucherParams = {
   search?: string;
+  status?: VoucherStatus;
   partnerId?: number;
   page?: number;
   size?: number;
@@ -97,7 +100,12 @@ export async function getAvailableVouchers(
   accessToken?: string | null,
 ) {
   const query = new URLSearchParams();
+  // Lưu ý: `/api/vouchers/available` bên backend tự dựng specification riêng
+  // (ACTIVE + còn số lượng + trong thời gian hiệu lực) và BỎ QUA search/
+  // partnerId/status — chỉ page/size/sortBy/sortDir là có tác dụng. Vẫn gửi
+  // lên để khi backend hỗ trợ thì không phải sửa lại client.
   if (params.search?.trim()) query.set("search", params.search.trim());
+  if (params.status) query.set("status", params.status);
   if (params.partnerId) query.set("partnerId", String(params.partnerId));
   query.set("page", String(params.page ?? 0));
   query.set("size", String(params.size ?? 20));
@@ -136,6 +144,20 @@ export async function redeemVoucher(voucherId: number, accessToken: string) {
 }
 
 export function getVoucherImage(voucher: Voucher) {
-  const media = voucher.medias?.[0];
-  return media?.url ?? media?.mediaUrl ?? media?.fileUrl ?? null;
+  return voucher.imageUrl?.trim() ? voucher.imageUrl : null;
+}
+
+/** Backend chưa lọc theo từ khoá ở `/available`, nên lọc tại client. */
+export function filterVouchersByKeyword(vouchers: Voucher[], keyword: string) {
+  const normalized = keyword.trim().toLowerCase();
+
+  if (!normalized) {
+    return vouchers;
+  }
+
+  return vouchers.filter((voucher) =>
+    [voucher.voucherName, voucher.partnerName, voucher.description]
+      .filter((value): value is string => Boolean(value))
+      .some((value) => value.toLowerCase().includes(normalized)),
+  );
 }
