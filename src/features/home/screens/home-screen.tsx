@@ -526,9 +526,6 @@ function JourneyProgressRing({ progress }: { progress: number }) {
   );
 }
 
-const communityRankRingColors = ["#F7B500", "#C9D4E5", "#FF8A00"] as const;
-const communityRankBadgeColors = ["#F7B500", "#9AACBF", "#FF8A00"] as const;
-
 const communityRowShadowStyle = {
   shadowColor: "rgba(15, 23, 42, 0.08)",
   shadowOpacity: 1,
@@ -707,26 +704,6 @@ function getCommunityLeaderboardDisplayName(
 
 function getCommunityLeaderboardSubtitle(entry: UserLeaderboardEntryDto) {
   return `@${entry.username}`;
-}
-
-function isTopCommunityLeaderboardRank(rank: number) {
-  return rank >= 1 && rank <= 3;
-}
-
-function getCommunityLeaderboardRingColor(rank: number) {
-  return isTopCommunityLeaderboardRank(rank)
-    ? communityRankRingColors[rank - 1]
-    : "#D7DCE4";
-}
-
-function getCommunityLeaderboardBadgeColor(rank: number) {
-  return isTopCommunityLeaderboardRank(rank)
-    ? communityRankBadgeColors[rank - 1]
-    : "#C7D1DE";
-}
-
-function getCommunityLeaderboardBadgeTextColor(rank: number) {
-  return isTopCommunityLeaderboardRank(rank) ? "#FFFFFF" : "#667085";
 }
 
 function getVisibleCommunityLeaderboardEntries(
@@ -997,9 +974,7 @@ function buildApiNearbyPlaceItems(
     .map(({ sortDistanceMeters: _sortDistanceMeters, ...item }) => item);
 }
 
-function isNearbyPlaceCheckedIn(
-  place: NearbyPlaceListItem,
-) {
+function isNearbyPlaceCheckedIn(place: NearbyPlaceListItem) {
   return place.isCheckedIn;
 }
 
@@ -1523,7 +1498,9 @@ export default function HomeScreen() {
   const themeCategoriesRequestRef = useRef(0);
   const communityLeaderboardRequestRef = useRef(0);
   const explorerSummaryRequestRef = useRef(0);
-  const initialHomeLoadPendingRef = useRef<Record<InitialHomeLoadPart, boolean>>({
+  const initialHomeLoadPendingRef = useRef<
+    Record<InitialHomeLoadPart, boolean>
+  >({
     activeJourney: authSession.isAuthenticated,
     communityLeaderboard: true,
     explorerSummary: authSession.isAuthenticated,
@@ -1543,7 +1520,10 @@ export default function HomeScreen() {
 
       pending[part] = false;
 
-      if (!hasCompletedInitialHomeLoad && !Object.values(pending).some(Boolean)) {
+      if (
+        !hasCompletedInitialHomeLoad &&
+        !Object.values(pending).some(Boolean)
+      ) {
         setHasCompletedInitialHomeLoad(true);
       }
     },
@@ -2882,15 +2862,13 @@ export default function HomeScreen() {
                       paddingRight: gutter,
                       paddingTop: 6,
                     }}
-                      showsHorizontalScrollIndicator={false}
-                      style={{
-                        width: safeWidth,
-                      }}
-                    >
+                    showsHorizontalScrollIndicator={false}
+                    style={{
+                      width: safeWidth,
+                    }}
+                  >
                     {resolvedNearbyPlaces.map((place, index) => {
-                      const isPlaceCheckedIn = isNearbyPlaceCheckedIn(
-                        place,
-                      );
+                      const isPlaceCheckedIn = isNearbyPlaceCheckedIn(place);
 
                       return (
                         <Pressable
@@ -3488,181 +3466,191 @@ export default function HomeScreen() {
               </View>
 
               <View className="mt-4 gap-3">
-                {/* LeaderRankingCard tự chứa padding 16px hai bên nên bù lại
-                    bằng margin âm để thẳng hàng với các mục khác của trang */}
-                <View style={{ marginHorizontal: -16 }}>
-                  <LeaderRankingCard
-                    description={activeCommunityBoard.summaryNote}
-                    title={activeCommunityBoard.summaryLabel}
-                    xp={activeCommunityBoard.summaryXp}
-                  />
-                </View>
+                {activeCommunityBoard.entries.length > 0 ? (
+                  <View style={{ marginHorizontal: -16 }}>
+                    <LeaderRankingCard
+                      topEntries={activeCommunityBoard.entries.filter(
+                        (entry) => entry.rank >= 1 && entry.rank <= 3,
+                      )}
+                      xp={activeCommunityBoard.summaryXp}
+                    />
+                  </View>
+                ) : (
+                  <View className="items-center rounded-[24px] border border-[#F3E7ED] bg-[#FFF8FB] px-4 py-5">
+                    {communityLeaderboardStatus === "loading" ? (
+                      <AppLoadingScreen
+                        mode="embedded"
+                        style={{ alignSelf: "stretch", minHeight: 88 }}
+                      />
+                    ) : (
+                      <>
+                        <Text className="text-center text-[13px] font-semibold text-[#1F2940]">
+                          {activeCommunityBoard.summaryLabel}
+                        </Text>
+                        <Text className="mt-1 text-center text-[12px] leading-[16px] text-[#8F8290]">
+                          {activeCommunityBoard.summaryNote}
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                )}
 
                 <View className="gap-2.5">
-                  {activeCommunityBoard.entries.length > 0 ? (
-                    activeCommunityBoard.entries.map((entry) => {
-                      const isChampion = entry.rank === 1;
-                      const badgeColor = getCommunityLeaderboardBadgeColor(
-                        entry.rank,
-                      );
+                  {activeCommunityBoard.entries.length > 0
+                    ? activeCommunityBoard.entries.map((entry) => {
+                        const isChampion = entry.rank === 1;
+                        const badgeColor =
+                          entry.rank === 1
+                            ? "#F7B500"
+                            : entry.rank === 2
+                              ? "#9AACBF"
+                              : entry.rank === 3
+                                ? "#FF8A00"
+                                : "#C7D1DE";
 
-                      return (
-                        <View
-                          key={`community-${entry.userId ?? entry.name}-${entry.rank}`}
-                          className="flex-row items-center rounded-[18px] px-3 py-2.5"
-                          style={[
-                            communityRowShadowStyle,
-                            {
-                              backgroundColor: isChampion
-                                ? "#FFF9EC"
-                                : entry.isCurrentUser
-                                  ? "#FFF7FA"
-                                  : "#FFFFFF",
-                              borderColor: isChampion
-                                ? "#F4D493"
-                                : entry.isCurrentUser
-                                  ? "#F8D8E3"
-                                  : "#EEF1F4",
-                              borderWidth: 1,
-                            },
-                          ]}
-                        >
-                          <View className="mr-2.5 w-7 items-center justify-center">
-                            {isChampion ? (
-                              <View className="absolute -top-3">
-                                <SymbolView
-                                  name={{
-                                    ios: "crown.fill",
-                                    android: "workspace_premium",
-                                    web: "workspace_premium",
-                                  }}
-                                  size={14}
-                                  tintColor="#F7B500"
-                                />
-                              </View>
-                            ) : null}
+                        return (
+                          <View
+                            key={`community-${entry.userId ?? entry.name}-${entry.rank}`}
+                            className="flex-row items-center rounded-[18px] px-3 py-2.5"
+                            style={[
+                              communityRowShadowStyle,
+                              {
+                                backgroundColor: isChampion
+                                  ? "#FFF9EC"
+                                  : entry.isCurrentUser
+                                    ? "#FFF7FA"
+                                    : "#FFFFFF",
+                                borderColor: isChampion
+                                  ? "#F4D493"
+                                  : entry.isCurrentUser
+                                    ? "#F8D8E3"
+                                    : "#EEF1F4",
+                                borderWidth: 1,
+                              },
+                            ]}
+                          >
+                            <View className="mr-2.5 w-7 items-center justify-center">
+                              {isChampion ? (
+                                <View className="absolute -top-3">
+                                  <SymbolView
+                                    name={{
+                                      ios: "crown.fill",
+                                      android: "workspace_premium",
+                                      web: "workspace_premium",
+                                    }}
+                                    size={14}
+                                    tintColor="#F7B500"
+                                  />
+                                </View>
+                              ) : null}
 
-                            {entry.rank === 2 || entry.rank === 3 ? (
-                              <View className="absolute -bottom-1 flex-row gap-[3px]">
-                                <View
-                                  style={{
-                                    backgroundColor: badgeColor,
-                                    borderBottomLeftRadius: 2,
-                                    borderBottomRightRadius: 2,
-                                    height: 10,
-                                    transform: [{ rotate: "10deg" }],
-                                    width: 5,
-                                  }}
-                                />
-                                <View
-                                  style={{
-                                    backgroundColor: badgeColor,
-                                    borderBottomLeftRadius: 2,
-                                    borderBottomRightRadius: 2,
-                                    height: 10,
-                                    transform: [{ rotate: "-10deg" }],
-                                    width: 5,
-                                  }}
-                                />
-                              </View>
-                            ) : null}
+                              {entry.rank === 2 || entry.rank === 3 ? (
+                                <View className="absolute -bottom-1 flex-row gap-[3px]">
+                                  <View
+                                    style={{
+                                      backgroundColor: badgeColor,
+                                      borderBottomLeftRadius: 2,
+                                      borderBottomRightRadius: 2,
+                                      height: 10,
+                                      transform: [{ rotate: "10deg" }],
+                                      width: 5,
+                                    }}
+                                  />
+                                  <View
+                                    style={{
+                                      backgroundColor: badgeColor,
+                                      borderBottomLeftRadius: 2,
+                                      borderBottomRightRadius: 2,
+                                      height: 10,
+                                      transform: [{ rotate: "-10deg" }],
+                                      width: 5,
+                                    }}
+                                  />
+                                </View>
+                              ) : null}
 
-                            <View
-                              className="h-6 w-6 items-center justify-center rounded-full"
-                              style={{
-                                backgroundColor: isTopCommunityLeaderboardRank(
-                                  entry.rank,
-                                )
-                                  ? badgeColor
-                                  : "#EEF2F7",
-                                borderColor: "#FFFFFF",
-                                borderWidth: 2,
-                              }}
-                            >
-                              <Text
-                                className="text-[11px] font-medium leading-[13px]"
+                              <View
+                                className="h-6 w-6 items-center justify-center rounded-full"
                                 style={{
-                                  color: getCommunityLeaderboardBadgeTextColor(
-                                    entry.rank,
-                                  ),
+                                  backgroundColor:
+                                    entry.rank >= 1 && entry.rank <= 3
+                                      ? badgeColor
+                                      : "#EEF2F7",
+                                  borderColor: "#FFFFFF",
+                                  borderWidth: 2,
                                 }}
                               >
-                                {entry.rank}
+                                <Text
+                                  className="text-[11px] font-medium leading-[13px]"
+                                  style={{
+                                    color:
+                                      entry.rank >= 1 && entry.rank <= 3
+                                        ? "#FFFFFF"
+                                        : "#667085",
+                                  }}
+                                >
+                                  {entry.rank}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View className="mr-2.5 h-10 w-10 items-center justify-center">
+                              <UserAvatar
+                                borderColor={
+                                  entry.rank === 1
+                                    ? "#F7B500"
+                                    : entry.rank === 2
+                                      ? "#C9D4E5"
+                                      : entry.rank === 3
+                                        ? "#FF8A00"
+                                        : "#D7DCE4"
+                                }
+                                borderWidth={
+                                  entry.rank >= 1 && entry.rank <= 3 ? 2 : 1.5
+                                }
+                                containerStyle={{
+                                  backgroundColor: "#FFFFFF",
+                                }}
+                                displayName={entry.name}
+                                size={38}
+                                textSize={12}
+                                uri={entry.avatarUri}
+                              />
+                            </View>
+
+                            <View className="flex-1 pr-2">
+                              <Text
+                                className="text-[12px] font-medium leading-[14px] text-[#2B2233]"
+                                numberOfLines={1}
+                              >
+                                {entry.name}
+                              </Text>
+                              <Text
+                                className="text-[10px] font-normal leading-[12px] text-[#9A93A5]"
+                                numberOfLines={1}
+                              >
+                                {entry.subtitle}
+                              </Text>
+                            </View>
+
+                            <View className="flex-row items-center rounded-full bg-[#FFF0F5] px-2.5 py-1.5">
+                              <SymbolView
+                                name={{
+                                  ios: "star.fill",
+                                  android: "star",
+                                  web: "star",
+                                }}
+                                size={10}
+                                tintColor="#FF5F87"
+                              />
+                              <Text className="ml-1 text-[10px] font-medium leading-[13px] text-[#2B2233]">
+                                {entry.points}
                               </Text>
                             </View>
                           </View>
-
-                          <View className="mr-2.5 h-10 w-10 items-center justify-center">
-                            <UserAvatar
-                              borderColor={getCommunityLeaderboardRingColor(
-                                entry.rank,
-                              )}
-                              borderWidth={
-                                isTopCommunityLeaderboardRank(entry.rank)
-                                  ? 2
-                                  : 1.5
-                              }
-                              containerStyle={{
-                                backgroundColor: "#FFFFFF",
-                              }}
-                              displayName={entry.name}
-                              size={38}
-                              textSize={12}
-                              uri={entry.avatarUri}
-                            />
-                          </View>
-
-                          <View className="flex-1 pr-2">
-                            <Text
-                              className="text-[12px] font-medium leading-[14px] text-[#2B2233]"
-                              numberOfLines={1}
-                            >
-                              {entry.name}
-                            </Text>
-                            <Text
-                              className="text-[10px] font-normal leading-[12px] text-[#9A93A5]"
-                              numberOfLines={1}
-                            >
-                              {entry.subtitle}
-                            </Text>
-                          </View>
-
-                          <View className="flex-row items-center rounded-full bg-[#FFF0F5] px-2.5 py-1.5">
-                            <SymbolView
-                              name={{
-                                ios: "star.fill",
-                                android: "star",
-                                web: "star",
-                              }}
-                              size={10}
-                              tintColor="#FF5F87"
-                            />
-                            <Text className="ml-1 text-[10px] font-medium leading-[13px] text-[#2B2233]">
-                              {entry.points}
-                            </Text>
-                          </View>
-                        </View>
-                      );
-                    })
-                  ) : (
-                    <View className="items-center rounded-[24px] border border-[#F3E7ED] bg-[#FFF8FB] px-4 py-5">
-                      {communityLeaderboardStatus === "loading" ? (
-                        <AppLoadingScreen
-                          mode="embedded"
-                          style={{ alignSelf: "stretch", minHeight: 88 }}
-                        />
-                      ) : (
-                        <>
-                          <Text className="text-center text-[12px] font-semibold text-[#1F2940]">
-                            {activeCommunityBoard.summaryLabel}
-                          </Text>
-                          <Text className="mt-1 text-center text-[10px] leading-[15px] text-[#8F8290]">
-                            {activeCommunityBoard.summaryNote}
-                          </Text>
-                        </>
-                      )}
-                    </View>
-                  )}
+                        );
+                      })
+                    : null}
                 </View>
               </View>
             </View>

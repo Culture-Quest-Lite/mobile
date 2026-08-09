@@ -45,6 +45,7 @@ export type CreatedPostResponse = {
   isTaggedRoute: boolean;
   likeCount: number | null;
   medias: CreatedPostMedia[];
+  pointEarned: number | null;
   pointRemaining: number | null;
   postId: number;
   reason: string | null;
@@ -186,6 +187,7 @@ export function parseCreatedPostResponse(
     isTaggedRoute: readBoolean(value.isTaggedRoute),
     likeCount: readNullableNumber(value.likeCount),
     medias,
+    pointEarned: readNullableNumber(value.pointEarned),
     pointRemaining: readNullableNumber(value.pointRemaining),
     postId,
     reason: readNullableString(value.reason),

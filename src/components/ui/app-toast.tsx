@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
-  Modal,
   Pressable,
   Text,
   View,
@@ -202,14 +201,16 @@ export function AppToastHost() {
   const currentTone = toneConfig[request.tone];
 
   return (
-    <Modal
-      animationType="none"
-      onRequestClose={() => {
-        setRequest(null);
+    <View
+      pointerEvents="box-none"
+      style={{
+        bottom: 0,
+        left: 0,
+        position: "absolute",
+        right: 0,
+        top: 0,
+        zIndex: 999,
       }}
-      statusBarTranslucent
-      transparent
-      visible
     >
       <View
         pointerEvents="box-none"
@@ -277,6 +278,6 @@ export function AppToastHost() {
           </Pressable>
         </Animated.View>
       </View>
-    </Modal>
+    </View>
   );
 }

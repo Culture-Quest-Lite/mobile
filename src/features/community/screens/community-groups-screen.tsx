@@ -172,7 +172,9 @@ function CommunityGroupsHeroArtwork() {
   );
 }
 
-function CommunityGroupAvatar() {
+function CommunityGroupAvatar({ imageUrl }: { imageUrl?: string | null }) {
+  const meaningfulImageUrl = readMeaningfulText(imageUrl);
+
   return (
     <View
       className="h-14 w-14 items-center justify-center rounded-full bg-[#FFF8FB]"
@@ -189,12 +191,22 @@ function CommunityGroupAvatar() {
         elevation: 2,
       }}
     >
-      <View className="h-11 w-11 items-center justify-center rounded-full bg-[#FFEAF3]">
-        <SymbolView
-          name={{ ios: "person.3.fill", android: "groups", web: "groups" }}
-          size={22}
-          tintColor="#FF5B92"
-        />
+      <View className="h-11 w-11 items-center justify-center rounded-full bg-[#FFEAF3] overflow-hidden">
+        {meaningfulImageUrl ? (
+          <Image
+            source={{ uri: meaningfulImageUrl }}
+            resizeMode="cover"
+            style={{ height: 44, width: 44, borderRadius: 999 }}
+          />
+        ) : (
+          <View className="h-11 w-11 items-center justify-center rounded-full bg-[#FFEAF3]">
+            <SymbolView
+              name={{ ios: "person.3.fill", android: "groups", web: "groups" }}
+              size={22}
+              tintColor="#FF5B92"
+            />
+          </View>
+        )}
       </View>
     </View>
   );
@@ -223,7 +235,7 @@ function CommunityGroupListRow({
       })}
     >
       <View className="flex-row items-start">
-        <CommunityGroupAvatar />
+        <CommunityGroupAvatar imageUrl={group.imageUrl} />
 
         <View className="ml-3 flex-1">
           <View className="flex-row items-start justify-between">
@@ -550,7 +562,11 @@ export default function CommunityGroupsScreen() {
             style={{ borderColor: "#EEE8F3", borderWidth: 1 }}
           >
             <SymbolView
-              name={{ ios: "magnifyingglass", android: "search", web: "search" }}
+              name={{
+                ios: "magnifyingglass",
+                android: "search",
+                web: "search",
+              }}
               size={16}
               tintColor="#ACA3B5"
             />

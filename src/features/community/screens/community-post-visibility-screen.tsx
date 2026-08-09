@@ -1,3 +1,4 @@
+import { appToast, type AppToastTone } from "@/components/ui/app-toast";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { ScreenHorizontalPadding } from "@/constants/theme";
 import {
@@ -30,6 +31,7 @@ import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   Pressable,
   Text,
   View,
@@ -42,12 +44,29 @@ type CommunityPostVisibilityParams = {
   postId?: string | string[];
 };
 
+type DeferredVisibilityToast = {
+  message: string;
+  tone: AppToastTone;
+};
+
 const footerShadowStyle = {
   elevation: 14,
   shadowColor: "rgba(24, 24, 27, 0.12)",
   shadowOffset: { width: 0, height: -6 },
   shadowOpacity: 1,
   shadowRadius: 16,
+} as const;
+
+const palette = {
+  accent: "#EB489B",
+  accentStrong: "#D95B8D",
+  accentSoft: "#FFE8F0",
+  border: "#E3E7ED",
+  errorBorder: "#F7C2D0",
+  errorSoft: "#FFF4F6",
+  errorText: "#C2416C",
+  iconSoft: "#FFF1F6",
+  primaryText: "#2B2233",
 } as const;
 
 function readMeaningfulText(value?: string | null) {
@@ -81,12 +100,15 @@ function SelectionIndicator({ selected }: { selected: boolean }) {
     <View
       className="h-[22px] w-[22px] items-center justify-center rounded-full"
       style={{
-        borderColor: selected ? "#2563EB" : "#D1D5DB",
+        borderColor: selected ? palette.accent : "#D1D5DB",
         borderWidth: 2,
       }}
     >
       {selected ? (
-        <View className="h-[10px] w-[10px] rounded-full bg-[#2563EB]" />
+        <View
+          className="h-[10px] w-[10px] rounded-full"
+          style={{ backgroundColor: palette.accent }}
+        />
       ) : null}
     </View>
   );
@@ -108,15 +130,18 @@ function VisibilityOptionRow({
       className="flex-row items-center rounded-[16px] border px-3.5 py-2.5"
       onPress={onPress}
       style={{
-        backgroundColor: isSelected ? "#EFF6FF" : "#FFFFFF",
-        borderColor: isSelected ? "#BFDBFE" : "#E5E7EB",
+        backgroundColor: isSelected ? palette.accentSoft : "#FFFFFF",
+        borderColor: isSelected ? "#F5B5CB" : palette.border,
       }}
     >
-      <View className="h-10 w-10 items-center justify-center rounded-full bg-[#F8FAFC]">
+      <View
+        className="h-10 w-10 items-center justify-center rounded-full"
+        style={{ backgroundColor: palette.iconSoft }}
+      >
         <SymbolView
           name={getPostVisibilityIcon(value)}
           size={18}
-          tintColor={isSelected ? "#2563EB" : "#111827"}
+          tintColor={isSelected ? palette.accent : "#111827"}
         />
       </View>
 
@@ -151,12 +176,66 @@ export default function CommunityPostVisibilityScreen() {
   const [selectedVisibility, setSelectedVisibility] = useState<PostVisibilityValue>(
     () => getCommunityPostVisibility(),
   );
+  // Lưu quyền riêng tư ban đầu để biết bài có thực sự đổi sang công khai hay
+  // không — public giữ nguyên public thì không cần chờ duyệt lại.
+  const [initialVisibility, setInitialVisibility] =
+    useState<PostVisibilityValue | null>(null);
   const [editingPostContent, setEditingPostContent] = useState<string | null>(
     null,
   );
   const [isLoadingPost, setIsLoadingPost] = useState(isEditMode);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isLeavingScreenRef = useRef(false);
+  const pendingToastRef = useRef<DeferredVisibilityToast | null>(null);
+
+  function showDeferredToast(toast: DeferredVisibilityToast) {
+    if (toast.tone === "error") {
+      appToast.error(toast.message);
+      return;
+    }
+
+    if (toast.tone === "success") {
+      appToast.success(toast.message);
+      return;
+    }
+
+    appToast.info(toast.message);
+  }
+
+  function leaveScreen(options?: { toast?: DeferredVisibilityToast | null }) {
+    if (options?.toast) {
+      pendingToastRef.current = options.toast;
+    }
+
+    if (isLeavingScreenRef.current) {
+      return;
+    }
+
+    isLeavingScreenRef.current = true;
+    Keyboard.dismiss();
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace("/bookings");
+        }
+
+        const pendingToast = pendingToastRef.current;
+        pendingToastRef.current = null;
+
+        setTimeout(() => {
+          isLeavingScreenRef.current = false;
+
+          if (pendingToast) {
+            showDeferredToast(pendingToast);
+          }
+        }, 40);
+      });
+    });
+  }
 
   useEffect(() => {
     if (!isEditMode) {
@@ -202,8 +281,11 @@ export default function CommunityPostVisibilityScreen() {
           return;
         }
 
+        const loadedVisibility = normalizePostVisibilityValue(post.visibility);
+
         setEditingPostContent(readMeaningfulText(post.content) ?? "");
-        setSelectedVisibility(normalizePostVisibilityValue(post.visibility));
+        setSelectedVisibility(loadedVisibility);
+        setInitialVisibility(loadedVisibility);
       } catch (error) {
         if (!isActive) {
           return;
@@ -281,7 +363,28 @@ export default function CommunityPostVisibilityScreen() {
       });
 
       cacheProfilePost(mapCreatedPostToProfilePost(updatedPost));
-      router.back();
+
+      const updatedVisibility = normalizePostVisibilityValue(
+        updatedPost.visibility,
+      );
+      const updatedStatus =
+        readMeaningfulText(updatedPost.status)?.toUpperCase() ?? "";
+      const wasAlreadyPublic = initialVisibility === "PUBLIC";
+      // Riêng tư/bạn bè và public giữ nguyên public: không cần duyệt lại.
+      // Chỉ chờ duyệt khi thực sự chuyển sang công khai và server báo PENDING.
+      const needsApproval =
+        updatedVisibility === "PUBLIC" &&
+        !wasAlreadyPublic &&
+        updatedStatus === "PENDING";
+
+      leaveScreen({
+        toast: {
+          message: needsApproval
+            ? "Đã cập nhật quyền riêng tư. Bài viết công khai đang chờ quản trị viên duyệt trước khi hiển thị."
+            : "Đã cập nhật quyền riêng tư bài viết.",
+          tone: needsApproval ? "info" : "success",
+        },
+      });
     } catch (error) {
       Alert.alert(
         t("community.postVisibility.cannotUpdateTitle"),
@@ -290,7 +393,9 @@ export default function CommunityPostVisibilityScreen() {
           : t("community.postVisibility.updateErrorFallback"),
       );
     } finally {
-      setIsSubmitting(false);
+      if (!isLeavingScreenRef.current) {
+        setIsSubmitting(false);
+      }
     }
   }
 
@@ -302,7 +407,10 @@ export default function CommunityPostVisibilityScreen() {
         className="flex-1 bg-white"
         edges={["top", "left", "right"]}
       >
-        <View className="border-b border-[#F2F4F7] px-4 py-2.5">
+        <View
+          className="border-b px-4 py-2.5"
+          style={{ borderColor: palette.border }}
+        >
           <View className="flex-row items-center justify-between">
             <Pressable
               className="h-9 w-9 items-center justify-center rounded-full"
@@ -332,8 +440,8 @@ export default function CommunityPostVisibilityScreen() {
             style={{ paddingHorizontal: ScreenHorizontalPadding }}
           >
             <Text
-              className="text-[16px] font-semibold text-[#2B2233]"
-              style={{ lineHeight: lineHeightFor(16) }}
+              className="text-[16px] font-semibold"
+              style={{ color: palette.primaryText, lineHeight: lineHeightFor(16) }}
             >
               {isEditMode
                 ? t("community.postVisibility.titleEdit")
@@ -351,14 +459,20 @@ export default function CommunityPostVisibilityScreen() {
 
           {isEditMode && isLoadingPost ? (
             <View className="mt-8 items-center justify-center px-5">
-              <ActivityIndicator color="#2563EB" size="small" />
+              <ActivityIndicator color={palette.accent} size="small" />
               <Text className="mt-3 text-[13px] font-normal text-[#6B7280]">
                 {t("community.postVisibility.loadingLabel")}
               </Text>
             </View>
           ) : loadError ? (
-            <View className="mx-4 mt-4 rounded-[16px] border border-[#F5D0D6] bg-[#FFF7F7] px-4 py-4">
-              <Text className="text-[13px] font-medium text-[#B42318]">
+            <View
+              className="mx-4 mt-4 rounded-[16px] border px-4 py-4"
+              style={{ backgroundColor: palette.errorSoft, borderColor: palette.errorBorder }}
+            >
+              <Text
+                className="text-[13px] font-medium"
+                style={{ color: palette.errorText }}
+              >
                 {loadError}
               </Text>
             </View>
@@ -379,10 +493,11 @@ export default function CommunityPostVisibilityScreen() {
         </View>
 
         <View
-          className="border-t border-[#F2F4F7] bg-white px-4 pt-3"
+          className="border-t bg-white px-4 pt-3"
           style={[
             footerShadowStyle,
             {
+              borderColor: palette.border,
               paddingBottom: Math.max(insets.bottom + 10, 16),
             },
           ]}
@@ -394,12 +509,13 @@ export default function CommunityPostVisibilityScreen() {
           </Text>
 
           <Pressable
-            className="h-11 items-center justify-center rounded-[12px] bg-[#2563EB]"
+            className="h-11 items-center justify-center rounded-[12px]"
             disabled={isSubmitting || (isEditMode && (isLoadingPost || !!loadError))}
             onPress={() => {
               void handleSubmit();
             }}
             style={({ pressed }) => ({
+              backgroundColor: palette.accentStrong,
               opacity:
                 isSubmitting || (isEditMode && (isLoadingPost || !!loadError))
                   ? 0.7

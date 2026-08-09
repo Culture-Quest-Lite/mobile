@@ -9,6 +9,7 @@ import {
   type UserLeaderboardEntryDto,
 } from "@/features/home/api/get-user-leaderboard";
 import { LeaderRankingCard } from "@/features/home/components/leader-ranking-card";
+import { textStyle } from "@/lib/text-scale";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -289,10 +290,18 @@ export default function CommunityLeaderboardScreen() {
         >
           {/* LeaderRankingCard tự chứa padding 16px hai bên nên bù lại bằng
               margin âm để khớp với padding của ScrollView */}
-          <View style={{ marginHorizontal: -16 }}>
+          <View style={{ marginHorizontal: -16, marginTop: 14 }}>
             <LeaderRankingCard
-              description={summaryContent.note}
-              title={summaryContent.title}
+              topEntries={entries
+                .filter((entry) => entry.rank >= 1 && entry.rank <= 3)
+                .map((entry) => ({
+                  avatarUri: readMeaningfulText(entry.avatarUrl) ?? null,
+                  isCurrentUser: entry.isCurrentUser,
+                  name: getCommunityLeaderboardDisplayName(entry),
+                  points: `${formatCommunityXp(entry.totalXp)} XP`,
+                  rank: entry.rank,
+                  subtitle: getCommunityLeaderboardSubtitle(entry),
+                }))}
               xp={summaryContent.totalXp}
             />
           </View>
@@ -315,18 +324,14 @@ export default function CommunityLeaderboardScreen() {
                   style={[
                     leaderboardCardShadow,
                     {
-                      backgroundColor: isChampion
-                        ? "#FFF9EC"
-                        : isCurrentUserEntry
-                          ? "#FFF7FA"
-                          : "#FFFFFF",
-                      borderColor: isChampion
-                        ? "#F4D493"
-                        : isCurrentUserEntry
-                          ? "#F8D8E3"
-                          : "#EEF1F4",
-                      borderWidth: 1,
-                    },
+                      backgroundColor: isCurrentUserEntry
+                        ? "#FFF7FA"
+                        : "#FFFFFF",
+                      borderColor: isCurrentUserEntry
+                        ? "#F8D8E3"
+                        : "#EEF1F4",
+                        borderWidth: 1,
+                      },
                   ]}
                 >
                   <View className="mr-2.5 w-7 items-center justify-center">
@@ -382,12 +387,15 @@ export default function CommunityLeaderboardScreen() {
                       }}
                     >
                       <Text
-                        className="text-[11px] font-medium leading-[13px]"
-                        style={{
-                          color: getCommunityLeaderboardBadgeTextColor(
-                            entry.rank,
-                          ),
-                        }}
+                        className="text-[11px] text-[#2F2337]"
+                        style={[
+                          textStyle(11),
+                          {
+                            color: getCommunityLeaderboardBadgeTextColor(
+                              entry.rank,
+                            ),
+                          },
+                        ]}
                       >
                         {entry.rank}
                       </Text>
@@ -410,13 +418,15 @@ export default function CommunityLeaderboardScreen() {
 
                   <View className="flex-1 pr-2">
                     <Text
-                      className="text-[12px] font-medium leading-[14px] text-[#2B2233]"
+                      className="text-[14px] text-[#2F2337]"
+                      style={textStyle(14)}
                       numberOfLines={1}
                     >
                       {getCommunityLeaderboardDisplayName(entry)}
                     </Text>
                     <Text
-                      className="text-[10px] font-normal leading-[12px] text-[#9A93A5]"
+                      className="text-[12px] text-[#8F8298]"
+                      style={textStyle(12)}
                       numberOfLines={1}
                     >
                       {getCommunityLeaderboardSubtitle(entry)}

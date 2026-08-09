@@ -9,22 +9,12 @@ import { useTranslation } from "react-i18next";
 import {
   Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text as RNText,
   useWindowDimensions,
   View,
   type TextProps,
 } from "react-native";
-import Animated, {
-  Easing,
-  ReduceMotion,
-  cancelAnimation,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from "react-native-reanimated";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -32,12 +22,17 @@ import {
 
 import { CommunityGroupStateCard } from "../components/community-group-ui";
 import { getCachedCommunityGroupSession } from "../data/community-group-session-store";
-import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
+import { lineHeightFor } from "@/lib/text-scale";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 
 const successHeroImage = require("../../../../assets/images/post_group1.png");
+const successBackgroundImage = require("../../../../assets/images/nenanpopup.png");
 const detailTextMaxFontSizeMultiplier = 1.05;
+/** Đoạn nội dung của màn này siết hơn mức 1.45 chung, vẫn đủ chỗ cho dấu tiếng Việt. */
+const compactBodyLineHeightRatio = 1.32;
+/** Chữ 1 dòng (tên nhóm, link, nhãn) siết sát hơn mức 1.15 chung. */
+const compactLabelLineHeightRatio = 1.1;
 const pagePalette = {
   accent: "#B16A19",
   accentStrong: "#8C5211",
@@ -47,8 +42,9 @@ const pagePalette = {
   buttonMid: "#F09EC3",
   buttonStart: "#F7BDD7",
   iconTint: "#8F857A",
+  pageBase: "#FFF9FB",
   surface: "#FFFFFF",
-  surfaceSoft: "#FFF8ED",
+  surfaceSoft: "#F3F4F6",
   title: "#2F261D",
 };
 
@@ -83,83 +79,14 @@ function SuccessHeroImage({
   imageHeight: number;
   imageWidth: number;
 }) {
-  const heroFloat = useSharedValue(0);
-  const heroRotate = useSharedValue(0);
-  const heroScale = useSharedValue(1);
-
-  useEffect(() => {
-    heroFloat.set(
-      withRepeat(
-        withTiming(-14, {
-          duration: 1850,
-          easing: Easing.inOut(Easing.quad),
-          reduceMotion: ReduceMotion.System,
-        }),
-        -1,
-        true,
-        undefined,
-        ReduceMotion.System,
-      ),
-    );
-
-    heroRotate.set(
-      withRepeat(
-        withTiming(3.6, {
-          duration: 1850,
-          easing: Easing.inOut(Easing.quad),
-          reduceMotion: ReduceMotion.System,
-        }),
-        -1,
-        true,
-        undefined,
-        ReduceMotion.System,
-      ),
-    );
-
-    heroScale.set(
-      withRepeat(
-        withTiming(1.06, {
-          duration: 1850,
-          easing: Easing.inOut(Easing.quad),
-          reduceMotion: ReduceMotion.System,
-        }),
-        -1,
-        true,
-        undefined,
-        ReduceMotion.System,
-      ),
-    );
-
-    return () => {
-      cancelAnimation(heroFloat);
-      cancelAnimation(heroRotate);
-      cancelAnimation(heroScale);
-      heroFloat.set(0);
-      heroRotate.set(0);
-      heroScale.set(1);
-    };
-  }, [heroFloat, heroRotate, heroScale]);
-
-  const animatedHeroStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        { translateY: heroFloat.get() },
-        { rotate: `${heroRotate.get()}deg` },
-        { scale: heroScale.get() },
-      ],
-    };
-  });
-
   return (
     <View className="items-center">
       <View style={[styles.heroImageFrame, { height: frameHeight, width: imageWidth + 20 }]}>
-        <Animated.View style={animatedHeroStyle}>
-          <Image
-            resizeMode="contain"
-            source={successHeroImage}
-            style={[styles.heroImage, { height: imageHeight, width: imageWidth }]}
-          />
-        </Animated.View>
+        <Image
+          resizeMode="contain"
+          source={successHeroImage}
+          style={[styles.heroImage, { height: imageHeight, width: imageWidth }]}
+        />
       </View>
     </View>
   );
@@ -169,7 +96,7 @@ function MetaItem({ icon, label }: { icon: SymbolName; label: string }) {
   return (
     <View className="flex-row items-center">
       <SymbolView name={icon} size={12} tintColor={pagePalette.iconTint} />
-      <Text className="ml-1 text-[12px]" style={{ color: pagePalette.body, lineHeight: lineHeightFor(12) }}>
+      <Text className="ml-1 text-[11.5px]" style={{ color: pagePalette.body, lineHeight: lineHeightFor(11.5, compactLabelLineHeightRatio) }}>
         {label}
       </Text>
     </View>
@@ -203,17 +130,17 @@ function InviteCard({
                   android: "groups",
                   web: "groups",
                 }}
-                size={22}
-                tintColor="#34B362"
+                size={19}
+                tintColor="#9CA3AF"
               />
             </View>
           </View>
 
-          <View className="ml-4 flex-1" style={{ minWidth: 0 }}>
+          <View className="ml-3 flex-1" style={{ minWidth: 0 }}>
             <Text
-              className="text-[15px] font-black"
+              className="text-[14px] font-black"
               numberOfLines={1}
-              style={{ color: pagePalette.title, lineHeight: lineHeightFor(15) }}
+              style={{ color: pagePalette.title, lineHeight: lineHeightFor(14, compactLabelLineHeightRatio) }}
             >
               {groupName}
             </Text>
@@ -234,14 +161,14 @@ function InviteCard({
         </View>
 
         <Text
-          className="mt-3 text-[11px] font-black uppercase tracking-[0.35px]"
-          style={{ color: pagePalette.body, lineHeight: lineHeightFor(11) }}
+          className="mt-2.5 text-[10.5px] font-black uppercase tracking-[0.35px]"
+          style={{ color: pagePalette.body, lineHeight: lineHeightFor(10.5, compactLabelLineHeightRatio) }}
         >
           {t("community.groupCreated.inviteLinkLabel")}
         </Text>
 
         <View
-          className="mt-1.5 flex-row items-center rounded-[18px] px-3 py-2"
+          className="mt-1.5 flex-row items-center rounded-[16px] px-2.5 py-1.5"
           style={{
             backgroundColor: pagePalette.surfaceSoft,
             borderColor: pagePalette.border,
@@ -250,9 +177,9 @@ function InviteCard({
         >
           <View className="flex-1 pr-2" style={{ minWidth: 0 }}>
             <Text
-              className="text-[12px]"
+              className="text-[11.5px]"
               numberOfLines={1}
-              style={{ color: pagePalette.body, lineHeight: lineHeightFor(12) }}
+              style={{ color: pagePalette.body, lineHeight: lineHeightFor(11.5, compactLabelLineHeightRatio) }}
             >
               {inviteUrl}
             </Text>
@@ -278,7 +205,7 @@ function InviteCard({
                   android: "content_copy",
                   web: "content_copy",
                 }}
-                size={15}
+                size={14}
                 tintColor={copied ? pagePalette.buttonEnd : pagePalette.body}
               />
             </View>
@@ -293,7 +220,7 @@ export default function CommunityGroupCreatedScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const { shareToken } = useLocalSearchParams<{ shareToken?: string }>();
   const resolvedShareToken =
     typeof shareToken === "string" ? decodeURIComponent(shareToken) : null;
@@ -302,13 +229,29 @@ export default function CommunityGroupCreatedScreen() {
   const safeScreenWidth = Math.max(width - insets.left - insets.right, 320);
   const horizontalPadding = ScreenHorizontalPadding;
   const contentMaxWidth = Math.min(460, safeScreenWidth - horizontalPadding * 2);
-  const heroImageWidth = Math.min(Math.max(contentMaxWidth - 8, 250), 304);
-  const heroImageHeight = Math.round(heroImageWidth * (202 / 304));
-  const heroFrameHeight = heroImageHeight + 26;
-  const closeButtonTop =
-    Math.max(insets.top, 16) + (safeScreenWidth < 360 ? 44 : 52);
-  const scrollTopPadding = closeButtonTop + 56;
+  const heroImageWidth = Math.min(Math.max(contentMaxWidth - 8, 230), 272);
+  // Màn cố định, không cuộn: ảnh linh vật phải nhường chỗ cho card + 2 nút,
+  // nên chặn thêm theo chiều cao máy để máy thấp không bị tràn khỏi khung.
+  const heroImageHeight = Math.round(
+    Math.min(heroImageWidth * (202 / 304), height * 0.21),
+  );
+  const heroFrameHeight = heroImageHeight + 14;
+  // Nút X nằm trong luồng bố cục bình thường (giống trang popup đăng bài thành công)
+  // thay vì "float" tuyệt đối, để luôn cách mép an toàn insets.top thay vì dính sát mép máy.
+  const closeButtonRowTopPadding = Math.max(insets.top, 16) + 14;
+  const closeButtonRowHeight = closeButtonRowTopPadding + 40 + 4;
+  const contentTopPadding = 56;
   const descriptionMaxWidth = Math.min(contentMaxWidth * 0.82, 278);
+  // Nền chỉ phủ vùng header: từ đỉnh màn hình tới hết ảnh linh vật, rồi tan dần vào nền trang.
+  const headerBackgroundHeight =
+    closeButtonRowHeight + contentTopPadding + heroFrameHeight;
+  // Neo thủ công thay vì để "cover" tự cắt giữa: dải cầu - lầu son nằm ở khoảng 34% chiều cao ảnh,
+  // cần kéo về giữa header thì mới nhìn thấy, nếu không phần lọt vào khung chỉ là mặt nước trắng.
+  const headerImageWidth = width;
+  const headerImageHeight = Math.round(headerImageWidth * (1672 / 941));
+  const headerImageTop = Math.round(
+    headerBackgroundHeight * 0.58 - headerImageHeight * 0.34,
+  );
 
   useEffect(() => {
     if (!copied) {
@@ -344,32 +287,64 @@ export default function CommunityGroupCreatedScreen() {
       : 1;
 
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1" style={{ backgroundColor: pagePalette.pageBase }}>
       <StatusBar style="dark" />
 
-      <SafeAreaView className="flex-1 bg-white" edges={["left", "right", "bottom"]}>
-        <Pressable
-          className="absolute z-20 h-11 w-11 items-center justify-center rounded-full"
-          onPress={navigateToFeed}
-          style={({ pressed }) => [
-            styles.closeButtonFloating,
+      <View
+        pointerEvents="none"
+        style={[styles.headerBackground, { height: headerBackgroundHeight }]}
+      >
+        <Image
+          resizeMode="cover"
+          source={successBackgroundImage}
+          style={[
+            styles.headerBackgroundImage,
             {
-              left: horizontalPadding,
-              opacity: pressed ? 0.82 : 1,
-              top: closeButtonTop,
+              height: headerImageHeight,
+              top: headerImageTop,
+              width: headerImageWidth,
             },
           ]}
+        />
+        <LinearGradient
+          colors={[
+            "rgba(255, 249, 251, 0)",
+            "rgba(255, 249, 251, 0.35)",
+            pagePalette.pageBase,
+          ]}
+          locations={[0, 0.78, 1]}
+          style={styles.headerBackgroundFade}
+        />
+      </View>
+
+      <SafeAreaView className="flex-1" edges={["left", "right", "bottom"]}>
+        <View
+          className="z-20 flex-row items-center justify-start"
+          style={{
+            paddingBottom: 4,
+            paddingHorizontal: horizontalPadding,
+            paddingTop: closeButtonRowTopPadding,
+          }}
         >
-          <SymbolView
-            name={{
-              ios: "xmark",
-              android: "close",
-              web: "close",
-            }}
-            size={20}
-            tintColor={pagePalette.body}
-          />
-        </Pressable>
+          <Pressable
+            hitSlop={12}
+            onPress={navigateToFeed}
+            style={({ pressed }) => [
+              styles.closeButtonInline,
+              { opacity: pressed ? 0.82 : 1 },
+            ]}
+          >
+            <SymbolView
+              name={{
+                ios: "xmark",
+                android: "close",
+                web: "close",
+              }}
+              size={18}
+              tintColor={pagePalette.body}
+            />
+          </Pressable>
+        </View>
 
         {!resolvedShareToken ? (
           <View
@@ -400,15 +375,13 @@ export default function CommunityGroupCreatedScreen() {
             />
           </View>
         ) : (
-          <ScrollView
-            bounces={false}
-            contentContainerStyle={{
-              alignItems: "center",
+          <View
+            className="flex-1 items-center"
+            style={{
               paddingBottom: Math.max(insets.bottom + 14, 20),
               paddingHorizontal: horizontalPadding,
-              paddingTop: scrollTopPadding,
+              paddingTop: contentTopPadding,
             }}
-            showsVerticalScrollIndicator={false}
           >
             <View className="w-full items-center" style={{ maxWidth: contentMaxWidth }}>
               <View className="items-center">
@@ -419,28 +392,26 @@ export default function CommunityGroupCreatedScreen() {
                 />
 
                 <Text
-                  className="mt-1 text-center text-[22px] font-black"
-                  style={{ color: pagePalette.title, lineHeight: lineHeightFor(22) }}
+                  className="mt-6 text-center text-[19px] font-black"
+                  style={{ color: pagePalette.title, lineHeight: lineHeightFor(19, compactLabelLineHeightRatio) }}
                 >
                   {t("community.groupCreated.successTitle")}
                 </Text>
 
-                <LinearGradient
-                  colors={["#F7BDD7", "#EA8FB9"]}
-                  end={{ x: 1, y: 0.5 }}
-                  start={{ x: 0, y: 0.5 }}
-                  style={styles.titleUnderline}
-                />
-
                 <Text
-                  className="mt-1.5 text-center text-[13px]"
-                  style={{ color: pagePalette.body, lineHeight: bodyLineHeightFor(13), maxWidth: descriptionMaxWidth }}
+                  className="mt-1.5 text-center text-[12px]"
+                  style={{
+                    color: pagePalette.body,
+                    // 1.32 thay cho 1.45 mặc định: gọn hơn nhưng vẫn đủ chỗ cho dấu tiếng Việt.
+                    lineHeight: lineHeightFor(12, compactBodyLineHeightRatio),
+                    maxWidth: descriptionMaxWidth,
+                  }}
                 >
                   {t("community.groupCreated.successSubtitle")}
                 </Text>
               </View>
 
-              <View className="mt-5 w-full">
+              <View className="mt-4 w-full">
                 <InviteCard
                   copied={copied}
                   groupName={
@@ -455,7 +426,7 @@ export default function CommunityGroupCreatedScreen() {
                 />
               </View>
 
-              <View className="mt-4 w-full">
+              <View className="mt-3 w-full">
                 <Pressable
                   onPress={() => {
                     router.push(
@@ -466,15 +437,12 @@ export default function CommunityGroupCreatedScreen() {
                     opacity: pressed ? 0.9 : 1,
                   })}
                 >
-                  <LinearGradient
-                    colors={[
-                      pagePalette.buttonStart,
-                      pagePalette.buttonMid,
-                      pagePalette.buttonEnd,
+                  <View
+                    style={[
+                      styles.primaryButton,
+                      styles.primaryButtonShadow,
+                      { backgroundColor: pagePalette.buttonMid },
                     ]}
-                    end={{ x: 1, y: 0.5 }}
-                    start={{ x: 0, y: 0.5 }}
-                    style={[styles.primaryButton, styles.primaryButtonShadow]}
                   >
                     <View className="flex-row items-center justify-center">
                       <SymbolView
@@ -483,12 +451,12 @@ export default function CommunityGroupCreatedScreen() {
                           android: "send",
                           web: "send",
                         }}
-                        size={17}
+                        size={14}
                         tintColor="#FFFFFF"
                       />
                       <Text
-                        className="ml-2 text-[15px] font-black text-white"
-                        style={{ lineHeight: lineHeightFor(15) }}
+                        className="ml-2 text-[13px] font-black text-white"
+                        style={{ lineHeight: lineHeightFor(13, compactLabelLineHeightRatio) }}
                       >
                         {t("community.groupCreated.viewDetails")}
                       </Text>
@@ -501,11 +469,11 @@ export default function CommunityGroupCreatedScreen() {
                           android: "auto_awesome",
                           web: "auto_awesome",
                         }}
-                        size={16}
+                        size={14}
                         tintColor="#FFF4FB"
                       />
                     </View>
-                  </LinearGradient>
+                  </View>
                 </Pressable>
 
                 <Pressable
@@ -516,7 +484,7 @@ export default function CommunityGroupCreatedScreen() {
                   })}
                 >
                   <View
-                    className="flex-row items-center justify-center rounded-[20px] px-4"
+                    className="flex-row items-center justify-center px-4"
                     style={[
                       styles.secondaryButton,
                       styles.whiteButtonShadow,
@@ -533,12 +501,12 @@ export default function CommunityGroupCreatedScreen() {
                         android: "home",
                         web: "home",
                       }}
-                      size={17}
+                      size={14}
                       tintColor={pagePalette.body}
                     />
                     <Text
-                      className="ml-2 text-[15px] font-black"
-                      style={{ color: pagePalette.body, lineHeight: lineHeightFor(15) }}
+                      className="ml-2 text-[13px] font-black"
+                      style={{ color: pagePalette.body, lineHeight: lineHeightFor(13, compactLabelLineHeightRatio) }}
                     >
                       {t("community.groupCreated.backToFeed")}
                     </Text>
@@ -546,7 +514,7 @@ export default function CommunityGroupCreatedScreen() {
                 </Pressable>
               </View>
             </View>
-          </ScrollView>
+          </View>
         )}
       </SafeAreaView>
     </View>
@@ -554,11 +522,16 @@ export default function CommunityGroupCreatedScreen() {
 }
 
 const styles = StyleSheet.create({
-  closeButtonFloating: {
+  closeButtonInline: {
+    alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderColor: pagePalette.border,
+    borderRadius: 999,
     borderWidth: 0.85,
     elevation: 4,
+    height: 40,
+    justifyContent: "center",
+    width: 40,
     shadowColor: "#CDBA9A",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.14,
@@ -574,30 +547,30 @@ const styles = StyleSheet.create({
   copyButton: {
     borderColor: pagePalette.border,
     borderWidth: 0.85,
-    height: 36,
-    width: 36,
+    height: 32,
+    width: 32,
   },
   copyButtonActive: {
     borderColor: pagePalette.border,
     borderWidth: 0.85,
-    height: 36,
-    width: 36,
+    height: 32,
+    width: 32,
   },
   groupBadgeInner: {
     alignItems: "center",
-    backgroundColor: "#EAF7EF",
+    backgroundColor: "#F3F4F6",
     borderRadius: 999,
-    height: 46,
+    height: 40,
     justifyContent: "center",
-    width: 46,
+    width: 40,
   },
   groupBadgeOuter: {
     alignItems: "center",
-    backgroundColor: "rgba(243,252,247,0.92)",
+    backgroundColor: "rgba(243,244,246,0.92)",
     borderRadius: 999,
-    height: 58,
+    height: 50,
     justifyContent: "center",
-    width: 58,
+    width: 50,
   },
   heroImage: {
     height: 202,
@@ -609,18 +582,36 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 324,
   },
+  headerBackground: {
+    left: 0,
+    overflow: "hidden",
+    position: "absolute",
+    right: 0,
+    top: 0,
+  },
+  headerBackgroundImage: {
+    left: 0,
+    position: "absolute",
+  },
+  headerBackgroundFade: {
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
+  },
   inviteCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "rgba(255, 255, 255, 0.96)",
     borderColor: pagePalette.border,
-    borderRadius: 28,
+    borderRadius: 24,
     borderWidth: 0.85,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
+    paddingHorizontal: 15,
+    paddingVertical: 15,
   },
   primaryButton: {
     alignItems: "center",
-    borderRadius: 20,
-    height: 52,
+    borderRadius: 15,
+    height: 40,
     justifyContent: "center",
     overflow: "hidden",
   },
@@ -633,15 +624,9 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     alignItems: "center",
-    borderRadius: 20,
-    height: 50,
+    borderRadius: 15,
+    height: 38,
     justifyContent: "center",
-  },
-  titleUnderline: {
-    borderRadius: 999,
-    height: 3,
-    marginTop: 6,
-    width: 38,
   },
   whiteButtonShadow: {
     elevation: 4,

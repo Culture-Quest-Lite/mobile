@@ -17,8 +17,11 @@ type UpdatePostRequest = {
   accessToken: string;
   content: string;
   files?: CreatePostUploadFile[];
+  hotspotIds?: number[];
   postId: number;
   removedMediaIds?: number[];
+  routeIds?: number[];
+  tagIds?: number[];
   tokenType?: string | null;
   visibility?: PostVisibilityValue | string | null;
 };
@@ -95,8 +98,11 @@ export async function updatePost({
   accessToken,
   content,
   files = [],
+  hotspotIds = [],
   postId,
   removedMediaIds = [],
+  routeIds = [],
+  tagIds = [],
   tokenType,
   visibility = "PUBLIC",
 }: UpdatePostRequest): Promise<CreatedPostResponse> {
@@ -118,6 +124,24 @@ export async function updatePost({
   for (const mediaId of Array.from(new Set(removedMediaIds))) {
     if (Number.isInteger(mediaId) && mediaId > 0) {
       formData.append("removedMediaIds", `${mediaId}`);
+    }
+  }
+
+  for (const hotspotId of Array.from(new Set(hotspotIds))) {
+    if (Number.isInteger(hotspotId) && hotspotId > 0) {
+      formData.append("hotspotIds", `${hotspotId}`);
+    }
+  }
+
+  for (const routeId of Array.from(new Set(routeIds))) {
+    if (Number.isInteger(routeId) && routeId > 0) {
+      formData.append("routeIds", `${routeId}`);
+    }
+  }
+
+  for (const tagId of Array.from(new Set(tagIds))) {
+    if (Number.isInteger(tagId) && tagId > 0) {
+      formData.append("tagIds", `${tagId}`);
     }
   }
 

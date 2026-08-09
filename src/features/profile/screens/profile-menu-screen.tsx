@@ -1,8 +1,12 @@
 import { SymbolView } from "@/components/ui/symbol-view";
 import { ScreenHorizontalPadding } from "@/constants/theme";
+import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, type Href } from "expo-router";
+import { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Pressable,
   Text as RNText,
   ScrollView,
@@ -16,18 +20,29 @@ import {
 import { useTranslation } from "react-i18next";
 
 import {
+  getValidAccessToken,
   resetAuthSessionToGuest,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
+import { updateMyProfile } from "../api/update-me";
 import { resetPremiumStatus } from "../hooks/use-premium-status";
 import { useProfile } from "../hooks/use-profile";
 
-const gradientColors = ["#F8B1C8", "#EB489B", "#F58752"] as const;
+function getUpdateProfileErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return "Không thể cập nhật ảnh đại diện.";
+}
+
+const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const detailTextMaxFontSizeMultiplier = 1.05;
 
 type MenuRowConfig = {
   isDestructive?: boolean;
+  isLoading?: boolean;
   label: string;
   onPress: () => void;
   value?: string;
@@ -61,7 +76,7 @@ function getProfileTitle(name: string | undefined, fallbackName: string, t: (key
 export default function ProfileMenuScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
-  const { profile } = useProfile();
+  const { profile, reloadProfile } = useProfile();
   const insets = useSafeAreaInsets();
   const { t, i18n } = useTranslation();
 
@@ -80,6 +95,69 @@ export default function ProfileMenuScreen() {
     // nếu không tài khoản đăng nhập kế tiếp sẽ thừa hưởng isPremium của user cũ.
     resetPremiumStatus();
     router.replace("/home");
+  };
+
+  const handleChangeAvatar = async () => {
+    if (!profile || isChangingAvatar) {
+      return;
+    }
+
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Alert.alert(
+        "Cần cấp quyền",
+        "Hãy cho phép truy cập thư viện để đổi ảnh đại diện.",
+      );
+      return;
+    }
+
+    const pickerResult = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      mediaTypes: ["images"],
+      quality: 0.85,
+    });
+
+    if (pickerResult.canceled || pickerResult.assets.length === 0) {
+      return;
+    }
+
+    const pickedAvatarUrl = pickerResult.assets[0]?.uri;
+
+    if (!pickedAvatarUrl) {
+      return;
+    }
+
+    setIsChangingAvatar(true);
+
+    try {
+      const accessToken = await getValidAccessToken();
+
+      if (!accessToken) {
+        throw new Error(
+          "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+        );
+      }
+
+      // BE yêu cầu PUT đủ cả 4 field dù UI chỉ cho đổi avatar, nếu không các field
+      // còn lại (displayName, backgroundUrl, autoPlayAudio) sẽ bị ghi đè mất giá trị hiện tại.
+      await updateMyProfile({
+        accessToken,
+        autoPlayAudio: profile.autoPlayAudio ?? false,
+        avatarUrl: pickedAvatarUrl,
+        backgroundUrl: profile.cover,
+        displayName: profile.name,
+        tokenType: authSession.tokenType,
+      });
+
+      await reloadProfile();
+    } catch (error) {
+      Alert.alert("Không thể đổi ảnh đại diện", getUpdateProfileErrorMessage(error));
+    } finally {
+      setIsChangingAvatar(false);
+    }
   };
 
   const displayName = getProfileTitle(profile?.name, authSession.displayName, t);
@@ -148,6 +226,12 @@ export default function ProfileMenuScreen() {
     {
       label: t('profile.menu.generalSettings'),
       onPress: () => {},
+    },
+    {
+      label: "Kho lưu trữ",
+      onPress: () => {
+        router.push("/community/trash" as Href);
+      },
     },
   ];
 
@@ -292,15 +376,17 @@ function MenuRow({
   return (
     <Pressable
       className="flex-row items-center gap-3 px-4 py-3"
+      disabled={row.isLoading}
       onPress={row.onPress}
-      style={
+      style={[
         showDivider
           ? {
               borderBottomColor: "#ECE8F2",
               borderBottomWidth: 1,
             }
-          : undefined
-      }
+          : undefined,
+        row.isLoading ? { opacity: 0.6 } : undefined,
+      ]}
     >
       <Text
         className="min-w-0 flex-1 text-[15px]"
@@ -320,15 +406,19 @@ function MenuRow({
           </Text>
         ) : null}
 
-        <SymbolView
-          name={{
-            ios: "chevron.right",
-            android: "chevron_right",
-            web: "chevron_right",
-          }}
-          size={16}
-          tintColor={valueColor}
-        />
+        {row.isLoading ? (
+          <ActivityIndicator color={valueColor} size="small" />
+        ) : (
+          <SymbolView
+            name={{
+              ios: "chevron.right",
+              android: "chevron_right",
+              web: "chevron_right",
+            }}
+            size={16}
+            tintColor={valueColor}
+          />
+        )}
       </View>
     </Pressable>
   );

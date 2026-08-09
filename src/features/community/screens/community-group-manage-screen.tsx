@@ -8,6 +8,8 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  ActivityIndicator,
+  Image,
   Pressable,
   Text as RNText,
   ScrollView,
@@ -21,20 +23,22 @@ import {
 
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { appToast } from "@/components/ui/app-toast";
-import { SymbolView } from "@/components/ui/symbol-view";
+import { SymbolView, type SymbolName } from "@/components/ui/symbol-view";
 import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
+import { ReviewDeleteDialog } from "@/features/home/components/review-delete-dialog";
 import {
+  deleteCommunityGroup,
   getCommunityGroupById,
-  getCommunityGroupMembers,
   type CommunityGroupPayload,
 } from "../api/group-api";
 import { CommunityGroupStateCard } from "../components/community-group-ui";
 import {
   cacheCommunityGroupSession,
   getCachedCommunityGroupSession,
+  removeCachedCommunityGroupSession,
 } from "../data/community-group-session-store";
 import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
@@ -136,8 +140,8 @@ function SectionCard({
     >
       <View className="flex-row items-center justify-between gap-3">
         <Text
-          className="text-[16px] font-semibold"
-          style={{ color: palette.primaryText, lineHeight: lineHeightFor(16) }}
+          className="text-[18px] font-bold"
+          style={{ color: palette.primaryText, lineHeight: lineHeightFor(18) }}
         >
           {title}
         </Text>
@@ -294,6 +298,63 @@ function ManagementActionRow({
   );
 }
 
+function DangerActionRow({
+  description,
+  hideDivider = false,
+  icon,
+  isBusy = false,
+  label,
+  onPress,
+}: {
+  description?: string;
+  hideDivider?: boolean;
+  icon: SymbolName;
+  isBusy?: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  const dangerColor = "#D9432E";
+
+  return (
+    <Pressable
+      className="flex-row items-center py-2"
+      disabled={isBusy}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        borderBottomColor: palette.border,
+        borderBottomWidth: hideDivider ? 0 : 1,
+        opacity: isBusy ? 0.6 : pressed ? 0.85 : 1,
+      })}
+    >
+      <View
+        className="mr-2.5 h-8.5 w-8.5 items-center justify-center rounded-2xl"
+        style={{ backgroundColor: "#FDECEA" }}
+      >
+        <SymbolView name={icon} size={16} tintColor={dangerColor} />
+      </View>
+
+      <View className="min-w-0 flex-1 pr-2">
+        <Text
+          className="text-[15px] font-medium"
+          style={{ color: dangerColor, lineHeight: lineHeightFor(15) }}
+        >
+          {label}
+        </Text>
+        {description ? (
+          <Text
+            className="mt-0.5 text-[12px]"
+            style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(12) }}
+          >
+            {description}
+          </Text>
+        ) : null}
+      </View>
+
+      {isBusy ? <ActivityIndicator color={dangerColor} size="small" /> : null}
+    </Pressable>
+  );
+}
+
 export default function CommunityGroupManageScreen() {
   const authSession = useAuthSession();
   const { t } = useTranslation();
@@ -312,9 +373,8 @@ export default function CommunityGroupManageScreen() {
   const [groupDetail, setGroupDetail] = useState<CommunityGroupPayload | null>(
     null,
   );
-  const [kickedMembersCount, setKickedMembersCount] = useState<number | null>(
-    null,
-  );
+  const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
   const [status, setStatus] = useState<GroupManageStatus>(
     resolvedRouteValue ? "loading" : "idle",
@@ -342,31 +402,16 @@ export default function CommunityGroupManageScreen() {
 
         setStatus("loading");
         setErrorMessage(null);
-        setKickedMembersCount(null);
 
         try {
           const accessToken = authSession.isAuthenticated
             ? await getValidAccessToken()
             : null;
-          const [nextGroupDetail, kickedMembers] = await Promise.all([
-            getCommunityGroupById({
-              accessToken: accessToken ?? undefined,
-              groupId: resolvedGroupId,
-              tokenType: authSession.tokenType ?? undefined,
-            }),
-            getCommunityGroupMembers({
-              accessToken: accessToken ?? undefined,
-              action: "KICKED",
-              groupId: resolvedGroupId,
-              tokenType: authSession.tokenType ?? undefined,
-            }).catch((error) => {
-              console.warn("[community] load kicked members failed", {
-                error: error instanceof Error ? error.message : error,
-                groupId: resolvedGroupId,
-              });
-              return null;
-            }),
-          ]);
+          const nextGroupDetail = await getCommunityGroupById({
+            accessToken: accessToken ?? undefined,
+            groupId: resolvedGroupId,
+            tokenType: authSession.tokenType ?? undefined,
+          });
 
           if (!isActive) {
             return;
@@ -378,7 +423,6 @@ export default function CommunityGroupManageScreen() {
           });
 
           setGroupDetail(cachedGroup ?? nextGroupDetail);
-          setKickedMembersCount(kickedMembers?.length ?? null);
           setStatus("ready");
         } catch (error) {
           if (!isActive) {
@@ -390,7 +434,6 @@ export default function CommunityGroupManageScreen() {
               ? error.message
               : t("community.groupManage.loadError"),
           );
-          setKickedMembersCount(null);
           setStatus("error");
         }
       }
@@ -452,18 +495,63 @@ export default function CommunityGroupManageScreen() {
     );
   };
 
-  const handleOpenKickedMembers = () => {
-    const nextShareToken = displayGroup?.shareToken ?? resolvedRouteValue;
-    const nextGroupId = displayGroup?.groupId ?? resolvedGroupId;
-
-    if (!nextShareToken || !nextGroupId) {
-      appToast.error(t("community.groupManage.missingGroupForKicked"));
+  const handleDeleteGroup = async () => {
+    if (isDeletingGroup) {
       return;
     }
 
-    router.push(
-      `/community/group/${encodeURIComponent(nextShareToken)}/members?groupId=${encodeURIComponent(nextGroupId)}&action=KICKED&screenTitle=${encodeURIComponent(t("community.groupManage.kickedMembersLabel"))}` as Href,
-    );
+    const targetGroupId = displayGroup?.groupId ?? resolvedGroupId;
+
+    if (!targetGroupId) {
+      appToast.error("Không xác định được ID nhóm để xóa.");
+      return;
+    }
+
+    if (!authSession.isAuthenticated) {
+      appToast.error("Bạn cần đăng nhập để xóa nhóm.");
+      return;
+    }
+
+    const accessToken = await getValidAccessToken();
+
+    if (!accessToken) {
+      appToast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      return;
+    }
+
+    setIsDeletingGroup(true);
+
+    try {
+      await deleteCommunityGroup({
+        accessToken,
+        groupId: targetGroupId,
+        tokenType: authSession.tokenType ?? undefined,
+      });
+
+      removeCachedCommunityGroupSession(displayGroup?.shareToken);
+      removeCachedCommunityGroupSession(resolvedRouteValue);
+      setIsDeleteConfirmVisible(false);
+      appToast.success("Đã xóa nhóm.");
+      router.replace("/bookings" as Href);
+    } catch (error) {
+      appToast.error(
+        error instanceof Error ? error.message : "Không thể xóa nhóm lúc này.",
+      );
+    } finally {
+      setIsDeletingGroup(false);
+    }
+  };
+
+  const handleConfirmDeleteGroup = () => {
+    setIsDeleteConfirmVisible(true);
+  };
+
+  const handleCancelDeleteGroup = () => {
+    if (isDeletingGroup) {
+      return;
+    }
+
+    setIsDeleteConfirmVisible(false);
   };
 
   if (!resolvedRouteValue) {
@@ -583,15 +671,23 @@ export default function CommunityGroupManageScreen() {
           >
             <View className="flex-row items-center">
               <View
-                className="mr-3 h-12 w-12 items-center justify-center rounded-[16px]"
+                className="mr-3 h-20 w-20 items-center justify-center overflow-hidden rounded-[20px]"
                 style={{ backgroundColor: palette.accentSoft }}
               >
-                <Text
-                  className="text-[17px] font-bold"
-                  style={{ color: palette.accentStrong, lineHeight: lineHeightFor(17) }}
-                >
-                  {getInitials(displayGroup.groupName)}
-                </Text>
+                {readMeaningfulText(displayGroup.imageUrl) ? (
+                  <Image
+                    resizeMode="cover"
+                    source={{ uri: displayGroup.imageUrl as string }}
+                    style={{ height: "100%", width: "100%" }}
+                  />
+                ) : (
+                  <Text
+                    className="text-[25px] font-bold"
+                    style={{ color: palette.accentStrong, lineHeight: lineHeightFor(25) }}
+                  >
+                    {getInitials(displayGroup.groupName)}
+                  </Text>
+                )}
               </View>
 
               <View className="min-w-0 flex-1">
@@ -612,17 +708,28 @@ export default function CommunityGroupManageScreen() {
                   {totalMembersLabel}
                 </Text>
 
-                <View
-                  className="mt-1 self-start rounded-full px-2 py-1"
-                  style={{ backgroundColor: palette.successBg }}
-                >
-                  <Text
-                    className="text-[11px] font-bold"
-                    style={{ color: palette.successText, lineHeight: lineHeightFor(11) }}
+                {displayGroup.requiredApproval === false ? (
+                  <View
+                    className="mt-1 flex-row items-center self-start rounded-full px-2 py-1"
+                    style={{ backgroundColor: palette.successBg }}
                   >
-                    {statusLabel}
-                  </Text>
-                </View>
+                    <SymbolView
+                      name={{
+                        android: "lock-open",
+                        ios: "lock.open.fill",
+                        web: "lock-open",
+                      }}
+                      size={11}
+                      tintColor={palette.successText}
+                    />
+                    <Text
+                      className="ml-1 text-[11px] font-bold"
+                      style={{ color: palette.successText, lineHeight: lineHeightFor(11) }}
+                    >
+                      Tham gia tự do
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             </View>
           </View>
@@ -693,10 +800,34 @@ export default function CommunityGroupManageScreen() {
                 label={t("community.groupManage.groupSettingsLabel")}
                 onPress={handleOpenGroupSettings}
               />
+              <DangerActionRow
+                description="Xóa vĩnh viễn nhóm và toàn bộ dữ liệu liên quan."
+                hideDivider
+                icon={{
+                  ios: "trash",
+                  android: "delete_outline",
+                  web: "delete_outline",
+                }}
+                isBusy={isDeletingGroup}
+                label="Xóa nhóm"
+                onPress={handleConfirmDeleteGroup}
+              />
             </SectionCard>
           </View>
         </View>
       </ScrollView>
+
+      <ReviewDeleteDialog
+        confirmLabel="Xóa nhóm"
+        description={`Nhóm "${displayGroup.groupName ?? "này"}" và toàn bộ dữ liệu, bài viết, thành viên liên quan sẽ bị xóa vĩnh viễn khỏi Culture Quest Lite.`}
+        isDeleting={isDeletingGroup}
+        onCancel={handleCancelDeleteGroup}
+        onConfirm={() => {
+          void handleDeleteGroup();
+        }}
+        title="Xóa nhóm?"
+        visible={isDeleteConfirmVisible}
+      />
     </SafeAreaView>
   );
 }

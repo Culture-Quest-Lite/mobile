@@ -1,7 +1,7 @@
-import { LinearGradient } from "expo-linear-gradient";
-import { type Href, useLocalSearchParams, useRouter } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import { SymbolView } from "@/components/ui/symbol-view";
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -22,22 +22,23 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import {
-  SafeAreaView,
-} from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useAuthScreenLayout } from "@/features/auth/hooks/use-auth-screen-layout";
-import { AuthInput } from "@/features/auth/components/auth-input";
-import { SocialAuthButton } from "@/features/auth/components/social-auth-button";
 import {
   SocialSignInCancelledError,
   type SocialProvider,
 } from "@/features/auth/api/social-login";
+import { AuthInput } from "@/features/auth/components/auth-input";
+import { SocialAuthButton } from "@/features/auth/components/social-auth-button";
+import { useAuthScreenLayout } from "@/features/auth/hooks/use-auth-screen-layout";
 import {
   signInWithPassword,
   signInWithSocial,
 } from "@/features/auth/hooks/use-auth-session";
-import { hasAnyFieldError, validateLoginForm } from "@/features/auth/utils/validation";
+import {
+  hasAnyFieldError,
+  validateLoginForm,
+} from "@/features/auth/utils/validation";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -123,9 +124,13 @@ export default function LoginScreen() {
     username,
   });
   const usernameError =
-    touchedFields.username || didAttemptSubmit ? loginErrors.username ?? null : null;
+    touchedFields.username || didAttemptSubmit
+      ? (loginErrors.username ?? null)
+      : null;
   const passwordError =
-    touchedFields.password || didAttemptSubmit ? loginErrors.password ?? null : null;
+    touchedFields.password || didAttemptSubmit
+      ? (loginErrors.password ?? null)
+      : null;
   const isSocialSubmitting = pendingSocialProvider !== null;
   const isSubmitDisabled =
     isSubmitting || isSocialSubmitting || hasAnyFieldError(loginErrors);
@@ -279,7 +284,10 @@ export default function LoginScreen() {
       >
         <ScrollView
           className="flex-1 bg-white"
-          contentContainerStyle={{ flexGrow: 1, minHeight: scrollContentMinHeight }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            minHeight: scrollContentMinHeight,
+          }}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -325,7 +333,10 @@ export default function LoginScreen() {
 
             <View
               className="-mt-8 flex-1 rounded-t-[34px] bg-white"
-              style={[cardShadowStyle, { paddingHorizontal: horizontalPadding }]}
+              style={[
+                cardShadowStyle,
+                { paddingHorizontal: horizontalPadding },
+              ]}
             >
               <View
                 className="w-full self-center"
@@ -392,7 +403,9 @@ export default function LoginScreen() {
                           disabled={isSubmitting}
                           hitSlop={8}
                           onPress={() => {
-                            setIsPasswordVisible((currentValue) => !currentValue);
+                            setIsPasswordVisible(
+                              (currentValue) => !currentValue,
+                            );
                           }}
                         >
                           <SymbolView
@@ -401,7 +414,9 @@ export default function LoginScreen() {
                               android: isPasswordVisible
                                 ? "visibility_off"
                                 : "visibility",
-                              web: isPasswordVisible ? "visibility_off" : "visibility",
+                              web: isPasswordVisible
+                                ? "visibility_off"
+                                : "visibility",
                             }}
                             size={18}
                             tintColor="#8E869A"

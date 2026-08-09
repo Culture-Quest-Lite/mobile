@@ -1,4 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import {
   Image,
   Platform,
@@ -18,6 +19,16 @@ export type LeaderRankingCardProps = {
   xp: number;
   title?: string;
   description?: string;
+  topEntries?: LeaderRankingTopEntry[];
+};
+
+export type LeaderRankingTopEntry = {
+  avatarUri: string | null;
+  isCurrentUser?: boolean;
+  name: string;
+  points: string;
+  rank: number;
+  subtitle?: string;
 };
 
 /** Ngưỡng coi là màn hình nhỏ để thu nhỏ cúp và cỡ chữ */
@@ -26,6 +37,68 @@ const SMALL_SCREEN_WIDTH = 360;
 const CARD_HEIGHT = 164;
 /** Tỉ lệ ngang/dọc của file cup.png (ảnh dọc 2:3) */
 const TROPHY_ASPECT_RATIO = 2 / 3;
+const podiumOrder = [2, 1, 3] as const;
+
+function isTopRank(rank: number) {
+  return rank >= 1 && rank <= 3;
+}
+
+function getPodiumRingColor(rank: number) {
+  switch (rank) {
+    case 1:
+      return "#F7B500";
+    case 2:
+      return "#B8C5D9";
+    case 3:
+      return "#FF9B5A";
+    default:
+      return "#D7DCE4";
+  }
+}
+
+function getPodiumBadgeColor(rank: number) {
+  switch (rank) {
+    case 1:
+      return "#F7B500";
+    case 2:
+      return "#AAB9CD";
+    case 3:
+      return "#FF934F";
+    default:
+      return "#D7DCE4";
+  }
+}
+
+function getPodiumColumnMetrics(rank: number, isSmallScreen: boolean) {
+  const compactScale = isSmallScreen ? 0.88 : 1;
+
+  switch (rank) {
+    case 1:
+      return {
+        avatarSize: 50 * compactScale,
+        badgeSize: 24,
+        offsetY: -22 * compactScale,
+      };
+    case 2:
+      return {
+        avatarSize: 39 * compactScale,
+        badgeSize: 21,
+        offsetY: 18 * compactScale,
+      };
+    case 3:
+      return {
+        avatarSize: 39 * compactScale,
+        badgeSize: 21,
+        offsetY: 20 * compactScale,
+      };
+    default:
+      return {
+        avatarSize: 39 * compactScale,
+        badgeSize: 21,
+        offsetY: 20 * compactScale,
+      };
+  }
+}
 
 /** 6500 -> "6.500 XP" */
 function formatXp(xp: number) {
@@ -36,9 +109,14 @@ export function LeaderRankingCard({
   xp = 6500,
   title = "Bạn đang dẫn đầu bảng xếp hạng",
   description = "Tiếp tục giữ phong độ hôm nay!",
+  topEntries,
 }: LeaderRankingCardProps) {
   const { width } = useWindowDimensions();
   const isSmallScreen = width < SMALL_SCREEN_WIDTH;
+  const hasTopEntries = Array.isArray(topEntries) && topEntries.length > 0;
+  const podiumEntries = podiumOrder
+    .map((rank) => topEntries?.find((entry) => entry.rank === rank) ?? null)
+    .filter((entry): entry is LeaderRankingTopEntry => entry !== null);
 
   // Kích thước co giãn theo bề ngang màn hình
   // Cỡ chữ tối đa mà tiêu đề mặc định vẫn gói gọn trên một hàng
@@ -72,59 +150,140 @@ export function LeaderRankingCard({
           resizeMode="cover"
         />
 
-        {/* Cúp vàng - bên phải thẻ */}
-        <Image
-          source={trophyImage}
-          style={[
-            styles.trophy,
-            {
-              height: trophyHeight,
-              right: trophyRight,
-              top: trophyTop,
-              width: trophyWidth,
-            },
-          ]}
-          resizeMode="contain"
-        />
+        {hasTopEntries ? (
+          <>
+            <Image
+              source={trophyImage}
+              style={[
+                styles.trophy,
+                {
+                  height: trophyHeight,
+                  right: trophyRight,
+                  top: trophyTop,
+                  width: trophyWidth,
+                },
+              ]}
+              resizeMode="contain"
+            />
 
-        {/* Nội dung chữ bên trái - mỗi dòng gói gọn trên một hàng,
-            cả cụm canh giữa theo chiều cao thẻ */}
-        <View style={styles.content}>
-          <Text
-            adjustsFontSizeToFit
-            style={[
-              styles.title,
-              { fontSize: titleFontSize, lineHeight: titleLineHeight },
-            ]}
-            numberOfLines={1}
-          >
-            {title}
-          </Text>
+            <View style={styles.topEntriesContent}>
+              <View style={styles.podiumRow}>
+                {podiumEntries.map((entry) => {
+                  const metrics = getPodiumColumnMetrics(
+                    entry.rank,
+                    isSmallScreen,
+                  );
+                  const badgeColor = getPodiumBadgeColor(entry.rank);
 
-          <Text
-            adjustsFontSizeToFit
-            style={[
-              styles.description,
-              {
-                fontSize: descriptionFontSize,
-                lineHeight: lineHeightFor(descriptionFontSize),
-              },
-            ]}
-            numberOfLines={1}
-          >
-            {description}
-          </Text>
+                  return (
+                    <View
+                      key={`${entry.rank}-${entry.name}`}
+                      style={[
+                        styles.podiumItem,
+                        {
+                          marginTop: metrics.offsetY,
+                          transform:
+                            entry.rank === 1
+                              ? [{ translateY: -20 * (isSmallScreen ? 0.9 : 1) }]
+                              : undefined,
+                        },
+                        entry.rank === 1
+                          ? styles.podiumChampionItem
+                          : styles.podiumSideItem,
+                      ]}
+                    >
+                      <View style={styles.podiumAvatarWrap}>
+                        <View
+                          style={[
+                            styles.rankBadge,
+                            {
+                              backgroundColor: badgeColor,
+                              height: metrics.badgeSize,
+                              width: metrics.badgeSize,
+                            },
+                          ]}
+                        >
+                          <Text style={styles.rankBadgeText}>{entry.rank}</Text>
+                        </View>
 
-          <Text style={styles.heart}>♡</Text>
-        </View>
+                        <UserAvatar
+                          borderColor={getPodiumRingColor(entry.rank)}
+                          borderWidth={isTopRank(entry.rank) ? 2 : 1.5}
+                          containerStyle={styles.podiumAvatar}
+                          displayName={entry.name}
+                          size={metrics.avatarSize}
+                          textSize={entry.rank === 1 ? 15 : 12}
+                          uri={entry.avatarUri}
+                        />
+                      </View>
 
-        {/* Khung điểm XP - dưới bên phải, chồng một phần lên cúp */}
-        <View style={styles.xpPill}>
-          <Text style={[styles.xpStar, { fontSize: xpFontSize }]}>★</Text>
-          <Text style={[styles.xpValue, { fontSize: xpFontSize }]}>
-            {formatXp(xp)}
-          </Text>
-        </View>
+                      <View style={styles.podiumPointsPill}>
+                        <Text style={styles.podiumPointsStar}>★</Text>
+                        <Text style={styles.podiumPointsText}>{entry.points}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          </>
+        ) : (
+          <>
+            {/* Cúp vàng - bên phải thẻ */}
+            <Image
+              source={trophyImage}
+              style={[
+                styles.trophy,
+                {
+                  height: trophyHeight,
+                  right: trophyRight,
+                  top: trophyTop,
+                  width: trophyWidth,
+                },
+              ]}
+              resizeMode="contain"
+            />
+
+            {/* Nội dung chữ bên trái - mỗi dòng gói gọn trên một hàng,
+                cả cụm canh giữa theo chiều cao thẻ */}
+            <View style={styles.content}>
+              <Text
+                adjustsFontSizeToFit
+                style={[
+                  styles.title,
+                  { fontSize: titleFontSize, lineHeight: titleLineHeight },
+                ]}
+                numberOfLines={1}
+              >
+                {title}
+              </Text>
+
+              <Text
+                adjustsFontSizeToFit
+                style={[
+                  styles.description,
+                  {
+                    fontSize: descriptionFontSize,
+                    lineHeight: lineHeightFor(descriptionFontSize),
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {description}
+              </Text>
+
+              <Text style={styles.heart}>♡</Text>
+            </View>
+
+            {/* Khung điểm XP - dưới bên phải, chồng một phần lên cúp */}
+            <View style={styles.xpPill}>
+              <Text style={[styles.xpStar, { fontSize: xpFontSize }]}>★</Text>
+              <Text style={[styles.xpValue, { fontSize: xpFontSize }]}>
+                {formatXp(xp)}
+              </Text>
+            </View>
+          </>
+        )}
       </LinearGradient>
     </View>
   );
@@ -232,5 +391,70 @@ const styles = StyleSheet.create({
   xpValue: {
     color: "#F03F75",
     fontWeight: "800",
+  },
+  topEntriesContent: {
+    flex: 1,
+    justifyContent: "flex-end",
+    maxWidth: "68%",
+    paddingBottom: 16,
+    paddingLeft: 14,
+    paddingRight: 8,
+    paddingTop: 12,
+  },
+  podiumRow: {
+    alignItems: "flex-end",
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+  podiumItem: {
+    alignItems: "center",
+    flex: 1,
+    maxWidth: "33%",
+  },
+  podiumChampionItem: {
+    marginHorizontal: 8,
+  },
+  podiumSideItem: {
+    marginHorizontal: 2,
+  },
+  podiumAvatarWrap: {
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  podiumAvatar: {
+    backgroundColor: "#FFFFFF",
+  },
+  rankBadge: {
+    alignItems: "center",
+    borderColor: "#FFFFFF",
+    borderRadius: 999,
+    borderWidth: 2,
+    justifyContent: "center",
+    marginBottom: 5,
+  },
+  rankBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+    lineHeight: lineHeightFor(10),
+  },
+  podiumPointsPill: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.94)",
+    borderRadius: 999,
+    flexDirection: "row",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  podiumPointsStar: {
+    color: "#FF5F87",
+    fontSize: 8,
+    marginRight: 3,
+  },
+  podiumPointsText: {
+    color: "#F44378",
+    fontSize: 9,
+    fontWeight: "800",
+    lineHeight: lineHeightFor(9),
   },
 });

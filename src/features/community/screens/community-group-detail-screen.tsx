@@ -35,9 +35,10 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 import { getMyProfile } from "@/features/profile/api/get-me";
 import { getUserProfileById } from "@/features/profile/api/get-user-by-id";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 import {
-  getCommunityGroupMembers,
   getCommunityGroupById,
+  getCommunityGroupMembers,
   leaveCommunityGroup,
   refreshCommunityGroupToken,
   type CommunityGroupPayload,
@@ -49,7 +50,6 @@ import {
   removeCachedCommunityGroupSession,
 } from "../data/community-group-session-store";
 import { buildCommunityInviteWebUrl } from "../lib/community-group-invite-links";
-import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 const HERO_IMAGE = require("../../../../assets/images/hero.jpg");
 const detailTextMaxFontSizeMultiplier = 1.05;
@@ -135,7 +135,7 @@ function formatGroupDate(
     return t("community.groupDetail.notUpdated");
   }
 
-  const date = new Date(normalizedDateValue);
+  const date = parseGroupDateValue(normalizedDateValue);
 
   if (Number.isNaN(date.getTime())) {
     return normalizedDateValue.replace("T", " ");
@@ -204,18 +204,24 @@ function GroupSection({
 }
 
 function GroupInfoRow({
-  accentValue = false,
   hideDivider = false,
   icon,
   label,
+  tone,
   value,
 }: {
-  accentValue?: boolean;
   hideDivider?: boolean;
   icon: string;
   label: string;
+  tone?: "pending" | "success";
   value: string;
 }) {
+  const badgeTone =
+    tone === "success"
+      ? { background: "#EAF8EE", text: "#25B45B" }
+      : tone === "pending"
+        ? { background: "#FDEAF2", text: palette.accentStrong }
+        : null;
   return (
     <View
       className="flex-row items-center py-2.5"
@@ -234,21 +240,38 @@ function GroupInfoRow({
       <View className="flex-1">
         <Text
           className="text-[12px]"
-          style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(12) }}
+          style={{
+            color: palette.mutedText,
+            lineHeight: bodyLineHeightFor(12),
+          }}
         >
           {label}
         </Text>
       </View>
 
-      <Text
-        className="ml-3 text-right text-[12.5px] font-semibold"
-        style={{
-          color: accentValue ? "#25B45B" : palette.primaryText,
-          lineHeight: lineHeightFor(12.5),
-        }}
-      >
-        {value}
-      </Text>
+      {badgeTone ? (
+        <View
+          className="ml-3 rounded-full px-2 py-1"
+          style={{ backgroundColor: badgeTone.background }}
+        >
+          <Text
+            className="text-right text-[12.5px] font-semibold"
+            style={{ color: badgeTone.text, lineHeight: lineHeightFor(12.5) }}
+          >
+            {value}
+          </Text>
+        </View>
+      ) : (
+        <Text
+          className="ml-3 text-right text-[12.5px] font-semibold"
+          style={{
+            color: palette.primaryText,
+            lineHeight: lineHeightFor(12.5),
+          }}
+        >
+          {value}
+        </Text>
+      )}
     </View>
   );
 }
@@ -298,7 +321,10 @@ function GroupInviteSection({
             ) : (
               <Text
                 className="text-[12px] font-extrabold"
-                style={{ color: palette.accentStrong, lineHeight: bodyLineHeightFor(12) }}
+                style={{
+                  color: palette.accentStrong,
+                  lineHeight: bodyLineHeightFor(12),
+                }}
               >
                 {t("community.groupDetail.refreshLinkAction")}
               </Text>
@@ -358,7 +384,10 @@ function GroupInviteSection({
         />
         <Text
           className="ml-1.5 text-[13px] font-extrabold"
-          style={{ color: palette.accentStrong, lineHeight: bodyLineHeightFor(13) }}
+          style={{
+            color: palette.accentStrong,
+            lineHeight: bodyLineHeightFor(13),
+          }}
         >
           {copied
             ? t("community.groupDetail.linkCopied")
@@ -595,14 +624,19 @@ export default function CommunityGroupDetailScreen() {
                 Boolean(currentUserId) &&
                 readMeaningfulText(nextGroupDetail.createdBy) === currentUserId;
 
-              if (!resolvedIsLeader && currentUserId && nextGroupDetail.groupId) {
+              if (
+                !resolvedIsLeader &&
+                currentUserId &&
+                nextGroupDetail.groupId
+              ) {
                 const groupMembers = await getCommunityGroupMembers({
                   accessToken,
                   groupId: nextGroupDetail.groupId,
                   tokenType: authSession.tokenType ?? undefined,
                 });
                 const currentMember = groupMembers.find(
-                  (member) => readMeaningfulText(member.userId) === currentUserId,
+                  (member) =>
+                    readMeaningfulText(member.userId) === currentUserId,
                 );
 
                 resolvedIsLeader =
@@ -669,7 +703,11 @@ export default function CommunityGroupDetailScreen() {
     ? null
     : (cachedGroupSession?.inviteWebUrl ??
       buildCommunityInviteWebUrl(displayGroup.shareToken));
-  const effectiveGroupId = readMeaningfulText(displayGroup?.groupId) ?? resolvedGroupId;
+  const effectiveGroupId =
+    readMeaningfulText(displayGroup?.groupId) ?? resolvedGroupId;
+  const heroImageSource = readMeaningfulText(displayGroup?.imageUrl)
+    ? { uri: displayGroup?.imageUrl as string }
+    : HERO_IMAGE;
   const closeGroupMenu = () => {
     setIsGroupMenuVisible(false);
   };
@@ -971,8 +1009,8 @@ export default function CommunityGroupDetailScreen() {
       >
         <View>
           <ImageBackground
-            source={HERO_IMAGE}
-            style={{ height: 210 + insets.top }}
+            source={heroImageSource}
+            style={{ height: 230 + insets.top }}
           >
             <LinearGradient
               colors={["rgba(255,250,252,0.18)", "rgba(252,246,248,0.96)"]}
@@ -1042,7 +1080,10 @@ export default function CommunityGroupDetailScreen() {
               <Text
                 className="flex-1 text-[17px] font-extrabold"
                 numberOfLines={2}
-                style={{ color: palette.primaryText, lineHeight: lineHeightFor(17) }}
+                style={{
+                  color: palette.primaryText,
+                  lineHeight: lineHeightFor(17),
+                }}
               >
                 {displayGroup.groupName ??
                   t("community.groupDetail.defaultGroupName")}
@@ -1079,7 +1120,10 @@ export default function CommunityGroupDetailScreen() {
               />
               <Text
                 className="ml-1.5 text-[13px]"
-                style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(13) }}
+                style={{
+                  color: palette.mutedText,
+                  lineHeight: bodyLineHeightFor(13),
+                }}
               >
                 {totalMembersLabel}
               </Text>
@@ -1096,7 +1140,10 @@ export default function CommunityGroupDetailScreen() {
             >
               <Text
                 className="text-[12px]"
-                style={{ color: palette.warmText, lineHeight: bodyLineHeightFor(12) }}
+                style={{
+                  color: palette.warmText,
+                  lineHeight: bodyLineHeightFor(12),
+                }}
               >
                 {errorMessage}
               </Text>
@@ -1126,6 +1173,7 @@ export default function CommunityGroupDetailScreen() {
                 value={requiredApprovalLabel}
               />
               <GroupInfoRow
+                hideDivider
                 icon="event"
                 label={t("community.groupDetail.createdAtLabel")}
                 value={formatGroupDate(displayGroup.createdAt, t)}

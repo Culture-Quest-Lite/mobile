@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -109,21 +110,10 @@ import {
   type CommunityGroupsStatus,
 } from "../hooks/use-community-groups";
 
-const PROJECT_WORDMARK = "Culture Quest Lite";
+const PROJECT_WORDMARK = "Công đồng hôm nay";
 const detailTextMaxFontSizeMultiplier = 1.05;
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
-
-const composerShadowStyle = {
-  shadowColor: "rgba(235, 72, 155, 0.16)",
-  shadowOpacity: 1,
-  shadowRadius: 20,
-  shadowOffset: {
-    width: 0,
-    height: 10,
-  },
-  elevation: 8,
-} as const;
 
 const cardShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.14)",
@@ -149,6 +139,10 @@ const pillShadowStyle = {
 
 const subtleBorderColor = "#E5E7EB";
 const subtleBorderWidth = 0.8;
+// Chiều cao phần ảnh header nằm dưới status bar - ảnh thấp lại theo thiết kế.
+const headerImageContentHeight = 220;
+// Thanh "Chia sẻ trải nghiệm" đè lên mép dưới ảnh header để che đường giao nhau.
+const shareBarOverlap = 48;
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type CommunityCommentsStatus = "idle" | "loading" | "ready" | "error";
@@ -168,7 +162,7 @@ type CommunityPostMenuItem = {
   description?: string;
   icon: SymbolName;
   isDestructive?: boolean;
-  key: "edit-post" | "edit-visibility" | "move-to-trash";
+  key: "edit-post" | "edit-visibility" | "move-to-trash" | "toggle-notifications";
   label: string;
 };
 type ComposerIdentity = {
@@ -795,6 +789,31 @@ function mergeCommunityFeedPostsWithCache(posts: CommunityFeedPost[]) {
   return sortCommunityFeedPostsNewestFirst([...missingCachedPosts, ...next]);
 }
 
+function dedupeCommunityFeedPosts(posts: CommunityFeedPost[]) {
+  const seenPostIds = new Set<number>();
+  const seenFallbackIds = new Set<string>();
+
+  return posts.filter((post) => {
+    const postNumericId = post.postNumericId;
+
+    if (typeof postNumericId === "number" && postNumericId > 0) {
+      if (seenPostIds.has(postNumericId)) {
+        return false;
+      }
+
+      seenPostIds.add(postNumericId);
+      return true;
+    }
+
+    if (seenFallbackIds.has(post.id)) {
+      return false;
+    }
+
+    seenFallbackIds.add(post.id);
+    return true;
+  });
+}
+
 function mapNewsfeedPostToCommunityFeedPost(
   post: NewsfeedPost,
   t: (key: string, options?: Record<string, unknown>) => string,
@@ -1005,9 +1024,15 @@ export default function CommunityScreen() {
   const [deletingPostIds, setDeletingPostIds] = useState<number[]>([]);
   const [postPendingDeletion, setPostPendingDeletion] =
     useState<CommunityFeedPost | null>(null);
+  const [postOptionsTarget, setPostOptionsTarget] =
+    useState<CommunityFeedPost | null>(null);
   const [communityToastMessage, setCommunityToastMessage] = useState<
     string | null
   >(null);
+  const [communityToastAction, setCommunityToastAction] = useState<{
+    label: string;
+    onPress: () => void;
+  } | null>(null);
   const [likingPostIds, setLikingPostIds] = useState<number[]>([]);
   const [sharePostTarget, setSharePostTarget] =
     useState<CommunityFeedPost | null>(null);
@@ -1024,6 +1049,14 @@ export default function CommunityScreen() {
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const communitySessionKeyRef = useRef(communitySessionKey);
   const communityFeedPostsRef = useRef<CommunityFeedPost[]>([]);
+  const shareBarTextOpacity = useMemo(() => new Animated.Value(1), []);
+  const fadeShareBarText = (toValue: number) => {
+    Animated.timing(shareBarTextOpacity, {
+      duration: 140,
+      toValue,
+      useNativeDriver: true,
+    }).start();
+  };
   const hasSkippedInitialFeedFocusRef = useRef(false);
   const communityToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -1056,6 +1089,7 @@ export default function CommunityScreen() {
 
     communityToastTimeoutRef.current = setTimeout(() => {
       setCommunityToastMessage(null);
+      setCommunityToastAction(null);
       communityToastTimeoutRef.current = null;
     }, 2600);
 
@@ -1066,6 +1100,17 @@ export default function CommunityScreen() {
       }
     };
   }, [communityToastMessage]);
+
+  const showCommunityToast = useCallback(
+    (
+      message: string,
+      action?: { label: string; onPress: () => void } | null,
+    ) => {
+      setCommunityToastMessage(message);
+      setCommunityToastAction(action ?? null);
+    },
+    [],
+  );
 
   useEffect(() => {
     clearCommunityPostCache();
@@ -1341,11 +1386,13 @@ export default function CommunityScreen() {
 
   const displayedPosts = useMemo<CommunityFeedPost[]>(
     () =>
-      communityFeedStatus === "ready"
-        ? communityFeedPosts
-        : communityFeedStatus === "error"
-          ? communityPosts.slice()
-          : [],
+      dedupeCommunityFeedPosts(
+        communityFeedStatus === "ready"
+          ? communityFeedPosts
+          : communityFeedStatus === "error"
+            ? communityPosts.slice()
+            : [],
+      ),
     [communityFeedPosts, communityFeedStatus],
   );
   const likedPostIdsSet = useMemo(
@@ -1570,9 +1617,6 @@ export default function CommunityScreen() {
     }, []),
   );
 
-  const openCommunityComposer = () => {
-    router.push("/community/create" as Href);
-  };
   const openCommunityGroupCreate = () => {
     router.push("/community/group-create" as Href);
   };
@@ -2061,7 +2105,7 @@ export default function CommunityScreen() {
       setSharePostTarget(null);
       setShareDraft("");
       setShareVisibility("PUBLIC");
-      setCommunityToastMessage(
+      showCommunityToast(
         sharedVisibility === "PRIVATE"
           ? t("community.feed.sharedPrivateToast")
           : t("community.feed.sharedPublicToast"),
@@ -2136,6 +2180,42 @@ export default function CommunityScreen() {
     }
 
     setPostPendingDeletion(post);
+  }
+
+  function handleOpenPostOptions(post: CommunityFeedPost) {
+    setPostOptionsTarget(post);
+  }
+
+  function handleClosePostOptions() {
+    setPostOptionsTarget(null);
+  }
+
+  function handleSelectPostOption(item: CommunityPostMenuItem) {
+    const selectedPost = postOptionsTarget;
+
+    setPostOptionsTarget(null);
+
+    if (!selectedPost) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      if (item.key === "edit-post") {
+        handleEditPost(selectedPost);
+        return;
+      }
+
+      if (item.key === "edit-visibility") {
+        handleEditPostVisibility(selectedPost);
+        return;
+      }
+
+      if (item.key === "toggle-notifications") {
+        return;
+      }
+
+      handleMovePostToTrash(selectedPost);
+    });
   }
 
   async function confirmMovePostToTrash() {
@@ -2224,7 +2304,7 @@ export default function CommunityScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
+    <SafeAreaView className="flex-1 bg-white" edges={["left", "right"]}>
       <StatusBar style="dark" />
 
       <View className="flex-1 bg-white">
@@ -2236,17 +2316,60 @@ export default function CommunityScreen() {
               onRefresh={() => {
                 void handleRefresh();
               }}
+              // Nội dung chạy lên dưới status bar nên spinner phải lùi xuống theo inset.
+              progressViewOffset={insets.top}
               refreshing={isRefreshing}
               tintColor="#EB489B"
             />
           }
           showsVerticalScrollIndicator={false}
         >
-          <View className="pb-5 pt-3" style={{ paddingHorizontal: gutter }}>
-            <View className="flex-row items-center justify-between">
+          {/* Header Image - tràn lên sát mép trên của điện thoại (phủ cả vùng status bar) */}
+          <View
+            className="relative"
+            style={{
+              height: insets.top + headerImageContentHeight,
+              paddingTop: insets.top,
+            }}
+          >
+            <Image
+              source={require("../../../../assets/images/postheader.png")}
+              style={{
+                width: "100%",
+                height: "100%",
+                position: "absolute",
+              }}
+              resizeMode="cover"
+            />
+
+            {/* Overlay gradient untuk readability */}
+            <LinearGradient
+              colors={["rgba(0, 0, 0, 0.3)", "rgba(0, 0, 0, 0.1)"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={{
+                position: "absolute",
+                width: "100%",
+                height: "100%",
+              }}
+            />
+            <LinearGradient
+              colors={["rgba(255, 255, 255, 0)", "rgba(255, 255, 255, 0.94)"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={{
+                position: "absolute",
+                width: "100%",
+                height: 80,
+                bottom: 0,
+              }}
+            />
+
+            {/* Header top bar */}
+            <View className="flex-row items-center justify-between px-4 py-2">
               <View className="flex-row items-center gap-2.5">
                 <Pressable
-                  className="h-10 w-10 items-center justify-center rounded-[16px] border bg-white"
+                  className="h-9 w-9 items-center justify-center rounded-[16px] border bg-white"
                   style={[
                     pillShadowStyle,
                     {
@@ -2267,85 +2390,80 @@ export default function CommunityScreen() {
                 </Pressable>
 
                 <Text
-                  className="text-[20px] font-black tracking-[-0.4px] text-[#EB489B]"
+                  className="text-[19px] font-black tracking-[-0.4px] text-white"
                   style={textStyle(20)}
                 >
                   {PROJECT_WORDMARK}
                 </Text>
               </View>
 
-              <View className="flex-row items-center gap-1.5">
-                <CircleIconButton
-                  icon={{
-                    ios: "magnifyingglass",
-                    android: "search",
-                    web: "search",
-                  }}
-                />
-                <CircleIconButton
-                  icon={{
-                    ios: "bell",
-                    android: "notifications",
-                    web: "notifications",
-                  }}
-                />
-              </View>
+              <CircleIconButton
+                icon={{
+                  ios: "bell",
+                  android: "notifications",
+                  web: "notifications",
+                }}
+              />
             </View>
+          </View>
 
-            <View className="mt-4 gap-2">
-              <View
-                className="flex-row items-center rounded-[24px] bg-white"
-                style={[
-                  composerShadowStyle,
-                  {
-                    marginHorizontal: -4,
-                    paddingBottom: 8,
-                    paddingLeft: 6,
-                    paddingRight: 8,
-                    paddingTop: 8,
-                  },
-                ]}
+          {/* Share experience bar - nằm ở giữa, nền trắng che ranh giới */}
+          <View
+            style={{
+              paddingHorizontal: gutter,
+              marginTop: -shareBarOverlap,
+              marginBottom: 4,
+              position: "relative",
+              zIndex: 10,
+            }}
+          >
+            <Pressable
+              className="flex-row items-center rounded-[24px] bg-white px-4 py-3"
+              onPress={() => {
+                fadeShareBarText(0);
+                router.push("/community/create" as Href);
+              }}
+              onPressIn={() => fadeShareBarText(0)}
+              onPressOut={() => fadeShareBarText(1)}
+              style={[
+                cardShadowStyle,
+                {
+                  borderColor: subtleBorderColor,
+                  borderWidth: subtleBorderWidth,
+                },
+              ]}
+            >
+              <UserAvatar
+                displayName={resolvedComposerIdentity.displayName}
+                size={36}
+                uri={resolvedComposerIdentity.avatarUri}
+                username={resolvedComposerIdentity.username}
+              />
+              <Animated.Text
+                className="ml-3 flex-1 text-[14px] font-medium text-[#8F8298]"
+                style={[textStyle(14), { opacity: shareBarTextOpacity }]}
               >
-                <ComposerAvatar
-                  displayName={resolvedComposerIdentity.displayName}
-                  uri={resolvedComposerIdentity.avatarUri}
-                />
+                Hãy chia sẻ trải nghiệm của bạn...
+              </Animated.Text>
 
-                <Pressable
-                  className="ml-2 flex-1 px-0 py-1"
-                  onPress={openCommunityComposer}
-                >
-                  <Text
-                    className="text-[13px] font-medium text-[#B1A2AB]"
-                    style={textStyle(13)}
-                  >
-                    {composerPlaceholderText}
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  className="ml-2 h-9 w-9 items-center justify-center rounded-full border"
-                  onPress={openCommunityComposer}
-                  style={{
-                    backgroundColor: "#F1F3F5",
-                    borderColor: subtleBorderColor,
-                    borderWidth: subtleBorderWidth,
+              <View
+                className="ml-2 h-8 w-8 items-center justify-center rounded-full bg-[#FDECF4]"
+              >
+                <SymbolView
+                  name={{
+                    ios: "photo.on.rectangle.angled",
+                    android: "image",
+                    web: "image",
                   }}
-                >
-                  <SymbolView
-                    name={{
-                      ios: "photo.on.rectangle.angled",
-                      android: "image",
-                      web: "image",
-                    }}
-                    size={15}
-                    tintColor="#9CA3AF"
-                  />
-                </Pressable>
+                  size={16}
+                  tintColor="#D55E8E"
+                />
               </View>
-            </View>
+            </Pressable>
+          </View>
 
-            <View className="mt-4">
+          <View className="pb-5" style={{ paddingHorizontal: gutter }}>
+            <View className="mt-2">
               <CommunityDiscoverGroupsSection
                 currentProfileId={currentProfileId}
                 errorMessage={communityGroupsError}
@@ -2353,8 +2471,18 @@ export default function CommunityScreen() {
                 onCreateGroup={openCommunityGroupCreate}
                 onOpenAll={openCommunityGroupsList}
                 onOpenGroup={handleOpenDiscoverGroup}
+                pageGutter={gutter}
                 status={communityGroupsStatus}
               />
+            </View>
+
+            <View className="mt-5">
+              <Text
+                className="text-[18px] font-bold text-[#2E2336]"
+                style={textStyle(18)}
+              >
+                Bài viết cộng đồng
+              </Text>
             </View>
 
             <View className="mt-2">
@@ -2423,9 +2551,7 @@ export default function CommunityScreen() {
                           postNumericId !== null &&
                           sharePostTarget?.postNumericId === postNumericId
                         }
-                        onEditPost={handleEditPost}
-                        onEditPostVisibility={handleEditPostVisibility}
-                        onMovePostToTrash={handleMovePostToTrash}
+                        onOpenPostOptions={handleOpenPostOptions}
                         pageGutter={gutter}
                         post={post}
                         resolvedHotspots={resolvedHotspots}
@@ -2485,6 +2611,7 @@ export default function CommunityScreen() {
         authorUsername={resolvedComposerIdentity.username}
         draft={shareDraft}
         isSubmitting={isSharingPost}
+        key={sharePostTarget?.postNumericId ?? "community-share-modal"}
         onChangeDraft={setShareDraft}
         onChangeVisibility={setShareVisibility}
         onClose={handleCloseSharePostComposer}
@@ -2493,6 +2620,14 @@ export default function CommunityScreen() {
         }}
         visibility={shareVisibility}
         visible={sharePostTarget !== null}
+      />
+
+      <CommunityPostOptionsSheet
+        bottomInset={insets.bottom}
+        items={communityPostMenuItems}
+        onClose={handleClosePostOptions}
+        onSelectItem={handleSelectPostOption}
+        visible={postOptionsTarget !== null}
       />
 
       <ReviewDeleteDialog
@@ -2526,6 +2661,7 @@ export default function CommunityScreen() {
             className="rounded-[18px] px-4 py-3"
             onPress={() => {
               setCommunityToastMessage(null);
+              setCommunityToastAction(null);
             }}
             style={{
               backgroundColor: "rgba(33, 33, 33, 0.92)",
@@ -2543,6 +2679,25 @@ export default function CommunityScreen() {
               >
                 {communityToastMessage}
               </Text>
+
+              {communityToastAction ? (
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => {
+                    const action = communityToastAction;
+                    setCommunityToastMessage(null);
+                    setCommunityToastAction(null);
+                    action?.onPress();
+                  }}
+                >
+                  <Text
+                    className="ml-3 font-semibold text-[#5AB0FF] underline"
+                    style={textStyle(14)}
+                  >
+                    {communityToastAction.label}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           </Pressable>
         </View>
@@ -2573,6 +2728,7 @@ function CommunityDiscoverGroupsSection({
   onCreateGroup,
   onOpenAll,
   onOpenGroup,
+  pageGutter,
   status,
 }: {
   currentProfileId: string | null;
@@ -2581,6 +2737,7 @@ function CommunityDiscoverGroupsSection({
   onCreateGroup: () => void;
   onOpenAll: () => void;
   onOpenGroup: (group: CommunityGroupPayload) => void;
+  pageGutter: number;
   status: CommunityGroupsStatus;
 }) {
   const { t } = useTranslation();
@@ -2611,9 +2768,15 @@ function CommunityDiscoverGroupsSection({
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{
+          paddingBottom: 8,
+          paddingLeft: pageGutter,
           paddingRight: 8,
-          paddingTop: 10,
+          paddingTop: 8,
           gap: 10,
+        }}
+        style={{
+          marginHorizontal: -pageGutter,
+          marginTop: 10,
         }}
       >
         <CommunityCreateGroupCard onPress={onCreateGroup} />
@@ -2842,9 +3005,9 @@ function CommunityPostRouteCard({
             {t("community.feed.badge.route")}
           </Text>
           <Text
-            className="text-[15px] font-medium text-[#4B414C]"
+            className="text-[16px] font-medium text-[#4B414C]"
             numberOfLines={2}
-            style={textStyle(15)}
+            style={textStyle(16)}
           >
             {label}
           </Text>
@@ -3159,9 +3322,7 @@ function CommunityPostCard({
   isLiked,
   isLiking,
   isSharing,
-  onEditPost,
-  onEditPostVisibility,
-  onMovePostToTrash,
+  onOpenPostOptions,
   pageGutter,
   post,
   resolvedHotspots,
@@ -3182,9 +3343,7 @@ function CommunityPostCard({
   isSharing: boolean;
   pageGutter: number;
   showDivider: boolean;
-  onEditPost: (post: CommunityFeedPost) => void;
-  onEditPostVisibility: (post: CommunityFeedPost) => void;
-  onMovePostToTrash: (post: CommunityFeedPost) => void;
+  onOpenPostOptions: (post: CommunityFeedPost) => void;
   post: CommunityFeedPost;
   resolvedHotspots: Record<number, ResolvedHotspotPreview>;
   resolvedRoutes: Record<number, ResolvedRoutePreview>;
@@ -3247,26 +3406,6 @@ function CommunityPostCard({
   const hotspotImageUris = hotspotItems
     .map((item) => item.imageUri)
     .filter((imageUri): imageUri is string => Boolean(imageUri));
-
-  function handleClosePostOptions() {
-    setIsPostOptionsVisible(false);
-  }
-
-  function handleSelectPostOption(item: CommunityPostMenuItem) {
-    setIsPostOptionsVisible(false);
-
-    if (item.key === "edit-post") {
-      onEditPost(post);
-      return;
-    }
-
-    if (item.key === "edit-visibility") {
-      onEditPostVisibility(post);
-      return;
-    }
-
-    onMovePostToTrash(post);
-  }
 
   return (
     <>
@@ -3339,7 +3478,7 @@ function CommunityPostCard({
               disabled={isDeleting}
               hitSlop={8}
               onPress={() => {
-                setIsPostOptionsVisible(true);
+                onOpenPostOptions(post);
               }}
             >
               <SymbolView
@@ -3631,16 +3770,6 @@ function AvatarMonogram({
   return <UserAvatarFallback displayName={initials} size={size} />;
 }
 
-function ComposerAvatar({
-  displayName,
-  uri,
-}: {
-  displayName: string;
-  uri: string | null;
-}) {
-  return <UserAvatar displayName={displayName} size={36} uri={uri} />;
-}
-
 function CommunityCommentCard({ item }: { item: PostComment }) {
   const { t } = useTranslation();
   const displayName =
@@ -3850,12 +3979,6 @@ function CommunitySharePostModal({
 }) {
   const { t } = useTranslation();
   const [isVisibilityMenuOpen, setIsVisibilityMenuOpen] = useState(false);
-  const [wasVisible, setWasVisible] = useState(visible);
-
-  if (wasVisible !== visible) {
-    setWasVisible(visible);
-    setIsVisibilityMenuOpen(false);
-  }
 
   return (
     <Modal
@@ -3943,8 +4066,8 @@ function CommunitySharePostModal({
                   fontSize: 15,
                   lineHeight: bodyLineHeightFor(15),
                   marginTop: 12,
-                  maxHeight: 96,
-                  minHeight: 46,
+                  maxHeight: 148,
+                  minHeight: 92,
                   padding: 0,
                   textAlignVertical: "top",
                 }}

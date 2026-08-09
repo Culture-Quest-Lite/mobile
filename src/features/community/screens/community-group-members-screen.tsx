@@ -218,7 +218,6 @@ function ProfileAvatar({
 }
 
 function MemberRow({
-  actionLabel,
   actionPending = false,
   avatarUri,
   displayName,
@@ -227,7 +226,6 @@ function MemberRow({
   onPress,
   roleLabel,
 }: {
-  actionLabel?: string;
   actionPending?: boolean;
   avatarUri: string | null;
   displayName: string;
@@ -294,18 +292,23 @@ function MemberRow({
           hitSlop={8}
           onPress={onActionPress}
           style={({ pressed }) => ({
-            backgroundColor: actionPending ? "#FAD7E3" : "#FFF0F5",
-            opacity: actionPending ? 0.7 : pressed ? 0.82 : 1,
+            backgroundColor: "#F4F5F7",
+            opacity: actionPending ? 0.6 : pressed ? 0.82 : 1,
           })}
         >
-          <Text
-            className="text-[12px] font-bold"
-            style={{ color: "#D95B8D", lineHeight: bodyLineHeightFor(12) }}
-          >
-            {actionPending
-              ? t("community.groupMembers.kickingAction")
-              : (actionLabel ?? t("community.groupMembers.kickAction"))}
-          </Text>
+          {actionPending ? (
+            <ActivityIndicator color={palette.mutedText} size="small" />
+          ) : (
+            <SymbolView
+              name={{
+                ios: "ellipsis",
+                android: "more-horiz",
+                web: "more-horiz",
+              }}
+              size={18}
+              tintColor={palette.primaryText}
+            />
+          )}
         </Pressable>
       ) : null}
     </View>
@@ -582,25 +585,20 @@ function KickMemberConfirmModal({
             </View>
 
             <Text
-              className="mt-3 text-center text-[16px] font-bold"
-              style={{ color: palette.primaryText, lineHeight: lineHeightFor(16) }}
+              className="mt-3 text-center text-[17px] font-black"
+              style={{ color: palette.primaryText, lineHeight: lineHeightFor(17) }}
             >
               {t("community.groupMembers.kickModalTitle")}
             </Text>
 
-            <View
-              className="mt-2.5 h-[2px] w-9 rounded-full"
-              style={{ backgroundColor: "#E5E7EB" }}
-            />
-
             <Text
-              className="mt-3 text-center text-[13px]"
-              style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(13) }}
+              className="mt-2 text-center text-[12px]"
+              style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(12) }}
             >
               {t("community.groupMembers.kickConfirmPrefix")}{" "}
               <Text
-                className="text-[13px] font-bold"
-                style={{ color: palette.primaryText, lineHeight: bodyLineHeightFor(13) }}
+                className="text-[12px] font-bold"
+                style={{ color: palette.primaryText, lineHeight: bodyLineHeightFor(12) }}
               >
                 {memberName ?? t("community.groupMembers.kickConfirmDefaultName")}
               </Text>{" "}
@@ -632,8 +630,8 @@ function KickMemberConfirmModal({
             </View>
 
             <Text
-              className="flex-1 text-[11px]"
-              style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(11) }}
+              className="flex-1 text-[12px]"
+              style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(12) }}
             >
               {t("community.groupMembers.kickWarningNote")}
             </Text>
@@ -660,9 +658,9 @@ function KickMemberConfirmModal({
               })}
             >
               <Text
-                className="text-[11px] font-bold"
+                className="text-[13px] font-black"
                 numberOfLines={1}
-                style={{ color: "#8F8698", lineHeight: lineHeightFor(11) }}
+                style={{ color: "#8F8698", lineHeight: lineHeightFor(13) }}
               >
                 {t("community.groupMembers.cancelActionUppercase")}
               </Text>
@@ -681,21 +679,85 @@ function KickMemberConfirmModal({
                 colors={["#FF7A87", "#FF5568"]}
                 end={{ x: 1, y: 0.5 }}
                 start={{ x: 0, y: 0.5 }}
-                className="w-full items-center justify-center rounded-[14px] px-3 py-2.5"
-                style={{ minHeight: 38 }}
+                className="w-full items-center justify-center rounded-[14px] px-2 py-2.5"
+                style={{ minHeight: 42 }}
               >
                 {isSubmitting ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <Text
-                    className="text-center text-[10px] font-bold text-white"
-                    numberOfLines={1}
-                    style={{ lineHeight: lineHeightFor(10) }}
+                    adjustsFontSizeToFit
+                    className="text-center text-[13px] font-black text-white"
+                    minimumFontScale={0.8}
+                    numberOfLines={2}
+                    style={{ lineHeight: lineHeightFor(13) }}
                   >
                     {t("community.groupMembers.kickConfirmActionUppercase")}
                   </Text>
                 )}
               </LinearGradient>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function MemberActionSheet({
+  bottomInset,
+  onClose,
+  onRequestKick,
+  visible,
+}: {
+  bottomInset: number;
+  onClose: () => void;
+  onRequestKick: () => void;
+  visible: boolean;
+}) {
+  return (
+    <Modal
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
+      transparent
+      visible={visible}
+    >
+      <View className="flex-1 bg-black/35">
+        <Pressable className="flex-1" onPress={onClose} />
+
+        <View
+          className="rounded-t-[28px] bg-white px-3 pt-3"
+          style={{ paddingBottom: Math.max(bottomInset, 14) }}
+        >
+          <View className="items-center pb-2">
+            <View className="h-1.5 w-14 rounded-full bg-[#D3D2DC]" />
+          </View>
+
+          <View className="rounded-[22px] bg-[#F7F6FB] px-4 py-0.5">
+            <Pressable
+              className="flex-row items-start gap-2.5 py-2.5"
+              onPress={onRequestKick}
+            >
+              <View className="w-6 items-center pt-px">
+                <SymbolView
+                  name={{
+                    ios: "person.fill.xmark",
+                    android: "person-remove",
+                    web: "person-remove",
+                  }}
+                  size={19}
+                  tintColor="#C24F3B"
+                />
+              </View>
+              <View className="min-w-0 flex-1">
+                <Text
+                  className="text-[15px] font-normal"
+                  style={{ color: "#C24F3B", lineHeight: lineHeightFor(15) }}
+                >
+                  Mời ra khỏi nhóm
+                </Text>
+              </View>
             </Pressable>
           </View>
         </View>
@@ -748,6 +810,8 @@ export default function CommunityGroupMembersScreen() {
   >([]);
   const [kickingUserId, setKickingUserId] = useState<string | null>(null);
   const [kickConfirmTarget, setKickConfirmTarget] =
+    useState<KickConfirmTarget | null>(null);
+  const [memberActionSheetTarget, setMemberActionSheetTarget] =
     useState<KickConfirmTarget | null>(null);
   const [pendingParticipantAction, setPendingParticipantAction] =
     useState<PendingParticipantAction | null>(null);
@@ -987,6 +1051,28 @@ export default function CommunityGroupMembersScreen() {
     setKickConfirmTarget(null);
   };
 
+  const handleOpenMemberActionSheet = (userId: string, displayName: string) => {
+    setMemberActionSheetTarget({
+      displayName,
+      userId,
+    });
+  };
+
+  const handleCloseMemberActionSheet = () => {
+    setMemberActionSheetTarget(null);
+  };
+
+  const handleRequestKickFromActionSheet = () => {
+    if (!memberActionSheetTarget) {
+      return;
+    }
+
+    const { displayName, userId } = memberActionSheetTarget;
+
+    setMemberActionSheetTarget(null);
+    handleConfirmKickMember(userId, displayName);
+  };
+
   const handleReviewPendingParticipant = async ({
     action,
     displayName,
@@ -1184,8 +1270,8 @@ export default function CommunityGroupMembersScreen() {
             </Pressable>
 
             <Text
-              className="text-[17px]"
-              style={{ color: palette.primaryText, lineHeight: lineHeightFor(17) }}
+              className="text-[19px] font-bold"
+              style={{ color: palette.primaryText, lineHeight: lineHeightFor(19) }}
             >
               {screenTitle}
             </Text>
@@ -1228,9 +1314,9 @@ export default function CommunityGroupMembersScreen() {
 
               <View className="min-w-0 flex-1 pt-0.5">
                 <Text
-                  className="text-[15px]"
+                  className="text-[16px] font-semibold"
                   numberOfLines={2}
-                  style={{ color: palette.primaryText, lineHeight: lineHeightFor(15) }}
+                  style={{ color: palette.primaryText, lineHeight: lineHeightFor(16) }}
                 >
                   {groupName}
                 </Text>
@@ -1247,8 +1333,8 @@ export default function CommunityGroupMembersScreen() {
                       tintColor={palette.mutedText}
                     />
                     <Text
-                      className="ml-1 text-[11px]"
-                      style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(11) }}
+                      className="ml-1 text-[12px]"
+                      style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(12) }}
                     >
                       {totalGroupMembersLabel}
                     </Text>
@@ -1261,8 +1347,8 @@ export default function CommunityGroupMembersScreen() {
                       tintColor={palette.mutedText}
                     />
                     <Text
-                      className="ml-1 text-[11px]"
-                      style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(11) }}
+                      className="ml-1 text-[12px]"
+                      style={{ color: palette.subtleText, lineHeight: bodyLineHeightFor(12) }}
                     >
                       {t("community.groupMembers.createdDateLabel", {
                         date: createdDateLabel,
@@ -1294,15 +1380,15 @@ export default function CommunityGroupMembersScreen() {
 
                 <View className="min-w-0 flex-1 pr-2">
                   <Text
-                    className="text-[12px]"
-                    style={{ color: palette.primaryText, lineHeight: bodyLineHeightFor(12) }}
+                    className="text-[13px] font-semibold"
+                    style={{ color: palette.primaryText, lineHeight: bodyLineHeightFor(13) }}
                   >
                     {t("community.groupMembers.inviteLinkLabel")}
                   </Text>
                   <Text
-                    className="mt-1 text-[11px]"
+                    className="mt-1 text-[12px]"
                     numberOfLines={1}
-                    style={{ color: "#8E869A", lineHeight: lineHeightFor(11) }}
+                    style={{ color: "#8E869A", lineHeight: lineHeightFor(12) }}
                   >
                     {inviteLink}
                   </Text>
@@ -1469,7 +1555,7 @@ export default function CommunityGroupMembersScreen() {
                       onActionPress={
                         canKickMember && normalizedUserId
                           ? () => {
-                              handleConfirmKickMember(
+                              handleOpenMemberActionSheet(
                                 normalizedUserId,
                                 displayName,
                               );
@@ -1525,6 +1611,13 @@ export default function CommunityGroupMembersScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <MemberActionSheet
+        bottomInset={insets.bottom}
+        onClose={handleCloseMemberActionSheet}
+        onRequestKick={handleRequestKickFromActionSheet}
+        visible={memberActionSheetTarget !== null}
+      />
 
       <KickMemberConfirmModal
         isSubmitting={
