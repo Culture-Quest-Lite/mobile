@@ -1,9 +1,7 @@
 import { SymbolView } from "@/components/ui/symbol-view";
 import type { CommunityGroupPayload } from "@/features/community/api/group-api";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { lineHeightFor } from "@/lib/text-scale";
-
-const communityGroupPinImage = require("../../../../assets/images/pin_group.png");
+import { Image, Pressable, Text, View } from "react-native";
 
 const cardShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.14)",
@@ -18,31 +16,17 @@ const cardShadowStyle = {
 
 const subtleBorderColor = "#E5E7EB";
 const subtleBorderWidth = 0.8;
-// Card cao cố định để tên nhóm dài không đẩy nút "Mở nhóm" tràn ra ngoài viền.
-const cardHeight = 220;
-const cardMaxFontSizeMultiplier = 1.1;
-// Toàn bộ chữ trong card đều 13px - lineHeight lấy từ thang chung.
-const cardTextFontSize = 13;
+// Card cao cố định để tên nhóm dài không đẩy badge vai trò tràn ra ngoài viền.
+const cardHeight = 232;
+const cardImageHeight = 124;
+// Bề rộng mặc định của card nhóm - gọn lại để lướt ngang thấy được nhiều nhóm.
+const cardWidth = 180;
+const cardMaxFontSizeMultiplier = 1.0;
+// Toàn bộ chữ trong card đều 12px - lineHeight lấy từ thang chung.
+const cardTextFontSize = 12;
 const cardTextLineHeight = lineHeightFor(cardTextFontSize);
-const groupNameLineHeight = cardTextLineHeight;
+const groupNameLineHeight = lineHeightFor(15);
 const groupNameMaxLines = 2;
-const groupNameBlockHeight = groupNameLineHeight * groupNameMaxLines;
-
-// Đường kẻ mảnh ngăn giữa các row trong card nhóm.
-const rowDividerColor = "#F1EDF1";
-
-function CommunityGroupRowDivider() {
-  return (
-    <View
-      className="self-stretch"
-      style={{
-        backgroundColor: rowDividerColor,
-        height: StyleSheet.hairlineWidth,
-        marginVertical: 5,
-      }}
-    />
-  );
-}
 
 function readMeaningfulText(value?: string | null) {
   if (typeof value !== "string") {
@@ -72,51 +56,27 @@ function formatGroupMemberCountLabel(memberCount: number) {
   return `${formatCompactCount(memberCount)} thành viên`;
 }
 
-function getCommunityGroupAccessLabel(requiredApproval?: boolean | null) {
-  return requiredApproval === true ? "Cần leader duyệt" : "Tham gia tự do";
-}
-
-function getCommunityGroupAccessPalette(requiredApproval?: boolean | null) {
-  if (requiredApproval === true) {
-    return {
-      backgroundColor: "#FFF4DE",
-      iconColor: "#E39B1A",
-      textColor: "#E39B1A",
-    };
-  }
-
-  return {
-    backgroundColor: "#EAF8ED",
-    iconColor: "#4CAF6A",
-    textColor: "#4CAF6A",
-  };
-}
-
-export function CommunityCreateGroupCard({
-  onPress,
-}: {
-  onPress: () => void;
-}) {
+export function CommunityCreateGroupCard({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
-      className="overflow-hidden rounded-[26px] bg-white"
+      className="overflow-hidden rounded-[20px] bg-white"
       onPress={onPress}
       style={({ pressed }) => [
         cardShadowStyle,
         {
           minHeight: cardHeight,
           opacity: pressed ? 0.88 : 1,
-          width: 160,
+          width: cardWidth,
         },
       ]}
     >
       <View
-        className="flex-1 self-stretch items-center justify-center rounded-[26px] bg-[#FFFDFE] px-4 py-4"
+        className="flex-1 self-stretch items-center justify-center rounded-[20px] bg-[#FFFDFE] px-4 py-4"
         style={{
           borderColor: "#F7D4E3",
           borderStyle: "dashed",
           borderWidth: 1,
-          borderRadius: 26,
+          borderRadius: 20,
         }}
       >
         <View
@@ -156,7 +116,7 @@ export function CommunityCreateGroupCard({
 export function CommunityGroupCompactStateCard({
   description,
   title,
-  width = 180,
+  width = cardWidth,
 }: {
   description: string;
   title: string;
@@ -164,7 +124,7 @@ export function CommunityGroupCompactStateCard({
 }) {
   return (
     <View
-      className="rounded-[26px] border bg-white px-4 py-4"
+      className="rounded-[20px] border bg-white px-4 py-4"
       style={[
         cardShadowStyle,
         {
@@ -199,13 +159,13 @@ export function CommunityGroupCompactStateCard({
 }
 
 export function CommunityGroupPlaceholderCard({
-  width = 180,
+  width = cardWidth,
 }: {
   width?: number;
 }) {
   return (
     <View
-      className="items-center justify-center rounded-[26px] border bg-white px-4 py-4"
+      className="items-center justify-center rounded-[20px] border bg-white px-4 py-4"
       style={[
         cardShadowStyle,
         {
@@ -230,7 +190,7 @@ export function CommunityGroupListCard({
   group,
   isLeader = false,
   onPress,
-  width = 180,
+  width = cardWidth,
 }: {
   group: CommunityGroupPayload;
   isLeader?: boolean;
@@ -239,14 +199,15 @@ export function CommunityGroupListCard({
 }) {
   const groupName = readMeaningfulText(group.groupName) ?? "Nhóm chưa đặt tên";
   const memberCount =
-    typeof group.totalMembers === "number" && Number.isFinite(group.totalMembers)
+    typeof group.totalMembers === "number" &&
+    Number.isFinite(group.totalMembers)
       ? Math.max(0, Math.round(group.totalMembers))
       : 0;
-  const accessPalette = getCommunityGroupAccessPalette(group.requiredApproval);
+  const roleLabel = isLeader ? "Nhóm trưởng" : "Thành viên";
 
   return (
-    <View
-      className="rounded-[26px] bg-white"
+    <Pressable
+      className="rounded-[20px] bg-white overflow-hidden"
       style={[
         cardShadowStyle,
         {
@@ -256,132 +217,88 @@ export function CommunityGroupListCard({
           width,
         },
       ]}
+      onPress={onPress}
     >
-      <Image
-        source={communityGroupPinImage}
-        resizeMode="contain"
-        style={{
-          height: 56,
-          position: "absolute",
-          right: 6,
-          top: -12,
-          width: 56,
-          zIndex: 2,
-        }}
-      />
-
-      <View className="flex-1 overflow-hidden rounded-[26px] px-3 pb-2.5 pt-2.5">
-        <View className="flex-row items-start">
-          <View
-            className="items-center justify-center rounded-full bg-[#FFF1F7]"
-            style={{ height: 36, width: 36 }}
-          >
-            <SymbolView
-              name={{ ios: "person.3.fill", android: "groups", web: "groups" }}
-              size={17}
-              tintColor="#FF4F84"
+      <View className="overflow-hidden rounded-[20px] bg-white">
+        <View
+          className="w-full overflow-hidden bg-[#F5F0F8]"
+          style={{ height: cardImageHeight }}
+        >
+          {group.imageUrl ? (
+            <Image
+              source={{ uri: group.imageUrl }}
+              resizeMode="cover"
+              className="h-full w-full"
             />
-          </View>
+          ) : (
+            <Image
+              source={require("../../../../assets/images/tachnen3.png")}
+              resizeMode="cover"
+              className="h-full w-full"
+            />
+          )}
         </View>
 
-        <CommunityGroupRowDivider />
-
-        <View
-          className="flex-row items-start self-stretch"
-          style={{ columnGap: 4, height: groupNameBlockHeight }}
-        >
+        <View className="px-3 pb-3 pt-3">
           <Text
-            className="text-[13px] font-normal text-[#2E2336]"
+            className="text-[15px] font-semibold text-[#2E2336]"
             maxFontSizeMultiplier={cardMaxFontSizeMultiplier}
             numberOfLines={groupNameMaxLines}
             style={{
-              flex: 1,
               includeFontPadding: false,
               lineHeight: groupNameLineHeight,
             }}
           >
             {groupName}
           </Text>
-          {isLeader ? (
-            <SymbolView
-              name={{
-                ios: "crown.fill",
-                android: "workspace-premium",
-                web: "workspace-premium",
-              }}
-              size={14}
-              tintColor="#E39B1A"
-            />
-          ) : null}
-        </View>
 
-        <CommunityGroupRowDivider />
-
-        <View className="self-stretch">
-          <View className="self-start flex-row items-center">
-            <SymbolView
-              name={{ ios: "person.2.fill", android: "groups", web: "groups" }}
-              size={12}
-              tintColor="#7D7488"
-            />
-            <Text
-              className="ml-1 text-[13px] font-normal text-[#7D7488]"
-              maxFontSizeMultiplier={cardMaxFontSizeMultiplier}
-              numberOfLines={1}
-              style={{
-                includeFontPadding: false,
-                lineHeight: cardTextLineHeight,
-              }}
+          <View className="mt-1 space-y-1">
+            <View
+              className="flex-row items-center"
+              style={{ paddingVertical: 1 }}
             >
-              {formatGroupMemberCountLabel(memberCount)}
-            </Text>
+              <SymbolView
+                name={{
+                  ios: "person.2.fill",
+                  android: "groups",
+                  web: "groups",
+                }}
+                size={11}
+                tintColor="#6F657A"
+              />
+              <Text
+                className="ml-1 text-[12px] font-normal text-[#6F657A]"
+                style={{
+                  includeFontPadding: false,
+                  lineHeight: lineHeightFor(13),
+                }}
+              >
+                {formatGroupMemberCountLabel(memberCount)}
+              </Text>
+            </View>
+
+            <View
+              className="flex-row items-center"
+              style={{ paddingVertical: 1 }}
+            >
+              <SymbolView
+                name={{ ios: "person.fill", android: "person", web: "person" }}
+                size={11}
+                tintColor="#6D4B9E"
+              />
+              <Text
+                className="ml-1 text-[12px] font-normal text-[#6D4B9E]"
+                style={{
+                  includeFontPadding: false,
+                  lineHeight: lineHeightFor(13),
+                }}
+              >
+                {roleLabel}
+              </Text>
+            </View>
           </View>
-
-          <View
-            className="self-start flex-row items-center rounded-full px-2 py-0.5"
-            style={{ backgroundColor: accessPalette.backgroundColor }}
-          >
-            <SymbolView
-              name={group.requiredApproval === true ? "lock.fill" : "link"}
-              size={11}
-              tintColor={accessPalette.iconColor}
-            />
-            <Text
-              className="ml-1 text-[13px] font-normal"
-              maxFontSizeMultiplier={cardMaxFontSizeMultiplier}
-              numberOfLines={1}
-              style={{
-                color: accessPalette.textColor,
-                includeFontPadding: false,
-                lineHeight: cardTextLineHeight,
-              }}
-            >
-              {getCommunityGroupAccessLabel(group.requiredApproval)}
-            </Text>
-          </View>
-        </View>
-
-        <View className="mt-auto pt-1.5">
-          <Pressable
-            className="self-stretch items-center justify-center rounded-[10px] bg-[#F3F4F6] px-3 py-1"
-            onPress={onPress}
-            style={({ pressed }) => ({
-              opacity: pressed ? 0.86 : 1,
-            })}
-          >
-            <Text
-              className="text-[12px] font-normal text-[#6B7280]"
-              maxFontSizeMultiplier={cardMaxFontSizeMultiplier}
-              style={{
-                includeFontPadding: false,
-                lineHeight: lineHeightFor(12),
-              }}
-            >
-              Mở nhóm
-            </Text>
-          </Pressable>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }

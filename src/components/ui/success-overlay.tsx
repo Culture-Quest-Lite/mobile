@@ -80,6 +80,11 @@ const defaultSecondaryActionIcon: SymbolName = {
   android: "explore",
   web: "explore",
 };
+const defaultAvatarBadgeIcon: SymbolName = {
+  ios: "checkmark",
+  android: "check",
+  web: "check",
+};
 
 function Text({
   maxFontSizeMultiplier = successTextMaxFontSizeMultiplier,
@@ -192,9 +197,13 @@ function ConfettiPiece({
 function SuccessHeroAvatar({
   avatarFallbackLabel,
   avatarUri,
+  badgeIconName,
+  badgeVariant,
 }: {
   avatarFallbackLabel?: string;
   avatarUri?: string | null;
+  badgeIconName: SymbolName;
+  badgeVariant: "outline" | "solid";
 }) {
   const haloSize = avatarSize + avatarHaloExtra;
 
@@ -228,6 +237,7 @@ function SuccessHeroAvatar({
             shadowOpacity: 1,
             shadowRadius: 20,
             width: avatarSize,
+            zIndex: 1,
           }}
         >
           <UserAvatar
@@ -240,39 +250,61 @@ function SuccessHeroAvatar({
           />
         </View>
 
-        <LinearGradient
-          colors={[accentColor, accentDeepColor]}
-          end={{ x: 1, y: 1 }}
-          start={{ x: 0, y: 0 }}
-          style={{
-            alignItems: "center",
-            borderColor: "#FFFFFF",
-            borderRadius: 999,
-            borderWidth: 3,
-            bottom: 2,
-            height: 42,
-            justifyContent: "center",
-            position: "absolute",
-            right: -2,
-            width: 42,
-          }}
-        >
-          <SymbolView
-            name={{
-              ios: "checkmark",
-              android: "check",
-              web: "check",
+        {badgeVariant === "outline" ? (
+          <View
+            style={{
+              alignItems: "center",
+              backgroundColor: "#FFFFFF",
+              borderColor: "#FFFFFF",
+              borderRadius: 999,
+              borderWidth: 3,
+              bottom: 2,
+              elevation: 12,
+              height: 42,
+              justifyContent: "center",
+              position: "absolute",
+              right: -2,
+              shadowColor: "rgba(228,80,143,0.25)",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 1,
+              shadowRadius: 8,
+              width: 42,
+              zIndex: 2,
             }}
-            size={20}
-            tintColor="#FFFFFF"
-          />
-        </LinearGradient>
+          >
+            <SymbolView name={badgeIconName} size={22} tintColor={accentColor} />
+          </View>
+        ) : (
+          <LinearGradient
+            colors={[accentColor, accentDeepColor]}
+            end={{ x: 1, y: 1 }}
+            start={{ x: 0, y: 0 }}
+            style={{
+              alignItems: "center",
+              borderColor: "#FFFFFF",
+              borderRadius: 999,
+              borderWidth: 3,
+              bottom: 2,
+              elevation: 12,
+              height: 42,
+              justifyContent: "center",
+              position: "absolute",
+              right: -2,
+              width: 42,
+              zIndex: 2,
+            }}
+          >
+            <SymbolView name={badgeIconName} size={20} tintColor="#FFFFFF" />
+          </LinearGradient>
+        )}
       </View>
     </View>
   );
 }
 
 export function SuccessOverlay({
+  avatarBadgeIcon = defaultAvatarBadgeIcon,
+  avatarBadgeVariant = "solid",
   avatarFallbackLabel,
   avatarUri,
   description,
@@ -287,6 +319,8 @@ export function SuccessOverlay({
   secondaryActionLabel,
   title,
 }: {
+  avatarBadgeIcon?: SymbolName;
+  avatarBadgeVariant?: "outline" | "solid";
   avatarFallbackLabel?: string;
   avatarUri?: string | null;
   description: string;
@@ -416,45 +450,52 @@ export function SuccessOverlay({
         <SuccessHeroAvatar
           avatarFallbackLabel={avatarFallbackLabel}
           avatarUri={avatarUri}
+          badgeIconName={avatarBadgeIcon}
+          badgeVariant={avatarBadgeVariant}
         />
 
         <Text
-          className="mt-2 text-center text-[25px] font-black"
-          style={{ color: titleColor, lineHeight: lineHeightFor(25) }}
+          className="mt-2 text-center text-[21px] font-black"
+          style={{ color: titleColor, lineHeight: lineHeightFor(21) }}
         >
           {title}
         </Text>
 
         <Text
-          className="mt-1 text-center text-[14px]"
-          style={{ color: bodyColor, lineHeight: lineHeightFor(14), maxWidth: 290 }}
+          className="mt-1 text-center text-[13px]"
+          style={{ color: bodyColor, lineHeight: lineHeightFor(13), maxWidth: 290 }}
         >
           {description}
         </Text>
 
         {rewardText ? (
           <Text
-            className="mt-3 text-center text-[30px] font-black"
-            style={{ color: "#F97316", lineHeight: lineHeightFor(30) }}
+            className="mt-3 text-center text-[26px] font-black"
+            style={{ color: "#F97316", lineHeight: lineHeightFor(26) }}
           >
             {rewardText}
           </Text>
         ) : null}
 
         {note ? (
-          <View className="mt-1.5 flex-row items-center">
-            <SymbolView
-              name={{
-                ios: "heart.fill",
-                android: "favorite",
-                web: "favorite",
-              }}
-              size={13}
-              tintColor="#F7A8CB"
-            />
+          <View
+            className="mt-1.5 flex-row items-start justify-center"
+            style={{ maxWidth: 290 }}
+          >
+            <View style={{ marginTop: 1 }}>
+              <SymbolView
+                name={{
+                  ios: "heart.fill",
+                  android: "favorite",
+                  web: "favorite",
+                }}
+                size={12}
+                tintColor="#F7A8CB"
+              />
+            </View>
             <Text
-              className="ml-1.5 text-center text-[12px]"
-              style={{ color: subtleTextColor, lineHeight: lineHeightFor(12) }}
+              className="ml-1.5 text-center text-[11px]"
+              style={{ color: subtleTextColor, lineHeight: lineHeightFor(11) }}
             >
               {note}
             </Text>
@@ -488,8 +529,8 @@ export function SuccessOverlay({
             }}
           >
             <Text
-              className="text-[16px] font-black text-white"
-              style={{ lineHeight: lineHeightFor(16) }}
+              className="text-[14px] font-black text-white"
+              style={{ lineHeight: lineHeightFor(14) }}
             >
               {primaryActionLabel}
             </Text>
@@ -519,8 +560,8 @@ export function SuccessOverlay({
             })}
           >
             <Text
-              className="text-[15px] font-black"
-              style={{ color: titleColor, lineHeight: lineHeightFor(15) }}
+              className="text-[14px] font-black"
+              style={{ color: titleColor, lineHeight: lineHeightFor(14) }}
             >
               {secondaryActionLabel}
             </Text>

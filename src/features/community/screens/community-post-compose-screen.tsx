@@ -1,4 +1,4 @@
-import { appToast } from "@/components/ui/app-toast";
+import { appToast, type AppToastTone } from "@/components/ui/app-toast";
 import { FieldError, fieldErrorBorderColor } from "@/components/ui/field-error";
 import { SymbolView } from "@/components/ui/symbol-view";
 import {
@@ -10,12 +10,15 @@ import {
   type CreatedPostResponse,
   type PostVisibility,
 } from "@/features/home/api/create-post";
+import { getHotspotById } from "@/features/home/api/get-hotspot-by-id";
 import { type NearbyHotspotDto } from "@/features/home/api/get-nearby-hotspots";
+import { getPostById } from "@/features/home/api/get-post-by-id";
 import { getActiveTags, type ActiveTagDto } from "@/features/home/api/get-tags";
 import {
   getHotspots,
   searchHotspots,
 } from "@/features/home/api/search-hotspots";
+import { updatePost } from "@/features/home/api/update-post";
 import {
   ReviewMediaViewer,
   type ReviewMediaViewerItem,
@@ -28,6 +31,7 @@ import { getMyProfile } from "@/features/profile/api/get-me";
 import { cacheProfilePost } from "@/features/profile/data/profile-post-cache";
 import { mapCreatedPostToProfilePost } from "@/features/profile/lib/map-created-post-to-profile-post";
 import {
+  getRouteById,
   getRouteCoverUrl,
   searchRoutes,
   type RouteDto,
@@ -36,12 +40,18 @@ import {
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect, useRouter, type Href } from "expo-router";
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+  type Href,
+} from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -56,7 +66,10 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
-import { getPostVisibilityLabel } from "@/lib/post-visibility";
+import {
+  getPostVisibilityLabel,
+  normalizePostVisibilityValue,
+} from "@/lib/post-visibility";
 import { bodyLineHeightFor } from "@/lib/text-scale";
 import {
   CommunityPostSuccessOverlay,
@@ -65,6 +78,7 @@ import {
 import { cacheCommunityExplorerProfile } from "../data/community-explorer-profile-cache";
 import {
   cacheCommunityPost,
+  updateCachedCommunityPost,
   type CommunityFeedMediaItem,
   type CommunityFeedPost,
 } from "../data/community-post-cache";
@@ -81,6 +95,12 @@ type ComposerMediaItem = {
   assetId?: string | null;
   fileName: string;
   mimeType: string;
+  type: "image" | "video";
+  uri: string;
+};
+
+type ExistingMediaItem = {
+  mediaId: number;
   type: "image" | "video";
   uri: string;
 };
@@ -109,6 +129,12 @@ type SelectionSheet = "hotspot" | "route" | "tag" | null;
 type PostSuccessState = {
   rewardText: string | null;
   variant: CommunityPostSuccessVariant;
+  visibility: string;
+};
+
+type DeferredComposerToast = {
+  message: string;
+  tone: AppToastTone;
 };
 
 type RoutePickerSheetProps = {
@@ -373,6 +399,55 @@ function sortHotspotsForSearch(
 
 function buildHashtagLabel(tagName: string) {
   return `#${tagName.trim().replace(/^#/, "").replace(/\s+/g, "_")}`;
+}
+
+// Nội dung bài viết đã đăng có hashtag nối ở cuối; bóc ra khi nạp lại để
+// chỉnh sửa, tránh hashtag bị lặp khi thẻ được gắn lại vào nội dung lúc gửi.
+function stripTrailingHashtagBlock(content: string) {
+  const normalizedContent = content.trim();
+
+  if (!normalizedContent) {
+    return normalizedContent;
+  }
+
+  const lines = normalizedContent.split(/\r?\n/).map((line) => line.trimEnd());
+  let lastMeaningfulLineIndex = lines.length - 1;
+
+  while (
+    lastMeaningfulLineIndex >= 0 &&
+    lines[lastMeaningfulLineIndex]?.trim() === ""
+  ) {
+    lastMeaningfulLineIndex -= 1;
+  }
+
+  if (lastMeaningfulLineIndex < 0) {
+    return "";
+  }
+
+  const trailingLine = lines[lastMeaningfulLineIndex]?.trim() ?? "";
+  const hashtagLinePattern = /^(#[\p{L}\p{N}_-]+)(\s+#[\p{L}\p{N}_-]+)*$/u;
+
+  if (!hashtagLinePattern.test(trailingLine)) {
+    return normalizedContent;
+  }
+
+  let previousMeaningfulLineIndex = lastMeaningfulLineIndex - 1;
+
+  while (
+    previousMeaningfulLineIndex >= 0 &&
+    lines[previousMeaningfulLineIndex]?.trim() === ""
+  ) {
+    previousMeaningfulLineIndex -= 1;
+  }
+
+  if (previousMeaningfulLineIndex < 0) {
+    return "";
+  }
+
+  return lines
+    .slice(0, previousMeaningfulLineIndex + 1)
+    .join("\n")
+    .trimEnd();
 }
 
 function buildTaggedPostContent(content: string, tagNames: string[]) {
@@ -1609,6 +1684,18 @@ export default function CommunityPostComposeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const authSession = useAuthSession();
+  const searchParams = useLocalSearchParams<{
+    mode?: string;
+    postId?: string;
+  }>();
+  const editPostId = useMemo(() => {
+    const parsedPostId = Number(searchParams.postId);
+
+    return Number.isInteger(parsedPostId) && parsedPostId > 0
+      ? parsedPostId
+      : null;
+  }, [searchParams.postId]);
+  const isEditMode = searchParams.mode === "edit" && editPostId !== null;
   const fallbackComposerIdentity = buildComposerIdentityFromSession(
     authSession.isAuthenticated,
     authSession.displayName,
@@ -1619,6 +1706,10 @@ export default function CommunityPostComposeScreen() {
   );
   const [draftText, setDraftText] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<ComposerMediaItem[]>([]);
+  const [existingMedia, setExistingMedia] = useState<ExistingMediaItem[]>([]);
+  const [removedMediaIds, setRemovedMediaIds] = useState<number[]>([]);
+  const [isLoadingEditPost, setIsLoadingEditPost] = useState(isEditMode);
+  const [editLoadError, setEditLoadError] = useState<string | null>(null);
   const [activeMediaViewerIndex, setActiveMediaViewerIndex] = useState<
     number | null
   >(null);
@@ -1657,6 +1748,8 @@ export default function CommunityPostComposeScreen() {
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
   const [postSuccessState, setPostSuccessState] =
     useState<PostSuccessState | null>(null);
+  const isLeavingComposerRef = useRef(false);
+  const pendingLeaveToastRef = useRef<DeferredComposerToast | null>(null);
   const resolvedComposerIdentity =
     composerIdentity.accountKey === fallbackComposerIdentity.accountKey
       ? composerIdentity
@@ -1701,7 +1794,8 @@ export default function CommunityPostComposeScreen() {
   const visiblePostSubmitError = visibleContentError ?? postSubmitError;
   const isContentNearLimit = composedDraftLength >= postLengthWarningThreshold;
   // Nút luôn bấm được (trừ khi đang gửi) để cú chạm nào cũng có phản hồi.
-  const isSubmitDisabled = isSubmitting;
+  const isSubmitDisabled = isSubmitting || isLoadingEditPost;
+  const totalMediaCount = existingMedia.length + selectedMedia.length;
   const routeSummaryLabel = selectedRoute?.routeName ?? "Chọn tuyến đường";
   const hotspotSummaryLabel =
     selectedHotspots.length === 0
@@ -1719,12 +1813,6 @@ export default function CommunityPostComposeScreen() {
     () => activeTags.map((tag) => tag.tagName),
     [activeTags],
   );
-
-  useEffect(() => {
-    if (postSubmitError && visibleContentError) {
-      setPostSubmitError(null);
-    }
-  }, [visibleContentError, postSubmitError]);
   const selectedTagIdsForSubmit = useMemo(() => {
     const tagLookup = new Map<string, number>();
 
@@ -1752,13 +1840,18 @@ export default function CommunityPostComposeScreen() {
       ),
     );
   }, [activeTags, selectedTags]);
-  const selectedMediaViewerItems = useMemo<ReviewMediaViewerItem[]>(
-    () =>
-      selectedMedia.map((media) => ({
+  const combinedMediaViewerItems = useMemo<ReviewMediaViewerItem[]>(
+    () => [
+      ...existingMedia.map((media) => ({
         type: media.type,
         uri: media.uri,
       })),
-    [selectedMedia],
+      ...selectedMedia.map((media) => ({
+        type: media.type,
+        uri: media.uri,
+      })),
+    ],
+    [existingMedia, selectedMedia],
   );
   const suggestedTagNames = useMemo(
     () =>
@@ -1827,6 +1920,124 @@ export default function CommunityPostComposeScreen() {
       tokenType: authSession.tokenType,
     };
   }, [authSession.isAuthenticated, authSession.tokenType]);
+
+  useEffect(() => {
+    if (!isEditMode || editPostId === null) {
+      return;
+    }
+
+    let isActive = true;
+
+    async function loadPostForEdit() {
+      setIsLoadingEditPost(true);
+      setEditLoadError(null);
+
+      try {
+        const accessToken = await getValidAccessToken();
+
+        if (!accessToken) {
+          throw new Error("Vui lòng đăng nhập lại để chỉnh sửa bài viết.");
+        }
+
+        const post = await getPostById({
+          accessToken,
+          postId: editPostId as number,
+          tokenType: authSession.tokenType,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setDraftText(stripTrailingHashtagBlock(post.content));
+        setPostVisibility(normalizePostVisibilityValue(post.visibility));
+        setExistingMedia(
+          post.medias
+            .filter((media) => Boolean(readMeaningfulText(media.fileUrl)))
+            .map((media) => ({
+              mediaId: media.mediaId,
+              type:
+                media.mediaType.trim().toUpperCase() === "VIDEO"
+                  ? "video"
+                  : "image",
+              uri: media.fileUrl,
+            })),
+        );
+        setRemovedMediaIds([]);
+        setSelectedMedia([]);
+        setSelectedTags(
+          dedupeStringList(
+            post.tags
+              .map((tag) => readMeaningfulText(tag.tagName))
+              .filter((tagName): tagName is string => Boolean(tagName)),
+          ).slice(0, maxSelectableTags),
+        );
+
+        const [hotspotResults, routeResult] = await Promise.all([
+          Promise.allSettled(
+            post.hotspotIds.map((hotspotId) =>
+              getHotspotById({
+                accessToken,
+                hotspotId,
+                tokenType: authSession.tokenType,
+              }),
+            ),
+          ),
+          post.routeIds[0]
+            ? getRouteById({
+                accessToken,
+                routeId: post.routeIds[0],
+                tokenType: authSession.tokenType,
+              }).catch(() => null)
+            : Promise.resolve(null),
+        ]);
+
+        if (!isActive) {
+          return;
+        }
+
+        setSelectedHotspots(
+          dedupeHotspots(
+            hotspotResults
+              .filter(
+                (
+                  result,
+                ): result is PromiseFulfilledResult<NearbyHotspotDto> =>
+                  result.status === "fulfilled",
+              )
+              .map((result) =>
+                mapNearbyHotspotToComposerHotspot(result.value),
+              ),
+          ),
+        );
+
+        const mappedRoute = routeResult
+          ? mapRouteToComposerRoute(routeResult)
+          : null;
+        setSelectedRoute(mappedRoute);
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setEditLoadError(
+          error instanceof Error
+            ? error.message
+            : "Không thể tải bài viết để chỉnh sửa.",
+        );
+      } finally {
+        if (isActive) {
+          setIsLoadingEditPost(false);
+        }
+      }
+    }
+
+    void loadPostForEdit();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.tokenType, editPostId, isEditMode]);
 
   useFocusEffect(
     useCallback(() => {
@@ -2049,7 +2260,7 @@ export default function CommunityPostComposeScreen() {
   }, [activeSheet, hotspotOptions, hotspotSearchQuery, resolveOptionalAuth]);
 
   async function handlePickMedia() {
-    if (selectedMedia.length >= maxMediaCount) {
+    if (totalMediaCount >= maxMediaCount) {
       appToast.info(`Bạn chỉ thêm được tối đa ${maxMediaCount} ảnh/video.`);
       return;
     }
@@ -2097,9 +2308,14 @@ export default function CommunityPostComposeScreen() {
           uri: asset.uri,
         }));
 
+      const remainingSlots = Math.max(
+        0,
+        maxMediaCount - existingMedia.length,
+      );
+
       return dedupeComposerMediaItems([...current, ...nextMediaItems]).slice(
         0,
-        maxMediaCount,
+        remainingSlots,
       );
     });
   }
@@ -2165,6 +2381,10 @@ export default function CommunityPostComposeScreen() {
       return;
     }
 
+    if (postSubmitError) {
+      setPostSubmitError(null);
+    }
+
     setSelectedTags((current) =>
       dedupeStringList([...current, nextTag]).slice(0, maxSelectableTags),
     );
@@ -2182,6 +2402,10 @@ export default function CommunityPostComposeScreen() {
   }
 
   function removeSelectedTag(tagName: string) {
+    if (postSubmitError) {
+      setPostSubmitError(null);
+    }
+
     setSelectedTags((current) =>
       current.filter(
         (value) => normalizeLookupText(value) !== normalizeLookupText(tagName),
@@ -2189,21 +2413,147 @@ export default function CommunityPostComposeScreen() {
     );
   }
 
-  function handleLeaveComposer() {
-    setPostSuccessState(null);
-
-    if (router.canGoBack()) {
-      router.back();
+  function showDeferredComposerToast(toast: DeferredComposerToast) {
+    if (toast.tone === "error") {
+      appToast.error(toast.message);
       return;
     }
 
-    // Tab cộng đồng nằm ở route "/bookings".
-    router.replace("/bookings" as Href);
+    if (toast.tone === "success") {
+      appToast.success(toast.message);
+      return;
+    }
+
+    appToast.info(toast.message);
+  }
+
+  function leaveComposer(
+    destination: "back" | "explore",
+    options?: { toast?: DeferredComposerToast | null },
+  ) {
+    if (options?.toast) {
+      pendingLeaveToastRef.current = options.toast;
+    }
+
+    if (isLeavingComposerRef.current) {
+      return;
+    }
+
+    isLeavingComposerRef.current = true;
+    Keyboard.dismiss();
+    setActiveSheet(null);
+    setActiveMediaViewerIndex(null);
+    setPostSuccessState(null);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (destination === "explore") {
+          router.replace("/explore" as Href);
+        } else if (router.canGoBack()) {
+          router.back();
+        } else {
+          // Tab cộng đồng nằm ở route "/bookings".
+          router.replace("/bookings" as Href);
+        }
+
+        const pendingToast = pendingLeaveToastRef.current;
+        pendingLeaveToastRef.current = null;
+
+        setTimeout(() => {
+          isLeavingComposerRef.current = false;
+
+          if (pendingToast) {
+            showDeferredComposerToast(pendingToast);
+          }
+        }, 40);
+      });
+    });
+  }
+
+  function handleLeaveComposer(options?: { toast?: DeferredComposerToast | null }) {
+    leaveComposer("back", options);
   }
 
   function handleContinueExplore() {
-    setPostSuccessState(null);
-    router.replace("/explore" as Href);
+    leaveComposer("explore");
+  }
+
+  async function handleUpdatePost(accessToken: string, editingPostId: number) {
+    setIsSubmitting(true);
+
+    try {
+      setPostSubmitError(null);
+
+      const updatedPost = await updatePost({
+        accessToken,
+        content: composedDraftText,
+        files: selectedMedia.map((media) => ({
+          fileName: media.fileName,
+          mimeType: media.mimeType,
+          uri: media.uri,
+        })),
+        hotspotIds: hotspotIdsForSubmit,
+        postId: editingPostId,
+        removedMediaIds,
+        routeIds: routeIdsForSubmit,
+        tagIds: selectedTagIdsForSubmit,
+        tokenType: authSession.tokenType,
+        visibility: postVisibility,
+      });
+
+      cacheProfilePost(mapCreatedPostToProfilePost(updatedPost));
+
+      const updatedMediaItems: CommunityFeedMediaItem[] = updatedPost.medias
+        .filter(
+          (media) =>
+            media.mediaType.trim().toUpperCase() === "IMAGE" &&
+            Boolean(readMeaningfulText(media.fileUrl)),
+        )
+        .map((media) => ({
+          key: `${updatedPost.postId}-media-${media.mediaId}`,
+          source: { uri: media.fileUrl },
+        }));
+      const updatedVisibility = normalizePostVisibilityValue(
+        updatedPost.visibility,
+      );
+
+      updateCachedCommunityPost(editingPostId, (current) => ({
+        ...current,
+        caption:
+          readMeaningfulText(stripTrailingHashtagBlock(updatedPost.content)) ??
+          current.caption,
+        hotspotIds: updatedPost.hotspotIds,
+        image: updatedMediaItems[0]?.source ?? null,
+        mediaItems: updatedMediaItems,
+        mood: `${current.mood.split(" · ")[0] ?? "Cập nhật mới từ cộng đồng"} · ${getPostVisibilityLabel(updatedVisibility)}`,
+        routeIds: updatedPost.routeIds,
+        tags: dedupeStringList(
+          updatedPost.tags
+            .map((tag) => readMeaningfulText(tag.tagName))
+            .filter((tagName): tagName is string => Boolean(tagName)),
+        ),
+        visibility: updatedVisibility,
+      }));
+
+      handleLeaveComposer({
+        toast: {
+          message: "Đã cập nhật bài viết",
+          tone: "success",
+        },
+      });
+    } catch (error) {
+      const submitErrorMessage =
+        error instanceof Error
+          ? error.message
+          : "Đã có lỗi xảy ra khi cập nhật bài viết cộng đồng.";
+
+      setPostSubmitError(submitErrorMessage);
+      appToast.error(submitErrorMessage);
+    } finally {
+      if (!isLeavingComposerRef.current) {
+        setIsSubmitting(false);
+      }
+    }
   }
 
   async function handleSubmit() {
@@ -2234,6 +2584,11 @@ export default function CommunityPostComposeScreen() {
       return;
     }
 
+    if (isEditMode && editPostId !== null) {
+      await handleUpdatePost(accessToken, editPostId);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -2258,8 +2613,12 @@ export default function CommunityPostComposeScreen() {
         readMeaningfulText(createdPost.status)?.toUpperCase() ?? "";
       const createdPostVisibility =
         readMeaningfulText(createdPost.visibility)?.toUpperCase() ?? "PUBLIC";
+      const isPublicPost = createdPostVisibility === "PUBLIC";
       const shouldAppearInCommunityFeed =
-        createdPostVisibility === "PUBLIC" && createdPostStatus === "APPROVED";
+        isPublicPost && createdPostStatus === "APPROVED";
+      // Riêng tư/bạn bè không cần admin duyệt: chỉ coi là "đang chờ duyệt"
+      // khi bài thực sự công khai, để không hiện nhầm thông báo chờ duyệt.
+      const isPendingApproval = isPublicPost && isCreatedPostPending(createdPost);
 
       cacheProfilePost(mapCreatedPostToProfilePost(createdPost));
 
@@ -2276,12 +2635,13 @@ export default function CommunityPostComposeScreen() {
       }
 
       setPostSuccessState({
-        rewardText: getCreatedPostRewardText(createdPost),
-        variant: isCreatedPostPending(createdPost)
+        rewardText: isPublicPost ? getCreatedPostRewardText(createdPost) : null,
+        variant: isPendingApproval
           ? "pending"
           : shouldAppearInCommunityFeed
             ? "approved"
             : "profileOnly",
+        visibility: createdPostVisibility,
       });
     } catch (error) {
       const submitErrorMessage =
@@ -2292,7 +2652,9 @@ export default function CommunityPostComposeScreen() {
       setPostSubmitError(submitErrorMessage);
       appToast.error(submitErrorMessage);
     } finally {
-      setIsSubmitting(false);
+      if (!isLeavingComposerRef.current) {
+        setIsSubmitting(false);
+      }
     }
   }
 
@@ -2329,27 +2691,19 @@ export default function CommunityPostComposeScreen() {
             </Pressable>
 
             <Text className="text-[18px] font-semibold text-[#111827]">
-              Tạo bài viết
+              {isEditMode ? "Chỉnh sửa bài viết" : "Tạo bài viết"}
             </Text>
 
-            <Pressable
-              className="h-9 w-9 items-center justify-center rounded-full"
-              hitSlop={8}
-              onPress={() => {
-                router.back();
-              }}
-            >
-              <SymbolView
-                name={{
-                  ios: "xmark",
-                  android: "close",
-                  web: "close",
-                }}
-                size={18}
-                tintColor="#111827"
-              />
-            </Pressable>
+            <View className="h-9 w-9" />
           </View>
+
+          {editLoadError ? (
+            <View className="mx-4 mt-2 rounded-[14px] bg-[#FFF4F6] px-3 py-2.5">
+              <Text className="text-[12px] font-normal text-[#C2416C]">
+                {editLoadError}
+              </Text>
+            </View>
+          ) : null}
 
           <ScrollView
             contentContainerStyle={{
@@ -2438,7 +2792,7 @@ export default function CommunityPostComposeScreen() {
                   Ảnh / video
                 </Text>
                 <Text className="text-[11px] font-normal text-[#9CA3AF]">
-                  {selectedMedia.length}/{maxMediaCount}
+                  {totalMediaCount}/{maxMediaCount}
                 </Text>
               </View>
 
@@ -2449,19 +2803,48 @@ export default function CommunityPostComposeScreen() {
                 showsHorizontalScrollIndicator={false}
               >
                 <MediaAddTile
-                  canAddMore={selectedMedia.length < maxMediaCount}
-                  count={selectedMedia.length}
+                  canAddMore={totalMediaCount < maxMediaCount}
+                  count={totalMediaCount}
                   onPress={() => {
                     void handlePickMedia();
                   }}
                 />
+
+                {existingMedia.map((media, index) => (
+                  <View key={`existing-${media.mediaId}`} className="ml-2">
+                    <MediaPreviewCard
+                      item={{
+                        fileName: `media-${media.mediaId}`,
+                        mimeType:
+                          media.type === "video" ? "video/mp4" : "image/jpeg",
+                        type: media.type,
+                        uri: media.uri,
+                      }}
+                      onPress={() => {
+                        setActiveMediaViewerIndex(index);
+                      }}
+                      onRemove={() => {
+                        setExistingMedia((current) =>
+                          current.filter(
+                            (item) => item.mediaId !== media.mediaId,
+                          ),
+                        );
+                        setRemovedMediaIds((current) =>
+                          current.includes(media.mediaId)
+                            ? current
+                            : [...current, media.mediaId],
+                        );
+                      }}
+                    />
+                  </View>
+                ))}
 
                 {selectedMedia.map((media, index) => (
                   <View key={`${media.uri}-${index}`} className="ml-2">
                     <MediaPreviewCard
                       item={media}
                       onPress={() => {
-                        setActiveMediaViewerIndex(index);
+                        setActiveMediaViewerIndex(existingMedia.length + index);
                       }}
                       onRemove={() => {
                         setSelectedMedia((current) =>
@@ -2644,11 +3027,11 @@ export default function CommunityPostComposeScreen() {
                   }}
                 >
                   <View className="items-center justify-center">
-                    {isSubmitting ? (
+                    {isSubmitting || isLoadingEditPost ? (
                       <ActivityIndicator color="#FFFFFF" size="small" />
                     ) : (
                       <Text className="text-[14px] font-normal text-white">
-                        Đăng bài
+                        {isEditMode ? "Cập nhật" : "Đăng bài"}
                       </Text>
                     )}
                   </View>
@@ -2662,7 +3045,7 @@ export default function CommunityPostComposeScreen() {
                   `Sẽ gắn ${routeIdsForSubmit.length} tuyến đường, ${hotspotIdsForSubmit.length} địa điểm và ${selectedTags.length} thẻ.`}
               </Text>
               <Text className="text-[10px] font-normal text-[#9CA3AF]">
-                {selectedMedia.length}/{maxMediaCount}
+                {totalMediaCount}/{maxMediaCount}
               </Text>
             </View>
           </View>
@@ -2716,10 +3099,10 @@ export default function CommunityPostComposeScreen() {
           />
 
           {activeMediaViewerIndex !== null &&
-          selectedMediaViewerItems.length > 0 ? (
+          combinedMediaViewerItems.length > 0 ? (
             <ReviewMediaViewer
               initialIndex={activeMediaViewerIndex}
-              items={selectedMediaViewerItems}
+              items={combinedMediaViewerItems}
               onClose={() => {
                 setActiveMediaViewerIndex(null);
               }}
@@ -2737,6 +3120,7 @@ export default function CommunityPostComposeScreen() {
           onViewPost={handleLeaveComposer}
           rewardText={postSuccessState.rewardText}
           variant={postSuccessState.variant}
+          visibility={postSuccessState.visibility}
         />
       ) : null}
     </View>
