@@ -36,7 +36,7 @@ function AnimatedLevelProgressTrack({
   const [trackWidth, setTrackWidth] = useState(0);
   const animatedProgress = useSharedValue(0);
   const markerSize = 38;
-  const markerTrackOverlap = 10;
+  const markerTrackOverlap = 16;
   const markerLeft =
     trackWidth > 0
       ? clampNumber(
@@ -66,7 +66,7 @@ function AnimatedLevelProgressTrack({
 
   return (
     <View
-      className="mt-[-2px]"
+      className="mt-[-4px]"
       style={{
         paddingTop: markerSource ? markerSize - markerTrackOverlap : 0,
       }}
@@ -75,9 +75,11 @@ function AnimatedLevelProgressTrack({
         <View
           pointerEvents="none"
           style={{
+            elevation: 2,
             left: markerLeft,
             position: "absolute",
             top: 0,
+            zIndex: 2,
           }}
         >
           <Image
@@ -98,7 +100,7 @@ function AnimatedLevelProgressTrack({
             setTrackWidth(nextWidth);
           }
         }}
-        style={{ height: 8 }}
+        style={{ height: 8, zIndex: 1 }}
       >
         <Animated.View
           className="absolute bottom-0 left-0 top-0 overflow-hidden rounded-full"

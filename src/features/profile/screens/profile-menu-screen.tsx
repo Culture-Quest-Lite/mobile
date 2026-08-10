@@ -37,6 +37,14 @@ function getUpdateProfileErrorMessage(error: unknown) {
   return "Không thể cập nhật ảnh đại diện.";
 }
 
+function getUpdateCoverErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return "Không thể cập nhật ảnh bìa.";
+}
+
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const detailTextMaxFontSizeMultiplier = 1.05;
 
@@ -78,6 +86,8 @@ export default function ProfileMenuScreen() {
   const authSession = useAuthSession();
   const { profile, reloadProfile } = useProfile();
   const insets = useSafeAreaInsets();
+  const [isChangingAvatar, setIsChangingAvatar] = useState(false);
+  const [isChangingCover, setIsChangingCover] = useState(false);
   const { t, i18n } = useTranslation();
 
   const handleBackToProfile = () => {
@@ -124,9 +134,9 @@ export default function ProfileMenuScreen() {
       return;
     }
 
-    const pickedAvatarUrl = pickerResult.assets[0]?.uri;
+    const pickedAvatarAsset = pickerResult.assets[0];
 
-    if (!pickedAvatarUrl) {
+    if (!pickedAvatarAsset?.uri) {
       return;
     }
 
@@ -141,13 +151,14 @@ export default function ProfileMenuScreen() {
         );
       }
 
-      // BE yêu cầu PUT đủ cả 4 field dù UI chỉ cho đổi avatar, nếu không các field
-      // còn lại (displayName, backgroundUrl, autoPlayAudio) sẽ bị ghi đè mất giá trị hiện tại.
       await updateMyProfile({
         accessToken,
         autoPlayAudio: profile.autoPlayAudio ?? false,
-        avatarUrl: pickedAvatarUrl,
-        backgroundUrl: profile.cover,
+        avatarFile: {
+          mimeType: pickedAvatarAsset.mimeType,
+          name: pickedAvatarAsset.fileName,
+          uri: pickedAvatarAsset.uri,
+        },
         displayName: profile.name,
         tokenType: authSession.tokenType,
       });
@@ -157,6 +168,70 @@ export default function ProfileMenuScreen() {
       Alert.alert("Không thể đổi ảnh đại diện", getUpdateProfileErrorMessage(error));
     } finally {
       setIsChangingAvatar(false);
+    }
+  };
+
+  const handleChangeCover = async () => {
+    if (!profile || isChangingCover) {
+      return;
+    }
+
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Alert.alert(
+        "Cần cấp quyền",
+        "Hãy cho phép truy cập thư viện để đổi ảnh bìa.",
+      );
+      return;
+    }
+
+    const pickerResult = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [16, 9],
+      mediaTypes: ["images"],
+      quality: 0.85,
+    });
+
+    if (pickerResult.canceled || pickerResult.assets.length === 0) {
+      return;
+    }
+
+    const pickedCoverAsset = pickerResult.assets[0];
+
+    if (!pickedCoverAsset?.uri) {
+      return;
+    }
+
+    setIsChangingCover(true);
+
+    try {
+      const accessToken = await getValidAccessToken();
+
+      if (!accessToken) {
+        throw new Error(
+          "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+        );
+      }
+
+      await updateMyProfile({
+        accessToken,
+        autoPlayAudio: profile.autoPlayAudio ?? false,
+        backgroundFile: {
+          mimeType: pickedCoverAsset.mimeType,
+          name: pickedCoverAsset.fileName,
+          uri: pickedCoverAsset.uri,
+        },
+        displayName: profile.name,
+        tokenType: authSession.tokenType,
+      });
+
+      await reloadProfile();
+    } catch (error) {
+      Alert.alert("Không thể đổi ảnh bìa", getUpdateCoverErrorMessage(error));
+    } finally {
+      setIsChangingCover(false);
     }
   };
 
@@ -172,12 +247,18 @@ export default function ProfileMenuScreen() {
       },
     },
     {
-      label: t('profile.menu.changeAvatar'),
-      onPress: () => {},
+      isLoading: isChangingAvatar,
+      label: "Đổi ảnh đại diện",
+      onPress: () => {
+        void handleChangeAvatar();
+      },
     },
     {
-      label: t('profile.menu.changeCover'),
-      onPress: () => {},
+      isLoading: isChangingCover,
+      label: "Đổi ảnh bìa",
+      onPress: () => {
+        void handleChangeCover();
+      },
     },
     {
       label: t('profile.menu.updateBio'),

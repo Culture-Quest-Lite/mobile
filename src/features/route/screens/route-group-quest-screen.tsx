@@ -10,9 +10,10 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  Text as RNText,
   ScrollView,
-  Text,
   View,
+  type TextProps,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -35,9 +36,11 @@ import {
   type RouteDto,
 } from "@/features/route/api/route-api";
 import { routeSystemAlert } from "@/features/route/components/route-system-alert";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 const fallbackRouteImage =
   "https://i.pinimg.com/736x/f3/0f/e8/f30fe84218790e6ffd25f987d434eb13.jpg";
+const detailTextMaxFontSizeMultiplier = 1.05;
 
 const cardShadow = {
   shadowColor: "rgba(28, 45, 80, 0.10)",
@@ -52,6 +55,20 @@ type GroupQuestSuccessState = {
   groupName: string;
   routeName: string;
 };
+
+function Text({
+  maxFontSizeMultiplier = detailTextMaxFontSizeMultiplier,
+  style,
+  ...props
+}: TextProps) {
+  return (
+    <RNText
+      maxFontSizeMultiplier={maxFontSizeMultiplier}
+      style={[{ includeFontPadding: false }, style]}
+      {...props}
+    />
+  );
+}
 
 function readMeaningfulText(value: unknown) {
   if (typeof value !== "string") {
@@ -81,13 +98,29 @@ function getCommunityGroupDisplayName(group: CommunityGroupPayload) {
   return (
     readMeaningfulText(group.groupName) ??
     (readMeaningfulText(group.groupId)
-      ? `Group #${group.groupId}`
+      ? `Nhóm #${group.groupId}`
       : "Nhóm chưa đặt tên")
   );
 }
 
 function getCommunityGroupAccessLabel(requiredApproval: boolean | null) {
-  return requiredApproval === true ? "Cần duyệt" : "Công khai";
+  return requiredApproval === true ? "Cần duyệt" : "Tham gia tự do";
+}
+
+function getCommunityGroupAccessPalette(requiredApproval: boolean | null) {
+  if (requiredApproval === true) {
+    return {
+      backgroundColor: "#FFF4DE",
+      iconColor: "#E39B1A",
+      textColor: "#E39B1A",
+    };
+  }
+
+  return {
+    backgroundColor: "#EAF8ED",
+    iconColor: "#4CAF6A",
+    textColor: "#4CAF6A",
+  };
 }
 
 function getCommunityGroupMemberLabel(group: CommunityGroupPayload) {
@@ -241,11 +274,17 @@ function GroupQuestSuccessModal({
               </View>
             </View>
 
-            <Text className="mt-4 text-center text-[22px] font-semibold text-[#D95B8D]">
+            <Text
+              className="mt-4 text-center text-[22px] font-semibold text-[#D95B8D]"
+              style={{ lineHeight: lineHeightFor(22) }}
+            >
               Tham gia nhóm thành công
             </Text>
 
-            <Text className="mt-2 text-center text-[13px] leading-[18px] text-[#746D7C]">
+            <Text
+              className="mt-2 text-center text-[13px] text-[#746D7C]"
+              style={{ lineHeight: bodyLineHeightFor(13) }}
+            >
               Bạn đã tham gia vào nhóm{" "}
               <Text className="font-semibold text-[#D95B8D]">{groupName}</Text>
               {"\n"}trong lộ trình{" "}
@@ -267,8 +306,16 @@ function GroupQuestSuccessModal({
                 />
               </View>
               <View className="ml-3 min-w-0 flex-1">
-                <Text className="text-[11px] text-[#8E869A]">Lộ trình</Text>
-                <Text className="mt-0.5 text-[13px] font-semibold text-[#2B2233]">
+                <Text
+                  className="text-[11px] text-[#8E869A]"
+                  style={{ lineHeight: lineHeightFor(11) }}
+                >
+                  Lộ trình
+                </Text>
+                <Text
+                  className="mt-0.5 text-[13px] font-semibold text-[#2B2233]"
+                  style={{ lineHeight: lineHeightFor(13) }}
+                >
                   {routeName}
                 </Text>
               </View>
@@ -296,8 +343,16 @@ function GroupQuestSuccessModal({
                 />
               </View>
               <View className="ml-3 min-w-0 flex-1">
-                <Text className="text-[11px] text-[#8E869A]">Nhóm</Text>
-                <Text className="mt-0.5 text-[13px] font-semibold text-[#2B2233]">
+                <Text
+                  className="text-[11px] text-[#8E869A]"
+                  style={{ lineHeight: lineHeightFor(11) }}
+                >
+                  Nhóm
+                </Text>
+                <Text
+                  className="mt-0.5 text-[13px] font-semibold text-[#2B2233]"
+                  style={{ lineHeight: lineHeightFor(13) }}
+                >
                   {groupName}
                 </Text>
               </View>
@@ -317,7 +372,10 @@ function GroupQuestSuccessModal({
             className="mt-5 rounded-[16px] bg-[#D95B8D] py-3.5"
             onPress={onViewGroup}
           >
-            <Text className="text-center text-[15px] font-semibold text-white">
+            <Text
+              className="text-center text-[15px] font-semibold text-white"
+              style={{ lineHeight: lineHeightFor(15) }}
+            >
               Xem nhóm
             </Text>
           </Pressable>
@@ -326,7 +384,10 @@ function GroupQuestSuccessModal({
             className="mt-3 rounded-[16px] border border-[#F0DEE7] bg-white py-3.5"
             onPress={onClose}
           >
-            <Text className="text-center text-[15px] font-semibold text-[#D95B8D]">
+            <Text
+              className="text-center text-[15px] font-semibold text-[#D95B8D]"
+              style={{ lineHeight: lineHeightFor(15) }}
+            >
               Đóng
             </Text>
           </Pressable>
@@ -382,7 +443,7 @@ export default function RouteGroupQuestScreen() {
           setGroups([]);
           setRouteDetail(null);
           setSelectedGroupId(null);
-          setErrorMessage("Bạn cần đăng nhập để chọn group cho tuyến này.");
+          setErrorMessage("Bạn cần đăng nhập để chọn nhóm cho tuyến này.");
           setIsLoading(false);
           return;
         }
@@ -517,7 +578,7 @@ export default function RouteGroupQuestScreen() {
   const routeSecondaryMeta = getRouteSecondaryMeta(routeDetail);
   const selectedGroupSummary = selectedGroup
     ? `${getCommunityGroupMemberLabel(selectedGroup)} • ${getCommunityGroupAccessLabel(selectedGroup.requiredApproval)}`
-    : "Chọn group mà bạn đang làm leader";
+    : "Chọn nhóm bạn đang làm trưởng nhóm";
 
   async function handleStartGroupJourney() {
     const normalizedGroupId = readMeaningfulText(selectedGroupId);
@@ -556,7 +617,7 @@ export default function RouteGroupQuestScreen() {
         detailRouteKey,
         groupName: selectedGroup
           ? getCommunityGroupDisplayName(selectedGroup)
-          : `Group #${normalizedGroupId}`,
+          : `Nhóm #${normalizedGroupId}`,
         routeName: routeDisplayName,
       });
     } catch (error) {
@@ -592,7 +653,10 @@ export default function RouteGroupQuestScreen() {
           </Pressable>
 
           <View className="flex-1 items-center">
-            <Text className="pr-10 text-[15px] font-semibold text-[#2B2233]">
+            <Text
+              className="pr-10 text-[18px] font-semibold text-[#2B2233]"
+              style={{ lineHeight: lineHeightFor(18) }}
+            >
               Tham gia nhóm hành trình
             </Text>
           </View>
@@ -604,8 +668,11 @@ export default function RouteGroupQuestScreen() {
         contentContainerStyle={{ paddingBottom: 24, paddingHorizontal: 16 }}
         showsVerticalScrollIndicator={false}
       >
-        <Text className="mb-3 mt-2 text-[15px] font-semibold text-[#2B2233]">
-          1. Lộ trình
+        <Text
+          className="mb-3 mt-2 text-[17px] font-semibold text-[#2B2233]"
+          style={{ lineHeight: lineHeightFor(17) }}
+        >
+          Lộ trình tuyến đường
         </Text>
         <View
           className="rounded-[22px] border border-[#F0DEE7] bg-white p-3.5"
@@ -620,8 +687,9 @@ export default function RouteGroupQuestScreen() {
 
             <View className="min-w-0 flex-1">
               <Text
-                className="text-[15px] leading-[17px] text-[#2B2233]"
+                className="text-[17px] font-semibold text-[#2B2233]"
                 numberOfLines={2}
+                style={{ lineHeight: lineHeightFor(17) }}
               >
                 {routeDisplayName}
               </Text>
@@ -636,7 +704,10 @@ export default function RouteGroupQuestScreen() {
                   size={13}
                   tintColor="#8E869A"
                 />
-                <Text className="flex-1 text-[11px] leading-[12px] text-[#8E869A]">
+                <Text
+                  className="flex-1 text-[13px] text-[#8E869A]"
+                  style={{ lineHeight: lineHeightFor(13) }}
+                >
                   {routePrimaryMeta}
                 </Text>
               </View>
@@ -651,7 +722,10 @@ export default function RouteGroupQuestScreen() {
                   size={13}
                   tintColor="#8E869A"
                 />
-                <Text className="flex-1 text-[11px] leading-[12px] text-[#8E869A]">
+                <Text
+                  className="flex-1 text-[13px] text-[#8E869A]"
+                  style={{ lineHeight: lineHeightFor(13) }}
+                >
                   {routeSecondaryMeta}
                 </Text>
               </View>
@@ -659,8 +733,11 @@ export default function RouteGroupQuestScreen() {
           </View>
         </View>
 
-        <Text className="mb-3 mt-5 text-[15px] font-semibold text-[#2B2233]">
-          2. Nhóm
+        <Text
+          className="mb-3 mt-5 text-[17px] font-semibold text-[#2B2233]"
+          style={{ lineHeight: lineHeightFor(17) }}
+        >
+          Nhóm tham gia
         </Text>
         <Pressable
           className="flex-row items-center gap-3 rounded-[18px] border border-[#F0DEE7] bg-white px-4 py-4"
@@ -669,18 +746,20 @@ export default function RouteGroupQuestScreen() {
         >
           <View className="min-w-0 flex-1">
             <Text
-              className={`text-[14px] ${
+              className={`text-[16px] font-semibold ${
                 selectedGroup ? "text-[#2B2233]" : "text-[#8E869A]"
               }`}
               numberOfLines={1}
+              style={{ lineHeight: lineHeightFor(16) }}
             >
               {selectedGroup
                 ? getCommunityGroupDisplayName(selectedGroup)
                 : "Chọn nhóm hành trình"}
             </Text>
             <Text
-              className="mt-1 text-[11px] leading-[12px] text-[#8E869A]"
+              className="mt-1 text-[13px] text-[#8E869A]"
               numberOfLines={1}
+              style={{ lineHeight: lineHeightFor(13) }}
             >
               {selectedGroupSummary}
             </Text>
@@ -705,7 +784,10 @@ export default function RouteGroupQuestScreen() {
             style={cardShadow}
           >
             <ActivityIndicator color="#D95B8D" />
-            <Text className="mt-3 text-[12px] text-[#8E869A]">
+            <Text
+              className="mt-3 text-[13px] text-[#8E869A]"
+              style={{ lineHeight: lineHeightFor(13) }}
+            >
               Đang tải danh sách nhóm...
             </Text>
           </View>
@@ -714,10 +796,16 @@ export default function RouteGroupQuestScreen() {
             className="mt-4 rounded-[20px] border border-[#F0DEE7] bg-white px-4 py-4"
             style={cardShadow}
           >
-            <Text className="text-[14px] font-semibold text-[#2B2233]">
+            <Text
+              className="text-[15px] font-semibold text-[#2B2233]"
+              style={{ lineHeight: lineHeightFor(15) }}
+            >
               Không tải được danh sách nhóm
             </Text>
-            <Text className="mt-2 text-[12px] leading-[14px] text-[#8E869A]">
+            <Text
+              className="mt-2 text-[13px] text-[#8E869A]"
+              style={{ lineHeight: bodyLineHeightFor(13) }}
+            >
               {errorMessage}
             </Text>
           </View>
@@ -730,6 +818,9 @@ export default function RouteGroupQuestScreen() {
               const groupId = readMeaningfulText(group.groupId);
               const isSelected = groupId === selectedGroupId;
               const avatarIcon = getGroupAvatarIcon(group);
+              const accessPalette = getCommunityGroupAccessPalette(
+                group.requiredApproval,
+              );
 
               if (!groupId) {
                 return null;
@@ -756,18 +847,56 @@ export default function RouteGroupQuestScreen() {
 
                   <View className="min-w-0 flex-1">
                     <Text
-                      className="text-[14px] text-[#2B2233]"
+                      className="text-[15px] text-[#2B2233]"
                       numberOfLines={1}
+                      style={{ lineHeight: lineHeightFor(15) }}
                     >
                       {getCommunityGroupDisplayName(group)}
                     </Text>
-                    <Text
-                      className="mt-1 text-[12px] leading-[13px] text-[#8E869A]"
-                      numberOfLines={1}
-                    >
-                      {getCommunityGroupMemberLabel(group)} •{" "}
-                      {getCommunityGroupAccessLabel(group.requiredApproval)}
-                    </Text>
+                    <View className="mt-1 flex-row flex-wrap items-center gap-2">
+                      <View className="flex-row items-center py-[5px]">
+                        <SymbolView
+                          name={{
+                            ios: "person.2.fill",
+                            android: "groups",
+                            web: "groups",
+                          }}
+                          size={12}
+                          tintColor="#6F657A"
+                        />
+                        <Text
+                          className="ml-1 text-[12px] text-[#6F657A]"
+                          style={{ lineHeight: lineHeightFor(12) }}
+                        >
+                          {getCommunityGroupMemberLabel(group)}
+                        </Text>
+                      </View>
+                      <View
+                        className="flex-row items-center rounded-full px-2 py-[5px]"
+                        style={{
+                          backgroundColor: accessPalette.backgroundColor,
+                        }}
+                      >
+                        <SymbolView
+                          name={
+                            group.requiredApproval === true
+                              ? "lock.fill"
+                              : "link"
+                          }
+                          size={12}
+                          tintColor={accessPalette.iconColor}
+                        />
+                        <Text
+                          className="ml-1 text-[12px]"
+                          style={{
+                            color: accessPalette.textColor,
+                            lineHeight: lineHeightFor(12),
+                          }}
+                        >
+                          {getCommunityGroupAccessLabel(group.requiredApproval)}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
                   {isSelected ? (
                     <View className="items-center justify-center pl-2">
@@ -791,11 +920,17 @@ export default function RouteGroupQuestScreen() {
             className="mt-4 rounded-[20px] border border-[#F0DEE7] bg-white px-4 py-4"
             style={cardShadow}
           >
-            <Text className="text-[14px] font-semibold text-[#2B2233]">
+            <Text
+              className="text-[15px] font-semibold text-[#2B2233]"
+              style={{ lineHeight: lineHeightFor(15) }}
+            >
               Bạn chưa có nhóm nào làm leader
             </Text>
-            <Text className="mt-2 text-[12px] leading-[14px] text-[#8E869A]">
-              Tạo một group cộng đồng trước rồi quay lại màn này để chọn nhóm.
+            <Text
+              className="mt-2 text-[13px] text-[#8E869A]"
+              style={{ lineHeight: bodyLineHeightFor(13) }}
+            >
+              Tạo một nhóm cộng đồng trước rồi quay lại màn này để chọn nhóm.
             </Text>
 
             <Pressable
@@ -804,8 +939,11 @@ export default function RouteGroupQuestScreen() {
                 router.push("/community/group-create" as Href);
               }}
             >
-              <Text className="text-center text-[12px] font-semibold text-[#D95B8D]">
-                Tạo group mới
+              <Text
+                className="text-center text-[13px] font-semibold text-[#D95B8D]"
+                style={{ lineHeight: lineHeightFor(13) }}
+              >
+                Tạo nhóm mới
               </Text>
             </Pressable>
           </View>
@@ -825,7 +963,10 @@ export default function RouteGroupQuestScreen() {
               size={16}
               tintColor="#D95B8D"
             />
-            <Text className="text-[14px] font-semibold text-[#D95B8D]">
+            <Text
+              className="text-[15px] font-semibold text-[#D95B8D]"
+              style={{ lineHeight: lineHeightFor(15) }}
+            >
               Tóm tắt lựa chọn
             </Text>
           </View>
@@ -844,13 +985,19 @@ export default function RouteGroupQuestScreen() {
             </View>
 
             <View className="flex-1">
-              <Text className="text-[12px] text-[#8E869A]">
+              <Text
+                className="text-[13px] text-[#8E869A]"
+                style={{ lineHeight: lineHeightFor(13) }}
+              >
                 Lộ trình đã chọn
               </Text>
             </View>
 
             <View className="items-end">
-              <Text className="text-right text-[13px] text-[#2B2233]">
+              <Text
+                className="text-right text-[15px] text-[#2B2233]"
+                style={{ lineHeight: lineHeightFor(15) }}
+              >
                 {routeDisplayName}
               </Text>
             </View>
@@ -870,11 +1017,19 @@ export default function RouteGroupQuestScreen() {
             </View>
 
             <View className="flex-1">
-              <Text className="text-[12px] text-[#8E869A]">Nhóm đã chọn</Text>
+              <Text
+                className="text-[13px] text-[#8E869A]"
+                style={{ lineHeight: lineHeightFor(13) }}
+              >
+                Nhóm đã chọn
+              </Text>
             </View>
 
             <View className="items-end">
-              <Text className="text-right text-[13px] text-[#2B2233]">
+              <Text
+                className="text-right text-[15px] text-[#2B2233]"
+                style={{ lineHeight: lineHeightFor(15) }}
+              >
                 {selectedGroup
                   ? getCommunityGroupDisplayName(selectedGroup)
                   : "Chưa chọn nhóm"}
@@ -898,22 +1053,14 @@ export default function RouteGroupQuestScreen() {
           }}
         >
           <Text
-            className={`text-center text-[14px] font-semibold ${
+            className={`text-center text-[15px] font-semibold ${
               !selectedGroupId || isLoading || isSubmitting
                 ? "text-[#8E869A]"
                 : "text-white"
             }`}
+            style={{ lineHeight: lineHeightFor(15) }}
           >
             {isSubmitting ? "Đang bắt đầu khám phá..." : "Bắt đầu hành trình"}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          className="mt-3 rounded-[15px] border border-[#F0DEE7] bg-white py-3.5"
-          onPress={() => router.back()}
-        >
-          <Text className="text-center text-[14px] font-semibold text-[#D95B8D]">
-            Hủy
           </Text>
         </Pressable>
       </SafeAreaView>

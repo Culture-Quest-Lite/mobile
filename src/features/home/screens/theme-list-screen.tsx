@@ -8,7 +8,6 @@ import { Image } from "expo-image";
 import { type Href, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -19,8 +18,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
-import { getActiveTags } from "../api/get-tags";
 import { getTagById } from "../api/get-tag-by-id";
+import { getActiveTags } from "../api/get-tags";
 import {
   mapActiveTagsToThemeCategories,
   normalizeThemeLookupText,
@@ -58,7 +57,9 @@ const softShadowStyle = {
   elevation: 2,
 } as const;
 
-function buildThemeListItems(themeCards: ThemeCategoryCardModel[]): ThemeListItem[] {
+function buildThemeListItems(
+  themeCards: ThemeCategoryCardModel[],
+): ThemeListItem[] {
   return themeCards.map((item) => ({
     ...item,
     hotspotCount: null,
@@ -146,7 +147,11 @@ function ThemeListCard({
                   width: 54,
                 }}
               >
-                <SymbolView name={item.icon} size={24} tintColor={item.accent} />
+                <SymbolView
+                  name={item.icon}
+                  size={24}
+                  tintColor={item.accent}
+                />
               </View>
             )}
           </View>
@@ -216,7 +221,9 @@ export default function ThemeListScreen() {
           return;
         }
 
-        const baseItems = buildThemeListItems(mapActiveTagsToThemeCategories(tags));
+        const baseItems = buildThemeListItems(
+          mapActiveTagsToThemeCategories(tags),
+        );
 
         const detailResults = await Promise.allSettled(
           baseItems.map((item) =>
@@ -344,25 +351,23 @@ export default function ThemeListScreen() {
 
   const hasSearchQuery = searchQuery.trim().length > 0;
 
-  if (isLoading && themeItems.length === 0 && !loadError) {
-    return (
-      <AppLoadingScreen
-        edges={["left", "right", "bottom"]}
-        message="Đang tải danh sách chủ đề..."
-      />
-    );
+  if (isLoading && !loadError) {
+    return <AppLoadingScreen edges={["left", "right", "bottom"]} />;
   }
 
   return (
-    <SafeAreaView
-      className="flex-1"
-      edges={["left", "right", "bottom"]}
-    >
+    <SafeAreaView className="flex-1" edges={["left", "right", "bottom"]}>
       <View className="flex-1">
         <Image
           source={themeListBackgroundImage}
           contentFit="cover"
-          style={{ height: "100%", left: 0, position: "absolute", top: 0, width: "100%" }}
+          style={{
+            height: "100%",
+            left: 0,
+            position: "absolute",
+            top: 0,
+            width: "100%",
+          }}
         />
 
         <ScrollView
@@ -410,28 +415,23 @@ export default function ThemeListScreen() {
               <View className="h-11 w-11" />
             </View>
 
-            <View className="mt-0.5 items-center">
-              <Text
-                className="max-w-[250px] text-center text-[12px] font-normal leading-[12px] text-[#7E7482]"
-                numberOfLines={2}
-              >
-                Khám phá các chủ đề đa dạng về văn hóa, lịch sử và trải nghiệm
-              </Text>
-            </View>
-
             <View
               className="mt-4 flex-row items-center rounded-[18px] border border-[#F1DCE5] bg-[#FFF1F6] px-3.5"
               style={[softShadowStyle, { height: 48 }]}
             >
               <SymbolView
-                name={{ ios: "magnifyingglass", android: "search", web: "search" }}
+                name={{
+                  ios: "magnifyingglass",
+                  android: "search",
+                  web: "search",
+                }}
                 size={16}
                 tintColor="#9A91A1"
               />
               <TextInput
                 className="ml-2.5 flex-1 py-0 text-[14px] leading-[16px] text-[#2B2233]"
                 onChangeText={setSearchQuery}
-                placeholder="Tìm chủ đề hoặc tag"
+                placeholder="Nhập tên chủ đề để tìm kiếm"
                 placeholderTextColor="#A59BA8"
                 returnKeyType="search"
                 value={searchQuery}
@@ -439,7 +439,11 @@ export default function ThemeListScreen() {
               {hasSearchQuery ? (
                 <Pressable hitSlop={8} onPress={() => setSearchQuery("")}>
                   <SymbolView
-                    name={{ ios: "xmark.circle.fill", android: "close", web: "close" }}
+                    name={{
+                      ios: "xmark.circle.fill",
+                      android: "close",
+                      web: "close",
+                    }}
                     size={16}
                     tintColor="#B5AAB7"
                   />
@@ -448,10 +452,7 @@ export default function ThemeListScreen() {
             </View>
           </View>
 
-          <View
-            className="px-4 pt-4"
-            style={{ paddingHorizontal: gutter }}
-          >
+          <View className="px-4 pt-4" style={{ paddingHorizontal: gutter }}>
             <Text className="text-[16px] font-medium leading-[17px] text-[#2B2233]">
               Tất cả chủ đề ({themeItems.length})
             </Text>
@@ -461,18 +462,6 @@ export default function ThemeListScreen() {
             className="gap-3.5 px-4 pt-4"
             style={{ paddingHorizontal: gutter }}
           >
-            {isLoading ? (
-              <View
-                className="items-center rounded-[28px] border border-[#F2E7EC] bg-white/96 px-5 py-10"
-                style={softShadowStyle}
-              >
-                <ActivityIndicator color="#D95B8D" />
-                <Text className="mt-3 text-[12px] font-medium leading-[15px] text-[#7E7482]">
-                  Đang tải danh sách chủ đề...
-                </Text>
-              </View>
-            ) : null}
-
             {!isLoading && loadError ? (
               <Pressable onPress={() => void loadThemes()}>
                 <View

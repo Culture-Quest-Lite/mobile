@@ -1,3 +1,4 @@
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import {
@@ -13,13 +14,7 @@ import { textStyle } from "@/lib/text-scale";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type LeaderboardStatus = "error" | "loading" | "ready";
@@ -214,6 +209,10 @@ export default function CommunityLeaderboardScreen() {
     [entries, t],
   );
 
+  if (status === "loading" && entries.length === 0) {
+    return <AppLoadingScreen />;
+  }
+
   return (
     <SafeAreaView
       className="flex-1 bg-[#FCF7FA]"
@@ -250,14 +249,7 @@ export default function CommunityLeaderboardScreen() {
         <View className="h-10 w-10" />
       </View>
 
-      {status === "loading" && entries.length === 0 ? (
-        <View className="flex-1 items-center justify-center px-6">
-          <ActivityIndicator color="#FF5F87" />
-          <Text className="mt-3 text-center text-[13px] text-[#8F8290]">
-            {t("community.leaderboard.loading")}
-          </Text>
-        </View>
-      ) : status === "error" && entries.length === 0 ? (
+      {status === "error" && entries.length === 0 ? (
         <View className="flex-1 px-4 pt-6">
           <View
             className="rounded-[24px] border border-[#F6D8E5] bg-white px-5 py-6"

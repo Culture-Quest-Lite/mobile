@@ -150,7 +150,6 @@ const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
 const routeParticipantFallbackCover =
   "https://i.pinimg.com/1200x/80/69/f9/8069f9581583a196f9f39bda000b9312.jpg";
 const fallbackPostAuthorName = "Minh Anh";
-const fallbackPostTimestamp = "02/07/2026";
 /** Khớp `detailTextMaxFontSizeMultiplier` của community-screen để tên tác giả
  * phóng chữ cùng nhịp với bảng tin cộng đồng. */
 const postAuthorMaxFontSizeMultiplier = 1.05;
@@ -270,20 +269,74 @@ function parseApiTimestamp(value: string) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function getElapsedCalendarMonths(fromTime: number, toTime: number) {
+  const fromDate = new Date(fromTime);
+  const toDate = new Date(toTime);
+  let monthDelta =
+    (toDate.getFullYear() - fromDate.getFullYear()) * 12 +
+    (toDate.getMonth() - fromDate.getMonth());
+
+  if (toDate.getDate() < fromDate.getDate()) {
+    monthDelta -= 1;
+  }
+
+  return Math.max(monthDelta, 0);
+}
+
 function formatPostTimestamp(value: string | null) {
   const parsedDate = value ? parseApiTimestamp(value) : null;
 
   if (!parsedDate) {
-    return fallbackPostTimestamp;
+    return "Vừa xong";
   }
 
-  const dateText = new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(parsedDate);
+  const createdAtTime = parsedDate.getTime();
+  const currentTime = Date.now();
+  const elapsedMilliseconds = currentTime - createdAtTime;
 
-  return dateText;
+  if (elapsedMilliseconds <= 0) {
+    return "Vừa xong";
+  }
+
+  const minuteInMilliseconds = 60 * 1000;
+  const hourInMilliseconds = 60 * minuteInMilliseconds;
+  const dayInMilliseconds = 24 * hourInMilliseconds;
+
+  if (elapsedMilliseconds < minuteInMilliseconds) {
+    return "Vừa xong";
+  }
+
+  const formatElapsedValue = (elapsedValue: number, unit: string) =>
+    `${elapsedValue} ${unit}`;
+  const elapsedMinutes = Math.floor(elapsedMilliseconds / minuteInMilliseconds);
+
+  if (elapsedMinutes < 60) {
+    return formatElapsedValue(elapsedMinutes, "phút");
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+
+  if (elapsedHours < 24) {
+    return formatElapsedValue(elapsedHours, "giờ");
+  }
+
+  const elapsedDays = Math.floor(elapsedMilliseconds / dayInMilliseconds);
+
+  if (elapsedDays < 7) {
+    return formatElapsedValue(elapsedDays, "ngày");
+  }
+
+  if (elapsedDays <= 30) {
+    return formatElapsedValue(Math.floor(elapsedDays / 7), "tuần");
+  }
+
+  const elapsedMonths = getElapsedCalendarMonths(createdAtTime, currentTime);
+
+  if (elapsedMonths < 12) {
+    return formatElapsedValue(Math.max(elapsedMonths, 1), "tháng");
+  }
+
+  return formatElapsedValue(Math.floor(elapsedMonths / 12), "năm");
 }
 
 function formatRouteParticipantDate(value: string | null) {
@@ -1141,7 +1194,7 @@ export default function ProfileScreen() {
   const postSectionTitle =
     tab === "pending-posts"
       ? "Bài viết riêng tư & chờ duyệt"
-      : "Bài viết đã duyệt";
+      : "Bài viết của bạn";
 
   return (
     <SafeAreaView className="flex-1 bg-[#F7F8FC]" edges={["left", "right"]}>
@@ -1240,10 +1293,10 @@ export default function ProfileScreen() {
               size={avatarSize}
             />
 
-            <View className="min-w-0 flex-1 pt-4">
+            <View className="min-w-0 flex-1 pt-6">
               <View className="mt-0 flex-row items-center">
                 <Text
-                  className="text-[17px] font-semibold leading-tight text-[#2B2233]"
+                  className="text-[18px] font-semibold leading-tight text-[#2B2233]"
                   numberOfLines={1}
                 >
                   {resolvedDisplayName}
@@ -1713,11 +1766,11 @@ function AccountAvatar({
           end={{ x: 1, y: 1 }}
           style={{
             position: "absolute",
-            bottom: -4,
-            right: -4,
-            width: 48,
-            height: 48,
-            borderRadius: 24,
+            bottom: -3,
+            right: -3,
+            width: 44,
+            height: 44,
+            borderRadius: 22,
             alignItems: "center",
             justifyContent: "center",
             borderWidth: 3,
@@ -1727,7 +1780,7 @@ function AccountAvatar({
         >
           <Text
             className="font-extrabold text-white"
-            style={{ fontSize: badgeLabel.length > 2 ? 13 : 21 }}
+            style={{ fontSize: badgeLabel.length > 2 ? 12 : 18 }}
           >
             {badgeLabel}
           </Text>
@@ -2075,7 +2128,7 @@ function PostRouteCard({
             className="text-[13px] font-semibold text-[#F2608E]"
             style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
           >
-            Route
+            Tuyến đường
           </Text>
           <Text
             className="text-[15px] font-medium text-[#4B414C]"
@@ -2143,7 +2196,7 @@ function PostHotspotCard({
             className="text-[13px] font-semibold text-[#18A7B4]"
             style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
           >
-            {`${count} hotspot`}
+            {`${count} địa điểm`}
           </Text>
           <Text
             className="text-[15px] text-[#6D6671]"

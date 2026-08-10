@@ -1,13 +1,25 @@
+import { File as ExpoFile } from "expo-file-system";
 import { Platform } from "react-native";
 
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 
 import type { Profile } from "../types";
 
+export type ProfileImageFile = {
+  mimeType?: string | null;
+  name?: string | null;
+  uri: string;
+};
+
+type ProfileImageFilePart = {
+  file: ExpoFile;
+  name: string;
+};
+
 type UpdateMyProfileRequest = {
   accessToken: string;
-  avatarUrl: string | null;
-  backgroundUrl: string | null;
+  avatarFile?: ProfileImageFile | null;
+  backgroundFile?: ProfileImageFile | null;
   displayName: string;
   autoPlayAudio: boolean;
   tokenType?: string | null;
@@ -39,6 +51,70 @@ function resolveUpdateMeUrl() {
   }
 
   return "http://13.158.40.56:8080/api/users/me";
+}
+
+const imageMimeTypeByExtension: Record<string, string> = {
+  gif: "image/gif",
+  heic: "image/heic",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
+
+function readMeaningfulText(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+  return trimmedValue ? trimmedValue : null;
+}
+
+// Expo SDK 56 ho tro multipart voi expo-file-system File. ImagePicker tren Android
+// co the tra ve file:// hoac content://, nen dung File se on dinh hon object RN cu.
+function buildProfileImageFilePart(
+  file: ProfileImageFile | null | undefined,
+  fallbackName: string,
+): ProfileImageFilePart | null {
+  const uri = readMeaningfulText(file?.uri);
+
+  if (!uri) {
+    return null;
+  }
+
+  const extension =
+    uri.split("?")[0].split("#")[0].split(".").pop()?.toLowerCase() ?? "";
+  const name =
+    readMeaningfulText(file?.name) ??
+    `${fallbackName}.${extension in imageMimeTypeByExtension ? extension : "jpg"}`;
+  const type =
+    readMeaningfulText(file?.mimeType) ??
+    imageMimeTypeByExtension[extension] ??
+    "image/jpeg";
+
+  const uploadFile = new ExpoFile(uri);
+  const normalizedName = name.includes(".")
+    ? name
+    : `${name}.${type.split("/")[1] ?? "jpg"}`;
+
+  return {
+    file: uploadFile,
+    name: normalizedName,
+  };
+}
+
+function appendProfileImageField(
+  formData: FormData,
+  fieldName: string,
+  filePart: ProfileImageFilePart | null,
+) {
+  if (!filePart) {
+    formData.append(fieldName, "");
+    return;
+  }
+
+  formData.append(fieldName, filePart.file, filePart.name);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -137,7 +213,18 @@ function getErrorMessage(body: unknown, status: number) {
   return `Không thể cập nhật hồ sơ (${status}).`;
 }
 
-function getConnectionErrorMessage(url: string) {
+function isExpoFormDataFileError(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message.includes("Unsupported FormDataPart implementation")
+  );
+}
+
+function getConnectionErrorMessage(url: string, error: unknown) {
+  if (isExpoFormDataFileError(error)) {
+    return "Ảnh đang được gửi sai định dạng multipart. Vui lòng cập nhật app rồi thử lại.";
+  }
+
   if (Platform.OS === "android" && url.startsWith("http://")) {
     return "Android đang chặn kết nối HTTP tới API. Hãy dùng HTTPS hoặc rebuild Android dev client sau khi bật cleartext traffic.";
   }
@@ -196,27 +283,39 @@ function mapGetMeResponseToProfile(response: GetMeResponse): Profile {
 
 export async function updateMyProfile({
   accessToken,
-  avatarUrl,
-  backgroundUrl,
+  avatarFile,
+  backgroundFile,
   displayName,
   autoPlayAudio,
   tokenType,
 }: UpdateMyProfileRequest): Promise<Profile | null> {
   const updateMeUrl = resolveUpdateMeUrl();
+  const formData = new FormData();
+
+  formData.append("displayName", displayName);
+  formData.append("autoPlayAudio", `${autoPlayAudio}`);
+
+  // BE luon mong doi 2 part avatarFile/backgroundFile ton tai trong multipart
+  // body (giong hanh vi mac dinh "Send empty value" cua Swagger) - neu thieu
+  // part, BE se NPE khi doc MultipartFile null va tra ve 500 INTERNAL_ERROR.
+  const avatarFilePart = buildProfileImageFilePart(avatarFile, "avatar");
+  appendProfileImageField(formData, "avatarFile", avatarFilePart);
+
+  const backgroundFilePart = buildProfileImageFilePart(
+    backgroundFile,
+    "background",
+  );
+  appendProfileImageField(formData, "backgroundFile", backgroundFilePart);
+
   let response: Response;
 
   try {
     response = await fetch(updateMeUrl, {
-      body: JSON.stringify({
-        avatarUrl,
-        backgroundUrl,
-        autoPlayAudio,
-        displayName,
-      }),
+      body: formData,
+      // Khong tu set Content-Type: de fetch tu sinh boundary cho multipart.
       headers: {
         Accept: "application/json",
         Authorization: `${tokenType ?? "Bearer"} ${accessToken}`,
-        "Content-Type": "application/json",
         "X-Client-Type": "mobile",
       },
       method: "PUT",
@@ -227,7 +326,7 @@ export async function updateMyProfile({
       platform: Platform.OS,
       url: updateMeUrl,
     });
-    throw new Error(getConnectionErrorMessage(updateMeUrl));
+    throw new Error(getConnectionErrorMessage(updateMeUrl, error));
   }
 
   const responseBody = await parseResponseBody(response);
