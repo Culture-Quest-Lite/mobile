@@ -231,18 +231,18 @@ function GroupInfoRow({
           style={{ backgroundColor: badgeTone.background }}
         >
           <Text
-            className="text-right text-[12.5px] font-semibold"
-            style={{ color: badgeTone.text, lineHeight: lineHeightFor(12.5) }}
+            className="text-right text-[13px] font-semibold"
+            style={{ color: badgeTone.text, lineHeight: bodyLineHeightFor(13) }}
           >
             {value}
           </Text>
         </View>
       ) : (
         <Text
-          className="ml-3 text-right text-[12.5px] font-semibold"
+          className="ml-3 text-right text-[13px] font-semibold"
           style={{
             color: palette.primaryText,
-            lineHeight: lineHeightFor(12.5),
+            lineHeight: bodyLineHeightFor(13),
           }}
         >
           {value}
@@ -275,8 +275,8 @@ function GroupInviteSection({
     >
       <View className="flex-row items-center justify-between gap-3">
         <Text
-          className="flex-1 text-[15px] font-extrabold"
-          style={{ color: palette.primaryText, lineHeight: lineHeightFor(15) }}
+          className="flex-1 text-[14px] font-extrabold"
+          style={{ color: palette.primaryText, lineHeight: lineHeightFor(14) }}
         >
           Mời thành viên tham gia
         </Text>
@@ -327,9 +327,9 @@ function GroupInviteSection({
 
         <View className="flex-1">
           <Text
-            className="text-[12px]"
+            className="text-[13px]"
             selectable
-            style={{ color: "#4B5563", lineHeight: bodyLineHeightFor(12) }}
+            style={{ color: "#4B5563", lineHeight: bodyLineHeightFor(13) }}
           >
             {link}
           </Text>
@@ -1034,11 +1034,11 @@ export default function CommunityGroupDetailScreen() {
           >
             <View className="flex-row items-center gap-2">
               <Text
-                className="flex-1 text-[17px] font-extrabold"
+                className="flex-1 text-[18px] font-semibold"
                 numberOfLines={2}
                 style={{
                   color: palette.primaryText,
-                  lineHeight: lineHeightFor(17),
+                  lineHeight: lineHeightFor(18),
                 }}
               >
                 {displayGroup.groupName ?? "Nhóm cộng đồng"}
@@ -1077,10 +1077,7 @@ export default function CommunityGroupDetailScreen() {
             >
               <Text
                 className="text-[12px]"
-                style={{
-                  color: palette.warmText,
-                  lineHeight: bodyLineHeightFor(12),
-                }}
+                style={{ color: palette.warmText, lineHeight: bodyLineHeightFor(12) }}
               >
                 {errorMessage}
               </Text>

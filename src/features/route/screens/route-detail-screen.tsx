@@ -1,6 +1,5 @@
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { SymbolView } from "@/components/ui/symbol-view";
-import { ScreenHorizontalPadding } from "@/constants/theme";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -16,9 +15,10 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Text,
+  Text as RNText,
   useWindowDimensions,
   View,
+  type TextProps,
 } from "react-native";
 
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -67,9 +67,15 @@ import {
   unSaveRoute,
   type UserRouteProgressDto,
 } from "@/features/route/api/route-api";
+import { useScreenLayout } from "@/hooks/use-screen-layout";
 import { openGoogleMapsMultiStopRoute } from "@/lib/google-maps-navigation";
 import { getHotspotDetailHref } from "@/lib/hotspot-navigation";
-import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
+import {
+  bodyLineHeightFor,
+  bodyTextStyle,
+  lineHeightFor,
+  textStyle,
+} from "@/lib/text-scale";
 
 const fallbackStopImage =
   "https://i.pinimg.com/736x/f3/0f/e8/f30fe84218790e6ffd25f987d434eb13.jpg";
@@ -95,6 +101,7 @@ const reviewMediaBorderRadius = 10;
 const singleMediaAspectRatio = 16 / 9;
 const twoMediaAspectRatio = 6 / 5;
 const gridMediaAspectRatio = 16 / 9;
+const detailTextMaxFontSizeMultiplier = 1.05;
 
 type RouteReview = {
   id: string;
@@ -111,6 +118,40 @@ type RouteReview = {
   photos: string[];
   helpful: number;
 };
+
+function Text({
+  maxFontSizeMultiplier = detailTextMaxFontSizeMultiplier,
+  style,
+  ...props
+}: TextProps) {
+  return (
+    <RNText
+      maxFontSizeMultiplier={maxFontSizeMultiplier}
+      style={[{ includeFontPadding: false }, style]}
+      {...props}
+    />
+  );
+}
+
+const sectionEyebrowTextStyle = (fontSize: number) => ({
+  color: "#7A6F67",
+  lineHeight: lineHeightFor(fontSize),
+});
+
+const sectionTitleTextStyle = (fontSize: number) => ({
+  color: "#2B2233",
+  lineHeight: lineHeightFor(fontSize),
+});
+
+const sectionBodyTextStyle = (fontSize: number) => ({
+  color: "#6F657A",
+  lineHeight: bodyLineHeightFor(fontSize),
+});
+
+const sectionBodyEmphasisTextStyle = (fontSize: number) => ({
+  color: "#554751",
+  lineHeight: bodyLineHeightFor(fontSize),
+});
 
 function getCoordinate(stop: RouteHotspotDto) {
   if (typeof stop.latitude !== "number" || typeof stop.longitude !== "number")
@@ -350,7 +391,10 @@ function RouteJoinedCard() {
             tintColor="#fff"
           />
         </View>
-        <Text className="flex-1 text-[14px] font-medium text-[#027A48]">
+        <Text
+          className="flex-1 text-[14px] font-medium text-[#027A48]"
+          style={textStyle(14)}
+        >
           Tuyến đường đã tham gia
         </Text>
       </View>
@@ -376,7 +420,7 @@ function RouteMapHero({
         )
         .map((stop) => ({
           id: stop.hotspotId,
-          title: stop.hotspotName || `Hotspot #${stop.hotspotId}`,
+          title: stop.hotspotName || `Địa điểm #${stop.hotspotId}`,
           description: checkedInIds.includes(String(stop.hotspotId))
             ? "Đã check-in"
             : stop.address,
@@ -467,47 +511,25 @@ function Stat({
 }) {
   return (
     <View
-      className={`flex-1 rounded-2xl p-2 ${highlight ? "bg-[#FFF2E8]" : "bg-[#F8EEF4]"}`}
+      className={`min-w-0 flex-1 rounded-2xl px-2.5 py-2.5 ${highlight ? "bg-[#FFF2E8]" : "bg-[#F8EEF4]"}`}
     >
-      {icon ? <View className="mb-0.5 items-center">{icon}</View> : null}
+      {icon ? <View className="mb-1 items-center">{icon}</View> : null}
       <Text
-        className={`text-center text-[12px] font-bold leading-tight ${highlight ? "text-[#B86D2A]" : "text-[#2B2233]"}`}
+        className={`text-center text-[13px] font-bold leading-tight ${highlight ? "text-[#B86D2A]" : "text-[#2B2233]"}`}
+        minimumFontScale={0.82}
+        numberOfLines={1}
+        style={textStyle(13)}
       >
         {label}
       </Text>
       <Text
-        className={`text-center text-[9px] ${highlight ? "text-[#B86D2A]/80" : "text-[#8E869A]"}`}
+        className={`mt-0.5 text-center text-[10px] ${highlight ? "text-[#B86D2A]/80" : "text-[#8E869A]"}`}
+        minimumFontScale={0.9}
+        numberOfLines={1}
+        style={textStyle(10)}
       >
         {hint}
       </Text>
-    </View>
-  );
-}
-
-function Stars({
-  activeColor = "#EB489B",
-  inactiveColor = "#D4C8DE",
-  rating,
-  size = 11,
-}: {
-  activeColor?: string;
-  inactiveColor?: string;
-  rating: number;
-  size?: number;
-}) {
-  return (
-    <View className="flex-row gap-0.5">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Text
-          key={i}
-          style={{
-            fontSize: size,
-            color: i < rating ? activeColor : inactiveColor,
-          }}
-        >
-          ★
-        </Text>
-      ))}
     </View>
   );
 }
@@ -613,10 +635,19 @@ function RouteReviewMediaGallery({
         width,
       }}
     >
-      <Image source={photo} contentFit="cover" style={{ height: "100%", width: "100%" }} />
+      <Image
+        source={photo}
+        contentFit="cover"
+        style={{ height: "100%", width: "100%" }}
+      />
       {overlayLabel ? (
         <View className="absolute inset-0 items-center justify-center bg-black/35">
-          <Text className="text-[22px] font-bold text-white">{overlayLabel}</Text>
+          <Text
+            className="text-[22px] font-bold text-white"
+            style={textStyle(22)}
+          >
+            {overlayLabel}
+          </Text>
         </View>
       ) : null}
     </View>
@@ -776,34 +807,25 @@ function RouteReviewCard({
   };
 
   return (
-    <View className={`py-2 ${showDivider ? "border-b border-[#F0DEE7]" : ""}`}>
-      <View className="flex-row items-start">
+    <View className="px-0.5 py-3">
+      <View className="flex-row items-center">
         <Image
           source={review.avatar}
           contentFit="cover"
-          style={{ width: 36, height: 36, borderRadius: 18 }}
+          style={{ width: 40, height: 40, borderRadius: 20 }}
         />
-        <View className="ml-2 flex-1">
-          <View className="flex-row items-center gap-1.5">
-            <Text
-              className="text-[13px] font-semibold text-[#2B2233]"
-              numberOfLines={1}
-              style={{ lineHeight: lineHeightFor(13) }}
-            >
-              {review.user}
-            </Text>
-            {review.levelLabel ? (
-              <View className="rounded-full bg-[#FFF0F6] px-1.5 py-0.5">
-                <Text className="text-[10px] font-semibold text-[#EB489B]">
-                  {review.levelLabel}
-                </Text>
-              </View>
-            ) : null}
-          </View>
+        <View className="ml-2.5 flex-1 justify-center">
           <Text
-            className="text-[11px] text-[#8A7B83]"
+            className="text-[16px] font-semibold text-[#2B2233]"
             numberOfLines={1}
-            style={{ lineHeight: lineHeightFor(11), marginTop: 0 }}
+            style={{ lineHeight: lineHeightFor(16) }}
+          >
+            {review.user}
+          </Text>
+          <Text
+            className="text-[14px] text-[#8A7B83]"
+            numberOfLines={1}
+            style={{ lineHeight: lineHeightFor(14), marginTop: -2 }}
           >
             {review.visitedOn}
           </Text>
@@ -813,7 +835,7 @@ function RouteReviewCard({
             accessibilityLabel="Mở tùy chọn bài đánh giá"
             accessibilityRole="button"
             accessibilityState={{ disabled: isReviewActionPending }}
-            className="ml-1 h-8 w-8 items-center justify-center rounded-full"
+            className="ml-1 h-9 w-9 items-center justify-center rounded-full"
             disabled={isReviewActionPending}
             hitSlop={8}
             onPress={handleOpenReviewMenu}
@@ -880,7 +902,10 @@ function RouteReviewCard({
                       size={19}
                       tintColor="#2B2233"
                     />
-                    <Text className="ml-3 flex-1 text-[15px] font-normal text-[#2B2233]">
+                    <Text
+                      className="ml-3 flex-1 text-[15px] font-normal text-[#2B2233]"
+                      style={textStyle(15)}
+                    >
                       Chỉnh sửa bài đánh giá
                     </Text>
                   </Pressable>
@@ -905,7 +930,10 @@ function RouteReviewCard({
                       size={19}
                       tintColor="#C24157"
                     />
-                    <Text className="ml-3 flex-1 text-[15px] font-normal text-[#C24157]">
+                    <Text
+                      className="ml-3 flex-1 text-[15px] font-normal text-[#C24157]"
+                      style={textStyle(15)}
+                    >
                       Xóa bài đánh giá
                     </Text>
                   </Pressable>
@@ -928,7 +956,10 @@ function RouteReviewCard({
                     size={19}
                     tintColor="#2B2233"
                   />
-                  <Text className="ml-3 flex-1 text-[15px] font-semibold text-[#2B2233]">
+                  <Text
+                    className="ml-3 flex-1 text-[15px] font-semibold text-[#2B2233]"
+                    style={textStyle(15)}
+                  >
                     Báo cáo đánh giá vi phạm
                   </Text>
                 </Pressable>
@@ -938,18 +969,13 @@ function RouteReviewCard({
         </View>
       </Modal>
 
-      <View className="mt-0.5">
-        <Stars
-          activeColor="#F5A524"
-          inactiveColor="#E6D9C4"
-          rating={review.rating}
-          size={11}
-        />
+      <View className="mt-1 flex-row items-center">
+        <RouteRatingStars rating={review.rating} size={13} />
       </View>
 
       <Text
-        className="mt-0.5 text-[13px] text-[#3D3446]"
-        style={{ lineHeight: bodyLineHeightFor(13) }}
+        className="mt-1.5 text-[16px] text-[#554751]"
+        style={sectionBodyEmphasisTextStyle(16)}
       >
         {review.text}
       </Text>
@@ -989,16 +1015,18 @@ function RouteReviewCard({
             tintColor={review.isLiked ? "#F43F5E" : "#2B2233"}
           />
           <Text
-            className="text-[13px] font-semibold"
+            className="text-[14px] font-semibold"
             style={{
               color: review.isLiked ? "#F43F5E" : "#2B2233",
-              lineHeight: lineHeightFor(13),
+              lineHeight: lineHeightFor(14),
             }}
           >
             {review.helpful}
           </Text>
         </Pressable>
       </View>
+
+      {showDivider ? <View className="mt-3 h-px bg-[#F0DEE7]" /> : null}
     </View>
   );
 }
@@ -1009,6 +1037,7 @@ export default function RouteDetailScreen() {
   const session = useAuthSession();
   const insets = useSafeAreaInsets();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+  const { gutter } = useScreenLayout({ maxContentWidth: 640 });
   const [route, setRoute] = useState<RouteDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1336,11 +1365,16 @@ export default function RouteDetailScreen() {
   if (!route) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-white">
-        <Text className="text-[17px] text-[#8E869A]">
+        <Text className="text-[17px] text-[#8E869A]" style={bodyTextStyle(17)}>
           {error ?? "Tuyến không tồn tại"}
         </Text>
         <Pressable onPress={() => router.back()} className="mt-4">
-          <Text className="text-[15px] font-bold text-[#EB489B]">Quay lại</Text>
+          <Text
+            className="text-[15px] font-bold text-[#EB489B]"
+            style={textStyle(15)}
+          >
+            Quay lại
+          </Text>
         </Pressable>
       </SafeAreaView>
     );
@@ -1643,7 +1677,10 @@ export default function RouteDetailScreen() {
             className="absolute inset-x-0 top-0"
             pointerEvents="box-none"
           >
-            <View className="flex-row items-center justify-between px-3 pt-2">
+            <View
+              className="flex-row items-center justify-between pt-2"
+              style={{ paddingHorizontal: gutter }}
+            >
               <Pressable
                 onPress={() => router.back()}
                 className="h-10 w-10 items-center justify-center rounded-full bg-black/30"
@@ -1658,11 +1695,6 @@ export default function RouteDetailScreen() {
                   tintColor="#fff"
                 />
               </Pressable>
-              <View className="rounded-full bg-black/30 px-3 py-2">
-                <Text className="text-[11px] font-bold text-white">
-                  {route.status}
-                </Text>
-              </View>
             </View>
           </SafeAreaView>
         </View>
@@ -1670,19 +1702,17 @@ export default function RouteDetailScreen() {
         <View
           className="relative rounded-t-[30px] bg-[#FCF6F8]"
           style={{
+            alignSelf: "center",
             marginTop: -24,
+            maxWidth: 672,
             minHeight: screenHeight,
-            paddingHorizontal: ScreenHorizontalPadding,
+            paddingHorizontal: gutter,
+            width: "100%",
             zIndex: 2,
           }}
         >
-          <View className="items-center pb-2 pt-1">
+          <View className="items-center pt-1">
             <View className="h-1.5 w-12 rounded-full bg-[#D9DCE5]" />
-            <Text className="mt-1 text-[10px] text-[#8E869A]">
-              {mapHeight > collapsedMapHeight
-                ? "Bản đồ đang được mở rộng"
-                : "Kéo xuống để mở rộng bản đồ"}
-            </Text>
           </View>
 
           <View className="pt-5">
@@ -1694,17 +1724,21 @@ export default function RouteDetailScreen() {
                   web: "auto_awesome",
                 }}
                 size={13}
-                tintColor="#EB489B"
+                tintColor="#7A6F67"
               />
               <Text
-                className="flex-1 text-[13px] font-semibold uppercase tracking-[1px] text-[#D95B8D]"
+                className="flex-1 text-[14px] font-black uppercase tracking-[1.4px]"
                 numberOfLines={1}
                 minimumFontScale={0.85}
+                style={sectionEyebrowTextStyle(14)}
               >
-                Tuyến chủ đề · {routeTheme}
+                {`Tuyến chủ đề - ${routeTheme}`}
               </Text>
             </View>
-            <Text className="text-[18px] font-semibold leading-[21px] text-[#2B2233]">
+            <Text
+              className="text-[22px] font-semibold text-[#2B2233]"
+              style={sectionTitleTextStyle(22)}
+            >
               {route.routeName}
             </Text>
 
@@ -1735,7 +1769,7 @@ export default function RouteDetailScreen() {
                       android: "directions_walk",
                       web: "directions_walk",
                     }}
-                    size={14}
+                    size={15}
                     tintColor="#8E869A"
                   />
                 }
@@ -1750,7 +1784,7 @@ export default function RouteDetailScreen() {
                       android: "schedule",
                       web: "schedule",
                     }}
-                    size={14}
+                    size={15}
                     tintColor="#8E869A"
                   />
                 }
@@ -1765,7 +1799,7 @@ export default function RouteDetailScreen() {
                       android: "terrain",
                       web: "terrain",
                     }}
-                    size={14}
+                    size={15}
                     tintColor="#8E869A"
                   />
                 }
@@ -1780,7 +1814,7 @@ export default function RouteDetailScreen() {
                       android: "emoji_events",
                       web: "emoji_events",
                     }}
-                    size={14}
+                    size={15}
                     tintColor="#8E869A"
                   />
                 }
@@ -1800,11 +1834,11 @@ export default function RouteDetailScreen() {
                 }
                 trackColor={isRouteCompleted ? "#D1FADF" : "#ECEEF4"}
               />
-              <Text className="text-[12px] font-bold text-[#2B2233]">
+              <Text className="text-[12px] font-bold text-[#2B2233]" style={textStyle(12)}>
                 {completed}/{totalStops}
               </Text>
             </View>
-            <Text className="text-[12px] leading-[13px] text-[#8E869A]">
+            <Text className="text-[12px] text-[#8E869A]" style={bodyTextStyle(12)}>
               Tiến độ {Math.round(progress)}% · check-in theo bất kỳ thứ tự nào
             </Text>
             {isRouteCompleted ? <RouteJoinedCard /> : null}
@@ -1829,13 +1863,19 @@ export default function RouteDetailScreen() {
                       size={12}
                       tintColor="#B94A77"
                     />
-                    <Text className="text-[12px] font-extrabold uppercase tracking-wider text-[#8A5570]">
+                    <Text
+                      className="text-[12px] font-extrabold uppercase tracking-wider text-[#8A5570]"
+                      style={textStyle(12)}
+                    >
                       Đi cùng nhau
                     </Text>
                   </View>
                 </View>
 
-                <Text className="pt-1 text-[14px] leading-[15px] text-[#6F6671]">
+                <Text
+                  className="pt-1 text-[15px]"
+                  style={sectionBodyTextStyle(15)}
+                >
                   Chọn một nhóm bạn đã tạo trước đó để gắn với tuyến. Liên kết
                   sẽ được lưu sau khi bạn xác nhận.
                 </Text>
@@ -1858,7 +1898,10 @@ export default function RouteDetailScreen() {
                       size={15}
                       tintColor="#FFFFFF"
                     />
-                    <Text className="text-center text-[14px] font-bold text-white">
+                    <Text
+                      className="text-center text-[14px] font-bold text-white"
+                      style={textStyle(14)}
+                    >
                       Chọn nhóm để tham gia tuyến
                     </Text>
                   </View>
@@ -1905,7 +1948,10 @@ export default function RouteDetailScreen() {
                   size={14}
                   tintColor="#1677C8"
                 />
-                <Text className="text-[12px] font-bold text-[#1677C8]">
+                <Text
+                  className="text-[12px] font-bold text-[#1677C8]"
+                  style={textStyle(12)}
+                >
                   Mở Google Maps
                 </Text>
               </Pressable>
@@ -1938,7 +1984,10 @@ export default function RouteDetailScreen() {
                           tintColor="#fff"
                         />
                       ) : (
-                        <Text className="text-[11px] font-bold text-white">
+                        <Text
+                          className="text-[13px] font-normal text-white"
+                          style={textStyle(13)}
+                        >
                           {index + 1}
                         </Text>
                       )}
@@ -1950,26 +1999,34 @@ export default function RouteDetailScreen() {
                     />
                     <View className="min-w-0 flex-1">
                       <Text
-                        className="text-[14px] font-semibold text-[#2B2233]"
+                        className="text-[16px] font-normal text-[#2B2233]"
                         numberOfLines={1}
+                        style={{ lineHeight: lineHeightFor(16) }}
                       >
                         {stop.hotspotName || `Điểm #${stop.hotspotId}`}
                       </Text>
                       <Text
-                        className="text-[12px] text-[#8E869A]"
+                        className="text-[14px]"
                         numberOfLines={1}
+                        style={sectionEyebrowTextStyle(14)}
                       >
                         {stop.address}
                       </Text>
                       <View className="mt-1.5 flex-row items-center gap-2">
-                        <View className="rounded-full bg-[#F8EEF4] px-2 py-0.5">
-                          <Text className="text-[12px] text-[#2B2233]">
+                        <View className="rounded-full bg-[#F4EFF8] px-2 py-[5px]">
+                          <Text
+                            className="text-[12px] font-normal text-[#6F657A]"
+                            style={textStyle(12)}
+                          >
                             {formatDistance(
                               getDistanceKm(stop, orderedStops[index + 1]),
                             )}
                           </Text>
                         </View>
-                        <Text className="ml-auto text-[12px] font-bold text-[#D95B8D]">
+                        <Text
+                          className="ml-auto text-[12px] font-normal text-[#D97706]"
+                          style={textStyle(12)}
+                        >
                           +{stop.xp} XP
                         </Text>
                       </View>
@@ -1994,15 +2051,24 @@ export default function RouteDetailScreen() {
                 />
               </View>
               <View>
-                <Text className="text-[12px] font-bold uppercase tracking-wider text-[#D97A55]">
+                <Text
+                  className="text-[12px] font-bold uppercase tracking-wider text-[#D97A55]"
+                  style={textStyle(12)}
+                >
                   AI Gợi ý
                 </Text>
-                <Text className="text-[16px] font-semibold leading-[17px] text-[#2B2233]">
+                <Text
+                  className="text-[16px] font-semibold text-[#2B2233]"
+                  style={sectionTitleTextStyle(16)}
+                >
                   Tuyến này hợp với bạn 94%
                 </Text>
               </View>
             </View>
-            <Text className="mt-1 text-[14px] leading-[15px] text-[#3D3446]/80">
+            <Text
+              className="mt-1 text-[15px]"
+              style={sectionBodyTextStyle(15)}
+            >
               Dựa trên 7 tuyến bạn đã hoàn thành, bạn yêu kiến trúc Pháp thuộc.
               Tuyến này có 3/4 điểm khớp sở thích — và thời tiết sáng mai lý
               tưởng để đi bộ ☀️ 26°C.
@@ -2011,7 +2077,7 @@ export default function RouteDetailScreen() {
 
           <View className="mt-3.5 h-px bg-[#F0DEE7]" />
 
-          <Pressable className="mt-2.5 flex-row items-center justify-between rounded-[18px] border border-[#F3E6D8] bg-[#FFF8F0] px-4 py-3">
+          <Pressable className="mt-2.5 flex-row items-center justify-between rounded-[20px] border border-[#F3E6D8] bg-[#FFF8F0] px-4 py-3.5">
             <View className="flex-row items-center gap-2.5">
               <SymbolView
                 name={{
@@ -2019,40 +2085,58 @@ export default function RouteDetailScreen() {
                   android: "download",
                   web: "download",
                 }}
-                size={16}
+                size={18}
                 tintColor="#F58752"
               />
               <View>
-                <Text className="text-[14px] font-semibold text-[#2B2233]">
+                <Text
+                  className="text-[15px] font-semibold text-[#2B2233]"
+                  style={textStyle(15)}
+                >
                   Tải về để dùng offline
                 </Text>
-                <Text className="text-[12px] leading-[14px] text-[#8E869A]">
-                  Bản đồ + story · 12.4 MB
+                <Text
+                  className="text-[13px] text-[#8E869A]"
+                  style={bodyTextStyle(13)}
+                >
+                  Bản đồ + câu chuyện · 12.4 MB
                 </Text>
               </View>
             </View>
-            <Text className="text-[12px] font-bold text-[#D97A55]">
+            <Text
+              className="text-[13px] font-bold text-[#D97A55]"
+              style={textStyle(13)}
+            >
               Tải xuống
             </Text>
           </Pressable>
 
-          <View className="mt-5">
-              <View className="mb-1.5">
-                <Text className="text-[12px] font-extrabold tracking-wider text-[#D95B8D]">
-                  {`PHẢN HỒI VỀ TUYẾN (${routeReviewCountLabel})`}
-                </Text>
-              </View>
+          <View className="mt-5 px-0.5 py-1">
+            <View className="mb-1.5">
+              <Text
+                className="text-[14px] font-black uppercase tracking-[1.4px]"
+                style={sectionEyebrowTextStyle(14)}
+              >
+                {`PHẢN HỒI VỀ TUYẾN (${routeReviewCountLabel})`}
+              </Text>
+            </View>
 
-            <View className="mt-2.5">
+            <View className="mt-2.5 gap-3">
               {routeReviewsError ? (
                 <View className="py-3">
-                  <Text className="text-[13px] text-[#B94A77]">
+                  <Text
+                    className="text-[13px] text-[#B94A77]"
+                    style={bodyTextStyle(13)}
+                  >
                     {routeReviewsError}
                   </Text>
                 </View>
               ) : isRouteReviewsLoading ? (
                 <View className="py-3">
-                  <Text className="text-[13px] text-[#8E869A]">
+                  <Text
+                    className="text-[13px] text-[#8E869A]"
+                    style={bodyTextStyle(13)}
+                  >
                     Đang tải đánh giá...
                   </Text>
                 </View>
@@ -2073,7 +2157,10 @@ export default function RouteDetailScreen() {
                 ))
               ) : (
                 <View className="px-4 py-6">
-                  <Text className="text-center text-[14px] font-medium text-[#6F6671]">
+                  <Text
+                    className="text-center text-[14px] font-medium text-[#6F6671]"
+                    style={bodyTextStyle(14)}
+                  >
                     Chưa có đánh giá nào cho tuyến này.
                   </Text>
                 </View>
@@ -2119,7 +2206,10 @@ export default function RouteDetailScreen() {
                       size={16}
                       tintColor="#FFFFFF"
                     />
-                    <Text className="ml-2 text-[15px] font-semibold text-white">
+                    <Text
+                      className="ml-2 text-[15px] font-semibold text-white"
+                      style={textStyle(15)}
+                    >
                       Chia sẻ bài đánh giá
                     </Text>
                   </View>
@@ -2127,7 +2217,7 @@ export default function RouteDetailScreen() {
               </View>
 
               {!isFinished ? (
-                <Text className="mt-2 text-[12px] text-[#8E869A]">
+                <Text className="mt-2 text-[12px] text-[#8E869A]" style={bodyTextStyle(12)}>
                   {`Hoàn thành thêm ${Math.max(totalStops - completed, 0)} điểm check-in để mở quyền đánh giá tuyến.`}
                 </Text>
               ) : null}
@@ -2154,8 +2244,11 @@ export default function RouteDetailScreen() {
         <View
           className="absolute inset-x-0 bottom-0 pt-2"
           style={{
+            alignSelf: "center",
+            maxWidth: 672,
             paddingBottom: Math.max(insets.bottom + 18, 28),
-            paddingHorizontal: ScreenHorizontalPadding,
+            paddingHorizontal: gutter,
+            width: "100%",
           }}
         >
           <View
@@ -2198,7 +2291,10 @@ export default function RouteDetailScreen() {
                   size={16}
                   tintColor="#fff"
                 />
-                <Text className="text-[14px] font-bold text-white">
+                <Text
+                  className="text-[14px] font-bold text-white"
+                  style={textStyle(14)}
+                >
                   {isStartingRoute
                     ? "Đang bắt đầu..."
                     : hasStartedRoute

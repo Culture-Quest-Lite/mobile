@@ -15,8 +15,14 @@ import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
-import { useCheckedInApiHotspots, useCheckins } from "@/lib/checkin-store";
+import {
+  addApiCheckin,
+  addCheckin,
+  useCheckedInApiHotspots,
+  useCheckins,
+} from "@/lib/checkin-store";
 
+import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
 import { getActiveTags, type ActiveTagDto } from "../api/get-tags";
 import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
 import { getCachedHotspotDetail } from "../data/hotspot-detail-cache";
@@ -508,11 +514,28 @@ export default function HotspotStoriesScreen() {
     routeId: resolvedRouteId,
     slug: resolvedSlug,
   });
-  const isCheckedIn =
+  const hasLocalCheckIn =
     resolvedHotspotId === null
       ? true
       : checkedInApiHotspots.includes(resolvedHotspotId) ||
         checkedInHotspotSlugs.includes(resolvedSlug);
+  const [remoteCheckinVerification, setRemoteCheckinVerification] = useState<{
+    hotspotId: number | null;
+    isCheckedIn: boolean | null;
+  }>(() => ({
+    hotspotId: resolvedHotspotId,
+    isCheckedIn: hasLocalCheckIn ? true : resolvedHotspotId === null ? true : null,
+  }));
+  const remoteIsCheckedIn =
+    remoteCheckinVerification.hotspotId === resolvedHotspotId
+      ? remoteCheckinVerification.isCheckedIn
+      : null;
+  const isCheckedIn =
+    resolvedHotspotId === null ||
+    hasLocalCheckIn ||
+    remoteIsCheckedIn === true;
+  const isCheckinStatusLoading =
+    resolvedHotspotId !== null && !hasLocalCheckIn && remoteIsCheckedIn === null;
   const [activeTabId, setActiveTabId] = useState("");
   const [apiStoryCards, setApiStoryCards] = useState<
     HotspotThemeStory[] | null
@@ -533,6 +556,77 @@ export default function HotspotStoriesScreen() {
     resolvedThemeTabs.find((tab) => tab.id === activeTabId) ??
     resolvedThemeTabs[0] ??
     null;
+
+  useEffect(() => {
+    let isActive = true;
+
+    if (resolvedHotspotId === null || hasLocalCheckIn) {
+      return () => {
+        isActive = false;
+      };
+    }
+
+    const loadRemoteCheckinStatus = async () => {
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const remoteHotspot = await getHotspotByIdApi({
+          accessToken,
+          hotspotId: resolvedHotspotId,
+          tokenType: authSession.tokenType,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        const nextIsCheckedIn = remoteHotspot.isCheckedIn === true;
+        setRemoteCheckinVerification({
+          hotspotId: resolvedHotspotId,
+          isCheckedIn: nextIsCheckedIn,
+        });
+
+        if (!nextIsCheckedIn) {
+          return;
+        }
+
+        addApiCheckin(resolvedHotspotId);
+        addCheckin(`${resolvedHotspotId}`);
+
+        if (resolvedSlug.trim()) {
+          addCheckin(resolvedSlug);
+        }
+      } catch (error) {
+        console.warn("[hotspot-stories] load remote check-in status failed", {
+          error: error instanceof Error ? error.message : error,
+          hotspotId: resolvedHotspotId,
+          slug: resolvedSlug,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setRemoteCheckinVerification({
+          hotspotId: resolvedHotspotId,
+          isCheckedIn: false,
+        });
+      }
+    };
+
+    void loadRemoteCheckinStatus();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    hasLocalCheckIn,
+    resolvedHotspotId,
+    resolvedSlug,
+  ]);
 
   useEffect(() => {
     let isActive = true;
@@ -710,10 +804,9 @@ export default function HotspotStoriesScreen() {
             }) === resolvedActiveTab.id,
         );
   const shouldShowLoadingState =
-    isCheckedIn &&
     resolvedHotspotId !== null &&
-    isStoriesLoading &&
-    visibleStories.length === 0;
+    visibleStories.length === 0 &&
+    (isCheckinStatusLoading || (isCheckedIn && isStoriesLoading));
 
   if (shouldShowLoadingState) {
     return <AppLoadingScreen edges={["left", "right", "bottom"]} />;

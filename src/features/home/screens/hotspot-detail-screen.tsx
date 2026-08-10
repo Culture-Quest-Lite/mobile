@@ -2923,6 +2923,7 @@ export default function HotspotDetailScreen() {
     slug: resolvedSlug,
   });
   const resolvedRouteId = resolveRouteIdParam(routeId);
+  const hasResolvedHotspotSlug = resolvedSlug.trim().length > 0;
   const scrollY = useSharedValue(0);
   const [isCheckinOverlayVisible, setIsCheckinOverlayVisible] = useState(false);
   const [isStickyCheckinVisible, setIsStickyCheckinVisible] = useState(false);
@@ -3239,13 +3240,13 @@ export default function HotspotDetailScreen() {
 
   const remoteHotspotResult = useMemo(
     () =>
-      remoteHotspot
+      remoteHotspot?.hotspotId === resolvedHotspotId
         ? buildHotspotFromApi({
-            apiHotspot: remoteHotspot,
-            routeSlug: resolvedSlug,
-          })
+          apiHotspot: remoteHotspot,
+          routeSlug: resolvedSlug,
+        })
         : null,
-    [remoteHotspot, resolvedSlug],
+    [remoteHotspot, resolvedHotspotId, resolvedSlug],
   );
   const hotspot = remoteHotspotResult?.hotspot ?? null;
 
@@ -3332,8 +3333,14 @@ export default function HotspotDetailScreen() {
     resolvedHotspotId,
   ]);
 
+  const shouldShowLoadingState =
+    !hasResolvedHotspotSlug ||
+    (resolvedHotspotId !== null &&
+      remoteHotspotError === null &&
+      remoteHotspot?.hotspotId !== resolvedHotspotId);
+
   if (!hotspot) {
-    if (isRemoteHotspotLoading) {
+    if (shouldShowLoadingState || isRemoteHotspotLoading) {
       return <LoadingState />;
     }
 
@@ -3815,10 +3822,8 @@ export default function HotspotDetailScreen() {
               <RouteMatchesSectionHeader />
 
               {isRelatedRoutesLoading ? (
-                <View className="rounded-[16px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-                  <View className="items-center">
-                    <ActivityIndicator color="#EB489B" size="small" />
-                  </View>
+                <View className="items-center py-2">
+                  <ActivityIndicator color="#EB489B" size="small" />
                 </View>
               ) : null}
 

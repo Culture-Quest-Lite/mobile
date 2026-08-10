@@ -5,15 +5,16 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 import { getRouteById } from "@/features/route/api/route-api";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { type Href, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
-  Text,
+  Text as RNText,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -29,6 +30,9 @@ import {
 } from "../lib/theme-detail";
 
 type ThemeTab = "stories" | "routes";
+type TextProps = ComponentProps<typeof RNText>;
+
+const detailTextMaxFontSizeMultiplier = 1.05;
 
 const cardShadowStyle = {
   shadowColor: "rgba(193, 83, 124, 0.14)",
@@ -52,6 +56,20 @@ const softShadowStyle = {
   elevation: 2,
 } as const;
 
+function Text({
+  maxFontSizeMultiplier = detailTextMaxFontSizeMultiplier,
+  style,
+  ...props
+}: TextProps) {
+  return (
+    <RNText
+      maxFontSizeMultiplier={maxFontSizeMultiplier}
+      style={[{ includeFontPadding: false }, style]}
+      {...props}
+    />
+  );
+}
+
 function StatChip({
   icon,
   label,
@@ -67,12 +85,16 @@ function StatChip({
         <SymbolView name={icon} size={10} tintColor="#E35C90" />
       </View>
       <View className="shrink flex-row items-center gap-1">
-        <Text className="text-[10px] font-semibold leading-[11px] text-[#2B2233]">
+        <Text
+          className="text-[11px] font-semibold text-[#2B2233]"
+          style={{ lineHeight: lineHeightFor(11) }}
+        >
           {value}
         </Text>
         <Text
-          className="shrink text-[9px] font-medium leading-[11px] text-[#8E869A]"
+          className="shrink text-[10px] font-medium text-[#8E869A]"
           numberOfLines={1}
+          style={{ lineHeight: lineHeightFor(10) }}
         >
           {label}
         </Text>
@@ -101,10 +123,11 @@ function SegmentButton({
         }}
       >
         <Text
-          className="text-[10px] leading-[11px]"
+          className="text-[12px]"
           style={{
             color: active ? "#D94F84" : "#7E7482",
             fontWeight: active ? "600" : "500",
+            lineHeight: lineHeightFor(12),
           }}
         >
           {label}
@@ -126,7 +149,10 @@ function SectionHeader({
       <View className="h-7 w-7 items-center justify-center rounded-full bg-[#FFF1F6]">
         <SymbolView name={icon} size={12} tintColor="#D95B8D" />
       </View>
-      <Text className="text-[13px] font-semibold leading-[15px] text-[#2B2233]">
+      <Text
+        className="text-[15px] font-semibold text-[#2B2233]"
+        style={{ lineHeight: lineHeightFor(15) }}
+      >
         {title}
       </Text>
     </View>
@@ -145,107 +171,34 @@ function EmptySection({
       className="items-center rounded-[24px] border border-dashed border-[#F1DDE6] bg-[#FFF9FC] px-5 py-8"
       style={softShadowStyle}
     >
-      <Text className="text-[15px] font-medium leading-[18px] text-[#2B2233]">
+      <Text
+        className="text-[16px] font-medium text-[#2B2233]"
+        style={{ lineHeight: lineHeightFor(16) }}
+      >
         {title}
       </Text>
-      <Text className="mt-2 max-w-[280px] text-center text-[12px] font-medium leading-[16px] text-[#8E869A]">
+      <Text
+        className="mt-2 max-w-[280px] text-center text-[14px] font-medium text-[#8E869A]"
+        style={{ lineHeight: bodyLineHeightFor(14) }}
+      >
         {description}
       </Text>
     </View>
   );
 }
 
-function ThemeContentEmptyState({
-  accent,
-  background,
-  icon,
-  onBrowseThemes,
-  onGoBack,
-  themeTitle,
-}: {
-  accent: string;
-  background: string;
-  icon: Parameters<typeof SymbolView>[0]["name"];
-  onBrowseThemes: () => void;
-  onGoBack: () => void;
-  themeTitle: string;
-}) {
+function ThemeContentEmptyState() {
   return (
     <View
-      className="overflow-hidden rounded-[28px] border border-[#F4DCE7] bg-white"
-      style={cardShadowStyle}
+      className="items-center justify-center rounded-[24px] border border-dashed border-[#F1DDE6] bg-[#FFF9FC] px-5 py-10"
+      style={softShadowStyle}
     >
-      <LinearGradient
-        colors={["#FFFFFF", background]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        className="px-5 py-6"
+      <Text
+        className="text-center text-[16px] font-medium text-[#7E7482]"
+        style={{ lineHeight: bodyLineHeightFor(16) }}
       >
-        <View className="items-center">
-          <View
-            className="h-20 w-20 items-center justify-center rounded-full border border-white/80"
-            style={{
-              backgroundColor: "#FFF8FB",
-              shadowColor: "rgba(217, 91, 141, 0.18)",
-              shadowOpacity: 1,
-              shadowRadius: 16,
-              shadowOffset: { width: 0, height: 10 },
-              elevation: 4,
-            }}
-          >
-            <View className="h-14 w-14 items-center justify-center rounded-full bg-white">
-              <SymbolView name={icon} size={30} tintColor={accent} />
-            </View>
-          </View>
-
-          <View className="mt-4 items-center">
-            <Text className="text-center text-[18px] font-semibold leading-[22px] text-[#2B2233]">
-              Chủ đề này đang được cập nhật
-            </Text>
-            <Text className="mt-2 max-w-[300px] text-center text-[13px] leading-[19px] text-[#7E7482]">
-              Explorer chưa có tuyến đường hoặc câu chuyện nào trong chủ đề{" "}
-              {themeTitle}. Hãy quay lại để khám phá chủ đề khác trong lúc nội
-              dung này được bổ sung.
-            </Text>
-          </View>
-
-          <View className="mt-4 flex-row flex-wrap items-center justify-center gap-2">
-            <View className="rounded-full bg-white px-3 py-2">
-              <Text className="text-[11px] font-semibold text-[#D95B8D]">
-                0 tuyến đường
-              </Text>
-            </View>
-            <View className="rounded-full bg-white px-3 py-2">
-              <Text className="text-[11px] font-semibold text-[#D95B8D]">
-                0 câu chuyện
-              </Text>
-            </View>
-          </View>
-
-          <View className="mt-5 w-full gap-2">
-            <Pressable onPress={onBrowseThemes}>
-              <LinearGradient
-                colors={["#EB489B", "#F58752"]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                className="items-center rounded-full px-4 py-3.5"
-              >
-                <Text className="text-[13px] font-semibold text-white">
-                  Khám phá chủ đề khác
-                </Text>
-              </LinearGradient>
-            </Pressable>
-
-            <Pressable onPress={onGoBack}>
-              <View className="items-center rounded-full border border-[#F3D9E5] bg-white px-4 py-3.5">
-                <Text className="text-[13px] font-semibold text-[#D95B8D]">
-                  Quay lại
-                </Text>
-              </View>
-            </Pressable>
-          </View>
-        </View>
-      </LinearGradient>
+        Không có nội dung về chủ đề này.
+      </Text>
     </View>
   );
 }
@@ -260,7 +213,10 @@ function RouteMetaChip({
   return (
     <View className="flex-row items-center gap-1">
       <SymbolView name={icon} size={10} tintColor="#E5845E" />
-      <Text className="text-[9px] font-medium leading-[10px] text-[#8E869A]">
+      <Text
+        className="text-[11px] font-medium text-[#8E869A]"
+        style={{ lineHeight: lineHeightFor(11) }}
+      >
         {label}
       </Text>
     </View>
@@ -268,11 +224,9 @@ function RouteMetaChip({
 }
 
 function FeaturedRouteCard({
-  accent,
   item,
   onPress,
 }: {
-  accent: string;
   item: ThemeDetailRouteItem;
   onPress: () => void;
 }) {
@@ -292,15 +246,17 @@ function FeaturedRouteCard({
 
       <View className="min-w-0 px-2.5 pb-2.5 pt-2">
         <Text
-          className="text-[13px] font-semibold leading-[15px] text-[#2B2233]"
+          className="text-[15px] font-semibold text-[#2B2233]"
           numberOfLines={2}
+          style={{ lineHeight: lineHeightFor(15) }}
         >
           {item.title}
         </Text>
         {item.description ? (
           <Text
-            className="mt-1 text-[11px] font-medium leading-[12px] text-[#807683]"
+            className="mt-1 text-[13px] font-medium text-[#807683]"
             numberOfLines={3}
+            style={{ lineHeight: bodyLineHeightFor(13) }}
           >
             {item.description}
           </Text>
@@ -354,12 +310,12 @@ function FeaturedRouteCard({
 
         <View className="items-end">
           <Pressable onPress={onPress}>
-            <View
-              className="items-center rounded-full px-4 py-2.5"
-              style={{ backgroundColor: accent }}
-            >
+            <View className="items-center rounded-full bg-[#F8DDE9] px-4 py-2.5">
               <View className="flex-row items-center gap-2">
-                <Text className="text-[11px] font-semibold leading-[12px] text-white">
+                <Text
+                  className="text-[13px] font-semibold text-[#D94F84]"
+                  style={{ lineHeight: lineHeightFor(13) }}
+                >
                   Xem tuyến đường
                 </Text>
                 <SymbolView
@@ -369,7 +325,7 @@ function FeaturedRouteCard({
                     web: "chevron_right",
                   }}
                   size={11}
-                  tintColor="#FFFFFF"
+                  tintColor="#D94F84"
                 />
               </View>
             </View>
@@ -405,15 +361,19 @@ function RelatedStoryCard({
         <View className="min-w-0 flex-1 justify-center px-2.5 py-2">
           <View className="mb-0.5 flex-row items-start justify-between gap-2">
             <Text
-              className="flex-1 text-[12px] font-semibold leading-[13px] text-[#2B2233]"
+              className="flex-1 text-[14px] font-semibold text-[#2B2233]"
               numberOfLines={1}
+              style={{ lineHeight: lineHeightFor(14) }}
             >
               {item.title}
             </Text>
 
             {item.category ? (
               <View className="rounded-full bg-[#FFF1F6] px-2 py-1">
-                <Text className="text-[8px] font-medium leading-[9px] text-[#D95B8D]">
+                <Text
+                  className="text-[10px] font-medium text-[#D95B8D]"
+                  style={{ lineHeight: lineHeightFor(10) }}
+                >
                   {item.category}
                 </Text>
               </View>
@@ -432,8 +392,9 @@ function RelatedStoryCard({
                 tintColor="#E28A4A"
               />
               <Text
-                className="flex-1 text-[9px] font-medium leading-[10px] text-[#8E869A]"
+                className="flex-1 text-[11px] font-medium text-[#8E869A]"
                 numberOfLines={1}
+                style={{ lineHeight: lineHeightFor(11) }}
               >
                 {item.hotspotName}
               </Text>
@@ -442,8 +403,9 @@ function RelatedStoryCard({
 
           {item.content ? (
             <Text
-              className="text-[10px] font-medium leading-[11px] text-[#7B7287]"
+              className="text-[12px] font-medium text-[#7B7287]"
               numberOfLines={2}
+              style={{ lineHeight: bodyLineHeightFor(12) }}
             >
               {item.content}
             </Text>
@@ -616,7 +578,10 @@ export default function ThemeDetailScreen() {
               />
             </Pressable>
 
-            <Text className="px-4 text-[17px] font-medium leading-[20px] text-[#2B2233]">
+            <Text
+              className="px-4 text-[18px] font-medium text-[#2B2233]"
+              style={{ lineHeight: lineHeightFor(18) }}
+            >
               {themeTitle}
             </Text>
 
@@ -677,7 +642,10 @@ export default function ThemeDetailScreen() {
               </View>
 
               <View className="min-w-0 flex-1 items-center pr-1">
-                <Text className="text-[21px] font-semibold leading-[23px] text-[#3A2230]">
+                <Text
+                  className="text-[22px] font-semibold text-[#3A2230]"
+                  style={{ lineHeight: lineHeightFor(22) }}
+                >
                   {themeModel.title}
                 </Text>
                 <View className="mt-[11px] w-full flex-row items-center justify-center gap-1.5">
@@ -725,14 +693,8 @@ export default function ThemeDetailScreen() {
 
         <View className="mt-5 gap-5 px-4">
           {isLoading ? (
-            <View
-              className="items-center rounded-[24px] border border-[#F4E7EE] bg-white px-5 py-8"
-              style={softShadowStyle}
-            >
+            <View className="items-center py-2">
               <ActivityIndicator color={themeModel.accent} />
-              <Text className="mt-3 text-[12px] font-medium leading-[14px] text-[#8E869A]">
-                Đang tải dữ liệu chủ đề...
-              </Text>
             </View>
           ) : null}
 
@@ -742,13 +704,22 @@ export default function ThemeDetailScreen() {
                 className="items-center rounded-[24px] border border-[#F4D5E1] bg-white px-5 py-8"
                 style={softShadowStyle}
               >
-                <Text className="text-[13px] font-semibold leading-[16px] text-[#2B2233]">
+                <Text
+                  className="text-[15px] font-semibold text-[#2B2233]"
+                  style={{ lineHeight: lineHeightFor(15) }}
+                >
                   Không tải được chủ đề
                 </Text>
-                <Text className="mt-2 max-w-[280px] text-center text-[12px] font-medium leading-[16px] text-[#8E869A]">
+                <Text
+                  className="mt-2 max-w-[280px] text-center text-[14px] font-medium text-[#8E869A]"
+                  style={{ lineHeight: bodyLineHeightFor(14) }}
+                >
                   {loadError}
                 </Text>
-                <Text className="mt-3 text-[12px] font-semibold leading-[14px] text-[#EB5D8F]">
+                <Text
+                  className="mt-3 text-[14px] font-semibold text-[#EB5D8F]"
+                  style={{ lineHeight: lineHeightFor(14) }}
+                >
                   Thử lại
                 </Text>
               </View>
@@ -756,14 +727,7 @@ export default function ThemeDetailScreen() {
           ) : null}
 
           {!isLoading && !loadError && !hasAnyThemeContent ? (
-            <ThemeContentEmptyState
-              accent={themeModel.accent}
-              background={themeModel.background}
-              icon={themeModel.icon}
-              onBrowseThemes={() => router.replace("/home" as Href)}
-              onGoBack={() => router.back()}
-              themeTitle={themeModel.title}
-            />
+            <ThemeContentEmptyState />
           ) : null}
 
           {!isLoading && !loadError && hasAnyThemeContent && shouldShowRoutes ? (
@@ -779,7 +743,6 @@ export default function ThemeDetailScreen() {
 
               {featuredRoute ? (
                 <FeaturedRouteCard
-                  accent={themeModel.accent}
                   item={featuredRoute}
                   onPress={() => router.push(featuredRoute.href)}
                 />

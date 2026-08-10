@@ -92,30 +92,7 @@ function formatGroupRowDate(group: CommunityGroupPayload) {
     return normalizedDateValue.slice(0, 10).replace(/-/g, "/");
   }
 
-  const today = new Date();
-  const isToday =
-    date.getDate() === today.getDate() &&
-    date.getMonth() === today.getMonth() &&
-    date.getFullYear() === today.getFullYear();
-
-  if (isToday) {
-    return "Hôm nay";
-  }
-
-  return `${padDatePart(date.getDate())}/${padDatePart(date.getMonth() + 1)}`;
-}
-
-function getLocalizedGroupStatusLabel(status?: string | null) {
-  switch ((status ?? "").trim().toUpperCase()) {
-    case "ACTIVE":
-      return "Đang hoạt động";
-    case "PENDING":
-      return "Đang chờ duyệt";
-    case "INACTIVE":
-      return "Tạm ngưng";
-    default:
-      return "Nhóm cộng đồng";
-  }
+  return `${padDatePart(date.getDate())}/${padDatePart(date.getMonth() + 1)}/${date.getFullYear()}`;
 }
 
 function getGroupAccessLabel(requiredApproval?: boolean | null) {
@@ -233,12 +210,12 @@ function CommunityGroupListRow({
                 style={{ columnGap: 4, maxWidth: "100%" }}
               >
                 <Text
-                  className="text-[14px] font-normal text-[#2E2336]"
+                  className="text-[15px] font-normal text-[#2E2336]"
                   numberOfLines={2}
                   style={{
                     flexShrink: 1,
                     includeFontPadding: false,
-                    lineHeight: lineHeightFor(14),
+                    lineHeight: lineHeightFor(15),
                   }}
                 >
                   {groupName}
@@ -257,26 +234,13 @@ function CommunityGroupListRow({
               </View>
             </View>
             <Text
-              className="text-[11px] font-normal text-[#A9A1B1]"
-              style={{
-                includeFontPadding: false,
-                lineHeight: lineHeightFor(11),
-              }}
-            >
-              {formatGroupRowDate(group)}
-            </Text>
-          </View>
-
-          <View className="mt-0.5 flex-row items-center">
-            <View className="h-2 w-2 rounded-full bg-[#4BB862]" />
-            <Text
-              className="ml-1.5 text-[12px] font-normal text-[#7A6F67]"
+              className="text-[12px] font-normal text-[#A9A1B1]"
               style={{
                 includeFontPadding: false,
                 lineHeight: lineHeightFor(12),
               }}
             >
-              {getLocalizedGroupStatusLabel(group.status)}
+              {formatGroupRowDate(group)}
             </Text>
           </View>
 
@@ -284,21 +248,21 @@ function CommunityGroupListRow({
             className="mt-1 flex-row flex-wrap items-center"
             style={{ columnGap: 8, rowGap: 4 }}
           >
-            <View className="flex-row items-center rounded-full bg-[#F4EFF8] px-2 py-[5px]">
+            <View className="flex-row items-center px-2 py-[5px]">
               <SymbolView
                 name={{
                   ios: "person.2.fill",
                   android: "groups",
                   web: "groups",
                 }}
-                size={10}
+                size={12}
                 tintColor="#6F657A"
               />
               <Text
-                className="ml-1 text-[10px] font-normal text-[#6F657A]"
+                className="ml-1 text-[12px] font-normal text-[#6F657A]"
                 style={{
                   includeFontPadding: false,
-                  lineHeight: lineHeightFor(10),
+                  lineHeight: lineHeightFor(12),
                 }}
               >
                 {formatCompactCount(group.totalMembers)} thành viên
@@ -311,15 +275,15 @@ function CommunityGroupListRow({
             >
               <SymbolView
                 name={group.requiredApproval === true ? "lock.fill" : "link"}
-                size={10}
+                size={12}
                 tintColor={accessPalette.iconColor}
               />
               <Text
-                className="ml-1 text-[10px] font-normal"
+                className="ml-1 text-[12px] font-normal"
                 style={{
                   color: accessPalette.textColor,
                   includeFontPadding: false,
-                  lineHeight: lineHeightFor(10),
+                  lineHeight: lineHeightFor(12),
                 }}
               >
                 {getGroupAccessLabel(group.requiredApproval)}
@@ -481,19 +445,19 @@ export default function CommunityGroupsScreen() {
           <View className="flex-row items-center justify-between">
             <View className="max-w-[56%]">
               <Text
-                className="text-[14px] font-normal text-[#2E2336]"
+                className="text-[16px] font-semibold text-[#2E2336]"
                 style={{
                   includeFontPadding: false,
-                  lineHeight: lineHeightFor(14),
+                  lineHeight: lineHeightFor(16),
                 }}
               >
                 Nhóm của bạn
               </Text>
               <Text
-                className="mt-0.5 text-[12px] font-normal text-[#7A6F67]"
+                className="mt-0.5 text-[13px] font-normal text-[#7A6F67]"
                 style={{
                   includeFontPadding: false,
-                  lineHeight: lineHeightFor(12),
+                  lineHeight: lineHeightFor(13),
                 }}
               >
                 {status === "ready"
@@ -520,10 +484,10 @@ export default function CommunityGroupsScreen() {
                     tintColor="#FFFFFF"
                   />
                   <Text
-                    className="ml-1.5 text-[12px] font-normal text-white"
+                    className="ml-1.5 text-[13px] font-normal text-white"
                     style={{
                       includeFontPadding: false,
-                      lineHeight: lineHeightFor(12),
+                      lineHeight: lineHeightFor(13),
                     }}
                   >
                     Tạo nhóm mới
@@ -551,7 +515,7 @@ export default function CommunityGroupsScreen() {
               tintColor="#ACA3B5"
             />
             <TextInput
-              className="ml-2 flex-1 text-[12px] text-[#2E2336]"
+              className="ml-2 flex-1 text-[14px] text-[#2E2336]"
               onChangeText={setSearchQuery}
               placeholder="Tìm kiếm nhóm..."
               placeholderTextColor="#B1A8BA"
@@ -574,10 +538,10 @@ export default function CommunityGroupsScreen() {
               tintColor="#756B80"
             />
             <Text
-              className="ml-1.5 text-[12px] font-normal text-[#756B80]"
+              className="ml-1.5 text-[13px] font-normal text-[#756B80]"
               style={{
                 includeFontPadding: false,
-                lineHeight: lineHeightFor(12),
+                lineHeight: lineHeightFor(13),
               }}
             >
               Bộ lọc

@@ -166,9 +166,6 @@ export default function ProfileInformationScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
-  const [submitTone, setSubmitTone] = useState<"error" | "success" | null>(
-    null,
-  );
   const [requestVersion, setRequestVersion] = useState(0);
 
   const syncDraftFields = (nextProfile: Profile) => {
@@ -194,7 +191,6 @@ export default function ProfileInformationScreen() {
       setIsLoading(true);
       setErrorMessage(null);
       setSubmitMessage(null);
-      setSubmitTone(null);
 
       try {
         const accessToken = await getValidAccessToken();
@@ -253,14 +249,12 @@ export default function ProfileInformationScreen() {
     if (!isEditing) {
       syncDraftFields(profile);
       setSubmitMessage(null);
-      setSubmitTone(null);
       setIsEditing(true);
       return;
     }
 
     setIsSubmitting(true);
     setSubmitMessage(null);
-    setSubmitTone(null);
 
     try {
       const accessToken = await getValidAccessToken();
@@ -275,8 +269,6 @@ export default function ProfileInformationScreen() {
 
       const updatedProfile = await updateMyProfile({
         accessToken,
-        avatarUrl: profile.avatar,
-        backgroundUrl: profile.cover,
         autoPlayAudio: draftAutoPlayAudio,
         displayName: normalizedDisplayName,
         tokenType: authSession.tokenType,
@@ -296,11 +288,9 @@ export default function ProfileInformationScreen() {
       }
 
       setIsEditing(false);
-      setSubmitMessage("Cập nhật thông tin cá nhân thành công.");
-      setSubmitTone("success");
+      setSubmitMessage(null);
     } catch (error) {
       setSubmitMessage(getErrorMessage(error));
-      setSubmitTone("error");
     } finally {
       setIsSubmitting(false);
     }
@@ -314,7 +304,6 @@ export default function ProfileInformationScreen() {
     syncDraftFields(profile);
     setIsEditing(false);
     setSubmitMessage(null);
-    setSubmitTone(null);
   };
 
   const informationRows = profile ? buildInformationRows(profile) : [];
@@ -422,10 +411,7 @@ export default function ProfileInformationScreen() {
 
                 {submitMessage ? (
                   <View className="px-4 pb-1 pt-4">
-                    <InlineNotice
-                      message={submitMessage}
-                      tone={submitTone === "success" ? "success" : "error"}
-                    />
+                    <InlineNotice message={submitMessage} />
                   </View>
                 ) : null}
 
@@ -556,25 +542,12 @@ function StateCard({
   );
 }
 
-function InlineNotice({
-  message,
-  tone,
-}: {
-  message: string;
-  tone: "error" | "success";
-}) {
-  const palette =
-    tone === "success"
-      ? {
-          backgroundColor: "#EAF8EF",
-          borderColor: "#BCE7C8",
-          textColor: "#226B3A",
-        }
-      : {
-          backgroundColor: "#FFF4F1",
-          borderColor: "#F6C9C0",
-          textColor: "#B54D3A",
-        };
+function InlineNotice({ message }: { message: string }) {
+  const palette = {
+    backgroundColor: "#FFF4F1",
+    borderColor: "#F6C9C0",
+    textColor: "#B54D3A",
+  };
 
   return (
     <View

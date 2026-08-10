@@ -27,6 +27,8 @@ import {
   StyleSheet,
   TextInput,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type TextProps,
 } from "react-native";
 import {
@@ -186,7 +188,7 @@ function Text({
 }
 
 const meaninglessTextValues = new Set(["", "string", "null", "undefined"]);
-const communityFeedPageSize = 10;
+const communityFeedPageSize = 20;
 const communityPostCommentsPageSize = 10;
 const communityCommentMaxLength = 320;
 const communitySharePostMaxLength = 500;
@@ -1020,6 +1022,10 @@ export default function CommunityScreen() {
   const [isSharingPost, setIsSharingPost] = useState(false);
   const [communityFeedStatus, setCommunityFeedStatus] =
     useState<CommunityFeedStatus>("loading");
+  const [communityFeedPage, setCommunityFeedPage] = useState(0);
+  const [communityFeedHasMore, setCommunityFeedHasMore] = useState(true);
+  const [isLoadingMoreCommunityFeed, setIsLoadingMoreCommunityFeed] =
+    useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [composerIdentity, setComposerIdentity] = useState<ComposerIdentity>(
     fallbackComposerIdentity,
@@ -1096,26 +1102,36 @@ export default function CommunityScreen() {
     hasSkippedInitialFeedFocusRef.current = false;
   }, [communitySessionKey]);
 
+  const fetchCommunityNewsfeedPage = useCallback(
+    async (page: number) => {
+      const accessToken = authSession.isAuthenticated
+        ? await getValidAccessToken()
+        : null;
+      const response = await getNewsfeedPosts({
+        accessToken,
+        page,
+        size: communityFeedPageSize,
+        tokenType: authSession.tokenType,
+      });
+      const mappedPosts = response.content
+        .filter(
+          (post) =>
+            normalizePostVisibilityValue(post.visibility) !== "PRIVATE",
+        )
+        .map(mapNewsfeedPostToCommunityFeedPost);
+
+      mappedPosts.forEach(cacheCommunityExplorerProfile);
+
+      return { posts: mappedPosts, isLast: response.isLast };
+    },
+    [authSession.isAuthenticated, authSession.tokenType],
+  );
+
   const fetchCommunityNewsfeed = useCallback(async () => {
-    const accessToken = authSession.isAuthenticated
-      ? await getValidAccessToken()
-      : null;
-    const response = await getNewsfeedPosts({
-      accessToken,
-      page: 0,
-      size: communityFeedPageSize,
-      tokenType: authSession.tokenType,
-    });
-    const mappedPosts = response.content
-      .filter(
-        (post) => normalizePostVisibilityValue(post.visibility) !== "PRIVATE",
-      )
-      .map(mapNewsfeedPostToCommunityFeedPost);
+    const { posts, isLast } = await fetchCommunityNewsfeedPage(0);
 
-    mappedPosts.forEach(cacheCommunityExplorerProfile);
-
-    return mergeCommunityFeedPostsWithCache(mappedPosts);
-  }, [authSession.isAuthenticated, authSession.tokenType]);
+    return { posts: mergeCommunityFeedPostsWithCache(posts), isLast };
+  }, [fetchCommunityNewsfeedPage]);
 
   useEffect(() => {
     let isActive = true;
@@ -1126,7 +1142,7 @@ export default function CommunityScreen() {
       setCommunityFeedError(null);
 
       try {
-        const mappedPosts = await fetchCommunityNewsfeed();
+        const { posts: mappedPosts, isLast } = await fetchCommunityNewsfeed();
 
         if (
           !isActive ||
@@ -1136,6 +1152,8 @@ export default function CommunityScreen() {
         }
 
         setCommunityFeedPosts(mappedPosts);
+        setCommunityFeedPage(0);
+        setCommunityFeedHasMore(!isLast);
         setCommunityFeedStatus("ready");
       } catch (error) {
         console.warn("[community] load newsfeed failed", {
@@ -1150,6 +1168,8 @@ export default function CommunityScreen() {
         }
 
         setCommunityFeedPosts([]);
+        setCommunityFeedPage(0);
+        setCommunityFeedHasMore(true);
         setCommunityFeedError(
           error instanceof Error
             ? error.message
@@ -1400,12 +1420,14 @@ export default function CommunityScreen() {
     setCommunityFeedError(null);
 
     try {
-      const [mappedPosts] = await Promise.all([
+      const [{ posts: mappedPosts, isLast }] = await Promise.all([
         fetchCommunityNewsfeed(),
         reloadCommunityGroups(),
       ]);
 
       setCommunityFeedPosts(mappedPosts);
+      setCommunityFeedPage(0);
+      setCommunityFeedHasMore(!isLast);
       setCommunityFeedStatus("ready");
     } catch (error) {
       console.warn("[community] pull to refresh newsfeed failed", {
@@ -1414,6 +1436,8 @@ export default function CommunityScreen() {
 
       if (communityFeedPostsRef.current.length === 0) {
         setCommunityFeedPosts([]);
+        setCommunityFeedPage(0);
+        setCommunityFeedHasMore(true);
         setCommunityFeedError(
           error instanceof Error
             ? error.message
@@ -1432,6 +1456,59 @@ export default function CommunityScreen() {
       setIsRefreshing(false);
     }
   }, [fetchCommunityNewsfeed, isRefreshing, reloadCommunityGroups]);
+
+  const handleLoadMoreCommunityFeed = useCallback(async () => {
+    if (
+      isLoadingMoreCommunityFeed ||
+      isRefreshing ||
+      communityFeedStatus !== "ready" ||
+      !communityFeedHasMore
+    ) {
+      return;
+    }
+
+    const nextPage = communityFeedPage + 1;
+
+    setIsLoadingMoreCommunityFeed(true);
+
+    try {
+      const { posts: nextPosts, isLast } =
+        await fetchCommunityNewsfeedPage(nextPage);
+
+      setCommunityFeedPosts((current) =>
+        dedupeCommunityFeedPosts([...current, ...nextPosts]),
+      );
+      setCommunityFeedPage(nextPage);
+      setCommunityFeedHasMore(!isLast);
+    } catch (error) {
+      console.warn("[community] load more newsfeed failed", {
+        error: error instanceof Error ? error.message : error,
+      });
+    } finally {
+      setIsLoadingMoreCommunityFeed(false);
+    }
+  }, [
+    communityFeedHasMore,
+    communityFeedPage,
+    communityFeedStatus,
+    fetchCommunityNewsfeedPage,
+    isLoadingMoreCommunityFeed,
+    isRefreshing,
+  ]);
+
+  const handleCommunityFeedScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } =
+        event.nativeEvent;
+      const distanceToBottom =
+        contentSize.height - (contentOffset.y + layoutMeasurement.height);
+
+      if (distanceToBottom < 400) {
+        void handleLoadMoreCommunityFeed();
+      }
+    },
+    [handleLoadMoreCommunityFeed],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -1453,13 +1530,15 @@ export default function CommunityScreen() {
         setCommunityFeedError(null);
 
         try {
-          const mappedPosts = await fetchCommunityNewsfeed();
+          const { posts: mappedPosts, isLast } = await fetchCommunityNewsfeed();
 
           if (!isActive) {
             return;
           }
 
           setCommunityFeedPosts(mappedPosts);
+          setCommunityFeedPage(0);
+          setCommunityFeedHasMore(!isLast);
           setCommunityFeedStatus("ready");
         } catch (error) {
           console.warn("[community] refetch newsfeed on focus failed", {
@@ -1472,6 +1551,8 @@ export default function CommunityScreen() {
 
           if (communityFeedPostsRef.current.length === 0) {
             setCommunityFeedPosts([]);
+            setCommunityFeedPage(0);
+            setCommunityFeedHasMore(true);
             setCommunityFeedError(
               error instanceof Error
                 ? error.message
@@ -2294,6 +2375,8 @@ export default function CommunityScreen() {
             />
           }
           showsVerticalScrollIndicator={false}
+          onScroll={handleCommunityFeedScroll}
+          scrollEventThrottle={200}
         >
           {/* Header Image - tràn lên sát mép trên của điện thoại (phủ cả vùng status bar) */}
           <View
@@ -2558,6 +2641,12 @@ export default function CommunityScreen() {
                     </Text>
                   </View>
                 )
+              ) : null}
+
+              {communityFeedStatus === "ready" && isLoadingMoreCommunityFeed ? (
+                <View className="items-center py-4">
+                  <ActivityIndicator color="#EB489B" />
+                </View>
               ) : null}
             </View>
           </View>

@@ -41,6 +41,7 @@ import {
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 import { useProfile } from "@/features/profile/hooks/use-profile";
+import { addApiCheckin, addCheckin } from "@/lib/checkin-store";
 import { formatDistance, getDistanceMeters } from "@/lib/location";
 
 import {
@@ -256,9 +257,10 @@ function buildStatusCopy(
   if (status === "ready") {
     return {
       accentColor: "#F58752",
-      badgeLabel: isAlwaysReady ? "Hotspot test sẵn sàng" : "GPS xác minh",
+      badgeLabel:
+        isAlwaysReady ? "Địa điểm thử nghiệm sẵn sàng" : "GPS xác minh",
       helperText: isAlwaysReady
-        ? "Điểm demo này luôn xác minh thành công để bạn test story và UI sau check-in."
+        ? "Địa điểm demo này luôn xác minh thành công để bạn test câu chuyện và UI sau check-in."
         : `Bạn đã đến nơi · cách ${formatDistance(distanceMeters)}`,
       primaryLabel: "Check-in ngay",
       primaryDisabled: false,
@@ -504,7 +506,7 @@ function VerificationMapPreview({
   const distanceBadgeLabel =
     distanceMeters === null
       ? "Đang xác định khoảng cách..."
-      : `Cách hotspot ${formatDistance(distanceMeters)}`;
+      : `Cách địa điểm ${formatDistance(distanceMeters)}`;
   const distanceBadgeState =
     distanceMeters === null
       ? "Đang xác minh GPS"
@@ -611,8 +613,8 @@ function VerificationMapPreview({
           {resolvedHotspotCoordinate ? (
             <Marker
               coordinate={resolvedHotspotCoordinate}
-              description="Điểm check-in của hotspot"
-              title="Hotspot"
+              description="Điểm check-in của địa điểm"
+              title="Địa điểm"
             >
               <View className="items-center">
                 <View
@@ -620,7 +622,7 @@ function VerificationMapPreview({
                   style={{ backgroundColor: SOFT_SURFACE_OVERLAY_SOFT }}
                 >
                   <Text className="text-[11px] font-medium uppercase tracking-[0.8px] text-[#EB489B]">
-                    Hotspot
+                    Địa điểm
                   </Text>
                 </View>
                 <Animated.View
@@ -1011,7 +1013,7 @@ export function HotspotGpsCheckinOverlay({
       setStoryPrefetchError(
         error instanceof Error
           ? error.message
-          : "Không tải được story từ hệ thống.",
+          : "Không tải được câu chuyện từ hệ thống.",
       );
     } finally {
       setIsStoryPrefetching(false);
@@ -1029,6 +1031,16 @@ export function HotspotGpsCheckinOverlay({
   const userAvatarUri = authSession.isAuthenticated
     ? (profile?.avatar ?? null)
     : null;
+  const markCheckInLocally = useCallback(() => {
+    if (typeof hotspotId === "number" && hotspotId > 0) {
+      addApiCheckin(hotspotId);
+      addCheckin(`${hotspotId}`);
+    }
+
+    if (hotspot.slug.trim()) {
+      addCheckin(hotspot.slug);
+    }
+  }, [hotspot.slug, hotspotId]);
 
   const submitCheckIn = useCallback(async () => {
     if (!authSession.isAuthenticated) {
@@ -1038,7 +1050,7 @@ export function HotspotGpsCheckinOverlay({
     }
 
     if (!(typeof hotspotId === "number" && hotspotId > 0)) {
-      setCheckInError("Hotspot này chưa có mã API để gửi check-in.");
+      setCheckInError("Địa điểm này chưa có mã API để gửi check-in.");
       return;
     }
 
@@ -1076,6 +1088,7 @@ export function HotspotGpsCheckinOverlay({
       setIsExistingCheckIn(false);
       setCheckInResult(nextCheckInResult);
       setCheckInDeviceTime(Date.now());
+      markCheckInLocally();
       onSuccess();
       setCheckinStage("success");
       void prefetchUnlockedStories();
@@ -1083,6 +1096,7 @@ export function HotspotGpsCheckinOverlay({
       if (isDuplicateCheckInError(error)) {
         setIsExistingCheckIn(true);
         setCheckInResult(null);
+        markCheckInLocally();
         onSuccess();
         setCheckinStage("success");
         void prefetchUnlockedStories();
@@ -1099,8 +1113,8 @@ export function HotspotGpsCheckinOverlay({
     authSession.isAuthenticated,
     authSession.tokenType,
     currentCoordinate,
-    hotspotCoordinate,
     hotspotId,
+    markCheckInLocally,
     onClose,
     onSuccess,
     prefetchUnlockedStories,
@@ -1135,7 +1149,7 @@ export function HotspotGpsCheckinOverlay({
     ? null
     : (checkInResult?.totalPointEarned ?? null);
   const checkInMetaLabel = isExistingCheckIn
-    ? "Hệ thống xác nhận bạn đã check-in hotspot này trước đó."
+    ? "Hệ thống xác nhận bạn đã check-in địa điểm này trước đó."
     : null;
   const isSuccessStage = checkinStage === "success";
   const verifyButtonColors = verificationCopy.primaryDisabled
@@ -1507,7 +1521,7 @@ export function HotspotGpsCheckinOverlay({
                     className="text-[13px] font-semibold leading-[16px]"
                     style={{ color: SUCCESS_TITLE_COLOR }}
                   >
-                    Xem câu chuyện địa điểm trên
+                    Xem câu chuyện của địa điểm
                   </Text>
                 </Pressable>
               ) : null}
@@ -1521,7 +1535,7 @@ export function HotspotGpsCheckinOverlay({
             >
               <View
                 className="relative"
-                style={{ height: "52%", minHeight: 372 }}
+                style={{ height: "56%", minHeight: 372 }}
               >
                 <VerificationMapPreview
                   currentCoordinate={currentCoordinate}
@@ -1591,7 +1605,7 @@ export function HotspotGpsCheckinOverlay({
               </View>
 
               <View
-                className="-mt-8 flex-1 rounded-t-[34px] px-6 pt-5"
+                className="-mt-5 flex-1 rounded-t-[34px] px-6 pt-5"
                 style={{
                   backgroundColor: SOFT_SURFACE,
                   paddingBottom: Math.max(insets.bottom + 14, 24),

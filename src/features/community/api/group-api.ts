@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { File as ExpoFile } from "expo-file-system";
 
 import { PublicEnv, buildApiUrl } from "@/constants/env";
 
@@ -37,6 +38,11 @@ export type CommunityGroupImageFile = {
   mimeType?: string | null;
   name?: string | null;
   uri: string;
+};
+
+type CommunityGroupImageFilePart = {
+  file: ExpoFile;
+  name: string;
 };
 
 export type CreateCommunityGroupRequest = AuthenticatedGroupRequest & {
@@ -178,8 +184,9 @@ const imageMimeTypeByExtension: Record<string, string> = {
   webp: "image/webp",
 };
 
-// RN gui multipart tu object { uri, name, type }; Blob/expo File khong dung duoc
-// vi FormData cua RN spread object nen mat cac getter tren prototype.
+// Expo SDK 56 ho tro multipart voi expo-file-system File. ImagePicker tren
+// Android co the tra ve file:// hoac content://, nen dung File se on dinh hon
+// object RN cu.
 function buildImageFilePart(imageFile?: CommunityGroupImageFile | null) {
   const uri = readMeaningfulText(imageFile?.uri);
 
@@ -204,7 +211,19 @@ function buildImageFilePart(imageFile?: CommunityGroupImageFile | null) {
     imageMimeTypeByExtension[extension] ??
     "image/jpeg";
 
-  return { name, type, uri };
+  const uploadFile = new ExpoFile(uri);
+  const normalizedName = name.includes(".")
+    ? name
+    : `${name}.${type.split("/")[1] ?? "jpg"}`;
+
+  return { file: uploadFile, name: normalizedName } satisfies CommunityGroupImageFilePart;
+}
+
+function isExpoFormDataFileError(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message.includes("Unsupported FormDataPart implementation")
+  );
 }
 
 async function parseResponseBody(response: Response) {
@@ -221,7 +240,11 @@ async function parseResponseBody(response: Response) {
   }
 }
 
-function getConnectionErrorMessage(url: string) {
+function getConnectionErrorMessage(url: string, error?: unknown) {
+  if (isExpoFormDataFileError(error)) {
+    return "Ảnh nhóm đang được gửi sai định dạng multipart. Vui lòng cập nhật app rồi thử lại.";
+  }
+
   if (Platform.OS === "android" && url.startsWith("http://")) {
     return "Android dang chan ket noi HTTP toi Group API. Hay dung HTTPS hoac rebuild Android dev client sau khi bat cleartext traffic.";
   }
@@ -458,7 +481,7 @@ async function requestGroup(
       method: options.method,
       url,
     });
-    throw new Error(getConnectionErrorMessage(url));
+    throw new Error(getConnectionErrorMessage(url, error));
   }
 
   const responseBody = await parseResponseBody(response);
@@ -508,7 +531,7 @@ export async function createCommunityGroup({
   const imageFilePart = buildImageFilePart(imageFile);
 
   if (imageFilePart) {
-    formData.append("imageFile", imageFilePart as unknown as Blob);
+    formData.append("imageFile", imageFilePart.file, imageFilePart.name);
   }
 
   let response: Response;
@@ -534,7 +557,7 @@ export async function createCommunityGroup({
       method: "POST",
       url,
     });
-    throw new Error(getConnectionErrorMessage(url));
+    throw new Error(getConnectionErrorMessage(url, error));
   }
 
   const responseBody = await parseResponseBody(response);
@@ -702,7 +725,7 @@ export async function updateCommunityGroup({
   const imageFilePart = buildImageFilePart(imageFile);
 
   if (imageFilePart) {
-    formData.append("imageFile", imageFilePart as unknown as Blob);
+    formData.append("imageFile", imageFilePart.file, imageFilePart.name);
   }
 
   let response: Response;
@@ -728,7 +751,7 @@ export async function updateCommunityGroup({
       method: "PUT",
       url,
     });
-    throw new Error(getConnectionErrorMessage(url));
+    throw new Error(getConnectionErrorMessage(url, error));
   }
 
   const responseBody = await parseResponseBody(response);
