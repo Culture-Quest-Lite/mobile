@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
@@ -77,13 +78,14 @@ function padDatePart(value: number) {
   return `${value}`.padStart(2, "0");
 }
 
-function formatGroupRowDate(group: CommunityGroupPayload) {
-  const normalizedDateValue = normalizeDateValue(
-    group.updatedAt ?? group.createdAt,
-  );
+function formatGroupRowDate(
+  group: CommunityGroupPayload,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  const normalizedDateValue = normalizeDateValue(group.updatedAt ?? group.createdAt);
 
   if (!normalizedDateValue) {
-    return "Mới";
+    return t("community.groupsScreen.dateNew");
   }
 
   const date = new Date(normalizedDateValue);
@@ -92,11 +94,42 @@ function formatGroupRowDate(group: CommunityGroupPayload) {
     return normalizedDateValue.slice(0, 10).replace(/-/g, "/");
   }
 
-  return `${padDatePart(date.getDate())}/${padDatePart(date.getMonth() + 1)}/${date.getFullYear()}`;
+  const today = new Date();
+  const isToday =
+    date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear();
+
+  if (isToday) {
+    return t("community.groupsScreen.dateToday");
+  }
+
+  return `${padDatePart(date.getDate())}/${padDatePart(date.getMonth() + 1)}`;
 }
 
-function getGroupAccessLabel(requiredApproval?: boolean | null) {
-  return requiredApproval === true ? "Cần leader duyệt" : "Tham gia tự do";
+function getLocalizedGroupStatusLabel(
+  status: string | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  switch ((status ?? "").trim().toUpperCase()) {
+    case "ACTIVE":
+      return t("community.groupsScreen.status.active");
+    case "PENDING":
+      return t("community.groupsScreen.status.pending");
+    case "INACTIVE":
+      return t("community.groupsScreen.status.inactive");
+    default:
+      return t("community.groupsScreen.status.default");
+  }
+}
+
+function getGroupAccessLabel(
+  requiredApproval: boolean | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  return requiredApproval === true
+    ? t("community.groupsScreen.access.approvalRequired")
+    : t("community.groupsScreen.access.openJoin");
 }
 
 function getGroupAccessPalette(requiredApproval?: boolean | null) {
@@ -188,7 +221,9 @@ function CommunityGroupListRow({
   isLeader?: boolean;
   onPress: () => void;
 }) {
-  const groupName = readMeaningfulText(group.groupName) ?? "Nhóm chưa đặt tên";
+  const { t } = useTranslation();
+  const groupName =
+    readMeaningfulText(group.groupName) ?? t("community.groupsScreen.unnamedGroup");
   const accessPalette = getGroupAccessPalette(group.requiredApproval);
 
   return (
@@ -234,13 +269,26 @@ function CommunityGroupListRow({
               </View>
             </View>
             <Text
-              className="text-[12px] font-normal text-[#A9A1B1]"
+              className="text-[11px] font-normal text-[#A9A1B1]"
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(11),
+              }}
+            >
+              {formatGroupRowDate(group, t)}
+            </Text>
+          </View>
+
+          <View className="mt-0.5 flex-row items-center">
+            <View className="h-2 w-2 rounded-full bg-[#4BB862]" />
+            <Text
+              className="ml-1.5 text-[12px] font-normal text-[#7A6F67]"
               style={{
                 includeFontPadding: false,
                 lineHeight: lineHeightFor(12),
               }}
             >
-              {formatGroupRowDate(group)}
+              {getLocalizedGroupStatusLabel(group.status, t)}
             </Text>
           </View>
 
@@ -265,7 +313,9 @@ function CommunityGroupListRow({
                   lineHeight: lineHeightFor(12),
                 }}
               >
-                {formatCompactCount(group.totalMembers)} thành viên
+                {t("community.groupsScreen.memberCountLabel", {
+                  count: formatCompactCount(group.totalMembers),
+                })}
               </Text>
             </View>
 
@@ -286,7 +336,7 @@ function CommunityGroupListRow({
                   lineHeight: lineHeightFor(12),
                 }}
               >
-                {getGroupAccessLabel(group.requiredApproval)}
+                {getGroupAccessLabel(group.requiredApproval, t)}
               </Text>
             </View>
           </View>
@@ -313,6 +363,7 @@ function CommunityGroupsLoadingState() {
 }
 
 export default function CommunityGroupsScreen() {
+  const { t } = useTranslation();
   const authSession = useAuthSession();
   const router = useRouter();
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
@@ -391,7 +442,10 @@ export default function CommunityGroupsScreen() {
     });
 
     if (!cachedGroup) {
-      Alert.alert("Không mở được nhóm", "Dữ liệu nhóm này chưa hợp lệ.");
+      Alert.alert(
+        t("community.groupsCommon.openErrorTitle"),
+        t("community.groupsCommon.openErrorMessage"),
+      );
       return;
     }
 
@@ -415,7 +469,7 @@ export default function CommunityGroupsScreen() {
         onBack={() => {
           router.back();
         }}
-        title="Tất cả nhóm"
+        title={t("community.groupsScreen.headerTitle")}
       />
 
       <ScrollView
@@ -451,7 +505,7 @@ export default function CommunityGroupsScreen() {
                   lineHeight: lineHeightFor(16),
                 }}
               >
-                Nhóm của bạn
+                {t("community.groupsScreen.heroTitle")}
               </Text>
               <Text
                 className="mt-0.5 text-[13px] font-normal text-[#7A6F67]"
@@ -461,8 +515,10 @@ export default function CommunityGroupsScreen() {
                 }}
               >
                 {status === "ready"
-                  ? `${groups.length} nhóm đang có sẵn trong tài khoản của bạn`
-                  : "Danh sách nhóm sẽ được làm mới khi bạn mở màn này"}
+                  ? t("community.groupsScreen.heroSubtitleReady", {
+                      count: groups.length,
+                    })
+                  : t("community.groupsScreen.heroSubtitlePending")}
               </Text>
 
               <Pressable
@@ -490,7 +546,7 @@ export default function CommunityGroupsScreen() {
                       lineHeight: lineHeightFor(13),
                     }}
                   >
-                    Tạo nhóm mới
+                    {t("community.groupsScreen.createButton")}
                   </Text>
                 </LinearGradient>
               </Pressable>
@@ -517,7 +573,7 @@ export default function CommunityGroupsScreen() {
             <TextInput
               className="ml-2 flex-1 text-[14px] text-[#2E2336]"
               onChangeText={setSearchQuery}
-              placeholder="Tìm kiếm nhóm..."
+              placeholder={t("community.groupsScreen.searchPlaceholder")}
               placeholderTextColor="#B1A8BA"
               style={{ includeFontPadding: false }}
               value={searchQuery}
@@ -544,7 +600,7 @@ export default function CommunityGroupsScreen() {
                 lineHeight: lineHeightFor(13),
               }}
             >
-              Bộ lọc
+              {t("common.filter")}
             </Text>
           </View>
         </View>
@@ -552,13 +608,13 @@ export default function CommunityGroupsScreen() {
         {status === "error" && groups.length === 0 ? (
           <View className="mt-4">
             <CommunityGroupStateCard
-              actionLabel="Thử lại"
+              actionLabel={t("common.retry")}
               description={
-                errorMessage ?? "Không tải được danh sách nhóm cộng đồng."
+                errorMessage ?? t("community.groupsCommon.loadError")
               }
               icon="error"
               onPress={reload}
-              title="Không tải được nhóm"
+              title={t("community.groupsCommon.loadErrorTitle")}
               variant="error"
             />
           </View>
@@ -567,11 +623,11 @@ export default function CommunityGroupsScreen() {
         {status === "ready" && groups.length === 0 ? (
           <View className="mt-4">
             <CommunityGroupStateCard
-              actionLabel="Tạo nhóm"
-              description="Bạn chưa có nhóm nào. Hãy tạo nhóm đầu tiên để bắt đầu."
+              actionLabel={t("community.groups.create")}
+              description={t("community.groupsScreen.emptyDescription")}
               icon="groups"
               onPress={openCommunityGroupCreate}
-              title="Chưa có nhóm"
+              title={t("community.groupsCommon.emptyTitle")}
               variant="empty"
             />
           </View>
@@ -580,9 +636,9 @@ export default function CommunityGroupsScreen() {
         {groups.length > 0 && filteredGroups.length === 0 ? (
           <View className="mt-4">
             <CommunityGroupStateCard
-              description="Thử nhập tên nhóm khác để tìm lại danh sách phù hợp."
+              description={t("community.groupsScreen.searchEmptyDescription")}
               icon="groups"
-              title="Không tìm thấy nhóm"
+              title={t("community.groupsScreen.searchEmptyTitle")}
               variant="empty"
             />
           </View>

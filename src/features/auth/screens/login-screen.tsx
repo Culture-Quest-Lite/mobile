@@ -3,6 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Image,
   KeyboardAvoidingView,
@@ -67,6 +68,7 @@ const buttonShadowStyle = {
 } as const;
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { entry, redirectTo } = useLocalSearchParams<{
     entry?: string;
@@ -211,7 +213,7 @@ export default function LoginScreen() {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "Không thể đăng nhập. Vui lòng thử lại.",
+          : t("auth.login.errorCannotLogin"),
       );
     } finally {
       setIsSubmitting(false);
@@ -245,7 +247,9 @@ export default function LoginScreen() {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : `Không thể đăng nhập với ${provider === "facebook" ? "Facebook" : "Google"}. Vui lòng thử lại.`,
+          : t("auth.login.errorCannotLoginWithProvider", {
+              provider: provider === "facebook" ? "Facebook" : "Google",
+            }),
       );
     } finally {
       setPendingSocialProvider(null);
@@ -347,10 +351,10 @@ export default function LoginScreen() {
                     className="font-extrabold text-[#EB489B]"
                     style={{ fontSize: titleSize }}
                   >
-                    Đăng nhập
+                    {t("auth.login.title")}
                   </Text>
                   <Text className="text-[14px] text-[#8E869A]">
-                    Nhập tài khoản của bạn để đăng nhập
+                    {t("auth.login.subtitle")}
                   </Text>
                 </View>
 
@@ -364,8 +368,8 @@ export default function LoginScreen() {
                       editable={!isSubmitting}
                       errorMessage={usernameError}
                       inputClassName={fieldHeightClassName}
-                      label="Tên đăng nhập"
-                      placeholder="Nhập tên đăng nhập"
+                      label={t("auth.login.username")}
+                      placeholder={t("auth.login.usernamePlaceholder")}
                       textContentType="username"
                       value={username}
                       onBlur={() => markFieldTouched("username")}
@@ -383,15 +387,17 @@ export default function LoginScreen() {
                       editable={!isSubmitting}
                       errorMessage={passwordError}
                       inputClassName={fieldHeightClassName}
-                      label="Mật khẩu"
+                      label={t("auth.login.password")}
                       onSubmitEditing={() => {
                         void handleLogin();
                       }}
-                      placeholder="Nhập mật khẩu"
+                      placeholder={t("auth.login.passwordPlaceholder")}
                       rightAccessory={
                         <Pressable
                           accessibilityLabel={
-                            isPasswordVisible ? "Ẩn mật khẩu" : "Hiện mật khẩu"
+                            isPasswordVisible
+                              ? t("auth.login.hidePassword")
+                              : t("auth.login.showPassword")
                           }
                           className="h-9 w-9 items-center justify-center"
                           disabled={isSubmitting}
@@ -435,7 +441,7 @@ export default function LoginScreen() {
                       onPress={() => router.push("/forgot-password?entry=home")}
                     >
                       <Text className="text-[14px] font-medium text-[#8E869A]">
-                        Bạn quên mật khẩu?
+                        {t("auth.login.forgotPassword")}
                       </Text>
                     </Pressable>
 
@@ -457,9 +463,11 @@ export default function LoginScreen() {
                         start={{ x: 0, y: 0.5 }}
                         className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
                       >
-                        <Text className="text-[16px] font-extrabold text-white">
-                          {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
-                        </Text>
+                      <Text className="text-[16px] font-extrabold text-white">
+                        {isSubmitting
+                          ? t("auth.login.loggingIn")
+                          : t("auth.login.loginButton")}
+                      </Text>
                       </LinearGradient>
                     </Pressable>
 
@@ -474,7 +482,7 @@ export default function LoginScreen() {
                     <View className="flex-row items-center justify-center gap-3">
                       <View className="h-px flex-1 bg-[#F0E8F4]" />
                       <Text className="text-[13px] font-medium text-[#AA9FB0]">
-                        Hoặc đăng nhập với
+                        {t("auth.login.orLoginWith")}
                       </Text>
                       <View className="h-px flex-1 bg-[#F0E8F4]" />
                     </View>
@@ -501,13 +509,13 @@ export default function LoginScreen() {
 
                     <View className="flex-row items-center justify-center gap-1.5">
                       <Text className="text-[14px] text-[#8E869A]">
-                        Bạn chưa có tài khoản?
+                        {t("auth.login.noAccount")}
                       </Text>
                       <Pressable
                         onPress={() => router.push("/register?entry=home")}
                       >
                         <Text className="text-[14px] font-extrabold text-[#F58752]">
-                          Đăng ký
+                          {t("auth.login.signUp")}
                         </Text>
                       </Pressable>
                     </View>

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "272821188601",
+    "project_id": "culture-quest-lite-d5fee",
+    "storage_bucket": "culture-quest-lite-d5fee.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:272821188601:android:aa2f1c6ccc0eb162f4ef28",
+        "android_client_info": {
+          "package_name": "com.anonymous.Culture_quest_lite_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC-LgbyWmUyvwMk0t9P5IPexoSoRybZgmU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

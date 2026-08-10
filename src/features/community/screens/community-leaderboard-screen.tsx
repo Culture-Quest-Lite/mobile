@@ -13,6 +13,7 @@ import { LeaderRankingCard } from "@/features/home/components/leader-ranking-car
 import { textStyle } from "@/lib/text-scale";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -70,14 +71,17 @@ function getCommunityLeaderboardBadgeTextColor(rank: number) {
   return isTopCommunityLeaderboardRank(rank) ? "#FFFFFF" : "#667085";
 }
 
-function buildSummaryContent(entries: UserLeaderboardEntryDto[]) {
+function buildSummaryContent(
+  entries: UserLeaderboardEntryDto[],
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   if (entries.length === 0) {
     return {
-      note: "Bảng xếp hạng sẽ hiển thị khi có hoạt động cộng đồng.",
+      note: t("community.leaderboard.emptyNote"),
       rankLabel: "#--",
-      title: "Chưa có dữ liệu bảng xếp hạng",
+      title: t("community.leaderboard.emptyTitle"),
       totalXp: 0,
-      totalXpLabel: "0 XP",
+      totalXpLabel: t("community.leaderboard.xpLabel", { value: 0 }),
     };
   }
 
@@ -87,14 +91,16 @@ function buildSummaryContent(entries: UserLeaderboardEntryDto[]) {
   const currentUserEntry =
     sortedEntries.find((entry) => entry.isCurrentUser) ?? null;
   const summaryEntry = currentUserEntry ?? sortedEntries[0];
-  const totalXpLabel = `${formatCommunityXp(summaryEntry.totalXp)} XP`;
+  const totalXpLabel = t("community.leaderboard.xpLabel", {
+    value: formatCommunityXp(summaryEntry.totalXp),
+  });
 
   if (currentUserEntry) {
     if (currentUserEntry.rank === 1) {
       return {
-        note: `Tiếp tục giữ phong độ hôm nay!`,
+        note: t("community.leaderboard.rankOneNote"),
         rankLabel: `#${currentUserEntry.rank}`,
-        title: "Bạn đang dẫn đầu bảng xếp hạng",
+        title: t("community.leaderboard.rankOneTitle"),
         totalXp: summaryEntry.totalXp,
         totalXpLabel,
       };
@@ -104,32 +110,41 @@ function buildSummaryContent(entries: UserLeaderboardEntryDto[]) {
       (entry) => entry.rank === currentUserEntry.rank - 1,
     );
     const gapLabel = previousRankEntry
-      ? `${formatCommunityXp(
-          Math.max(previousRankEntry.totalXp - currentUserEntry.totalXp, 0),
-        )} XP`
+      ? t("community.leaderboard.xpLabel", {
+          value: formatCommunityXp(
+            Math.max(previousRankEntry.totalXp - currentUserEntry.totalXp, 0),
+          ),
+        })
       : totalXpLabel;
 
     return {
       note: previousRankEntry
-        ? `Còn ${gapLabel} để vượt hạng #${previousRankEntry.rank}.`
-        : `Bạn hiện có ${totalXpLabel}.`,
+        ? t("community.leaderboard.gapNote", {
+            gap: gapLabel,
+            rank: previousRankEntry.rank,
+          })
+        : t("community.leaderboard.currentXpNote", { xp: totalXpLabel }),
       rankLabel: `#${currentUserEntry.rank}`,
-      title: "Thứ hạng hiện tại của bạn",
+      title: t("community.leaderboard.currentRankTitle"),
       totalXp: summaryEntry.totalXp,
       totalXpLabel,
     };
   }
 
   return {
-    note: `${getCommunityLeaderboardDisplayName(summaryEntry)} đang dẫn đầu với ${totalXpLabel}.`,
+    note: t("community.leaderboard.leaderNote", {
+      name: getCommunityLeaderboardDisplayName(summaryEntry),
+      xp: totalXpLabel,
+    }),
     rankLabel: `#${summaryEntry.rank}`,
-    title: "Người dẫn đầu cộng đồng hôm nay",
+    title: t("community.leaderboard.leaderTitle"),
     totalXp: summaryEntry.totalXp,
     totalXpLabel,
   };
 }
 
 export default function CommunityLeaderboardScreen() {
+  const { t } = useTranslation();
   const authSession = useAuthSession();
   const router = useRouter();
   const [entries, setEntries] = useState<UserLeaderboardEntryDto[]>([]);
@@ -174,7 +189,7 @@ export default function CommunityLeaderboardScreen() {
           setErrorMessage(
             error instanceof Error
               ? error.message
-              : "Không tải được bảng xếp hạng cộng đồng.",
+              : t("community.leaderboard.loadError"),
           );
           setStatus("error");
         }
@@ -186,10 +201,13 @@ export default function CommunityLeaderboardScreen() {
       return () => {
         isActive = false;
       };
-    }, [authSession.isAuthenticated, authSession.tokenType, retryNonce]),
+    }, [authSession.isAuthenticated, authSession.tokenType, retryNonce, t]),
   );
 
-  const summaryContent = useMemo(() => buildSummaryContent(entries), [entries]);
+  const summaryContent = useMemo(
+    () => buildSummaryContent(entries, t),
+    [entries, t],
+  );
 
   if (status === "loading" && entries.length === 0) {
     return <AppLoadingScreen />;
@@ -224,8 +242,8 @@ export default function CommunityLeaderboardScreen() {
           />
         </Pressable>
 
-        <Text className="text-[16px] text-[#2E2336]" style={textStyle(16)}>
-          Bảng xếp hạng
+        <Text className="text-[16px] font-semibold text-[#1F2940]">
+          {t("community.leaderboard.header")}
         </Text>
 
         <View className="h-10 w-10" />
@@ -237,11 +255,11 @@ export default function CommunityLeaderboardScreen() {
             className="rounded-[24px] border border-[#F6D8E5] bg-white px-5 py-6"
             style={leaderboardCardShadow}
           >
-            <Text className="text-[18px] text-[#2F2337]" style={textStyle(18)}>
-              Không tải được bảng xếp hạng
+            <Text className="text-[17px] font-semibold text-[#1F2940]">
+              {t("community.leaderboard.errorTitle")}
             </Text>
-            <Text className="mt-2 text-[12px] text-[#8F8298]" style={textStyle(12)}>
-              {errorMessage ?? "Vui lòng thử lại sau."}
+            <Text className="mt-2 text-[13px] leading-5 text-[#8F8290]">
+              {errorMessage ?? t("community.leaderboard.errorFallback")}
             </Text>
 
             <Pressable
@@ -250,8 +268,8 @@ export default function CommunityLeaderboardScreen() {
                 setRetryNonce((currentValue) => currentValue + 1);
               }}
             >
-              <Text className="text-center text-[13px] text-white" style={textStyle(13)}>
-                Thử lại
+              <Text className="text-center text-[13px] font-semibold text-white">
+                {t("common.retry")}
               </Text>
             </Pressable>
           </View>
@@ -417,8 +435,10 @@ export default function CommunityLeaderboardScreen() {
                       size={10}
                       tintColor="#FF5F87"
                     />
-                    <Text className="ml-1 text-[13px] text-[#2F2337]" style={textStyle(13)}>
-                      {formatCommunityXp(entry.totalXp)} XP
+                    <Text className="ml-1 text-[10px] font-medium leading-[13px] text-[#2B2233]">
+                      {t("community.leaderboard.xpLabel", {
+                        value: formatCommunityXp(entry.totalXp),
+                      })}
                     </Text>
                   </View>
                 </Pressable>

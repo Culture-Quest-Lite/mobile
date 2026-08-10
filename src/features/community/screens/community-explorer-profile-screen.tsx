@@ -53,6 +53,7 @@ import {
   useState,
   type ComponentProps,
 } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -106,26 +107,30 @@ type ResolvedExplorerRoutePreview = {
   routeName: string;
 };
 
-const PROFILE_TABS: readonly {
+function buildProfileTabs(
+  t: (key: string, options?: Record<string, unknown>) => string,
+): readonly {
   key: ProfileTabKey;
   label: string;
   icon: SymbolName;
-}[] = [
-  {
-    key: "posts",
-    label: "Bài viết",
-    icon: {
-      ios: "rectangle.grid.1x2",
-      android: "view_agenda",
-      web: "view_agenda",
+}[] {
+  return [
+    {
+      key: "posts",
+      label: t("community.explorerProfile.tabs.posts"),
+      icon: {
+        ios: "rectangle.grid.1x2",
+        android: "view_agenda",
+        web: "view_agenda",
+      },
     },
-  },
-  {
-    key: "routes",
-    label: "Tuyến đường",
-    icon: { ios: "map", android: "route", web: "route" },
-  },
-] as const;
+    {
+      key: "routes",
+      label: t("community.explorerProfile.tabs.routes"),
+      icon: { ios: "map", android: "route", web: "route" },
+    },
+  ] as const;
+}
 
 const cardShadow = {
   shadowColor: "rgba(28, 45, 80, 0.10)",
@@ -200,7 +205,8 @@ function formatRoleLabel(role: string | null) {
 
 function buildCommunityExplorerProfileFromApiProfile(
   profile: Profile,
-  fallbackProfile?: CommunityExplorerProfile | null,
+  fallbackProfile: CommunityExplorerProfile | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): CommunityExplorerProfile {
   const normalizedName =
     readMeaningfulText(profile.name) ??
@@ -225,7 +231,7 @@ function buildCommunityExplorerProfileFromApiProfile(
     headline:
       fallbackHeadline ??
       ([levelLabel, formattedRole].filter(Boolean).join(" • ") ||
-        "Explorer đang hoạt động trên cộng đồng Culture Quest."),
+        t("community.explorerProfile.fallbackHeadline")),
     bio: "",
     birthDate: "",
     city: "",
@@ -272,11 +278,14 @@ function formatProfileDate(value?: string | null) {
     .padStart(2, "0")}/${parsedDate.getFullYear()}`;
 }
 
-function formatCommunityTime(value?: string | null) {
+function formatCommunityTime(
+  value: string | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   const normalizedValue = readMeaningfulText(value);
 
   if (!normalizedValue) {
-    return "Vừa xong";
+    return t("community.time.justNow");
   }
 
   const parsedDate = new Date(normalizedValue);
@@ -289,25 +298,25 @@ function formatCommunityTime(value?: string | null) {
   const elapsedMilliseconds = Date.now() - parsedTime;
 
   if (elapsedMilliseconds < 60 * 1000) {
-    return "Vừa xong";
+    return t("community.time.justNow");
   }
 
   const elapsedMinutes = Math.floor(elapsedMilliseconds / (60 * 1000));
 
   if (elapsedMinutes < 60) {
-    return `${elapsedMinutes} phút trước`;
+    return t("community.time.minutesAgo", { count: elapsedMinutes });
   }
 
   const elapsedHours = Math.floor(elapsedMinutes / 60);
 
   if (elapsedHours < 24) {
-    return `${elapsedHours} giờ trước`;
+    return t("community.time.hoursAgo", { count: elapsedHours });
   }
 
   const elapsedDays = Math.floor(elapsedHours / 24);
 
   if (elapsedDays < 7) {
-    return `${elapsedDays} ngày trước`;
+    return t("community.time.daysAgo", { count: elapsedDays });
   }
 
   return formatProfileDate(normalizedValue) ?? normalizedValue;
@@ -400,20 +409,23 @@ function normalizeExplorerPostStatus(value?: string | null) {
   }
 }
 
-function getExplorerPostStatusLabel(value?: string | null) {
+function getExplorerPostStatusLabel(
+  value: string | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   switch (normalizeExplorerPostStatus(value)) {
     case "APPROVED":
-      return "Đã duyệt";
+      return t("community.status.approved");
     case "PENDING":
-      return "Chờ duyệt";
+      return t("community.status.pending");
     case "REJECTED":
-      return "Bị từ chối";
+      return t("community.status.rejected");
     case "DELETED":
-      return "Đã xóa";
+      return t("community.status.deleted");
     default:
       return typeof value === "string" && value.trim()
         ? value.trim()
-        : "Chưa rõ";
+        : t("community.explorerProfile.statusUnknown");
   }
 }
 
@@ -472,6 +484,7 @@ function buildCommunityFeedMediaItems(post: CommunityFeedPost) {
 function buildExplorerRouteLabel(
   routeIds: number[],
   resolvedRoutes: Record<number, ResolvedExplorerRoutePreview>,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ) {
   const validRouteIds = routeIds.filter(
     (routeId) => Number.isInteger(routeId) && routeId > 0,
@@ -488,15 +501,19 @@ function buildExplorerRouteLabel(
       : resolvedRoutes[primaryRouteId]?.routeName?.trim() || null;
 
   if (validRouteIds.length === 1) {
-    return primaryRouteName ?? "Đang tải tuyến đường...";
+    return primaryRouteName ?? t("community.explorerProfile.loadingRoute");
   }
 
-  return `${primaryRouteName ?? `${validRouteIds.length} tuyến đường được gắn`} +${validRouteIds.length - 1}`;
+  return `${
+    primaryRouteName ??
+    t("community.feed.location.routeTagged", { count: validRouteIds.length })
+  } +${validRouteIds.length - 1}`;
 }
 
 function buildExplorerHotspotSubtitle(
   hotspotIds: number[],
   resolvedHotspots: Record<number, ResolvedExplorerHotspotPreview>,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ) {
   const validHotspotIds = hotspotIds.filter(
     (hotspotId) => Number.isInteger(hotspotId) && hotspotId > 0,
@@ -513,16 +530,22 @@ function buildExplorerHotspotSubtitle(
     .filter((hotspotName): hotspotName is string => Boolean(hotspotName));
 
   if (validHotspotIds.length === 1) {
-    return hotspotNames[0] ?? "Đang tải địa điểm...";
+    return hotspotNames[0] ?? t("community.explorerProfile.loadingLocation");
   }
 
   if (hotspotNames.length >= 2) {
     return hotspotNames.length === 2
       ? `${hotspotNames[0]}, ${hotspotNames[1]}`
-      : `${hotspotNames[0]}, ${hotspotNames[1]} và ${validHotspotIds.length - 2} địa điểm khác`;
+      : t("community.feed.hotspotMoreLabel", {
+          count: validHotspotIds.length - 2,
+          first: hotspotNames[0],
+          second: hotspotNames[1],
+        });
   }
 
-  return `${validHotspotIds.length} địa điểm được gắn`;
+  return t("community.feed.location.hotspotTagged", {
+    count: validHotspotIds.length,
+  });
 }
 
 function buildExplorerHotspotImageUris(
@@ -577,11 +600,12 @@ function hasSharedProfilePost(post: ProfilePost) {
 
 function mapProfilePostToCommunityFeedPost(
   post: ProfilePost,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): CommunityFeedPost {
   const author =
     readMeaningfulText(post.displayName) ??
     readMeaningfulText(post.username) ??
-    "Người dùng";
+    t("community.feed.fallbackUserName");
   const normalizedUsername =
     readMeaningfulText(post.username)?.replace(/^@+/, "") ?? null;
   const tags = post.tags
@@ -593,7 +617,7 @@ function mapProfilePostToCommunityFeedPost(
   const caption =
     readMeaningfulText(post.text) ??
     readMeaningfulText(sharedPost?.content) ??
-    "Bài viết mới từ cộng đồng.";
+    t("community.feed.fallbackCaption");
 
   return {
     id: `profile-post-${post.id}`,
@@ -601,11 +625,11 @@ function mapProfilePostToCommunityFeedPost(
     author,
     initials: getProfileInitials(author, normalizedUsername ?? author),
     role: normalizedUsername ? `@${normalizedUsername}` : "Explorer community",
-    time: formatCommunityTime(post.createdAt),
+    time: formatCommunityTime(post.createdAt, t),
     caption,
     location: "",
     mood: "",
-    badge: sharedPost ? "Chia sẻ" : "",
+    badge: sharedPost ? t("community.feed.badge.shared") : "",
     hotScore: "",
     views: "",
     likes: formatCountLabel(post.likeCount),
@@ -680,6 +704,7 @@ function buildApiRouteReferences(
 }
 
 export default function CommunityExplorerProfileScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const authSession = useAuthSession();
   const likedPostsAccountKey = authSession.isAuthenticated
@@ -777,7 +802,7 @@ export default function CommunityExplorerProfileScreen() {
             message:
               nextProfileResult.reason instanceof Error
                 ? nextProfileResult.reason.message
-                : "Không thể tải hồ sơ explorer.",
+                : t("community.explorerProfile.loadProfileError"),
           });
         }
 
@@ -808,7 +833,7 @@ export default function CommunityExplorerProfileScreen() {
           message:
             nextPostsResult.reason instanceof Error
               ? nextPostsResult.reason.message
-              : "Không thể tải bài viết của explorer.",
+              : t("community.explorerProfile.loadPostsError"),
         });
       } catch (error) {
         if (!isActive) {
@@ -827,14 +852,14 @@ export default function CommunityExplorerProfileScreen() {
           message:
             error instanceof Error
               ? error.message
-              : "Không thể tải hồ sơ explorer.",
+              : t("community.explorerProfile.loadProfileError"),
         });
         setRemotePostsErrorEntry({
           explorerId,
           message:
             error instanceof Error
               ? error.message
-              : "Không thể tải bài viết của explorer.",
+              : t("community.explorerProfile.loadPostsError"),
         });
       }
     })();
@@ -848,6 +873,7 @@ export default function CommunityExplorerProfileScreen() {
     explorerId,
     numericExplorerId,
     shouldLoadRemoteProfile,
+    t,
   ]);
   const remoteProfile =
     shouldLoadRemoteProfile &&
@@ -884,9 +910,10 @@ export default function CommunityExplorerProfileScreen() {
         ? buildCommunityExplorerProfileFromApiProfile(
             remoteProfile,
             cachedExplorerProfileEntry?.profile,
+            t,
           )
         : null,
-    [cachedExplorerProfileEntry?.profile, remoteProfile],
+    [cachedExplorerProfileEntry?.profile, remoteProfile, t],
   );
   const profile = useMemo(
     () =>
@@ -908,7 +935,9 @@ export default function CommunityExplorerProfileScreen() {
         ? demoProfile
           ? getCommunityPostsByAuthorId(explorerId)
           : usesApiProfileLayout
-            ? (remotePosts ?? []).map(mapProfilePostToCommunityFeedPost)
+            ? (remotePosts ?? []).map((post) =>
+                mapProfilePostToCommunityFeedPost(post, t),
+              )
             : (cachedExplorerProfileEntry?.posts ?? [])
         : [],
     [
@@ -916,6 +945,7 @@ export default function CommunityExplorerProfileScreen() {
       demoProfile,
       explorerId,
       remotePosts,
+      t,
       usesApiProfileLayout,
     ],
   );
@@ -1073,8 +1103,8 @@ export default function CommunityExplorerProfileScreen() {
 
       if (!authSession.isAuthenticated) {
         Alert.alert(
-          "Cần đăng nhập",
-          "Bạn cần đăng nhập để thả tim bài viết cộng đồng.",
+          t("community.feed.loginRequiredTitle"),
+          t("community.feed.loginRequiredLike"),
         );
         return;
       }
@@ -1083,8 +1113,8 @@ export default function CommunityExplorerProfileScreen() {
 
       if (!accessToken) {
         Alert.alert(
-          "Phiên đăng nhập hết hạn",
-          "Vui lòng đăng nhập lại trước khi thả tim bài viết cộng đồng.",
+          t("community.feed.sessionExpiredTitle"),
+          t("community.feed.sessionExpiredLike"),
         );
         return;
       }
@@ -1154,10 +1184,10 @@ export default function CommunityExplorerProfileScreen() {
         }
 
         Alert.alert(
-          "Không thể thả tim",
+          t("community.feed.likeErrorTitle"),
           error instanceof Error
             ? error.message
-            : "Đã có lỗi xảy ra khi thả tim bài viết cộng đồng.",
+            : t("community.feed.likeErrorMessage"),
         );
       } finally {
         setLikingPostIds((current) =>
@@ -1171,6 +1201,7 @@ export default function CommunityExplorerProfileScreen() {
       likedPostIdsSet,
       likedPostsAccountKey,
       likingPostIdsSet,
+      t,
     ],
   );
 
@@ -1180,16 +1211,16 @@ export default function CommunityExplorerProfileScreen() {
 
       if (typeof postNumericId !== "number" || postNumericId <= 0) {
         Alert.alert(
-          "Không thể chia sẻ",
-          "Bài viết này chưa có mã hợp lệ để chia sẻ.",
+          t("community.feed.shareErrorTitle"),
+          t("community.feed.shareInvalidIdMessage"),
         );
         return;
       }
 
       if (!authSession.isAuthenticated) {
         Alert.alert(
-          "Cần đăng nhập",
-          "Bạn cần đăng nhập để chia sẻ bài viết cộng đồng.",
+          t("community.feed.loginRequiredTitle"),
+          t("community.feed.loginRequiredShare"),
         );
         return;
       }
@@ -1198,7 +1229,7 @@ export default function CommunityExplorerProfileScreen() {
       setShareVisibility("PUBLIC");
       setSharePostTarget(post);
     },
-    [authSession.isAuthenticated],
+    [authSession.isAuthenticated, t],
   );
 
   const handleCloseSharePostComposer = useCallback(() => {
@@ -1223,8 +1254,8 @@ export default function CommunityExplorerProfileScreen() {
 
     if (!accessToken) {
       Alert.alert(
-        "Phiên đăng nhập hết hạn",
-        "Vui lòng đăng nhập lại trước khi chia sẻ bài viết cộng đồng.",
+        t("community.feed.sessionExpiredTitle"),
+        t("community.feed.sessionExpiredShare"),
       );
       return;
     }
@@ -1254,22 +1285,22 @@ export default function CommunityExplorerProfileScreen() {
       setShareDraft("");
       setShareVisibility("PUBLIC");
       Alert.alert(
-        "Đã chia sẻ",
+        t("community.explorerProfile.sharedAlertTitle"),
         normalizePostVisibilityValue(sharedPost.visibility) === "PRIVATE"
-          ? "Bài viết đã được chia sẻ vào mục riêng tư trong hồ sơ của bạn."
-          : "Bài viết đã được chia sẻ lên cộng đồng.",
+          ? t("community.explorerProfile.sharedPrivateMessage")
+          : t("community.explorerProfile.sharedPublicMessage"),
       );
     } catch (error) {
       Alert.alert(
-        "Không thể chia sẻ",
+        t("community.feed.shareErrorTitle"),
         error instanceof Error
           ? error.message
-          : "Đã có lỗi xảy ra khi chia sẻ bài viết cộng đồng.",
+          : t("community.feed.shareErrorMessage"),
       );
     } finally {
       setIsSharingPost(false);
     }
-  }, [authSession.tokenType, shareDraft, sharePostTarget, shareVisibility]);
+  }, [authSession.tokenType, shareDraft, sharePostTarget, shareVisibility, t]);
 
   useEffect(() => {
     posts.forEach((post) => {
@@ -1436,11 +1467,11 @@ export default function CommunityExplorerProfileScreen() {
       <SafeAreaView className="flex-1 items-center justify-center bg-[#F7F8FC] px-6">
         <StatusBar style="dark" />
         <Text className="text-center text-[18px] font-extrabold text-[#2B2233]">
-          Không tìm thấy explorer
+          {t("community.explorerProfile.notFoundTitle")}
         </Text>
         <Text className="mt-2 text-center text-[14px] leading-5 text-[#8E869A]">
           {remoteProfileError ??
-            "Hồ sơ cộng đồng này không còn khả dụng hoặc dữ liệu demo chưa được tạo."}
+            t("community.explorerProfile.notFoundMessage")}
         </Text>
         <Pressable
           onPress={() => router.replace("/bookings")}
@@ -1448,7 +1479,7 @@ export default function CommunityExplorerProfileScreen() {
           style={cardShadow}
         >
           <Text className="text-[14px] font-extrabold text-white">
-            Quay lại cộng đồng
+            {t("community.explorerProfile.backToCommunity")}
           </Text>
         </Pressable>
       </SafeAreaView>
@@ -1471,11 +1502,11 @@ export default function CommunityExplorerProfileScreen() {
         : Math.max(0, profile.followers + (isFollowingProfile ? 1 : -1));
   const postCount = remoteProfile?.totalPosts ?? posts.length;
   const socialStats = [
-    { label: "Đang theo dõi", value: profile.following },
-    { label: "Follower", value: followerCount },
-    { label: "Bài viết", value: postCount },
+    { label: t("community.explorerProfile.followingStat"), value: profile.following },
+    { label: t("community.explorerProfile.followerStat"), value: followerCount },
+    { label: t("community.explorerProfile.tabs.posts"), value: postCount },
   ];
-  const visibleTabs = PROFILE_TABS;
+  const visibleTabs = useMemo(() => buildProfileTabs(t), [t]);
   const resolvedActiveTab = visibleTabs.some((tab) => tab.key === activeTab)
     ? activeTab
     : "posts";
@@ -1494,7 +1525,10 @@ export default function CommunityExplorerProfileScreen() {
     }
 
     if (!authSession.isAuthenticated) {
-      Alert.alert("Cần đăng nhập", "Vui lòng đăng nhập để theo dõi explorer.");
+      Alert.alert(
+        t("community.feed.loginRequiredTitle"),
+        t("community.explorerProfile.loginToFollowMessage"),
+      );
       return;
     }
 
@@ -1502,8 +1536,8 @@ export default function CommunityExplorerProfileScreen() {
 
     if (!accessToken) {
       Alert.alert(
-        "Phiên đăng nhập đã hết hạn",
-        "Vui lòng đăng nhập lại để tiếp tục.",
+        t("community.feed.sessionExpiredTitle"),
+        t("community.explorerProfile.sessionExpiredFollowMessage"),
       );
       return;
     }
@@ -1533,10 +1567,10 @@ export default function CommunityExplorerProfileScreen() {
       }));
     } catch (error) {
       Alert.alert(
-        "Không thể cập nhật theo dõi",
+        t("community.explorerProfile.followErrorTitle"),
         error instanceof Error
           ? error.message
-          : "Đã có lỗi xảy ra khi cập nhật theo dõi.",
+          : t("community.explorerProfile.followErrorMessage"),
       );
     } finally {
       setIsFollowRequestPending(false);
@@ -1584,7 +1618,7 @@ export default function CommunityExplorerProfileScreen() {
             style={{ left: gutter, paddingTop: insets.top + 10, right: gutter }}
           >
             <Pressable
-              accessibilityLabel="Quay lại cộng đồng"
+              accessibilityLabel={t("community.explorerProfile.backToCommunity")}
               className="h-10 w-10 items-center justify-center rounded-full bg-black/30"
               onPress={() => router.replace("/bookings")}
             >
@@ -1655,8 +1689,8 @@ export default function CommunityExplorerProfileScreen() {
               <Pressable
                 accessibilityLabel={
                   isFollowingProfile
-                    ? "Bỏ theo dõi explorer"
-                    : "Theo dõi explorer"
+                    ? t("community.explorerProfile.unfollowA11y")
+                    : t("community.explorerProfile.followA11y")
                 }
                 className={`min-w-[128px] rounded-full px-5 py-2.5 ${
                   isFollowingProfile ? "bg-[#EDEFF4]" : "bg-[#FF4D73]"
@@ -1676,19 +1710,19 @@ export default function CommunityExplorerProfileScreen() {
                   }`}
                 >
                   {isFollowRequestPending
-                    ? "Đang xử lý..."
+                    ? t("community.explorerProfile.processingLabel")
                     : isFollowingProfile
-                      ? "Đã follow"
-                      : "Follow"}
+                      ? t("community.explorerProfile.followedLabel")
+                      : t("community.explorerProfile.followLabel")}
                 </Text>
               </Pressable>
 
               <Pressable
-                accessibilityLabel="Nhắn tin explorer"
+                accessibilityLabel={t("community.explorerProfile.messageA11y")}
                 className="rounded-full border border-[#E6E8EE] bg-white px-4 py-2.5"
               >
                 <Text className="text-[14px] font-bold text-[#2B2233]">
-                  Nhắn tin
+                  {t("community.explorerProfile.messageLabel")}
                 </Text>
               </Pressable>
             </View>
@@ -1733,7 +1767,7 @@ export default function CommunityExplorerProfileScreen() {
           <View className="mt-3">
             {resolvedActiveTab === "posts" ? (
               <PostsTabContent
-                emptyMessage="Explorer này chưa có bài viết công khai nào."
+                emptyMessage={t("community.explorerProfile.noPublicPosts")}
                 errorMessage={usesApiProfileLayout ? remotePostsError : null}
                 isSharingPost={isSharingPost}
                 likingPostIdsSet={likingPostIdsSet}
@@ -1865,6 +1899,7 @@ function PersonalInfoCard({
   apiProfile: Profile | null;
   profile: CommunityExplorerProfile;
 }) {
+  const { t } = useTranslation();
   const levelLabel =
     typeof apiProfile?.level === "number"
       ? `${apiProfile.level}`
@@ -1886,7 +1921,7 @@ function PersonalInfoCard({
                 android: "auto_awesome",
                 web: "auto_awesome",
               } satisfies SymbolName,
-              text: `Level: ${levelLabel}`,
+              text: t("community.explorerProfile.levelLabel", { level: levelLabel }),
             }
           : null,
         emailLabel
@@ -1897,7 +1932,7 @@ function PersonalInfoCard({
                 android: "mail",
                 web: "mail",
               } satisfies SymbolName,
-              text: `Email: ${emailLabel}`,
+              text: t("community.explorerProfile.emailLabel", { email: emailLabel }),
             }
           : null,
         createdAtLabel
@@ -1908,7 +1943,9 @@ function PersonalInfoCard({
                 android: "calendar_month",
                 web: "calendar_month",
               } satisfies SymbolName,
-              text: `Ngày tham gia: ${createdAtLabel}`,
+              text: t("community.explorerProfile.joinedDateLabel", {
+                date: createdAtLabel,
+              }),
             }
           : null,
       ].filter(isNonNull)
@@ -1920,12 +1957,14 @@ function PersonalInfoCard({
 
   if (!apiProfile) {
     const introText = profile.bio.trim() || profile.headline.trim();
-    const fallbackLevelLabel = `Level ${profile.level}`;
+    const fallbackLevelLabel = t("community.explorerProfile.levelLabel", {
+      level: profile.level,
+    });
 
     return (
       <View className="px-1 py-1">
         <Text className="text-[17px] font-extrabold text-[#202124]">
-          Thông tin cá nhân
+          {t("community.explorerProfile.personalInfoTitle")}
         </Text>
 
         <View className="mt-2.5 gap-2.5">
@@ -1973,7 +2012,7 @@ function PersonalInfoCard({
   return (
     <View className="px-1 py-1">
       <Text className="text-[17px] font-extrabold text-[#202124]">
-        Thông tin cá nhân
+        {t("community.explorerProfile.personalInfoTitle")}
       </Text>
 
       <View className="mt-2.5 gap-2.5">
@@ -2023,6 +2062,7 @@ function ExpandablePersonalInfoRow({
   icon: SymbolName;
   text: string;
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const maxLength = 78;
   const shouldTruncate = text.length > maxLength;
@@ -2045,7 +2085,8 @@ function ExpandablePersonalInfoRow({
             className="font-semibold text-[#F58752]"
             onPress={() => setExpanded((current) => !current)}
           >
-            {expanded ? " Thu gọn" : " Xem thêm"}
+            {" "}
+            {expanded ? t("community.feed.showLess") : t("community.feed.showMore")}
           </Text>
         ) : null}
       </Text>
@@ -2156,6 +2197,7 @@ function ExplorerPostAuthorAvatar({
 }
 
 function ExplorerExpandablePostCaption({ text }: { text: string }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const normalizedText = text.trim();
   const maxLength = 150;
@@ -2175,7 +2217,8 @@ function ExplorerExpandablePostCaption({ text }: { text: string }) {
           className="font-medium text-[#D4578F]"
           onPress={() => setExpanded((current) => !current)}
         >
-          {expanded ? " Rút gọn" : " Xem thêm"}
+          {" "}
+          {expanded ? t("community.feed.showLess") : t("community.feed.showMore")}
         </Text>
       ) : null}
     </Text>
@@ -2293,8 +2336,11 @@ function ExplorerSharedPostCard({
   sharedPost: SharedPostSummary;
   withTopSpacing: boolean;
 }) {
+  const { t } = useTranslation();
   const author =
-    sharedPost.displayName.trim() || sharedPost.username.trim() || "Người dùng";
+    sharedPost.displayName.trim() ||
+    sharedPost.username.trim() ||
+    t("community.feed.fallbackUserName");
   const content = stripTrailingHashtagBlock(sharedPost.content);
   const mediaItems: CommunityFeedMediaItem[] = sharedPost.medias
     .filter(
@@ -2380,6 +2426,7 @@ function ExplorerPostRouteCard({
   label: string;
   onPress?: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Pressable
       className="rounded-[16px] bg-[#FFF4F8] px-2.5 py-1.5"
@@ -2407,7 +2454,7 @@ function ExplorerPostRouteCard({
             className="text-[12px] font-semibold text-[#F2608E]"
             style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
           >
-            Route
+            {t("community.explorerProfile.routeCardLabel")}
           </Text>
           <Text
             className="text-[13px] font-medium text-[#4B414C]"
@@ -2442,6 +2489,7 @@ function ExplorerPostHotspotCard({
   onPress?: () => void;
   subtitle: string;
 }) {
+  const { t } = useTranslation();
   const previewImageUris = imageUris.slice(0, 3);
   const remainingCount = Math.max(
     imageUris.length - previewImageUris.length,
@@ -2475,7 +2523,7 @@ function ExplorerPostHotspotCard({
             className="text-[12px] font-semibold text-[#18A7B4]"
             style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
           >
-            {`${count} hotspot`}
+            {t("community.explorerProfile.hotspotCountLabel", { count })}
           </Text>
           <Text
             className="text-[13px] text-[#6D6671]"
@@ -2711,6 +2759,7 @@ function ExplorerSharePostModal({
   visibility: PostVisibilityValue;
   visible: boolean;
 }) {
+  const { t } = useTranslation();
   const [isVisibilityMenuOpen, setIsVisibilityMenuOpen] = useState(false);
   const [wasVisible, setWasVisible] = useState(visible);
 
@@ -2802,7 +2851,7 @@ function ExplorerSharePostModal({
                 maxLength={communitySharePostMaxLength}
                 multiline
                 onChangeText={onChangeDraft}
-                placeholder="Hãy nói gì đó về nội dung này..."
+                placeholder={t("community.feed.sharePlaceholder")}
                 placeholderTextColor="#B39EAD"
                 style={{
                   color: "#2F242C",
@@ -2842,7 +2891,9 @@ function ExplorerSharePostModal({
                       className="text-[14px] font-semibold text-white"
                       style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
                     >
-                      {isSubmitting ? "Đang chia sẻ..." : "Chia sẻ"}
+                      {isSubmitting
+                        ? t("community.explorerProfile.sharingLabel")
+                        : t("community.posts.share")}
                     </Text>
                   </LinearGradient>
                 </Pressable>
@@ -2884,21 +2935,22 @@ function ExplorerProfilePostCard({
   resolvedHotspots: Record<number, ResolvedExplorerHotspotPreview>;
   resolvedRoutes: Record<number, ResolvedExplorerRoutePreview>;
 }) {
+  const { t } = useTranslation();
   const authorName =
     readMeaningfulText(post.author) ??
     readMeaningfulText(profile.name) ??
-    "Người dùng";
+    t("community.feed.fallbackUserName");
   const sharedPost = post.sharedPost ?? null;
   const postContent =
     stripTrailingHashtagBlock(readMeaningfulText(post.caption) ?? "") ||
-    (sharedPost ? "" : "Chuyến đi hôm nay rất đáng nhớ.");
+    (sharedPost ? "" : t("community.explorerProfile.defaultPostContent"));
   const mediaItems = buildCommunityFeedMediaItems(post);
   const visibilityValue = normalizePostVisibilityValue(
     post.visibility ?? "PUBLIC",
   );
   const visibilityLabel = getPostVisibilityLabel(visibilityValue);
   const visibilityIcon = getPostVisibilityIcon(visibilityValue);
-  const statusLabel = getExplorerPostStatusLabel(post.status);
+  const statusLabel = getExplorerPostStatusLabel(post.status, t);
   const statusTone = getExplorerPostStatusTone(post.status);
   const normalizedStatus = normalizeExplorerPostStatus(post.status);
   const hasValidPostId =
@@ -2919,10 +2971,11 @@ function ExplorerProfilePostCard({
   const tagLabels = post.tags
     .map((tag) => formatProfileTagLabel(tag))
     .filter((tagLabel): tagLabel is string => Boolean(tagLabel));
-  const routeLabel = buildExplorerRouteLabel(routeIds, resolvedRoutes);
+  const routeLabel = buildExplorerRouteLabel(routeIds, resolvedRoutes, t);
   const hotspotSubtitle = buildExplorerHotspotSubtitle(
     hotspotIds,
     resolvedHotspots,
+    t,
   );
   const hotspotImageUris = buildExplorerHotspotImageUris(
     hotspotIds,
@@ -2930,7 +2983,9 @@ function ExplorerProfilePostCard({
   );
   const isPendingPost = normalizedStatus === "PENDING";
   const statusBadgeLabel =
-    normalizedStatus === "PENDING" ? "Chờ duyệt" : statusLabel;
+    normalizedStatus === "PENDING"
+      ? t("community.status.pending")
+      : statusLabel;
 
   return (
     <View
@@ -3147,7 +3202,7 @@ function ExplorerProfilePostCard({
               android: "share",
               web: "share",
             }}
-            label={shareCount > 0 ? shareCount : "Chia sẻ"}
+            label={shareCount > 0 ? shareCount : t("community.posts.share")}
             onPress={
               canInteractWithPost
                 ? () => {
@@ -3180,11 +3235,13 @@ function RoutesTabContent({
   favoriteRoutes: RouteItem[];
   onOpenRoute: (routeId: string) => void;
 }) {
+  const { t } = useTranslation();
+
   if (!completedRoutes.length && !favoriteRoutes.length) {
     return (
       <EmptyState
         icon={{ ios: "map", android: "map", web: "map" }}
-        message="Explorer này chưa chia sẻ route công khai nào."
+        message={t("community.explorerProfile.noPublicRoutes")}
       />
     );
   }
@@ -3192,29 +3249,33 @@ function RoutesTabContent({
   return (
     <View className="gap-3">
       <RouteSection
-        title="Route đã hoàn thành"
-        actionLabel={`${completedRoutes.length} route`}
-        emptyMessage="Chưa có route hoàn thành được chia sẻ công khai."
+        title={t("community.explorerProfile.completedRoutesTitle")}
+        actionLabel={t("community.explorerProfile.routeCountLabel", {
+          count: completedRoutes.length,
+        })}
+        emptyMessage={t("community.explorerProfile.noCompletedRoutes")}
         routes={completedRoutes}
         statusIcon={{
           ios: "checkmark.circle.fill",
           android: "task_alt",
           web: "task_alt",
         }}
-        statusLabel="Hoàn thành"
+        statusLabel={t("route.progress.completed")}
         onOpenRoute={onOpenRoute}
       />
       <RouteSection
-        title="Route yêu thích"
-        actionLabel={`${favoriteRoutes.length} route`}
-        emptyMessage="Chưa có route yêu thích được đánh dấu công khai."
+        title={t("community.explorerProfile.favoriteRoutesTitle")}
+        actionLabel={t("community.explorerProfile.routeCountLabel", {
+          count: favoriteRoutes.length,
+        })}
+        emptyMessage={t("community.explorerProfile.noFavoriteRoutes")}
         routes={favoriteRoutes}
         statusIcon={{
           ios: "star.fill",
           android: "star",
           web: "star",
         }}
-        statusLabel="Yêu thích"
+        statusLabel={t("community.explorerProfile.favoriteLabel")}
         onOpenRoute={onOpenRoute}
       />
     </View>
@@ -3230,6 +3291,8 @@ function ApiRoutesTabContent({
   onOpenRoute: (routeId: string) => void;
   routes: ApiRouteReference[];
 }) {
+  const { t } = useTranslation();
+
   if (errorMessage) {
     return (
       <EmptyState
@@ -3247,7 +3310,7 @@ function ApiRoutesTabContent({
     return (
       <EmptyState
         icon={{ ios: "map", android: "map", web: "map" }}
-        message="Explorer này chưa gắn route nào trong các bài viết."
+        message={t("community.explorerProfile.noRoutesInPosts")}
       />
     );
   }
@@ -3264,18 +3327,24 @@ function ApiRoutesTabContent({
           <View className="flex-row items-start justify-between gap-3">
             <View className="min-w-0 flex-1">
               <Text className="text-[15px] font-extrabold text-[#202124]">
-                {`Route #${route.routeId}`}
+                {t("community.explorerProfile.apiRouteLabel", {
+                  id: route.routeId,
+                })}
               </Text>
               <Text className="mt-1 text-[12px] leading-[18px] text-[#6B7280]">
-                {`${route.postCount} bài viết có gắn route này`}
+                {t("community.explorerProfile.routePostCount", {
+                  count: route.postCount,
+                })}
               </Text>
             </View>
 
             <View className="rounded-full bg-[#FFF4EF] px-3 py-1.5">
               <Text className="text-[11px] font-extrabold text-[#F58752]">
                 {route.sharedPostCount > 0
-                  ? `${route.sharedPostCount} chia sẻ`
-                  : "Chi tiết"}
+                  ? t("community.explorerProfile.sharedCountLabel", {
+                      count: route.sharedPostCount,
+                    })
+                  : t("community.explorerProfile.detailsLabel")}
               </Text>
             </View>
           </View>

@@ -1,0 +1,1110 @@
+{
+  "common": {
+    "back": "Back",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "close": "Close",
+    "retry": "Retry",
+    "continue": "Continue",
+    "apply": "Apply",
+    "search": "Search",
+    "filter": "Filter",
+    "done": "Done",
+    "skip": "Skip"
+  },
+  "auth": {
+    "login": {
+      "title": "Login",
+      "subtitle": "Enter your account to login",
+      "username": "Username",
+      "password": "Password",
+      "usernamePlaceholder": "Enter username",
+      "passwordPlaceholder": "Enter password",
+      "forgotPassword": "Forgot password?",
+      "loginButton": "Login",
+      "loggingIn": "Logging in...",
+      "orLoginWith": "Or login with",
+      "noAccount": "Don't have an account?",
+      "signUp": "Sign up",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
+      "errorCannotLogin": "Cannot login. Please try again.",
+      "errorCannotLoginWithProvider": "Cannot login with {{provider}}. Please try again."
+    },
+    "register": {
+      "title": "Sign Up",
+      "subtitle": "Create an account to start your journey",
+      "username": "Username",
+      "displayName": "Display name",
+      "email": "Email",
+      "password": "Password",
+      "confirmPassword": "Confirm password",
+      "usernamePlaceholder": "Choose username",
+      "displayNamePlaceholder": "Choose display name",
+      "emailPlaceholder": "Enter email address",
+      "passwordPlaceholder": "Enter password",
+      "confirmPasswordPlaceholder": "Re-enter password",
+      "createAccountButton": "Create account",
+      "creatingAccount": "Creating account...",
+      "orSignUpWith": "Or sign up with",
+      "haveAccount": "Already have an account?",
+      "signIn": "Sign in",
+      "errorCannotRegister": "Cannot register. Please try again.",
+      "errorCannotRegisterWithProvider": "Cannot register with {{provider}}. Please try again."
+    },
+    "forgotPassword": {
+      "title": "Forgot Password",
+      "subtitle": "Enter the email you used to register to continue password recovery",
+      "email": "Email",
+      "emailPlaceholder": "Enter email address",
+      "sendEmailButton": "Send recovery email",
+      "sendingEmail": "Sending email...",
+      "errorCannotSend": "Cannot send recovery email. Please try again.",
+      "errorEmailRequired": "Please enter your email.",
+      "errorEmailInvalid": "Invalid email format."
+    },
+    "forgotPasswordSuccess": {
+      "title": "Check your email",
+      "sentToPrefix": "We sent a password recovery email to",
+      "defaultMessage": "We've sent password recovery instructions to your email.",
+      "emailFallback": "your email",
+      "backToLogin": "Back to login",
+      "resendDifferentEmail": "Send to a different email"
+    },
+    "resetPassword": {
+      "title": "Reset Password",
+      "subtitle": "Enter a new password for your account",
+      "invalidTokenSubtitle": "The password reset link is invalid or has expired",
+      "newPassword": "New password",
+      "newPasswordPlaceholder": "Enter new password",
+      "confirmPassword": "Confirm new password",
+      "confirmPasswordPlaceholder": "Re-enter new password",
+      "submitButton": "Change password",
+      "submitting": "Changing password...",
+      "errorCannotReset": "Cannot change password. Please try again.",
+      "resendRecoveryEmail": "Resend recovery email",
+      "successTitle": "Password changed successfully",
+      "successSubtitle": "Please login again with your new password.",
+      "backToLogin": "Back to login"
+    },
+    "verifyOtp": {
+      "title": "Verify OTP",
+      "subtitle": "Enter the OTP code sent to your email",
+      "emailFallback": "Your email",
+      "step": "Step 2/2",
+      "codeSentTo": "Enter the 6-digit code sent to",
+      "confirmButton": "Confirm OTP",
+      "verifying": "Verifying...",
+      "noCodeReceived": "Didn't receive the code?",
+      "resendCode": "Resend code",
+      "resending": "Resending...",
+      "resendAfter": "Resend code in {{time}}",
+      "backToRegister": "Back to register",
+      "registerSuccessTitle": "Registration successful!",
+      "resendSuccessMessage": "OTP code sent successfully",
+      "errorCannotResend": "Cannot resend OTP code. Please try again.",
+      "errorCheckCode": "Please check the OTP code again.",
+      "errorCannotVerify": "Cannot verify OTP. Please try again."
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "menu": {
+      "information": "Information",
+      "changeAvatar": "Change avatar",
+      "changeCover": "Change cover photo",
+      "updateBio": "Update bio",
+      "vouchers": "Voucher store",
+      "notifications": "Notifications",
+      "subscription": "Subscription",
+      "myQRCode": "My QR code",
+      "privacy": "Privacy",
+      "accountManagement": "Account management",
+      "generalSettings": "General settings",
+      "language": "Language",
+      "logout": "Logout",
+      "settings": "Settings",
+      "guestMode": "You are in guest mode. Some features require login to use."
+    }
+  },
+  "settings": {
+    "language": {
+      "title": "Language",
+      "vietnamese": "Tiếng Việt",
+      "english": "English",
+      "description": "Choose display language for the app"
+    }
+  },
+  "route": {
+    "tabs": {
+      "official": "Official",
+      "active": "Active",
+      "groups": "My Groups",
+      "completed": "Completed",
+      "bookmarked": "Saved",
+      "plans": "Plans",
+      "journeys": "My Journeys",
+      "community": "Community"
+    },
+    "header": {
+      "journey": "Journey",
+      "exploreNext": "Explore Next",
+      "leaderboard": "Leaderboard"
+    },
+    "level": {
+      "level": "Level",
+      "remainingXP": "{{xp}} XP more to reach level {{level}}"
+    },
+    "progress": {
+      "inProgress": "In Progress",
+      "continueJourney": "Continue Journey",
+      "abandonRoute": "Abandon Route",
+      "abandoning": "Abandoning...",
+      "completed": "Completed",
+      "progress": "Progress"
+    },
+    "empty": {
+      "noRoutes": "You haven't joined any routes",
+      "noCompleted": "No completed routes yet",
+      "noBookmarked": "You haven't saved any routes",
+      "noPlans": "You don't have any Custom User Plans",
+      "noJourneys": "You haven't recorded any journeys",
+      "noCommunity": "No community journeys yet",
+      "noGroups": "You don't have any route groups",
+      "loading": "Loading routes from API..."
+    },
+    "actions": {
+      "continue": "Continue",
+      "unsave": "Unsave",
+      "unsaving": "Unsaving...",
+      "viewDetails": "View Details",
+      "viewGroup": "View Group",
+      "inviteFriends": "Invite Friends"
+    },
+    "userPlan": {
+      "title": "Create New Journey Plan",
+      "subtitle": "Select locations, optimize order and start when ready.",
+      "continuePlan": "Continue Plan"
+    },
+    "recordJourney": {
+      "title": "Record New Journey",
+      "subtitle": "Save checked-in locations and complete your personal journey.",
+      "recording": "Recording",
+      "draft": "Draft",
+      "trial": "Pending Review",
+      "published": "Published",
+      "continueRecording": "Continue Recording",
+      "viewAndComplete": "View and Complete",
+      "viewStatus": "View Status",
+      "viewJourney": "View Journey"
+    },
+    "community": {
+      "title": "Explore Published Journeys",
+      "subtitle": "Routes shared by the community after completing the review process.",
+      "topRoutes": "Most Popular Routes",
+      "fromCommunity": "Routes from Community"
+    },
+    "leaderboard": {
+      "title": "Leaderboard",
+      "city": "Ho Chi Minh City",
+      "national": "National"
+    },
+    "stats": {
+      "points": "points",
+      "stops": "locations",
+      "completed": "completed"
+    }
+  },
+  "hotspot": {
+    "search": {
+      "title": "Search hotspot or address",
+      "placeholder": "Search hotspot or address",
+      "cancel": "Cancel",
+      "noResults": "No matching hotspots",
+      "noResultsSubtitle": "Try changing keywords or reducing search criteria to see more hotspots.",
+      "searchByNameOrAddress": "Search by hotspot name or address.",
+      "filter": {
+        "title": "Hotspot Filter",
+        "addFilter": "+ Add filter",
+        "remove": "Remove",
+        "noFilters": "No advanced filters yet. You can add filters by tag, address, description, history, status, created date or creator.",
+        "sortResults": "Sort Results",
+        "ascending": "Ascending",
+        "descending": "Descending",
+        "apply": "Apply Filter"
+      },
+      "stats": {
+        "xp": "XP",
+        "points": "Points",
+        "createdDate": "Created Date"
+      },
+      "pagination": {
+        "previous": "Previous",
+        "next": "Next",
+        "page": "Page"
+      },
+      "error": {
+        "cannotLoad": "Cannot load hotspot data.",
+        "retry": "Retry"
+      }
+    }
+  },
+  "tabs": {
+    "home": "Home",
+    "explore": "Explore",
+    "community": "Community",
+    "journey": "Journey",
+    "profile": "Profile"
+  },
+  "home": {
+    "greeting": "Hello {{name}}",
+    "readyToExplore": "Ready to explore",
+    "nearbyPlaces": "Places near you",
+    "featuredRoutes": "Featured Routes",
+    "viewAll": "View all",
+    "refreshing": "Updating...",
+    "empty": {
+      "title": "No matching data",
+      "description": "No matching data."
+    },
+    "a11y": {
+      "openHotspots": "Open places list",
+      "openNotifications": "Open notifications"
+    },
+    "guest": {
+      "greeting": "Hello there",
+      "loginToSave": "Log in to save your journey",
+      "unlockTitle": "Unlock your journey",
+      "notLoggedIn": "Not logged in",
+      "benefitProgress": "Save progress",
+      "benefitStories": "Unlock stories",
+      "benefitVouchers": "Get vouchers",
+      "cta": "Try it now"
+    },
+    "premium": {
+      "activeBadge": "PREMIUM EXPLORER",
+      "activeTitle": "You have unlocked all Premium features",
+      "activeSubtitle": "AI Planner, Live Journey Recording & Audio Guide are ready on the Explore page",
+      "upsellBadge": "CULTUREQUEST PREMIUM",
+      "upsellTitle": "Unlock the AI Planner & Live Journey Recording",
+      "upsellSubtitle": "Try the Premium feature set (User Plan & Record) on the Explore page",
+      "upsellCta": "Explore now →"
+    },
+    "featured": {
+      "subtitle": "The journeys explored the most by the community",
+      "emptyTitle": "No featured routes yet",
+      "emptyDescription": "No matching route data.",
+      "noPublishedRoutes": "No routes have been published on the system yet.",
+      "loadError": "Could not load featured routes.",
+      "xpUpdating": "Updating XP",
+      "tagFallback": "Explore",
+      "routeFallbackName": "Route #{{id}}"
+    },
+    "activeJourney": {
+      "title": "Active Journey",
+      "continue": "Continue Journey",
+      "nextStop": "Next Stop",
+      "remainingStops": "{{count}} stops remaining",
+      "distanceToNext": "{{distance}} to next stop",
+      "progress": "Progress",
+      "emptyTitle": "No active journey yet",
+      "emptyDescription": "You don't have a journey in progress. Pick a route to start exploring.",
+      "allStopsVisited": "All stops visited",
+      "remainingTime": "{{duration}} left",
+      "nextStopName": "Next: {{name}}",
+      "nextStopWithDistance": "Next: {{name}} · {{distance}}",
+      "checkedInStops": "{{current}}/{{total}} stops checked in",
+      "continueExploring": "Keep exploring"
+    },
+    "suggestedRoutes": {
+      "title": "Suggested Routes",
+      "emptyTitle": "No matching routes yet",
+      "noLocation": "Your current location is unknown, so we can't suggest matching routes yet.",
+      "noRoutesNearby": "No matching route data near you.",
+      "loadFailed": "Could not load suggested routes for the places near you.",
+      "loadError": "No matching route data.",
+      "partialNote": "Showing {{count}} routes from places near you. {{failed}} places couldn't load their routes.",
+      "devOverrideNote": "Showing {{count}} suggested routes gathered from {{hotspots}} hotspots near the test coordinate {{coordinate}}."
+    },
+    "community": {
+      "title": "Community Today",
+      "viewFullLeaderboard": "View the full leaderboard",
+      "loadingTitle": "Loading the leaderboard",
+      "loadingNote": "We're updating today's community data.",
+      "leaderLabel": "#{{rank}} {{name}} is leading",
+      "leaderNote": "{{xp}} in total on the leaderboard.",
+      "yourRank": "You are ranked #{{rank}}",
+      "currentTotal": "{{xp}} in total right now.",
+      "explorerFallback": "Explorer #{{id}}"
+    },
+    "stats": {
+      "distance": "{{value}} km",
+      "distanceMeters": "{{value}} m",
+      "duration": "{{value}} minutes",
+      "durationHours": "{{hours}} hours",
+      "durationHoursMinutes": "{{hours}} hours {{minutes}} minutes",
+      "stops": "{{count}} stops",
+      "updating": "Updating"
+    },
+    "difficulty": {
+      "easy": "Easy",
+      "medium": "Medium",
+      "hard": "Hard"
+    },
+    "leaderboard": {
+      "title": "Leaderboard",
+      "viewAll": "View All"
+    },
+    "vouchers": {
+      "title": "Special Offers",
+      "viewAll": "View all vouchers",
+      "points": "{{points}} pts",
+      "loading": "Loading offers...",
+      "empty": "No offers available yet. Tap to reload.",
+      "error": "Could not load offers. Tap to retry.",
+      "guest": "Sign in to see partner offers"
+    },
+    "nearby": {
+      "title": "Near You",
+      "rating": "Rating",
+      "reviews": "reviews",
+      "nearYou": "Near you"
+    },
+    "themes": {
+      "title": "Explore by Theme",
+      "viewAll": "View all themes"
+    }
+  },
+  "explore": {
+    "greeting": "Hello {{name}}",
+    "readyToExplore": "Ready to explore",
+    "categories": {
+      "all": "All",
+      "history": "History",
+      "architecture": "Architecture",
+      "culture": "Culture",
+      "cuisine": "Cuisine",
+      "heritage": "Heritage"
+    },
+    "featured": {
+      "title": "Featured Today"
+    },
+    "premium": {
+      "title": "CultureQuest Premium",
+      "subtitle": "Explore More",
+      "explorer": "Premium Explorer"
+    },
+    "features": {
+      "userPlan": "User Plan",
+      "record": "Record",
+      "routes": "Routes"
+    },
+    "search": {
+      "placeholder": "Search spots, routes, challenges..."
+    },
+    "map": {
+      "showingRoute": "Showing route",
+      "showingPlaces": "Showing places"
+    },
+    "missions": {
+      "title": "Missions Near You",
+      "checkpoint": "{{count}} checkpoints left to unlock badge",
+      "completeBefore": "Complete before {{time}}",
+      "bonusReward": "Bonus reward for check-in on time"
+    },
+    "places": {
+      "nearYou": "Near you",
+      "viewAll": "View all places"
+    },
+    "routes": {
+      "title": "Suggested Routes",
+      "viewAll": "View all routes",
+      "stops": "stops",
+      "startJourney": "Start Journey"
+    }
+  },
+  "community": {
+    "title": "Community",
+    "posts": {
+      "create": "Create Post",
+      "edit": "Edit Post",
+      "delete": "Delete Post",
+      "share": "Share",
+      "like": "Like",
+      "comment": "Comment",
+      "comments": "comments"
+    },
+    "status": {
+      "approved": "Approved",
+      "pending": "Pending",
+      "rejected": "Rejected",
+      "deleted": "Deleted"
+    },
+    "visibility": {
+      "public": "Public",
+      "private": "Private",
+      "friendsOnly": "Friends Only"
+    },
+    "time": {
+      "justNow": "Just now",
+      "minutesAgo": "{{count}} minutes ago",
+      "hoursAgo": "{{count}} hours ago",
+      "daysAgo": "{{count}} days ago"
+    },
+    "groups": {
+      "title": "Community Groups",
+      "create": "Create Group",
+      "viewAll": "View All"
+    },
+    "empty": {
+      "noPosts": "No posts yet",
+      "noUpdates": "No updates yet"
+    },
+    "leaderboard": {
+      "header": "Leaderboard",
+      "loading": "Loading community leaderboard...",
+      "errorTitle": "Couldn't load leaderboard",
+      "errorFallback": "Please try again later.",
+      "loadError": "Could not load the community leaderboard.",
+      "emptyNote": "The leaderboard will show up once there is community activity.",
+      "emptyTitle": "No leaderboard data yet",
+      "xpLabel": "{{value}} XP",
+      "rankOneNote": "Keep up the momentum today!",
+      "rankOneTitle": "You're leading the leaderboard",
+      "gapNote": "{{gap}} more to pass rank #{{rank}}.",
+      "currentXpNote": "You currently have {{xp}}.",
+      "currentRankTitle": "Your current rank",
+      "leaderNote": "{{name}} is leading with {{xp}}.",
+      "leaderTitle": "Today's community leader"
+    },
+    "joinGroup": {
+      "login": {
+        "actionLabel": "Login",
+        "description": "You need to log in to join this group from the invite link.",
+        "hint": "After logging in, the app will automatically retry joining the group.",
+        "title": "Login required"
+      },
+      "alreadyMember": {
+        "actionLabel": "Back to community",
+        "description": "This account is already a member of the group.",
+        "hint": "Open the Community section to view the current group.",
+        "title": "You're already in the group"
+      },
+      "expired": {
+        "description": "This invite link has expired and is no longer valid.",
+        "hint": "Ask the leader for a new link and try joining again.",
+        "title": "Link has expired"
+      },
+      "invalid": {
+        "description": "This invite link is invalid or has been changed.",
+        "hint": "Check the shared link again, then try again.",
+        "title": "Invalid link"
+      },
+      "generic": {
+        "hint": "Please try again later or contact an administrator for support.",
+        "title": "Couldn't join the group"
+      },
+      "sessionExpiredError": "Your session has expired. Please log in again.",
+      "saveGroupError": "Could not save the joined group data.",
+      "genericJoinError": "Could not join the group from this invite link.",
+      "pending": {
+        "title": "Join request sent!",
+        "description": "Your request has been sent successfully.\nPlease wait for the leader to approve it to join the group.",
+        "statusLabel": "Awaiting approval",
+        "statusHint": "The leader will review your request and respond as soon as possible.",
+        "backHome": "Back to home"
+      }
+    },
+    "groupsScreen": {
+      "headerTitle": "All Groups",
+      "dateNew": "New",
+      "dateToday": "Today",
+      "status": {
+        "active": "Active",
+        "pending": "Awaiting approval",
+        "inactive": "Suspended",
+        "default": "Community group"
+      },
+      "access": {
+        "approvalRequired": "Leader approval required",
+        "openJoin": "Open to join"
+      },
+      "memberCountLabel": "{{count}} members",
+      "heroTitle": "Your Groups",
+      "heroSubtitleReady": "{{count}} groups available in your account",
+      "heroSubtitlePending": "The group list will refresh when you open this screen",
+      "createButton": "Create new group",
+      "searchPlaceholder": "Search groups...",
+      "emptyDescription": "You don't have any groups yet. Create your first group to get started.",
+      "searchEmptyTitle": "No groups found",
+      "searchEmptyDescription": "Try a different group name to find a matching result.",
+      "unnamedGroup": "Unnamed group"
+    },
+    "groupsCommon": {
+      "openErrorTitle": "Couldn't open group",
+      "openErrorMessage": "This group's data isn't valid yet.",
+      "loadErrorTitle": "Couldn't load groups",
+      "loadError": "Could not load the community group list.",
+      "emptyTitle": "No groups yet",
+      "emptyDescription": "There are no groups to show yet."
+    },
+    "feed": {
+      "menu": {
+        "editVisibility": "Edit privacy",
+        "moveToTrash": "Move to trash",
+        "reportPost": "Report post",
+        "openOptionsA11y": "Open post options",
+        "openReportA11y": "Report this post"
+      },
+      "time": {
+        "minutes": "{{count}} minutes",
+        "hours": "{{count}} hours",
+        "days": "{{count}} days",
+        "weeks": "{{count}} weeks",
+        "months": "{{count}} months",
+        "years": "{{count}} years"
+      },
+      "composerIdentity": {
+        "you": "You",
+        "guest": "Guest"
+      },
+      "composerPlaceholder": {
+        "authenticated": "Share your experience...",
+        "guest": "Log in to share your experience..."
+      },
+      "location": {
+        "hotspotTagged": "{{count}} location tagged",
+        "routeTagged": "{{count}} route tagged"
+      },
+      "defaultMood": "New update from the community",
+      "badge": {
+        "location": "Location",
+        "route": "Route",
+        "feed": "Feed",
+        "shared": "Shared"
+      },
+      "routeEstimate": {
+        "days": "{{count}} days",
+        "hours": "{{count}} hours",
+        "minutes": "{{count}} minutes"
+      },
+      "fallbackUserName": "User",
+      "fallbackRole": "Discovery community",
+      "fallbackCaption": "New post from the community.",
+      "loadError": "Could not load the community feed.",
+      "refreshErrorTitle": "Couldn't refresh",
+      "refreshError": "Couldn't refresh the community feed.",
+      "commentsLoadError": "Could not load comments for the community post.",
+      "missingContentTitle": "Missing content",
+      "missingCommentMessage": "Please enter content before submitting a comment.",
+      "sessionExpiredTitle": "Session expired",
+      "sessionExpiredComment": "Please log in again before submitting a comment.",
+      "sessionExpiredLike": "Please log in again before liking a community post.",
+      "sessionExpiredShare": "Please log in again before sharing a community post.",
+      "sessionExpiredTrash": "Please log in again before moving the post to trash.",
+      "commentSubmitErrorTitle": "Couldn't submit comment",
+      "commentSubmitErrorMessage": "An error occurred while submitting your comment on the community post.",
+      "loginRequiredTitle": "Login required",
+      "loginRequiredLike": "You need to log in to like a community post.",
+      "loginRequiredShare": "You need to log in to share a community post.",
+      "loginRequiredTrash": "You need to log in to move the post to trash.",
+      "likeErrorTitle": "Couldn't like the post",
+      "likeErrorMessage": "An error occurred while liking the community post.",
+      "shareErrorTitle": "Couldn't share",
+      "shareInvalidIdMessage": "This post doesn't have a valid ID to share.",
+      "shareErrorMessage": "An error occurred while sharing the community post.",
+      "editErrorTitle": "Couldn't edit",
+      "editUnknownPostMessage": "Couldn't determine which post to edit.",
+      "editVisibilityUnknownPostMessage": "Couldn't determine which post's privacy to edit.",
+      "trashErrorTitle": "Couldn't move the post",
+      "trashInvalidIdMessage": "This post doesn't have a valid ID to move to trash.",
+      "trashErrorMessage": "An error occurred while moving the post to trash.",
+      "trashSuccessToast": "Post deleted successfully",
+      "sharedPrivateToast": "Shared to the private section of your profile",
+      "sharedPublicToast": "Post shared to the community",
+      "demoFallbackNotice": "Showing a sample feed temporarily so the screen isn't empty.",
+      "emptyFeedDescription": "The community feed doesn't have new posts yet. Check back later to see more activity from explorers.",
+      "trashConfirmLabel": "Move post",
+      "trashConfirmDescription": "The post and all attached photos and videos will be moved to your trash.",
+      "trashConfirmTitle": "Move this post to trash?",
+      "hotspotCountLabel": "{{count}} locations",
+      "routeFallbackName": "Route #{{id}}",
+      "hotspotFallbackName": "Location #{{id}}",
+      "hotspotMoreLabel": "{{first}}, {{second}} and {{count}} more locations",
+      "openProfileA11y": "Open {{name}}'s profile",
+      "showLess": "Show less",
+      "showMore": "Show more",
+      "defaultCommentText": "Sent a comment.",
+      "sharePlaceholder": "Say something about this...",
+      "shareNowButton": "Share now",
+      "writeCommentTitle": "Write a comment",
+      "commentForAuthor": "Comment on {{author}}'s post.",
+      "commentForPost": "Comment on the community post.",
+      "commentPlaceholder": "Share your thoughts about this post...",
+      "commentPublicNotice": "Your comment will be posted publicly.",
+      "submitCommentButton": "Post comment",
+      "commentCountLabel": "{{count}} items",
+      "commentsPagePlaceholder": "Page 1 / {{size}}",
+      "retryLoad": "Retry loading",
+      "noCommentsTitle": "No comments yet",
+      "noCommentsDescription": "Be the first to share your thoughts on this post.",
+      "report": {
+        "sheetTitle": "Reason for reporting",
+        "loginRequired": "You need to sign in to report a post.",
+        "sessionExpired": "Please sign in again before reporting this post.",
+        "successToast": "Report sent to the moderators",
+        "failureTitle": "Could not send the report",
+        "failureDescription": "Please try again in a few minutes.",
+        "reasons": {
+          "spam": "Spam or advertising",
+          "harassment": "Harassment or abuse",
+          "misinformation": "False information",
+          "violence": "Violence or danger",
+          "sensitiveContent": "Sensitive or inappropriate content",
+          "other": "Other reason"
+        },
+        "draftPlaceholder": "Describe what is wrong with this post...",
+        "submit": "Send report",
+        "invalidPost": "Could not identify the post to report."
+      }
+    },
+    "explorerProfile": {
+      "tabs": {
+        "posts": "Posts",
+        "routes": "Routes"
+      },
+      "fallbackHeadline": "Explorer active in the Culture Quest community.",
+      "statusUnknown": "Unknown",
+      "loadingRoute": "Loading route...",
+      "loadingLocation": "Loading location...",
+      "loadProfileError": "Could not load the explorer profile.",
+      "loadPostsError": "Could not load the explorer's posts.",
+      "sharedAlertTitle": "Shared",
+      "sharedPrivateMessage": "The post was shared to the private section of your profile.",
+      "sharedPublicMessage": "The post was shared to the community.",
+      "notFoundTitle": "Explorer not found",
+      "notFoundMessage": "This community profile is no longer available, or the demo data hasn't been created yet.",
+      "backToCommunity": "Back to community",
+      "followingStat": "Following",
+      "followerStat": "Follower",
+      "loginToFollowMessage": "Please log in to follow the explorer.",
+      "sessionExpiredFollowMessage": "Please log in again to continue.",
+      "followErrorTitle": "Couldn't update follow status",
+      "followErrorMessage": "An error occurred while updating follow status.",
+      "unfollowA11y": "Unfollow explorer",
+      "followA11y": "Follow explorer",
+      "processingLabel": "Processing...",
+      "followedLabel": "Following",
+      "followLabel": "Follow",
+      "messageA11y": "Message explorer",
+      "messageLabel": "Message",
+      "noPublicPosts": "This explorer doesn't have any public posts yet.",
+      "joinedDateLabel": "Joined: {{date}}",
+      "levelLabel": "Level: {{level}}",
+      "emailLabel": "Email: {{email}}",
+      "personalInfoTitle": "Personal Info",
+      "defaultPostContent": "Today's trip was truly memorable.",
+      "sharingLabel": "Sharing...",
+      "noPublicRoutes": "This explorer hasn't shared any public routes yet.",
+      "completedRoutesTitle": "Completed Routes",
+      "routeCountLabel": "{{count}} routes",
+      "noCompletedRoutes": "No completed routes have been shared publicly yet.",
+      "favoriteRoutesTitle": "Favorite Routes",
+      "noFavoriteRoutes": "No favorite routes have been marked public yet.",
+      "favoriteLabel": "Favorite",
+      "noRoutesInPosts": "This explorer hasn't tagged any routes in their posts.",
+      "apiRouteLabel": "Route #{{id}}",
+      "routePostCount": "{{count}} posts tagged with this route",
+      "sharedCountLabel": "{{count}} shares",
+      "detailsLabel": "Details",
+      "routeCardLabel": "Route",
+      "hotspotCountLabel": "{{count}} hotspot"
+    },
+    "groupCreate": {
+      "headerTitle": "Create join group",
+      "groupNameLabel": "Group name",
+      "groupNamePlaceholder": "Name your group",
+      "nameRequired": "Please give your group a name.",
+      "nameTooShort": "Group name needs at least {{min}} characters.",
+      "nameTooLong": "Group name is at most {{max}} characters.",
+      "inviteFriends": "Invite friends",
+      "selectedCount": "Selected: {{count}}",
+      "searchPlaceholder": "Search by name or username",
+      "loadingFriends": "Loading friends...",
+      "loginRequiredFriends": "You need to log in to see your friends list.",
+      "loadFriendsError": "Couldn't load your friends list right now.",
+      "loginAction": "Login",
+      "noFriendsFound": "No matching friends found",
+      "noFriendsFoundSubtitle": "Try searching with a different name or username.",
+      "loginRequiredSubmit": "You need to log in to create a new group.",
+      "saveError": "Could not save the newly created group data.",
+      "createError": "Couldn't create the group right now. Please try again.",
+      "submitButton": "Create group",
+      "defaultUserAccount": "User account"
+    },
+    "groupCreated": {
+      "backToFeed": "Back to feed",
+      "missingTokenTitle": "Missing invite link data",
+      "missingTokenDescription": "Couldn't read the shareToken from the current route.",
+      "missingSessionTitle": "Group data not found",
+      "missingSessionDescription": "The group creation session is no longer in memory. Please create the group again to get a fresh link.",
+      "successTitle": "Group created successfully!",
+      "successSubtitle": "Your community is ready. Invite people who share your interests to join.",
+      "inviteLinkLabel": "Invite link",
+      "defaultGroupName": "New group",
+      "viewDetails": "View details"
+    },
+    "groupDetail": {
+      "routeInvalidTitle": "Invalid group link",
+      "routeInvalidDescription": "Couldn't read the group parameter from the current route.",
+      "missingRouteError": "Couldn't read the group information from the current route.",
+      "missingGroupIdError": "Couldn't determine the group ID to load its details.",
+      "loadError": "Couldn't load the community group details.",
+      "loadErrorTitle": "Couldn't load the group",
+      "loadErrorFallbackDescription": "There's no detail data to show for this group.",
+      "missingGroupForMembers": "Couldn't determine the group to open the members list.",
+      "missingGroupIdForLeave": "Couldn't determine the group ID to leave the group.",
+      "loginRequiredLeave": "You need to log in to leave the group.",
+      "leaveSuccess": "Left the group.",
+      "leaveError": "Couldn't leave the group right now.",
+      "leaveConfirmTitle": "Leave group",
+      "leaveConfirmDescription": "Are you sure you want to leave this group?",
+      "stayAction": "Stay",
+      "missingGroupIdForRefresh": "Couldn't determine the group ID to refresh the invite link.",
+      "leaderOnlyRefresh": "Only the leader can refresh the invite link.",
+      "loginRequiredRefresh": "You need to log in to refresh the invite link.",
+      "refreshSuccess": "Invite link refreshed.",
+      "refreshError": "Couldn't refresh the invite link right now.",
+      "creatorFallback": "Explorer #{{id}}",
+      "notUpdated": "Not updated yet",
+      "noDataYet": "No data yet",
+      "requiredApprovalYes": "Yes",
+      "requiredApprovalNo": "No",
+      "viewMembersAction": "View group members",
+      "leavingAction": "Leaving...",
+      "infoSectionTitle": "Group information",
+      "creatorLabel": "Created by",
+      "totalMembersLabel": "Total members",
+      "requiredApprovalLabel": "Join approval required",
+      "createdAtLabel": "Created date",
+      "updatedAtLabel": "Last updated",
+      "footerNote": "This group is created and managed by CultureQuest Lite",
+      "defaultGroupName": "Community group",
+      "statusActive": "Active",
+      "inviteSectionTitle": "Invite members to join",
+      "refreshLinkA11y": "Refresh invite link",
+      "refreshLinkAction": "Refresh link",
+      "copyLinkA11y": "Copy invite link",
+      "linkCopied": "Link copied",
+      "copyLink": "Copy link",
+      "closeMenuA11y": "Close group menu"
+    },
+    "groupInvite": {
+      "headerTitle": "Invite Members",
+      "invalidTokenTitle": "Invalid invite link",
+      "invalidTokenDescription": "Couldn't read the shareToken to show the member invite link.",
+      "missingSessionTitle": "No group data yet",
+      "missingSessionDescription": "Couldn't find group data in the current session. Go back to Group Detail or create/join the group again.",
+      "defaultGroupName": "Travel group",
+      "screenDescription": "This screen doesn't create any extra API calls. The member invite link is derived directly from the shareToken returned by the backend.",
+      "totalMembersLabel": "Total Members",
+      "shareTokenLabel": "Share Token",
+      "shareErrorFallback": "Couldn't open native share right now."
+    },
+    "groupManage": {
+      "headerTitle": "Manage group",
+      "loadingMessage": "Loading group management",
+      "missingGroupIdError": "Couldn't determine the group ID to load the management screen.",
+      "loadError": "Couldn't load the group management screen.",
+      "loadErrorTitle": "Couldn't load group management",
+      "loadErrorFallbackDescription": "There's no detail data to show for the management screen.",
+      "missingGroupForPending": "Couldn't determine the group to open join requests.",
+      "missingGroupForKicked": "Couldn't determine the group to open the kicked members list.",
+      "pendingRequestsScreenTitle": "Review join requests",
+      "kickedMembersLabel": "Kicked members",
+      "memberManagementTitle": "Member management",
+      "pendingRequestsDescription": "View the pending list and approve new members.",
+      "pendingBadgeZero": "0 pending",
+      "pendingBadgeOff": "Approval off",
+      "membersListLabel": "Member list",
+      "membersListDescription": "View all members, current permissions and roles.",
+      "kickedMembersDescription": "View the list of kicked members for the leader to manage.",
+      "settingsTitle": "Settings",
+      "groupSettingsLabel": "Group settings",
+      "groupSettingsDescription": "Manage the group name and join approval requirement."
+    },
+    "groupMembers": {
+      "justSentRequest": "Just sent a request",
+      "roleLeader": "Group leader",
+      "roleMember": "Member",
+      "roleExplorer": "Explorer",
+      "kickAction": "Kick",
+      "kickingAction": "Kicking...",
+      "kickMemberA11y": "Kick {{name}} from the group",
+      "pendingEmptyTitle": "No join requests yet",
+      "pendingEmptyDescription": "When someone sends a join request, the list will show up here.",
+      "kickedEmptyTitle": "No members have been kicked",
+      "kickedEmptyDescription": "When the leader kicks a member from the group, the list will show up here.",
+      "kickModalTitle": "Kick member",
+      "kickConfirmPrefix": "Are you sure you want to kick",
+      "kickConfirmDefaultName": "this member",
+      "kickConfirmSuffix": "from the group?",
+      "kickWarningNote": "The kicked member will no longer be able to access the group and its content.",
+      "cancelActionUppercase": "CANCEL",
+      "kickConfirmActionUppercase": "KICK MEMBER",
+      "missingGroupIdForPendingError": "Couldn't determine the group ID to load join requests.",
+      "missingGroupIdForKickedError": "Couldn't determine the group ID to load the kicked list.",
+      "missingGroupIdForMembersError": "Couldn't determine the group ID to load members.",
+      "loadPendingError": "Couldn't load the pending requests list.",
+      "loadKickedError": "Couldn't load the kicked members list.",
+      "loadMembersError": "Couldn't load the members list.",
+      "missingGroupIdKickError": "Couldn't determine the group ID to kick the member.",
+      "loginRequiredKick": "You need to log in to kick a member.",
+      "kickSuccessToast": "Kicked {{name}} from the group.",
+      "kickErrorFallback": "Couldn't kick the member right now.",
+      "loginRequiredReview": "You need to log in to review join requests.",
+      "approveSuccessToast": "Approved {{name}} to join the group.",
+      "rejectSuccessToast": "Rejected {{name}}'s request.",
+      "approveErrorFallback": "Couldn't approve the request right now.",
+      "rejectErrorFallback": "Couldn't reject the request right now.",
+      "pendingSectionTitle": "Pending requests",
+      "kickedSectionTitle": "Kicked list",
+      "currentSectionTitle": "Current members",
+      "pendingCountLabel": "{{count}} pending",
+      "kickedCountLabel": "{{count}} kicked",
+      "createdDateLabel": "Created on {{date}}",
+      "inviteLinkLabel": "Invite link",
+      "noInviteLinkInfo": "This group doesn't have an invite link yet.",
+      "copyLinkSuccess": "Invite link copied.",
+      "copyLinkErrorFallback": "Couldn't copy the invite link.",
+      "loadPendingErrorDescription": "Couldn't load the group's join requests list.",
+      "loadKickedErrorDescription": "Couldn't load the group's kicked members list.",
+      "loadMembersErrorDescription": "Couldn't load the group's members list.",
+      "loadPendingErrorTitle": "Couldn't load join requests",
+      "loadKickedErrorTitle": "Couldn't load the kicked list",
+      "loadMembersErrorTitle": "Couldn't load members",
+      "emptyMembersTitle": "No members yet",
+      "emptyMembersDescription": "This group doesn't have any members to show yet."
+    },
+    "groupSettings": {
+      "missingGroupIdError": "Couldn't determine the group ID to load settings.",
+      "loadError": "Couldn't load the group settings.",
+      "missingGroupIdSaveError": "Couldn't find a valid group ID to update.",
+      "nameRequiredInfo": "Please enter a group name before saving.",
+      "approvalRequiredInfo": "Please choose the join approval requirement before saving.",
+      "loginRequiredSave": "You need to log in to update the group settings.",
+      "saveSuccessToast": "Group settings updated.",
+      "saveErrorFallback": "Couldn't update the group settings.",
+      "loadingMessage": "Loading group settings",
+      "noDataErrorDescription": "There's no data to show for the group settings.",
+      "loadErrorTitle": "Couldn't load settings",
+      "headerTitle": "Edit group",
+      "groupNamePlaceholder": "Enter group name",
+      "groupNameHelperText": "You can only change the group name when needed to keep the group's link and identity stable.",
+      "requiredApprovalLabel": "Join approval requirement",
+      "approvalOnLabel": "Approval on",
+      "approvalOffLabel": "Approval off"
+    },
+    "postComments": {
+      "viewProfileA11y": "View {{name}}'s profile",
+      "likeAction": "Like",
+      "replyAction": "Reply",
+      "replyCountLabel": "{{count}} replies",
+      "replyingIndicator": "Replying",
+      "likeCountLabel": "{{count}} likes",
+      "likedState": "Liked",
+      "notFoundTitle": "Post not found",
+      "notFoundDescription": "Please open it again from the community feed to see the full content and comments.",
+      "replyingToLabel": "Replying to {{name}}",
+      "replyPlaceholder": "Reply to {{name}}...",
+      "commentPlaceholder": "Write a comment...",
+      "loginRequiredCommentMessage": "You need to log in to comment on a community post."
+    },
+    "postCompose": {
+      "addressPendingFallback": "Updating address",
+      "stopsCountLabel": "{{count}} stops",
+      "routeMetaFallback": "Cultural route",
+      "routeDescriptionFallback": "A discovery route from Culture Quest.",
+      "addMediaLabel": "Add photo/video",
+      "addMoreMediaLabel": "Add more",
+      "selectRouteTitle": "Select route",
+      "searchRoutePlaceholder": "Search route...",
+      "clearRouteSelection": "Clear route selection",
+      "loadingRoutes": "Loading routes...",
+      "noRoutesFound": "No matching routes found.",
+      "loadRoutesErrorFallback": "Couldn't load the routes list.",
+      "selectHotspotTitle": "Select location",
+      "searchHotspotPlaceholder": "Search location name...",
+      "searchingHotspots": "Searching locations...",
+      "loadingHotspots": "Loading locations...",
+      "noHotspotsFoundSearch": "No matching locations found.",
+      "loadHotspotsErrorFallback": "Couldn't load the locations list.",
+      "searchHotspotsErrorFallback": "Couldn't search locations.",
+      "noHotspotsAvailable": "No locations to select yet.",
+      "selectedHotspotCountLabel": "Selected {{count}} locations",
+      "selectTagTitle": "Select tags",
+      "tagInputPlaceholder": "Enter tag...",
+      "addTagAction": "Add",
+      "selectedLabel": "Selected",
+      "suggestedLabel": "Suggested",
+      "noSuggestedTags": "No suggested tags yet.",
+      "selectedTagCountLabel": "Selected {{count}} tags",
+      "maxMediaInfo": "You can add up to {{count}} photos/videos.",
+      "permissionRequiredTitle": "Permission needed",
+      "permissionRequiredMessage": "Please allow access to your library to add photos or videos to the post.",
+      "loginRequiredSubmitMessage": "You need to log in to create a community post.",
+      "sessionExpiredSubmitMessage": "Please log in again before posting to the community.",
+      "submitErrorFallback": "An error occurred while submitting the community post.",
+      "contentRequiredError": "Please enter content for the post.",
+      "contentTooShortError": "Content needs at least {{min}} characters (currently {{current}}).",
+      "contentTooLongError": "Content with {{tagCount}} tags exceeds {{max}} characters. Please shorten it or remove some tags.",
+      "selectHotspotSummary": "Select related locations",
+      "oneHotspotLabel": "1 location",
+      "hotspotSelectedCountLabel": "{{count}} locations selected",
+      "addTagSummary": "Add tags",
+      "tagSelectedCountLabel": "{{count}} tags",
+      "contentPlaceholder": "What's on your mind?",
+      "mediaSectionTitle": "Photos / videos",
+      "routeSubtitleFallback": "Attach the post to a route",
+      "hotspotSubtitleFallback": "Select locations related to the post",
+      "attachHotspotTitle": "Attach location",
+      "tagSubtitleFallback": "Add related tags",
+      "submitButton": "Post",
+      "submitSummary": "Will attach {{routes}} routes, {{hotspots}} locations and {{tags}} tags."
+    },
+    "postVisibility": {
+      "missingPostIdError": "Couldn't determine which post to update privacy for.",
+      "sessionExpiredLoadError": "Your session has expired. Please log in again before editing the privacy setting.",
+      "loadErrorFallback": "Couldn't load the post to update its privacy.",
+      "loginRequiredMessage": "You need to log in to edit the post's privacy.",
+      "cannotUpdateTitle": "Couldn't update",
+      "missingPostIdSubmitError": "Couldn't determine which post to edit the privacy for.",
+      "postDataNotReadyError": "Post data isn't ready yet. Please try again.",
+      "sessionExpiredSubmitMessage": "Please log in again before editing the post's privacy.",
+      "updateErrorFallback": "An error occurred while updating the post's privacy.",
+      "titleEdit": "Who can see this post?",
+      "titleCreate": "Who can see your post?",
+      "subtitleEdit": "Choose who can see this post.",
+      "subtitleCreate": "Choose who can see the post you're composing for the community.",
+      "loadingLabel": "Loading post privacy...",
+      "footerNoteEdit": "This setting will update the post immediately.",
+      "footerNoteCreate": "This setting applies to the post you're composing."
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "loading": "Loading notifications...",
+    "empty": {
+      "title": "No notifications",
+      "subtitle": "Updates about your journeys, rewards and subscriptions will appear here"
+    }
+  },
+  "vouchers": {
+    "title": "Voucher Store",
+    "myVouchers": "My Vouchers",
+    "available": "Available",
+    "used": "Used",
+    "expired": "Expired",
+    "viewDetails": "View Details",
+    "useNow": "Use Now"
+  },
+  "subscription": {
+    "partner": {
+      "title": "Partner Registration",
+      "subtitle": "Display shop on CultureQuest map, issue vouchers & attract tourists",
+      "packageLabel": "Partner Package",
+      "steps": {
+        "step": "Step",
+        "information": "Registration Info",
+        "payment": "Bank Payment"
+      },
+      "benefits": {
+        "title": "Official Partner Benefits",
+        "showOnMap": "Display location/shop on travel map",
+        "manageVouchers": "Create & manage discount vouchers for travelers",
+        "verifiedBadge": "Verified Official Partner badge"
+      },
+      "selectPlan": "Select Partner Package",
+      "billingCycle": {
+        "title": "Billing Cycle",
+        "monthly": "Monthly",
+        "yearly": "Yearly",
+        "yearlyNote": "Price by package"
+      },
+      "shopInfo": {
+        "title": "Shop Information",
+        "shopName": "Shop / Location Name *",
+        "shopNamePlaceholder": "E.g.: Heritage Coffee Shop District 1",
+        "shopEmail": "Shop Management Email *",
+        "shopEmailPlaceholder": "E.g.: shop.partner@gmail.com",
+        "address": "Shop Address *",
+        "addressPlaceholder": "Enter street name, location or shop name",
+        "selectLocation": "Select shop location",
+        "locationSelected": "Shop location selected",
+        "tapToSelect": "Tap on map to select shop location",
+        "selectOnMap": "Select location on map",
+        "reselectLocation": "Select location again",
+        "saveLocation": "Save this location",
+        "locationSaved": "Location saved"
+      },
+      "verification": {
+        "title": "Verification Documents",
+        "selectDocument": "Select verification document photo *",
+        "documentSelected": "Selected: {{name}}",
+        "selectShopImages": "Add shop photos (optional)",
+        "imagesSelected": "Selected {{count}} shop photos"
+      },
+      "payment": {
+        "method": "Payment Method",
+        "bankTransfer": "Bank Transfer / QR",
+        "bankTransferNote": "Scan VietQR code or transfer via any banking app.",
+        "summary": "Payment Summary",
+        "package": "Package",
+        "cycle": "Cycle",
+        "amount": "Amount",
+        "status": "Status",
+        "complete": "Complete Payment",
+        "completeNote": "Open secure payment page to complete. If browser doesn't open, scan QR code below.",
+        "openPayment": "Open Payment Page",
+        "scanQR": "Scan code with banking app or VietQR-supported wallet."
+      },
+      "actions": {
+        "continueToPayment": "Continue to payment step",
+        "backToInfo": "Back to registration info",
+        "registerAndPay": "Register and Pay"
+      },
+      "status": {
+        "notRegistered": "Not Registered",
+        "paymentPending": "Awaiting Payment",
+        "paymentFailed": "Payment Failed",
+        "pending": "Paid, Awaiting Admin Approval",
+        "active": "Active",
+        "rejected": "Rejected",
+        "expired": "Expired"
+      },
+      "errors": {
+        "needLogin": "You need to login before registering for Partner package.",
+        "missingInfo": "Missing Information",
+        "selectPlan": "Please select a subscription package.",
+        "enterShopName": "Please enter shop name.",
+        "invalidEmail": "Shop email format is invalid.",
+        "enterAddress": "Please enter shop address.",
+        "selectLocationOnMap": "Please select shop location on map.",
+        "uploadDocument": "Please upload verification document.",
+        "cannotLoadSuggestions": "Cannot load address suggestions.",
+        "cannotGetCoordinates": "Cannot get address coordinates."
+      },
+      "permissions": {
+        "needPhotoAccess": "Missing Access Permission",
+        "grantPhotoPermission": "Please grant permission to select verification document photos.",
+        "grantShopPhotoPermission": "Please grant permission to select shop photos."
+      }
+    }
+  }
+}

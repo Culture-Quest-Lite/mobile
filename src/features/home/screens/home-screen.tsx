@@ -25,6 +25,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 
 import {
   getValidAccessToken,
@@ -46,6 +47,11 @@ import {
   mapRouteToRouteItem,
   searchRoutes,
 } from "@/features/route/api/route-api";
+import {
+  getAvailableVouchers,
+  getVoucherImage,
+  type Voucher,
+} from "@/features/voucher/api/voucher-api";
 import { useScreenLayout } from "@/hooks/use-screen-layout";
 import { type RouteItem } from "@/lib/demo-data";
 import {
@@ -70,7 +76,6 @@ import {
   type NearbyCategoryCard,
   activeJourney,
   featuredRoutes,
-  voucherMerchants,
 } from "../data/home-screen.mock";
 import { getApiHotspotRouteSlug, getHotspotHref } from "../data/hotspots";
 import { mapActiveTagsToThemeCategories } from "../lib/theme-categories";
@@ -130,19 +135,15 @@ const routeDifficultyStyles: Record<
   string,
   { background: string; color: string }
 > = {
-  Dễ: {
+  EASY: {
     background: "#DCFCE7",
     color: "#15803D",
   },
-  Khó: {
+  HARD: {
     background: "#FEE2E2",
     color: "#DC2626",
   },
-  "Trung bình": {
-    background: "#FEF3C7",
-    color: "#B45309",
-  },
-  Vừa: {
+  MEDIUM: {
     background: "#FEF3C7",
     color: "#B45309",
   },
@@ -197,54 +198,80 @@ function getFeaturedRouteFallbackImageUri(index: number) {
   return featuredRoutes[index % featuredRoutes.length].imageUri;
 }
 
-function getRouteDifficultyLabel(difficulty?: string | null) {
-  switch (difficulty?.trim().toUpperCase()) {
+function normalizeRouteDifficultyKey(difficulty?: string | null) {
+  return (difficulty ?? "").trim().toUpperCase();
+}
+
+function getRouteDifficultyLabel(
+  difficulty: string | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  switch (normalizeRouteDifficultyKey(difficulty)) {
     case "EASY":
-      return "Dễ";
+      return t("home.difficulty.easy");
     case "MEDIUM":
-      return "Vừa";
+      return t("home.difficulty.medium");
     case "HARD":
-      return "Khó";
+      return t("home.difficulty.hard");
     default:
-      return difficulty?.trim() || "Dễ";
+      return difficulty?.trim() || t("home.difficulty.easy");
   }
 }
 
-function formatRouteDistanceLabel(totalDistanceKm: number) {
+function formatRouteDistanceLabel(
+  totalDistanceKm: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   if (!Number.isFinite(totalDistanceKm) || totalDistanceKm <= 0) {
-    return "Đang cập nhật";
+    return t("home.stats.updating");
   }
 
   if (totalDistanceKm < 1) {
-    return `${Math.round(totalDistanceKm * 1000)} m`;
+    return t("home.stats.distanceMeters", {
+      value: Math.round(totalDistanceKm * 1000),
+    });
   }
 
-  return `${Number.isInteger(totalDistanceKm) ? totalDistanceKm : totalDistanceKm.toFixed(1)} km`;
+  return t("home.stats.distance", {
+    value: Number.isInteger(totalDistanceKm)
+      ? totalDistanceKm
+      : totalDistanceKm.toFixed(1),
+  });
 }
 
-function formatRouteDurationLabel(estimateMinutes: number) {
+function formatRouteDurationLabel(
+  estimateMinutes: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   if (!Number.isFinite(estimateMinutes) || estimateMinutes <= 0) {
-    return "Đang cập nhật";
+    return t("home.stats.updating");
   }
 
   const roundedMinutes = Math.round(estimateMinutes);
 
   if (roundedMinutes < 60) {
-    return `${roundedMinutes} phút`;
+    return t("home.stats.duration", { value: roundedMinutes });
   }
 
   const hours = Math.floor(roundedMinutes / 60);
   const minutes = roundedMinutes % 60;
 
-  return minutes > 0 ? `${hours} giờ ${minutes} phút` : `${hours} giờ`;
+  return minutes > 0
+    ? t("home.stats.durationHoursMinutes", { hours, minutes })
+    : t("home.stats.durationHours", { hours });
 }
 
-function formatRouteStopsLabel(stopCount: number) {
+function formatRouteStopsLabel(
+  stopCount: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   if (stopCount <= 0) {
-    return "Đang cập nhật";
+    return t("home.stats.updating");
   }
 
-  return `${String(stopCount).padStart(2, "0")} điểm dừng`;
+  return t("home.stats.stops", {
+    count: String(stopCount).padStart(2, "0"),
+  });
 }
 
 function isPublishedRoute(route: RouteDto) {
@@ -270,6 +297,7 @@ function getHighlightRoutes(routes: RouteDto[]) {
 function mapRouteToFeaturedRouteCard(
   route: RouteDto,
   index: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): FeaturedRouteCard {
   // Ưu tiên media của chính route (hoặc media hotspot đầu tiên trong route).
   // Chỉ khi API không có hình nào mới quay lại ảnh mặc định của màn hình.
@@ -277,13 +305,15 @@ function mapRouteToFeaturedRouteCard(
 
   return {
     coverUri: apiCoverUri || getFeaturedRouteFallbackImageUri(index),
-    difficultyLabel: getRouteDifficultyLabel(route.difficulty),
-    distanceLabel: formatRouteDistanceLabel(route.totalDistance),
-    durationLabel: formatRouteDurationLabel(route.estimateTime),
+    difficultyLabel: getRouteDifficultyLabel(route.difficulty, t),
+    distanceLabel: formatRouteDistanceLabel(route.totalDistance, t),
+    durationLabel: formatRouteDurationLabel(route.estimateTime, t),
     routeId: route.routeId,
-    stopsLabel: formatRouteStopsLabel(route.hotspots.length),
-    tagLabel: route.tags[0]?.tagName.trim() || "Khám phá",
-    title: route.routeName.trim() || `Tuyến #${route.routeId}`,
+    stopsLabel: formatRouteStopsLabel(route.hotspots.length, t),
+    tagLabel: route.tags[0]?.tagName.trim() || t("home.featured.tagFallback"),
+    title:
+      route.routeName.trim() ||
+      t("home.featured.routeFallbackName", { id: route.routeId }),
     xpLabel: route.xp > 0 ? `+${route.xp} XP` : null,
   };
 }
@@ -339,6 +369,7 @@ function readStopCoordinate(
 function buildActiveJourneyView(
   progress: UserRouteProgressDto,
   route: RouteDto | null,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): ActiveJourneyView {
   const orderedProgressStops = getOrderedHotspotProgressList(progress);
   const orderedRouteHotspots = getOrderedRouteHotspots(route);
@@ -408,21 +439,24 @@ function buildActiveJourneyView(
     progress: progressPercentage,
     remainingStopsLabel:
       remainingStops > 0
-        ? `Còn ${remainingStops} điểm dừng`
-        : "Đã đi hết điểm dừng",
+        ? t("home.activeJourney.remainingStops", { count: remainingStops })
+        : t("home.activeJourney.allStopsVisited"),
     remainingTimeLabel:
       remainingMinutes > 0
-        ? `${formatRouteDurationLabel(remainingMinutes)} nữa`
+        ? t("home.activeJourney.remainingTime", {
+            duration: formatRouteDurationLabel(remainingMinutes, t),
+          })
         : null,
     routeId: progress.routeId,
     title:
       readMeaningfulNearbyText(route?.routeName) ??
-      `Tuyến #${progress.routeId}`,
+      t("home.featured.routeFallbackName", { id: progress.routeId }),
     totalCheckpoints,
   };
 }
 
 function JourneyProgressRing({ progress }: { progress: number }) {
+  const { t } = useTranslation();
   const boundedProgress = Math.min(Math.max(progress, 0), 100);
   const activeSegments = Math.round(
     (boundedProgress / 100) * journeyProgressSegmentCount,
@@ -490,7 +524,7 @@ function JourneyProgressRing({ progress }: { progress: number }) {
           {boundedProgress}%
         </Text>
         <Text className="text-[8px] font-semibold leading-3 text-[#6F657A]">
-          Hoàn thành
+          {t("route.progress.completed")}
         </Text>
       </View>
     </View>
@@ -538,6 +572,23 @@ type NearbyPlaceListItem = {
 };
 
 type CommunityLeaderboardStatus = "empty" | "error" | "loading" | "ready";
+type HomeVouchersSectionStatus =
+  | "empty"
+  | "error"
+  | "guest"
+  | "loading"
+  | "ready";
+
+/** Số voucher hiển thị ở carousel Home; xem đủ thì bấm "Xem tất cả". */
+const homeVouchersPreviewSize = 8;
+
+function getHomeVoucherDiscountLabel(voucher: Voucher) {
+  if (voucher.discountType === "PERCENTAGE") {
+    return `-${voucher.discountValue}%`;
+  }
+
+  return `-${Number(voucher.discountValue).toLocaleString("vi-VN")}đ`;
+}
 type FeaturedRoutesSectionStatus = "empty" | "loading" | "ready";
 type ActiveJourneySectionStatus = "empty" | "loading" | "ready";
 type NearbyPlacesSectionStatus = "empty" | "loading" | "ready";
@@ -550,7 +601,11 @@ type InitialHomeLoadPart =
   | "nearbyPlaces"
   | "suggestedRoutes"
   | "themeCategories";
-type SuggestedRouteCard = RouteItem;
+type SuggestedRouteCard = RouteItem & {
+  difficultyKey: string;
+  distanceLabel: string;
+  durationLabel: string;
+};
 type CommunityBoardViewEntry = {
   avatarUri: string | null;
   isCurrentUser: boolean;
@@ -638,14 +693,16 @@ function formatNearbyRating(
 
 function formatNearbyReviewCount(
   value: number | null | undefined,
-  fallback = "0 đánh giá",
+  t: (key: string, options?: Record<string, unknown>) => string,
 ) {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return fallback;
-  }
+  const roundedValue =
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.max(0, Math.round(value))
+      : 0;
 
-  const roundedValue = Math.max(0, Math.round(value));
-  return `${new Intl.NumberFormat("vi-VN").format(roundedValue)} đánh giá`;
+  return t("home.nearby.reviewCount", {
+    value: new Intl.NumberFormat("vi-VN").format(roundedValue),
+  });
 }
 
 function readMeaningfulCommunityText(value?: string | null) {
@@ -657,11 +714,14 @@ function formatCommunityXp(value: number) {
   return new Intl.NumberFormat("vi-VN").format(Math.max(0, Math.round(value)));
 }
 
-function getCommunityLeaderboardDisplayName(entry: UserLeaderboardEntryDto) {
+function getCommunityLeaderboardDisplayName(
+  entry: UserLeaderboardEntryDto,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   return (
     readMeaningfulCommunityText(entry.displayName) ??
     readMeaningfulCommunityText(entry.username) ??
-    `Explorer #${entry.userId}`
+    t("home.community.explorerFallback", { id: entry.userId })
   );
 }
 
@@ -686,17 +746,19 @@ function buildCommunityBoardViewModelFromLeaderboard({
   entries,
   errorMessage,
   status,
+  t,
 }: {
   entries: UserLeaderboardEntryDto[];
   errorMessage: string | null;
   status: CommunityLeaderboardStatus;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }): CommunityBoardViewModel {
   if (status === "loading") {
     return {
       entries: [],
       headlineRankLabel: "#--",
-      summaryLabel: "Đang tải bảng xếp hạng",
-      summaryNote: "Hệ thống đang cập nhật cộng đồng hôm nay.",
+      summaryLabel: t("home.community.loadingTitle"),
+      summaryNote: t("home.community.loadingNote"),
       summaryXp: 0,
       totalPoints: "--",
     };
@@ -706,8 +768,8 @@ function buildCommunityBoardViewModelFromLeaderboard({
     return {
       entries: [],
       headlineRankLabel: "#--",
-      summaryLabel: "Không tải được bảng xếp hạng",
-      summaryNote: errorMessage ?? "Vui lòng thử lại sau.",
+      summaryLabel: t("community.leaderboard.errorTitle"),
+      summaryNote: errorMessage ?? t("community.leaderboard.errorFallback"),
       summaryXp: 0,
       totalPoints: "--",
     };
@@ -717,8 +779,8 @@ function buildCommunityBoardViewModelFromLeaderboard({
     return {
       entries: [],
       headlineRankLabel: "#--",
-      summaryLabel: "Chưa có dữ liệu bảng xếp hạng",
-      summaryNote: "Bảng xếp hạng sẽ hiển thị khi có hoạt động cộng đồng.",
+      summaryLabel: t("community.leaderboard.emptyTitle"),
+      summaryNote: t("community.leaderboard.emptyNote"),
       summaryXp: 0,
       totalPoints: "0 XP",
     };
@@ -730,16 +792,23 @@ function buildCommunityBoardViewModelFromLeaderboard({
   const currentUserEntry =
     sortedEntries.find((entry) => entry.isCurrentUser) ?? null;
   const summaryEntry = currentUserEntry ?? sortedEntries[0];
-  const summaryXpLabel = `${formatCommunityXp(summaryEntry.totalXp)} XP`;
-  let summaryLabel = `#${summaryEntry.rank} ${getCommunityLeaderboardDisplayName(summaryEntry)} đang dẫn đầu`;
-  let summaryNote = `Tổng ${summaryXpLabel} trên bảng xếp hạng.`;
+  const summaryXpLabel = t("community.leaderboard.xpLabel", {
+    value: formatCommunityXp(summaryEntry.totalXp),
+  });
+  let summaryLabel = t("home.community.leaderLabel", {
+    name: getCommunityLeaderboardDisplayName(summaryEntry, t),
+    rank: summaryEntry.rank,
+  });
+  let summaryNote = t("home.community.leaderNote", { xp: summaryXpLabel });
 
   if (currentUserEntry) {
     if (currentUserEntry.rank === 1) {
-      summaryLabel = "Bạn đang dẫn đầu bảng xếp hạng";
-      summaryNote = `Tiếp tục giữ phong độ hôm nay!`;
+      summaryLabel = t("community.leaderboard.rankOneTitle");
+      summaryNote = t("community.leaderboard.rankOneNote");
     } else {
-      summaryLabel = `Bạn đang xếp hạng #${currentUserEntry.rank}`;
+      summaryLabel = t("home.community.yourRank", {
+        rank: currentUserEntry.rank,
+      });
       const previousRankEntry = sortedEntries.find(
         (entry) => entry.rank === currentUserEntry.rank - 1,
       );
@@ -751,10 +820,15 @@ function buildCommunityBoardViewModelFromLeaderboard({
         );
         summaryNote =
           xpGap > 0
-            ? `Còn ${formatCommunityXp(xpGap)} XP để vượt hạng #${previousRankEntry.rank}.`
-            : `Tổng ${summaryXpLabel} hiện tại.`;
+            ? t("community.leaderboard.gapNote", {
+                gap: t("community.leaderboard.xpLabel", {
+                  value: formatCommunityXp(xpGap),
+                }),
+                rank: previousRankEntry.rank,
+              })
+            : t("home.community.currentTotal", { xp: summaryXpLabel });
       } else {
-        summaryNote = `Tổng ${summaryXpLabel} hiện tại.`;
+        summaryNote = t("home.community.currentTotal", { xp: summaryXpLabel });
       }
     }
   }
@@ -764,8 +838,10 @@ function buildCommunityBoardViewModelFromLeaderboard({
       (entry) => ({
         avatarUri: readMeaningfulCommunityText(entry.avatarUrl) ?? null,
         isCurrentUser: entry.isCurrentUser,
-        name: getCommunityLeaderboardDisplayName(entry),
-        points: `${formatCommunityXp(entry.totalXp)} XP`,
+        name: getCommunityLeaderboardDisplayName(entry, t),
+        points: t("community.leaderboard.xpLabel", {
+          value: formatCommunityXp(entry.totalXp),
+        }),
         rank: entry.rank,
         subtitle: getCommunityLeaderboardSubtitle(entry),
         userId: `${entry.userId}`,
@@ -841,8 +917,16 @@ function dedupeRoutesById(routes: RouteDto[]) {
   return [...routeById.values()];
 }
 
-function mapRouteToSuggestedRouteCard(route: RouteDto): SuggestedRouteCard {
-  return mapRouteToRouteItem(route);
+function mapRouteToSuggestedRouteCard(
+  route: RouteDto,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): SuggestedRouteCard {
+  return {
+    ...mapRouteToRouteItem(route),
+    difficultyKey: normalizeRouteDifficultyKey(route.difficulty),
+    distanceLabel: formatRouteDistanceLabel(route.totalDistance, t),
+    durationLabel: formatRouteDurationLabel(route.estimateTime, t),
+  };
 }
 
 function getSuggestedRouteDescription(route: SuggestedRouteCard) {
@@ -855,11 +939,14 @@ function getSuggestedRouteTagLabel(route: SuggestedRouteCard) {
   return route.era.trim() || route.theme.trim();
 }
 
-function getNearbyOpeningHoursLabel(hotspot: NearbyHotspotDto) {
+function getNearbyOpeningHoursLabel(
+  hotspot: NearbyHotspotDto,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   return (
     formatNearbyTimeWindow(hotspot.openingTime, hotspot.closingTime) ??
     formatNearbyTimeWindow(hotspot.startTime, hotspot.endTime) ??
-    "Giờ cập nhật sau"
+    t("home.nearby.openingHoursUpdating")
   );
 }
 
@@ -879,6 +966,7 @@ function getPrimaryNearbyImageUri(hotspot: NearbyHotspotDto) {
 function buildApiNearbyPlaceItems(
   hotspots: NearbyHotspotDto[],
   currentCoordinate: Pick<AppCoordinate, "latitude" | "longitude">,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): NearbyPlaceListItem[] {
   return hotspots
     .map((hotspot, index) => {
@@ -890,19 +978,19 @@ function buildApiNearbyPlaceItems(
 
       return {
         detailIcon,
-        detailPrimaryText: hotspot.address.trim() || "Không có dữ liệu",
+        detailPrimaryText: hotspot.address.trim() || t("home.nearby.noData"),
         distance: formatDistanceMeters(distanceMeters),
         hotspotId: hotspot.hotspotId,
         imageUri: getPrimaryNearbyImageUri(hotspot),
         isCheckedIn: hotspot.isCheckedIn === true,
         key: `${hotspot.hotspotId}-${index}`,
-        openingHours: getNearbyOpeningHoursLabel(hotspot),
+        openingHours: getNearbyOpeningHoursLabel(hotspot, t),
         rating: formatNearbyRating(hotspot.averageRating),
-        reviewCountText: formatNearbyReviewCount(hotspot.totalReviews),
+        reviewCountText: formatNearbyReviewCount(hotspot.totalReviews, t),
         reward: formatRewardLabel(hotspot.xp),
         slug: null,
         sortDistanceMeters: distanceMeters,
-        title: hotspot.hotspotName.trim() || "Không có dữ liệu",
+        title: hotspot.hotspotName.trim() || t("home.nearby.noData"),
       };
     })
     .sort((left, right) => left.sortDistanceMeters - right.sortDistanceMeters)
@@ -913,7 +1001,9 @@ function isNearbyPlaceCheckedIn(place: NearbyPlaceListItem) {
   return place.isCheckedIn;
 }
 
-async function resolveNearbyRequestCoordinate(): Promise<{
+async function resolveNearbyRequestCoordinate(
+  t: (key: string, options?: Record<string, unknown>) => string,
+): Promise<{
   coordinate: AppCoordinate | null;
   fallbackMessage: string | null;
 }> {
@@ -931,7 +1021,7 @@ async function resolveNearbyRequestCoordinate(): Promise<{
   if (!servicesEnabled) {
     return {
       coordinate: null,
-      fallbackMessage: "Bật GPS để tải địa điểm gần bạn.",
+      fallbackMessage: t("home.nearby.enableGps"),
     };
   }
 
@@ -944,7 +1034,7 @@ async function resolveNearbyRequestCoordinate(): Promise<{
   if (permissionResponse.status !== "granted") {
     return {
       coordinate: null,
-      fallbackMessage: "Cho phép truy cập vị trí để tải địa điểm gần bạn.",
+      fallbackMessage: t("home.nearby.allowLocation"),
     };
   }
 
@@ -966,7 +1056,7 @@ async function resolveNearbyRequestCoordinate(): Promise<{
   if (!currentLocation) {
     return {
       coordinate: null,
-      fallbackMessage: "Không xác định được vị trí hiện tại.",
+      fallbackMessage: t("home.nearby.unknownLocation"),
     };
   }
 
@@ -977,6 +1067,7 @@ async function resolveNearbyRequestCoordinate(): Promise<{
 }
 
 function GuestAccessCard({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
   const arrowOffset = useSharedValue(0);
 
   useEffect(() => {
@@ -1009,7 +1100,7 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
   return (
     <View className="gap-3">
       <Text className="text-[18px] font-extrabold text-[#2B2233]">
-        Mở khóa hành trình của bạn
+        {t("home.guest.unlockTitle")}
       </Text>
 
       <View
@@ -1028,7 +1119,7 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
             <View className="flex-1 gap-2">
               <View className="self-start rounded-full bg-white/90 px-3 py-1">
                 <Text className="text-[11px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
-                  Chưa đăng nhập
+                  {t("home.guest.notLoggedIn")}
                 </Text>
               </View>
 
@@ -1068,17 +1159,17 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
           <View className="flex-row flex-wrap gap-2">
             <View className="rounded-full bg-white/90 px-3 py-2">
               <Text className="text-[12px] font-bold text-[#D9587F]">
-                Lưu tiến trình
+                {t("home.guest.benefitProgress")}
               </Text>
             </View>
             <View className="rounded-full bg-white/90 px-3 py-2">
               <Text className="text-[12px] font-bold text-[#D9587F]">
-                Mở khóa câu chuyện
+                {t("home.guest.benefitStories")}
               </Text>
             </View>
             <View className="rounded-full bg-white/90 px-3 py-2">
               <Text className="text-[12px] font-bold text-[#D9587F]">
-                Nhận voucher
+                {t("home.guest.benefitVouchers")}
               </Text>
             </View>
           </View>
@@ -1096,7 +1187,7 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
               className="relative items-center justify-center px-5 py-3.5"
             >
               <Text className="text-[15px] font-extrabold text-white">
-                Trải nghiệm ngay
+                {t("home.guest.cta")}
               </Text>
 
               <View className="absolute right-3 h-9 w-9 items-center justify-center rounded-full bg-white/18">
@@ -1121,14 +1212,16 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
 }
 
 function SectionEmptyState({
-  description = "Không có dữ liệu phù hợp.",
+  description,
   isLoading = false,
-  title = "Không có dữ liệu phù hợp",
+  title,
 }: {
   description?: string;
   isLoading?: boolean;
   title?: string;
 }) {
+  const { t } = useTranslation();
+
   if (isLoading) {
     return (
       <AppLoadingScreen mode="embedded" style={{ minHeight: 92 }} />
@@ -1138,9 +1231,11 @@ function SectionEmptyState({
   return (
     <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
       <>
-        <Text className="text-[15px] font-bold text-[#3B4454]">{title}</Text>
+        <Text className="text-[15px] font-bold text-[#3B4454]">
+          {title ?? t("home.empty.title")}
+        </Text>
         <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
-          {description}
+          {description ?? t("home.empty.description")}
         </Text>
       </>
     </View>
@@ -1253,6 +1348,7 @@ function GuestWelcomeHeader({
   onGreetingPress: () => void;
   onSearchPress: () => void;
 }) {
+  const { t } = useTranslation();
   const logoOffset = useSharedValue(0);
 
   useEffect(() => {
@@ -1299,13 +1395,13 @@ function GuestWelcomeHeader({
         <View className="flex-row items-center justify-between gap-3">
           <Pressable className="flex-1" hitSlop={8} onPress={onGreetingPress}>
             <Text className="text-[18px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
-              Xin chào bạn
+              {t("home.guest.greeting")}
             </Text>
           </Pressable>
 
           <View className="flex-row items-center gap-2.5">
             <Pressable
-              accessibilityLabel="Mở danh sách địa danh"
+              accessibilityLabel={t("home.a11y.openHotspots")}
               className="h-10 w-10 items-center justify-center rounded-full border border-[#ECE1E9] bg-[#FAF7FC]"
               hitSlop={8}
               onPress={onSearchPress}
@@ -1334,7 +1430,7 @@ function GuestWelcomeHeader({
             tintColor="#F7B500"
           />
           <Text className="text-[13px] font-bold text-[#8E869A]">
-            Đăng nhập để lưu hành trình
+            {t("home.guest.loginToSave")}
           </Text>
         </View>
       </View>
@@ -1384,10 +1480,12 @@ function ExplorerHeaderActions({
   onSearchPress: () => void;
   onNotificationPress: () => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <View className="flex-row items-center gap-2.5">
       <Pressable
-        accessibilityLabel="Mở danh sách địa danh"
+        accessibilityLabel={t("home.a11y.openHotspots")}
         className="h-10 w-10 items-center justify-center rounded-full bg-[#FAF7FC]"
         hitSlop={8}
         onPress={onSearchPress}
@@ -1404,7 +1502,7 @@ function ExplorerHeaderActions({
       </Pressable>
 
       <Pressable
-        accessibilityLabel="Mở thông báo"
+        accessibilityLabel={t("home.a11y.openNotifications")}
         className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
         hitSlop={8}
         onPress={onNotificationPress}
@@ -1426,6 +1524,7 @@ function ExplorerHeaderActions({
 export default function HomeScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
+  const { t } = useTranslation();
   const { contentWidth, gutter, insets, safeWidth } = useScreenLayout({
     maxContentWidth: 640,
   });
@@ -1472,12 +1571,16 @@ export default function HomeScreen() {
     useState<ActiveJourneyView | null>(null);
   const [activeJourneyStatus, setActiveJourneyStatus] =
     useState<ActiveJourneySectionStatus>("loading");
+  const [homeVouchers, setHomeVouchers] = useState<Voucher[]>([]);
+  const [homeVouchersStatus, setHomeVouchersStatus] =
+    useState<HomeVouchersSectionStatus>("loading");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasCompletedInitialHomeLoad, setHasCompletedInitialHomeLoad] =
     useState(false);
   const nearbyPlacesRequestRef = useRef(0);
   const themeCategoriesRequestRef = useRef(0);
   const communityLeaderboardRequestRef = useRef(0);
+  const homeVouchersRequestRef = useRef(0);
   const explorerSummaryRequestRef = useRef(0);
   const initialHomeLoadPendingRef = useRef<
     Record<InitialHomeLoadPart, boolean>
@@ -1548,6 +1651,8 @@ export default function HomeScreen() {
     Math.max(contentWidth * 0.38, 134),
     152,
   );
+  const homeVoucherCardWidth = Math.min(Math.max(contentWidth * 0.42, 138), 164);
+  const homeVoucherImageHeight = Math.round(homeVoucherCardWidth * 0.62);
   const currentJourney = !isGuest ? activeJourneyView : null;
   const activeJourneyProgress = currentJourney
     ? Math.min(Math.max(currentJourney.progress, 0), 100)
@@ -1560,6 +1665,7 @@ export default function HomeScreen() {
     entries: communityLeaderboardEntries,
     errorMessage: communityLeaderboardErrorMessage,
     status: communityLeaderboardStatus,
+    t,
   });
   const activeFeaturedRoute =
     featuredRouteCards[
@@ -1666,13 +1772,17 @@ export default function HomeScreen() {
 
         activeRouteIndexRef.current = 0;
         setActiveRouteIndex(0);
-        setFeaturedRouteCards(highlightRoutes.map(mapRouteToFeaturedRouteCard));
+        setFeaturedRouteCards(
+          highlightRoutes.map((route, index) =>
+            mapRouteToFeaturedRouteCard(route, index, t),
+          ),
+        );
         setFeaturedRoutesStatus(highlightRoutes.length > 0 ? "ready" : "empty");
         markInitialHomeLoadPartResolved("featuredRoutes");
         setFeaturedRoutesNote(
           highlightRoutes.length > 0
             ? null
-            : "Chưa có tuyến nào được xuất bản trên hệ thống.",
+            : t("home.featured.noPublishedRoutes"),
         );
       } catch (error) {
         console.warn("[home] load featured routes failed", {
@@ -1685,9 +1795,7 @@ export default function HomeScreen() {
 
         setFeaturedRouteCards([]);
         setFeaturedRoutesNote(
-          error instanceof Error
-            ? error.message
-            : "Không tải được tuyến nổi bật.",
+          error instanceof Error ? error.message : t("home.featured.loadError"),
         );
         setFeaturedRoutesStatus("empty");
         markInitialHomeLoadPartResolved("featuredRoutes");
@@ -1703,6 +1811,7 @@ export default function HomeScreen() {
     authSession.isAuthenticated,
     authSession.tokenType,
     markInitialHomeLoadPartResolved,
+    t,
   ]);
 
   useFocusEffect(
@@ -1781,7 +1890,7 @@ export default function HomeScreen() {
           }
 
           setActiveJourneyView(
-            buildActiveJourneyView(activeProgress, journeyRoute),
+            buildActiveJourneyView(activeProgress, journeyRoute, t),
           );
           setActiveJourneyStatus("ready");
           markInitialHomeLoadPartResolved("activeJourney");
@@ -1809,6 +1918,7 @@ export default function HomeScreen() {
       authSession.isAuthenticated,
       authSession.tokenType,
       markInitialHomeLoadPartResolved,
+      t,
     ]),
   );
 
@@ -1824,7 +1934,7 @@ export default function HomeScreen() {
 
     try {
       const { coordinate, fallbackMessage } =
-        await resolveNearbyRequestCoordinate();
+        await resolveNearbyRequestCoordinate(t);
 
       if (!isActive()) {
         return;
@@ -1836,9 +1946,7 @@ export default function HomeScreen() {
         setNearbyPlacesStatus("empty");
         markInitialHomeLoadPartResolved("nearbyPlaces");
         setSuggestedRoutes([]);
-        setSuggestedRoutesNote(
-          "Không xác định được vị trí hiện tại nên chưa thể gợi ý tuyến đường phù hợp.",
-        );
+        setSuggestedRoutesNote(t("home.suggestedRoutes.noLocation"));
         setSuggestedRoutesStatus("empty");
         markInitialHomeLoadPartResolved("suggestedRoutes");
         return;
@@ -1863,24 +1971,32 @@ export default function HomeScreen() {
         setResolvedNearbyPlaces([]);
         setNearbyPlacesNote(
           coordinate.source === "dev-override"
-            ? `Không có dữ liệu phù hợp trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
-            : `Không có dữ liệu phù hợp trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh vị trí hiện tại.`,
+            ? t("home.nearby.emptyRadiusDevOverride", {
+                coordinate: formatCoordinateLabel(coordinate),
+                radius: formatDistanceMeters(nearbySearchDistanceMeters),
+              })
+            : t("home.nearby.emptyRadius", {
+                radius: formatDistanceMeters(nearbySearchDistanceMeters),
+              }),
         );
         setNearbyPlacesStatus("empty");
         markInitialHomeLoadPartResolved("nearbyPlaces");
         setSuggestedRoutes([]);
-        setSuggestedRoutesNote("Không có dữ liệu tuyến đường phù hợp gần bạn.");
+        setSuggestedRoutesNote(t("home.suggestedRoutes.noRoutesNearby"));
         setSuggestedRoutesStatus("empty");
         markInitialHomeLoadPartResolved("suggestedRoutes");
         return;
       }
 
       setResolvedNearbyPlaces(
-        buildApiNearbyPlaceItems(apiNearbyHotspots, coordinate),
+        buildApiNearbyPlaceItems(apiNearbyHotspots, coordinate, t),
       );
       setNearbyPlacesNote(
         coordinate.source === "dev-override"
-          ? `Đang hiển thị địa điểm trong bán kính ${formatDistanceMeters(nearbySearchDistanceMeters)} quanh tọa độ test ${formatCoordinateLabel(coordinate)}.`
+          ? t("home.nearby.devOverrideNote", {
+              coordinate: formatCoordinateLabel(coordinate),
+              radius: formatDistanceMeters(nearbySearchDistanceMeters),
+            })
           : null,
       );
       setNearbyPlacesStatus("ready");
@@ -1918,26 +2034,31 @@ export default function HomeScreen() {
 
         if (mergedRoutes.length === 0) {
           if (failedRouteLookups.length === hotspotRouteResults.length) {
-            throw new Error(
-              "Không tải được tuyến gợi ý cho các địa điểm gần bạn.",
-            );
+            throw new Error(t("home.suggestedRoutes.loadFailed"));
           }
 
           setSuggestedRoutes([]);
-          setSuggestedRoutesNote(
-            "Không có dữ liệu tuyến đường phù hợp gần bạn.",
-          );
+          setSuggestedRoutesNote(t("home.suggestedRoutes.noRoutesNearby"));
           setSuggestedRoutesStatus("empty");
           markInitialHomeLoadPartResolved("suggestedRoutes");
           return;
         }
 
-        setSuggestedRoutes(mergedRoutes.map(mapRouteToSuggestedRouteCard));
+        setSuggestedRoutes(
+          mergedRoutes.map((route) => mapRouteToSuggestedRouteCard(route, t)),
+        );
         setSuggestedRoutesNote(
           failedRouteLookups.length > 0
-            ? `Đang hiển thị ${mergedRoutes.length} tuyến từ các địa điểm gần bạn. ${failedRouteLookups.length} địa điểm chưa tải được route.`
+            ? t("home.suggestedRoutes.partialNote", {
+                count: mergedRoutes.length,
+                failed: failedRouteLookups.length,
+              })
             : coordinate.source === "dev-override"
-              ? `Đang hiển thị ${mergedRoutes.length} tuyến gợi ý tổng hợp từ ${nearbyHotspotsByDistance.length} hotspot gần tọa độ test ${formatCoordinateLabel(coordinate)}.`
+              ? t("home.suggestedRoutes.devOverrideNote", {
+                  coordinate: formatCoordinateLabel(coordinate),
+                  count: mergedRoutes.length,
+                  hotspots: nearbyHotspotsByDistance.length,
+                })
               : null,
         );
         setSuggestedRoutesStatus("ready");
@@ -1958,7 +2079,7 @@ export default function HomeScreen() {
         setSuggestedRoutesNote(
           routeError instanceof Error
             ? routeError.message
-            : "Không có dữ liệu tuyến đường phù hợp.",
+            : t("home.suggestedRoutes.loadError"),
         );
         setSuggestedRoutesStatus("empty");
         markInitialHomeLoadPartResolved("suggestedRoutes");
@@ -1974,14 +2095,12 @@ export default function HomeScreen() {
 
       setResolvedNearbyPlaces([]);
       setNearbyPlacesNote(
-        error instanceof Error
-          ? error.message
-          : "Không có dữ liệu địa điểm phù hợp.",
+        error instanceof Error ? error.message : t("home.nearby.loadError"),
       );
       setNearbyPlacesStatus("empty");
       markInitialHomeLoadPartResolved("nearbyPlaces");
       setSuggestedRoutes([]);
-      setSuggestedRoutesNote("Không có dữ liệu tuyến đường phù hợp.");
+      setSuggestedRoutesNote(t("home.suggestedRoutes.loadError"));
       setSuggestedRoutesStatus("empty");
       markInitialHomeLoadPartResolved("suggestedRoutes");
     }
@@ -1990,6 +2109,7 @@ export default function HomeScreen() {
     markInitialHomeLoadPartResolved,
     authSession.tokenType,
     nearbySearchDistanceMeters,
+    t,
   ]);
 
   useEffect(() => {
@@ -2095,7 +2215,7 @@ export default function HomeScreen() {
       setCommunityLeaderboardErrorMessage(
         error instanceof Error
           ? error.message
-          : "Không tải được bảng xếp hạng cộng đồng.",
+          : t("community.leaderboard.loadError"),
       );
       setCommunityLeaderboardStatus("error");
       markInitialHomeLoadPartResolved("communityLeaderboard");
@@ -2104,6 +2224,7 @@ export default function HomeScreen() {
     authSession.isAuthenticated,
     authSession.tokenType,
     markInitialHomeLoadPartResolved,
+    t,
   ]);
 
   useEffect(() => {
@@ -2113,6 +2234,72 @@ export default function HomeScreen() {
 
     void runCommunityLeaderboardLoad();
   }, [loadCommunityLeaderboard]);
+
+  /**
+   * `/api/vouchers/available` không nằm trong PUBLIC_GET_ENDPOINTS nên bắt buộc
+   * phải có token; khách chưa đăng nhập chỉ thấy lời mời đăng nhập.
+   * Không gắn vào `markInitialHomeLoadPartResolved` để section này không chặn
+   * màn hình loading đầu tiên của Home.
+   */
+  const loadHomeVouchers = useCallback(async () => {
+    const requestId = homeVouchersRequestRef.current + 1;
+    homeVouchersRequestRef.current = requestId;
+    const isActive = () => homeVouchersRequestRef.current === requestId;
+
+    if (!authSession.isAuthenticated) {
+      setHomeVouchers([]);
+      setHomeVouchersStatus("guest");
+      return;
+    }
+
+    setHomeVouchersStatus("loading");
+
+    try {
+      const accessToken = await getValidAccessToken();
+
+      if (!isActive()) {
+        return;
+      }
+
+      if (!accessToken) {
+        setHomeVouchers([]);
+        setHomeVouchersStatus("guest");
+        return;
+      }
+
+      const voucherPage = await getAvailableVouchers(
+        { page: 0, size: homeVouchersPreviewSize },
+        accessToken,
+      );
+
+      if (!isActive()) {
+        return;
+      }
+
+      const vouchers = voucherPage.content ?? [];
+      setHomeVouchers(vouchers);
+      setHomeVouchersStatus(vouchers.length > 0 ? "ready" : "empty");
+    } catch (error) {
+      console.warn("[home] load vouchers failed", {
+        error: error instanceof Error ? error.message : error,
+      });
+
+      if (!isActive()) {
+        return;
+      }
+
+      setHomeVouchers([]);
+      setHomeVouchersStatus("error");
+    }
+  }, [authSession.isAuthenticated]);
+
+  useEffect(() => {
+    async function runHomeVouchersLoad() {
+      await loadHomeVouchers();
+    }
+
+    void runHomeVouchersLoad();
+  }, [loadHomeVouchers]);
 
   const loadExplorerSummary = useCallback(async () => {
     const requestId = explorerSummaryRequestRef.current + 1;
@@ -2226,6 +2413,7 @@ export default function HomeScreen() {
         loadNearbyPlaces(),
         loadThemeCategories(),
         loadCommunityLeaderboard(),
+        loadHomeVouchers(),
       ]);
     } finally {
       setIsRefreshing(false);
@@ -2233,6 +2421,7 @@ export default function HomeScreen() {
   }, [
     loadCommunityLeaderboard,
     loadExplorerSummary,
+    loadHomeVouchers,
     loadNearbyPlaces,
     loadThemeCategories,
   ]);
@@ -2261,7 +2450,7 @@ export default function HomeScreen() {
             progressBackgroundColor="#FFFFFF"
             refreshing={isRefreshing}
             tintColor="#EB489B"
-            title="Đang cập nhật..."
+            title={t("home.refreshing")}
             titleColor="#8E869A"
           />
         }
@@ -2295,13 +2484,13 @@ export default function HomeScreen() {
                       className="text-[15px] font-semibold tracking-[-0.3px] text-[#2B2233]"
                       style={{ lineHeight: lineHeightFor(15) }}
                     >
-                      {`Chào ${explorerName}`}
+                      {t("home.greeting", { name: explorerName })}
                     </Text>
                     <Text
                       className="text-[11px] text-[#8E869A]"
                       style={{ lineHeight: lineHeightFor(11), marginTop: -1 }}
                     >
-                      Sẵn sàng khám phá
+                      {t("home.readyToExplore")}
                     </Text>
                   </View>
                 </View>
@@ -2330,15 +2519,14 @@ export default function HomeScreen() {
                       tintColor="#FFFFFF"
                     />
                     <Text className="text-[9px] font-extrabold uppercase tracking-wider text-white">
-                      PREMIUM EXPLORER
+                      {t("home.premium.activeBadge")}
                     </Text>
                   </View>
                   <Text className="text-[14px] font-extrabold text-[#2B2233]">
-                    Bạn đã mở khoá đầy đủ tính năng Premium
+                    {t("home.premium.activeTitle")}
                   </Text>
                   <Text className="mt-0.5 text-[11px] text-[#8E869A]">
-                    AI Lập kế hoạch, Ghi hành trình Live & Audio Guide đã sẵn
-                    sàng ở trang Khám phá
+                    {t("home.premium.activeSubtitle")}
                   </Text>
                 </View>
               </View>
@@ -2361,20 +2549,19 @@ export default function HomeScreen() {
                       tintColor="#FFFFFF"
                     />
                     <Text className="text-[9px] font-extrabold uppercase tracking-wider text-white">
-                      CULTUREQUEST PREMIUM
+                      {t("home.premium.upsellBadge")}
                     </Text>
                   </View>
                   <Text className="text-[14px] font-extrabold text-[#2B2233]">
-                    Mở khóa AI Lập kế hoạch & Ghi hành trình Live
+                    {t("home.premium.upsellTitle")}
                   </Text>
                   <Text className="mt-0.5 text-[11px] text-[#8E869A]">
-                    Trải nghiệm bộ tính năng Premium (User Plan & Record) tại
-                    trang Khám phá
+                    {t("home.premium.upsellSubtitle")}
                   </Text>
                 </View>
                 <View className="flex-row items-center rounded-full bg-[#EB489B] px-3 py-1.5">
                   <Text className="text-[11px] font-extrabold text-white">
-                    Khám phá ngay →
+                    {t("home.premium.upsellCta")}
                   </Text>
                 </View>
               </View>
@@ -2385,10 +2572,10 @@ export default function HomeScreen() {
             <View className="flex-row items-center justify-between gap-3">
               <View className="flex-1">
                 <Text className="text-[17px] font-extrabold text-[#2B2233]">
-                  Tuyến nổi bật
+                  {t("home.featuredRoutes")}
                 </Text>
                 <Text className="mt-0.5 text-[11px] font-medium text-[#9C94A5]">
-                  Những hành trình được cộng đồng khám phá nhiều nhất
+                  {t("home.featured.subtitle")}
                 </Text>
               </View>
 
@@ -2399,7 +2586,7 @@ export default function HomeScreen() {
                   onPress={handleOpenRoutes}
                 >
                   <Text className="text-[12px] font-bold text-[#EB489B]">
-                    Xem tất cả
+                    {t("home.viewAll")}
                   </Text>
                 </Pressable>
               ) : null}
@@ -2410,9 +2597,9 @@ export default function HomeScreen() {
             ) : !activeFeaturedRoute ? (
               <SectionEmptyState
                 description={
-                  featuredRoutesNote ?? "Không có dữ liệu tuyến phù hợp."
+                  featuredRoutesNote ?? t("home.featured.emptyDescription")
                 }
-                title="Chưa có tuyến nổi bật"
+                title={t("home.featured.emptyTitle")}
               />
             ) : (
               <>
@@ -2483,7 +2670,7 @@ export default function HomeScreen() {
                               }}
                             >
                               {activeFeaturedRoute.xpLabel ??
-                                "Đang cập nhật XP"}
+                                t("home.featured.xpUpdating")}
                             </Text>
                           </View>
 
@@ -2546,7 +2733,7 @@ export default function HomeScreen() {
           ) : isActiveJourneyLoading ? (
             <View className="gap-3">
               <Text className="text-[18px] font-extrabold text-[#2B2233]">
-                Tiếp tục hành trình
+                {t("home.activeJourney.continue")}
               </Text>
 
               <SectionEmptyState isLoading />
@@ -2554,7 +2741,7 @@ export default function HomeScreen() {
           ) : activeJourneyStatus === "empty" ? (
             <View className="gap-3">
               <Text className={homeSectionTitleClassName}>
-                Tiếp tục hành trình
+                {t("home.activeJourney.continue")}
               </Text>
 
               <ActiveJourneyEmptyStateCard
@@ -2565,7 +2752,7 @@ export default function HomeScreen() {
           ) : currentJourney ? (
             <View className="gap-3">
               <Text className={homeSectionTitleClassName}>
-                Tiếp tục hành trình
+                {t("home.activeJourney.continue")}
               </Text>
 
               <View
@@ -2609,7 +2796,7 @@ export default function HomeScreen() {
                         style={{ backgroundColor: activeJourneyAccentWarm }}
                       />
                       <Text className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-[#7A5167]">
-                        Đang thực hiện
+                        {t("route.progress.inProgress")}
                       </Text>
                     </View>
                   </View>
@@ -2646,12 +2833,18 @@ export default function HomeScreen() {
                           style={{ lineHeight: lineHeightFor(12) }}
                         >
                           {currentJourney.nextStopName
-                            ? `Tiếp theo: ${currentJourney.nextStopName}${
-                                currentJourney.distanceToNextLabel
-                                  ? ` · ${currentJourney.distanceToNextLabel}`
-                                  : ""
-                              }`
-                            : `${currentJourney.currentCheckpoint}/${currentJourney.totalCheckpoints} điểm dừng đã check-in`}
+                            ? currentJourney.distanceToNextLabel
+                              ? t("home.activeJourney.nextStopWithDistance", {
+                                  distance: currentJourney.distanceToNextLabel,
+                                  name: currentJourney.nextStopName,
+                                })
+                              : t("home.activeJourney.nextStopName", {
+                                  name: currentJourney.nextStopName,
+                                })
+                            : t("home.activeJourney.checkedInStops", {
+                                current: currentJourney.currentCheckpoint,
+                                total: currentJourney.totalCheckpoints,
+                              })}
                         </Text>
                       </View>
 
@@ -2739,7 +2932,7 @@ export default function HomeScreen() {
                         className="ml-1.5 text-[13px] font-extrabold text-white"
                         style={{ lineHeight: bodyLineHeightFor(13) }}
                       >
-                        Tiếp tục khám phá
+                        {t("home.activeJourney.continueExploring")}
                       </Text>
                     </LinearGradient>
                   </Pressable>
@@ -2756,7 +2949,7 @@ export default function HomeScreen() {
                 onPress={handleOpenNearbyHotspots}
               >
                 <Text className={homeSectionTitleClassName}>
-                  Địa điểm gần bạn
+                  {t("home.nearbyPlaces")}
                 </Text>
               </Pressable>
               <Pressable
@@ -2765,7 +2958,7 @@ export default function HomeScreen() {
                 onPress={handleOpenNearbyHotspots}
               >
                 <Text className={homeSectionActionTextClassName}>
-                  Xem tất cả
+                  {t("home.viewAll")}
                 </Text>
                 <SymbolView
                   name={{
@@ -2789,8 +2982,8 @@ export default function HomeScreen() {
               <SectionEmptyState isLoading />
             ) : nearbyPlacesStatus === "empty" ? (
               <SectionEmptyState
-                description={nearbyPlacesNote ?? "Không có dữ liệu phù hợp."}
-                title="Chưa có địa điểm phù hợp"
+                description={nearbyPlacesNote ?? t("home.empty.description")}
+                title={t("home.nearby.emptyTitle")}
               />
             ) : (
               <View
@@ -2902,7 +3095,7 @@ export default function HomeScreen() {
                                     }`}
                                   >
                                     {isPlaceCheckedIn
-                                      ? "Đã check-in"
+                                      ? t("home.nearby.checkedIn")
                                       : `${place.reward} XP`}
                                   </Text>
                                 </View>
@@ -2984,7 +3177,7 @@ export default function HomeScreen() {
                                     className="flex-1 text-[12px] font-bold text-[#15803D]"
                                     numberOfLines={1}
                                   >
-                                    Xem câu chuyện
+                                    {t("home.nearby.viewStory")}
                                   </Text>
                                 </View>
                               ) : (
@@ -3040,7 +3233,9 @@ export default function HomeScreen() {
             )}
 
             <View className="flex-row items-center justify-between gap-3">
-              <Text className={homeSectionTitleClassName}>Chủ đề</Text>
+              <Text className={homeSectionTitleClassName}>
+                {t("home.themes.sectionTitle")}
+              </Text>
 
               <Pressable
                 className="flex-row items-center"
@@ -3048,7 +3243,7 @@ export default function HomeScreen() {
                 onPress={handleOpenAllThemes}
               >
                 <Text className={homeSectionActionTextClassName}>
-                  Xem tất cả
+                  {t("home.viewAll")}
                 </Text>
                 <SymbolView
                   name={{
@@ -3063,7 +3258,7 @@ export default function HomeScreen() {
             </View>
 
             {themeCategories.length === 0 ? (
-              <SectionEmptyState description="Chưa có dữ liệu chủ đề phù hợp từ API." />
+              <SectionEmptyState description={t("home.themes.empty")} />
             ) : (
               <ScrollView
                 horizontal
@@ -3141,7 +3336,7 @@ export default function HomeScreen() {
 
             <View className="flex-row items-center justify-between">
               <Text className={homeSectionTitleClassName}>
-                Đề xuất tuyến đường
+                {t("home.suggestedRoutes.title")}
               </Text>
               {suggestedRoutes.length > 1 ? (
                 <Pressable
@@ -3150,7 +3345,7 @@ export default function HomeScreen() {
                   onPress={handleOpenRoutes}
                 >
                   <Text className={homeSectionActionTextClassName}>
-                    Xem tất cả
+                    {t("home.viewAll")}
                   </Text>
                   <SymbolView
                     name={{
@@ -3175,8 +3370,8 @@ export default function HomeScreen() {
               <SectionEmptyState isLoading />
             ) : suggestedRoutesStatus === "empty" ? (
               <SectionEmptyState
-                description={suggestedRoutesNote ?? "Không có dữ liệu phù hợp."}
-                title="Chưa có tuyến phù hợp"
+                description={suggestedRoutesNote ?? t("home.empty.description")}
+                title={t("home.suggestedRoutes.emptyTitle")}
               />
             ) : (
               <ScrollView
@@ -3237,12 +3432,12 @@ export default function HomeScreen() {
                           <View className="flex-row flex-wrap items-center gap-1.5">
                             <View className="rounded-full bg-[#FFF1F6] px-2 py-[5px]">
                               <Text className="text-[10px] font-extrabold text-[#EB489B]">
-                                {route.distance}
+                                {route.distanceLabel}
                               </Text>
                             </View>
                             <View className="rounded-full bg-[#FFF4EF] px-2 py-[5px]">
                               <Text className="text-[10px] font-extrabold text-[#F58752]">
-                                {route.duration}
+                                {route.durationLabel}
                               </Text>
                             </View>
 
@@ -3250,8 +3445,8 @@ export default function HomeScreen() {
                               className="rounded-full px-2 py-[5px]"
                               style={{
                                 backgroundColor: (
-                                  routeDifficultyStyles[route.difficulty] ??
-                                  routeDifficultyStyles["Trung bình"]
+                                  routeDifficultyStyles[route.difficultyKey] ??
+                                  routeDifficultyStyles.MEDIUM
                                 ).background,
                               }}
                             >
@@ -3259,12 +3454,16 @@ export default function HomeScreen() {
                                 className="text-[10px] font-extrabold"
                                 style={{
                                   color: (
-                                    routeDifficultyStyles[route.difficulty] ??
-                                    routeDifficultyStyles["Trung bình"]
+                                    routeDifficultyStyles[
+                                      route.difficultyKey
+                                    ] ?? routeDifficultyStyles.MEDIUM
                                   ).color,
                                 }}
                               >
-                                {route.difficulty}
+                                {getRouteDifficultyLabel(
+                                  route.difficultyKey,
+                                  t,
+                                )}
                               </Text>
                             </View>
                           </View>
@@ -3299,7 +3498,9 @@ export default function HomeScreen() {
 
                           <View className="rounded-full bg-[#FFF7E8] px-2 py-[5px]">
                             <Text className="text-[10px] font-extrabold text-[#D97706]">
-                              {route.hotspotIds.length} điểm dừng
+                              {t("home.stats.stops", {
+                                count: route.hotspotIds.length,
+                              })}
                             </Text>
                           </View>
                         </View>
@@ -3314,7 +3515,7 @@ export default function HomeScreen() {
               <View className="flex-row items-start justify-between gap-3">
                 <View className="flex-1">
                   <Text className={homeSectionTitleClassName}>
-                    Voucher ưu đãi
+                    {t("home.vouchers.title")}
                   </Text>
                 </View>
 
@@ -3323,7 +3524,7 @@ export default function HomeScreen() {
                   onPress={() => router.push("/vouchers" as Href)}
                 >
                   <Text className="text-[12px] font-bold text-[#F58752]">
-                    Xem tất cả
+                    {t("home.viewAll")}
                   </Text>
                 </Pressable>
               </View>
@@ -3332,53 +3533,108 @@ export default function HomeScreen() {
                 className="gap-5 rounded-[28px] bg-white p-4"
                 style={cardShadowStyle}
               >
-                <View className="gap-3">
+                {homeVouchersStatus === "ready" ? (
                   <ScrollView
                     horizontal
                     contentContainerStyle={{ paddingRight: 10 }}
                     showsHorizontalScrollIndicator={false}
                   >
-                    {voucherMerchants.map((merchant, index) => (
+                    {homeVouchers.map((voucher, index) => (
                       <Pressable
-                        key={merchant.label}
+                        key={voucher.voucherId}
                         className={
-                          index === voucherMerchants.length - 1 ? "" : "mr-3.5"
+                          index === homeVouchers.length - 1 ? "" : "mr-3.5"
                         }
-                        style={{ width: voucherMerchantItemWidth }}
+                        style={{ width: homeVoucherCardWidth }}
+                        onPress={() =>
+                          router.push(`/vouchers/${voucher.voucherId}` as Href)
+                        }
                       >
-                        <View className="items-center">
-                          <View
-                            className="items-center justify-center"
-                            style={{
-                              height: voucherMerchantCircleSize,
-                              width: voucherMerchantCircleSize,
-                            }}
-                          >
+                        <View
+                          className="overflow-hidden rounded-[18px] bg-[#FFF0F7]"
+                          style={{ height: homeVoucherImageHeight }}
+                        >
+                          {getVoucherImage(voucher) ? (
                             <Image
-                              source={merchant.logoUri}
-                              contentFit="contain"
+                              source={{ uri: getVoucherImage(voucher) ?? "" }}
+                              contentFit="cover"
                               transition={180}
                               cachePolicy="memory-disk"
-                              style={{
-                                height:
-                                  voucherMerchantLogoSize * merchant.logoScale,
-                                width:
-                                  voucherMerchantLogoSize * merchant.logoScale,
-                              }}
+                              style={{ height: "100%", width: "100%" }}
                             />
-                          </View>
+                          ) : (
+                            <View className="flex-1 items-center justify-center">
+                              <SymbolView
+                                name={{
+                                  ios: "ticket.fill",
+                                  android: "confirmation_number",
+                                  web: "confirmation_number",
+                                }}
+                                size={30}
+                                tintColor="#EB489B"
+                              />
+                            </View>
+                          )}
+                        </View>
 
+                        <Text
+                          className="mt-2 text-[13px] font-extrabold leading-4 text-[#2B2233]"
+                          numberOfLines={2}
+                        >
+                          {voucher.voucherName}
+                        </Text>
+
+                        <Text
+                          className="mt-0.5 text-[11px] font-semibold text-[#8E869A]"
+                          numberOfLines={1}
+                        >
+                          {voucher.partnerName}
+                        </Text>
+
+                        <View className="mt-1.5 flex-row items-center justify-between gap-1">
                           <Text
-                            className="mt-2 text-center text-[13px] font-extrabold leading-4 text-[#2B2233]"
-                            numberOfLines={2}
+                            className="text-[12px] font-extrabold text-[#F15B64]"
+                            numberOfLines={1}
                           >
-                            {merchant.label}
+                            {getHomeVoucherDiscountLabel(voucher)}
+                          </Text>
+                          <Text
+                            className="shrink-0 text-[11px] font-bold text-[#C98A10]"
+                            numberOfLines={1}
+                          >
+                            {t("home.vouchers.points", {
+                              points:
+                                voucher.pointsRequired.toLocaleString("vi-VN"),
+                            })}
                           </Text>
                         </View>
                       </Pressable>
                     ))}
                   </ScrollView>
-                </View>
+                ) : (
+                  <Pressable
+                    className="items-center py-6"
+                    disabled={homeVouchersStatus === "loading"}
+                    onPress={() => {
+                      if (homeVouchersStatus === "guest") {
+                        router.push("/vouchers" as Href);
+                        return;
+                      }
+
+                      void loadHomeVouchers();
+                    }}
+                  >
+                    <Text className="text-center text-[13px] font-semibold text-[#8E869A]">
+                      {homeVouchersStatus === "loading"
+                        ? t("home.vouchers.loading")
+                        : homeVouchersStatus === "guest"
+                          ? t("home.vouchers.guest")
+                          : homeVouchersStatus === "empty"
+                            ? t("home.vouchers.empty")
+                            : t("home.vouchers.error")}
+                    </Text>
+                  </Pressable>
+                )}
               </View>
             </View>
           </View>
@@ -3399,7 +3655,7 @@ export default function HomeScreen() {
                   </View>
                   <View className="min-w-0 flex-1">
                     <Text className={homeSectionTitleClassName}>
-                      Cộng đồng hôm nay
+                      {t("home.community.title")}
                     </Text>
                   </View>
                 </View>
@@ -3410,7 +3666,7 @@ export default function HomeScreen() {
                   onPress={handleOpenCommunityLeaderboard}
                 >
                   <Text className="text-[13px] font-bold uppercase tracking-[0.3px] text-[#FF5F87]">
-                    BXH
+                    {t("route.header.leaderboard")}
                   </Text>
                   <SymbolView
                     name={{

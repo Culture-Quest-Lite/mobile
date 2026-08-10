@@ -2,6 +2,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   ActivityIndicator,
   Image,
@@ -69,11 +71,11 @@ function formatCountdown(totalSeconds: number) {
   return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 }
 
-function maskEmailAddress(email: string) {
+function maskEmailAddress(email: string, t: TFunction) {
   const normalizedEmail = email.trim().toLowerCase();
 
   if (!normalizedEmail) {
-    return "Email của bạn";
+    return t("auth.verifyOtp.emailFallback");
   }
 
   const [localPart, domain] = normalizedEmail.split("@");
@@ -102,6 +104,7 @@ const hiddenOtpInputStyle = StyleSheet.create({
 });
 
 export default function VerifyOtpScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { displayName, email, entry, username } = useLocalSearchParams<{
     displayName?: string;
@@ -132,7 +135,7 @@ export default function VerifyOtpScreen() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const emailValue = email?.trim() ?? "";
-  const maskedEmail = maskEmailAddress(emailValue);
+  const maskedEmail = maskEmailAddress(emailValue, t);
   const heroHeight = isCompactScreen ? 232 : 284;
   const heroTopPadding = insets.top + (isCompactScreen ? 18 : 28);
   const heroBottomPadding = isCompactScreen ? 34 : 56;
@@ -267,12 +270,12 @@ export default function VerifyOtpScreen() {
       });
 
       setResendCountdown(resendCountdownSeconds);
-      showToast(response.message ?? "Mã OTP đã được gửi thành công");
+      showToast(response.message ?? t("auth.verifyOtp.resendSuccessMessage"));
     } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "Không thể gửi lại mã OTP. Vui lòng thử lại.",
+          : t("auth.verifyOtp.errorCannotResend"),
       );
     } finally {
       setIsResending(false);
@@ -303,7 +306,9 @@ export default function VerifyOtpScreen() {
 
     if (hasAnyFieldError(verifyErrors)) {
       setIsOtpInvalid(Boolean(verifyErrors.otpCode));
-      setErrorMessage(verifyErrors.otpCode ?? verifyErrors.email ?? "Vui lòng kiểm tra lại mã OTP.");
+      setErrorMessage(
+        verifyErrors.otpCode ?? verifyErrors.email ?? t("auth.verifyOtp.errorCheckCode"),
+      );
       return;
     }
 
@@ -329,7 +334,7 @@ export default function VerifyOtpScreen() {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "Không thể xác thực OTP. Vui lòng thử lại.",
+          : t("auth.verifyOtp.errorCannotVerify"),
       );
     } finally {
       setIsSubmitting(false);
@@ -398,7 +403,7 @@ export default function VerifyOtpScreen() {
               </View>
 
               <Text className="mt-8 text-center text-[24px] font-black leading-[30px] text-[#322A3D]">
-                Đăng ký thành công!
+                {t("auth.verifyOtp.registerSuccessTitle")}
               </Text>
               <Text className="mt-4 text-center text-[15px] leading-6 text-[#8E869A]">
                 {successMessage}
@@ -511,7 +516,7 @@ export default function VerifyOtpScreen() {
               <View className="items-center gap-3">
                 <View className="rounded-full bg-white/18 px-4 py-1.5">
                   <Text className="text-[12px] font-extrabold uppercase tracking-[1.8px] text-white">
-                    Bước 2 / 2
+                    {t("auth.verifyOtp.step")}
                   </Text>
                 </View>
 
@@ -542,10 +547,10 @@ export default function VerifyOtpScreen() {
                     className="font-extrabold text-[#EB489B]"
                     style={{ fontSize: titleSize }}
                   >
-                    Xác thực OTP
+                    {t("auth.verifyOtp.title")}
                   </Text>
                   <Text className="text-center text-[14px] leading-6 text-[#8E869A]">
-                    Nhập mã gồm 6 số được gửi tới
+                    {t("auth.verifyOtp.codeSentTo")}
                   </Text>
                   <Text className="text-center text-[15px] font-bold text-[#322A3D]">
                     {maskedEmail}
@@ -665,7 +670,9 @@ export default function VerifyOtpScreen() {
                             isConfirmDisabled ? "text-[#9F95A7]" : "text-white"
                           }`}
                         >
-                          {isSubmitting ? "Đang xác thực..." : "Xác nhận OTP"}
+                          {isSubmitting
+                            ? t("auth.verifyOtp.verifying")
+                            : t("auth.verifyOtp.confirmButton")}
                         </Text>
                       </LinearGradient>
                     </Pressable>
@@ -683,7 +690,7 @@ export default function VerifyOtpScreen() {
                       {canResendCode ? (
                         <View className="flex-row items-center justify-center gap-1.5">
                           <Text className="text-[14px] text-[#8E869A]">
-                            Không nhận được mã?
+                            {t("auth.verifyOtp.noCodeReceived")}
                           </Text>
                           <Pressable
                             disabled={isResending || isSubmitting}
@@ -698,13 +705,17 @@ export default function VerifyOtpScreen() {
                                   : "text-[#EB489B]"
                               }`}
                             >
-                              {isResending ? "Đang gửi lại..." : "Gửi lại mã"}
+                              {isResending
+                                ? t("auth.verifyOtp.resending")
+                                : t("auth.verifyOtp.resendCode")}
                             </Text>
                           </Pressable>
                         </View>
                       ) : (
                         <Text className="text-[14px] font-medium text-[#8E869A]">
-                          {`Gửi lại mã sau ${formatCountdown(resendCountdown)}`}
+                          {t("auth.verifyOtp.resendAfter", {
+                            time: formatCountdown(resendCountdown),
+                          })}
                         </Text>
                       )}
 
@@ -722,7 +733,7 @@ export default function VerifyOtpScreen() {
                         }
                       >
                         <Text className="text-[14px] font-extrabold text-[#F58752]">
-                          Quay lại đăng ký
+                          {t("auth.verifyOtp.backToRegister")}
                         </Text>
                       </Pressable>
                     </View>

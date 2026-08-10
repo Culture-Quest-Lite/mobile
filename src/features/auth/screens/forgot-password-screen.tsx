@@ -4,6 +4,8 @@ import { lineHeightFor } from "@/lib/text-scale";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   Image,
   KeyboardAvoidingView,
@@ -56,20 +58,21 @@ const buttonShadowStyle = {
   elevation: 6,
 } as const;
 
-function validateForgotPasswordForm(email: string) {
+function validateForgotPasswordForm(email: string, t: TFunction) {
   const errors: { email?: string } = {};
   const normalizedEmail = email.trim().toLowerCase();
 
   if (!normalizedEmail) {
-    errors.email = "Vui lòng nhập email.";
+    errors.email = t("auth.forgotPassword.errorEmailRequired");
   } else if (!emailPattern.test(normalizedEmail)) {
-    errors.email = "Email không đúng định dạng.";
+    errors.email = t("auth.forgotPassword.errorEmailInvalid");
   }
 
   return errors;
 }
 
 export default function ForgotPasswordScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { email: emailParam, entry } = useLocalSearchParams<{
     email?: string;
@@ -106,7 +109,7 @@ export default function ForgotPasswordScreen() {
     : "h-14 rounded-2xl";
   const buttonHeightClassName = isCompactScreen ? "h-12" : "h-14";
   const formGapClassName = isCompactScreen ? "gap-3" : "gap-4";
-  const forgotPasswordErrors = validateForgotPasswordForm(email);
+  const forgotPasswordErrors = validateForgotPasswordForm(email, t);
   const emailError =
     touchedEmail || didAttemptSubmit
       ? (forgotPasswordErrors.email ?? null)
@@ -180,7 +183,7 @@ export default function ForgotPasswordScreen() {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "Không thể gửi email khôi phục. Vui lòng thử lại.",
+          : t("auth.forgotPassword.errorCannotSend"),
       );
     } finally {
       setIsSubmitting(false);
@@ -263,11 +266,10 @@ export default function ForgotPasswordScreen() {
                     className="font-extrabold text-[#EB489B]"
                     style={{ fontSize: titleSize, lineHeight: titleLineHeight }}
                   >
-                    Quên mật khẩu
+                    {t("auth.forgotPassword.title")}
                   </Text>
                   <Text className="text-center text-[14px] leading-[18px] text-[#8E869A]">
-                    Nhập email bạn đã dùng để đăng ký để tiếp tục khôi phục mật
-                    khẩu
+                    {t("auth.forgotPassword.subtitle")}
                   </Text>
                 </View>
 
@@ -281,8 +283,8 @@ export default function ForgotPasswordScreen() {
                       errorMessage={emailError}
                       inputClassName={fieldHeightClassName}
                       keyboardType="email-address"
-                      label="Email"
-                      placeholder="Nhập địa chỉ email"
+                      label={t("auth.forgotPassword.email")}
+                      placeholder={t("auth.forgotPassword.emailPlaceholder")}
                       textContentType="emailAddress"
                       value={email}
                       onBlur={() => setTouchedEmail(true)}
@@ -313,7 +315,9 @@ export default function ForgotPasswordScreen() {
                         className={`${buttonHeightClassName} items-center justify-center rounded-[18px]`}
                       >
                         <Text className="text-[16px] font-extrabold text-white">
-                          {isSubmitting ? "Đang gửi email..." : "Gửi email khôi phục"}
+                          {isSubmitting
+                            ? t("auth.forgotPassword.sendingEmail")
+                            : t("auth.forgotPassword.sendEmailButton")}
                         </Text>
                       </LinearGradient>
                     </Pressable>

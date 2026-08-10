@@ -6,6 +6,7 @@ import {
   type Href,
 } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -135,11 +136,14 @@ function formatCommunityTagLabel(tag: string) {
   return meaningfulTag ? `#${meaningfulTag}` : null;
 }
 
-function formatCommunityTime(isoTimestamp?: string | null) {
+function formatCommunityTime(
+  isoTimestamp: string | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   const meaningfulValue = readMeaningfulText(isoTimestamp);
 
   if (!meaningfulValue) {
-    return "Vừa xong";
+    return t("community.time.justNow");
   }
 
   const parsedDate = new Date(meaningfulValue);
@@ -152,25 +156,25 @@ function formatCommunityTime(isoTimestamp?: string | null) {
   const elapsedMilliseconds = Date.now() - parsedTime;
 
   if (elapsedMilliseconds < 60 * 1000) {
-    return "Vừa xong";
+    return t("community.time.justNow");
   }
 
   const elapsedMinutes = Math.floor(elapsedMilliseconds / (60 * 1000));
 
   if (elapsedMinutes < 60) {
-    return `${elapsedMinutes} phút`;
+    return t("community.feed.time.minutes", { count: elapsedMinutes });
   }
 
   const elapsedHours = Math.floor(elapsedMinutes / 60);
 
   if (elapsedHours < 24) {
-    return `${elapsedHours} giờ`;
+    return t("community.feed.time.hours", { count: elapsedHours });
   }
 
   const elapsedDays = Math.floor(elapsedHours / 24);
 
   if (elapsedDays < 7) {
-    return `${elapsedDays} ngày`;
+    return t("community.feed.time.days", { count: elapsedDays });
   }
 
   return `${parsedDate.getDate().toString().padStart(2, "0")}/${(
@@ -219,7 +223,10 @@ function buildPostMediaItems(post: CommunityFeedPost) {
   return [];
 }
 
-function formatRouteEstimateLabel(estimateTimeMinutes?: number | null) {
+function formatRouteEstimateLabel(
+  estimateTimeMinutes: number | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   if (
     typeof estimateTimeMinutes !== "number" ||
     !Number.isFinite(estimateTimeMinutes) ||
@@ -230,22 +237,27 @@ function formatRouteEstimateLabel(estimateTimeMinutes?: number | null) {
 
   if (estimateTimeMinutes >= 480) {
     const dayCount = Math.max(1, Math.round(estimateTimeMinutes / 480));
-    return `${dayCount} ngày`;
+    return t("community.feed.routeEstimate.days", { count: dayCount });
   }
 
   if (estimateTimeMinutes >= 60) {
     const hourCount = Math.max(1, Math.round(estimateTimeMinutes / 60));
-    return `${hourCount} giờ`;
+    return t("community.feed.routeEstimate.hours", { count: hourCount });
   }
 
-  return `${Math.round(estimateTimeMinutes)} phút`;
+  return t("community.feed.routeEstimate.minutes", {
+    count: Math.round(estimateTimeMinutes),
+  });
 }
 
-function getCommentDisplayName(item: PostComment) {
+function getCommentDisplayName(
+  item: PostComment,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
   return (
     readMeaningfulText(item.displayName) ??
     readMeaningfulText(item.username) ??
-    "Người dùng"
+    t("community.feed.fallbackUserName")
   );
 }
 
@@ -499,6 +511,8 @@ function CommunityPostRouteCard({
   label: string;
   onPress?: () => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <Pressable
       className="rounded-[16px] bg-[#FFF4F8] px-2.5 py-1.5"
@@ -526,7 +540,7 @@ function CommunityPostRouteCard({
             className="text-[12px] font-semibold text-[#F2608E]"
             style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
           >
-            Route
+            {t("community.explorerProfile.routeCardLabel")}
           </Text>
           <Text
             className="text-[13px] font-medium text-[#4B414C]"
@@ -561,6 +575,7 @@ function CommunityPostHotspotCard({
   onPress?: () => void;
   subtitle: string;
 }) {
+  const { t } = useTranslation();
   const previewImageUris = imageUris.slice(0, 3);
   const remainingCount = Math.max(imageUris.length - previewImageUris.length, 0);
 
@@ -591,7 +606,7 @@ function CommunityPostHotspotCard({
             className="text-[12px] font-semibold text-[#18A7B4]"
             style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
           >
-            {`${count} hotspot`}
+            {t("community.explorerProfile.hotspotCountLabel", { count })}
           </Text>
           <Text
             className="text-[13px] text-[#6D6671]"
@@ -667,6 +682,7 @@ function CommunityPostAuthorAvatar({
 }
 
 function ExpandablePostCaption({ text }: { text: string }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const normalizedText = text.trim();
   const maxLength = 150;
@@ -691,7 +707,9 @@ function ExpandablePostCaption({ text }: { text: string }) {
             setExpanded((current) => !current);
           }}
         >
-          {expanded ? " Rút gọn" : " Xem thêm"}
+          {expanded
+            ? ` ${t("community.feed.showLess")}`
+            : ` ${t("community.feed.showMore")}`}
         </Text>
       ) : null}
     </Text>
@@ -725,6 +743,7 @@ function CommunityPostCard({
   onOpenHotspot: (hotspotId: number) => void;
   onOpenRoute: (routeId: number) => void;
 }) {
+  const { t } = useTranslation();
   const mediaItems = buildPostMediaItems(post);
   const visibilityIcon = getPostVisibilityIcon(post.visibility);
   const visibilityLabel = getPostVisibilityLabel(post.visibility);
@@ -740,7 +759,9 @@ function CommunityPostCard({
   const routeItems = routeIds.map((routeId) => ({
     id: routeId,
     hotspotCount: resolvedRoutes[routeId]?.hotspotCount ?? 0,
-    label: resolvedRoutes[routeId]?.routeName?.trim() || `Route #${routeId}`,
+    label:
+      resolvedRoutes[routeId]?.routeName?.trim() ||
+      t("community.feed.routeFallbackName", { id: routeId }),
     routeDurationLabel: resolvedRoutes[routeId]?.routeDurationLabel ?? null,
   }));
   const hotspotItems = hotspotIds.map((hotspotId) => ({
@@ -748,12 +769,12 @@ function CommunityPostCard({
     imageUri: resolvedHotspots[hotspotId]?.imageUri ?? null,
     label:
       resolvedHotspots[hotspotId]?.hotspotName?.trim() ||
-      `Hotspot #${hotspotId}`,
+      t("community.feed.hotspotFallbackName", { id: hotspotId }),
   }));
   const primaryRouteLabel =
     routeItems.length <= 1
       ? routeItems[0]?.label ?? null
-      : `${routeItems[0]?.label ?? "Route"} +${routeItems.length - 1}`;
+      : `${routeItems[0]?.label ?? t("community.explorerProfile.routeCardLabel")} +${routeItems.length - 1}`;
   const hotspotSubtitle =
     hotspotItems.length === 0
       ? null
@@ -761,7 +782,11 @@ function CommunityPostCard({
         ? hotspotItems[0]?.label ?? null
         : hotspotItems.length === 2
           ? `${hotspotItems[0]?.label ?? ""}, ${hotspotItems[1]?.label ?? ""}`
-          : `${hotspotItems[0]?.label ?? ""}, ${hotspotItems[1]?.label ?? ""} và ${hotspotItems.length - 2} địa điểm khác`;
+          : t("community.feed.hotspotMoreLabel", {
+              first: hotspotItems[0]?.label ?? "",
+              second: hotspotItems[1]?.label ?? "",
+              count: hotspotItems.length - 2,
+            });
   const hotspotImageUris = hotspotItems
     .map((item) => item.imageUri)
     .filter((imageUri): imageUri is string => Boolean(imageUri));
@@ -770,7 +795,9 @@ function CommunityPostCard({
     <View className="rounded-[20px] bg-white px-4 pb-2 pt-2">
       <View className="flex-row items-start">
         <Pressable
-          accessibilityLabel={`Mở hồ sơ của ${post.author}`}
+          accessibilityLabel={t("community.feed.openProfileA11y", {
+            name: post.author,
+          })}
           accessibilityRole={post.canOpenProfile === false ? undefined : "button"}
           className="rounded-full"
           disabled={post.canOpenProfile === false}
@@ -948,7 +975,7 @@ function CommunityPostCard({
                 android: "share",
                 web: "share",
               }}
-              label="Chia sẻ"
+              label={t("community.posts.share")}
             />
           </View>
         </View>
@@ -970,7 +997,8 @@ function CommunityCommentItem({
   replyCount: number;
   showReplyingState?: boolean;
 }) {
-  const displayName = getCommentDisplayName(item);
+  const { t } = useTranslation();
+  const displayName = getCommentDisplayName(item, t);
   const palette = getAvatarPalette(`${displayName}-${item.userId}`);
   const commenterId =
     Number.isInteger(item.userId) && item.userId > 0 ? `${item.userId}` : null;
@@ -978,7 +1006,9 @@ function CommunityCommentItem({
   return (
     <View className="flex-row items-start gap-1">
       <Pressable
-        accessibilityLabel={`Xem trang cá nhân của ${displayName}`}
+        accessibilityLabel={t("community.postComments.viewProfileA11y", {
+          name: displayName,
+        })}
         accessibilityRole="button"
         disabled={commenterId === null}
         hitSlop={6}
@@ -1015,16 +1045,17 @@ function CommunityCommentItem({
             className="mt-0.5 text-[14px] text-[#374151]"
             style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
           >
-            {readMeaningfulText(item.comment) ?? "Đã gửi một bình luận."}
+            {readMeaningfulText(item.comment) ??
+              t("community.feed.defaultCommentText")}
           </Text>
         </View>
 
         <View className="mt-1 flex-row flex-wrap items-center">
           <Text className="text-[12px] font-medium text-[#6B7280]">
-            {formatCommunityTime(item.createdAt)}
+            {formatCommunityTime(item.createdAt, t)}
           </Text>
           <Text className="ml-4 text-[12px] font-semibold text-[#4B5563]">
-            Thích
+            {t("community.postComments.likeAction")}
           </Text>
           <Pressable
             className="ml-4"
@@ -1034,27 +1065,29 @@ function CommunityCommentItem({
             }}
           >
             <Text className="text-[12px] font-semibold text-[#4B5563]">
-              Trả lời
+              {t("community.postComments.replyAction")}
             </Text>
           </Pressable>
           {replyCount > 0 ? (
             <Text className="ml-4 text-[12px] font-medium text-[#6B7280]">
-              {`${replyCount} phản hồi`}
+              {t("community.postComments.replyCountLabel", { count: replyCount })}
             </Text>
           ) : null}
           {showReplyingState ? (
             <Text className="ml-4 text-[12px] font-semibold text-[#2563EB]">
-              Đang trả lời
+              {t("community.postComments.replyingIndicator")}
             </Text>
           ) : null}
           {typeof item.likeCount === "number" && item.likeCount > 0 ? (
             <Text className="ml-4 text-[12px] font-medium text-[#6B7280]">
-              {`${item.likeCount} thích`}
+              {t("community.postComments.likeCountLabel", {
+                count: item.likeCount,
+              })}
             </Text>
           ) : null}
           {item.isLiked ? (
             <Text className="ml-4 text-[12px] font-semibold text-[#2563EB]">
-              Đã thích
+              {t("community.postComments.likedState")}
             </Text>
           ) : null}
         </View>
@@ -1111,6 +1144,7 @@ function CommunityCommentThread({
 }
 
 function NotFoundState() {
+  const { t } = useTranslation();
   const router = useRouter();
 
   return (
@@ -1124,17 +1158,19 @@ function NotFoundState() {
           style={socialCardShadowStyle}
         >
           <Text className="text-center text-[22px] font-black text-[#111827]">
-            Không tìm thấy bài viết
+            {t("community.postComments.notFoundTitle")}
           </Text>
           <Text className="mt-3 text-center text-[15px] leading-6 text-[#6B7280]">
-            Hãy mở lại từ feed cộng đồng để xem đầy đủ nội dung và bình luận.
+            {t("community.postComments.notFoundDescription")}
           </Text>
 
           <Pressable
             className="mt-5 items-center rounded-[20px] bg-[#111827] px-4 py-3.5"
             onPress={() => router.back()}
           >
-            <Text className="text-[14px] font-bold text-white">Quay lại</Text>
+            <Text className="text-[14px] font-bold text-white">
+              {t("common.back")}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -1143,6 +1179,7 @@ function NotFoundState() {
 }
 
 export default function CommunityPostCommentsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const authSession = useAuthSession();
   const insets = useSafeAreaInsets();
@@ -1279,11 +1316,11 @@ export default function CommunityPostCommentsScreen() {
       setCommentsError(
         error instanceof Error
           ? error.message
-          : "Không tải được bình luận của bài viết cộng đồng.",
+          : t("community.feed.commentsLoadError"),
       );
       setCommentsStatus("error");
     }
-  }, [authSession.isAuthenticated, authSession.tokenType, resolvedPostId]);
+  }, [authSession.isAuthenticated, authSession.tokenType, resolvedPostId, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1411,6 +1448,7 @@ export default function CommunityPostCommentsScreen() {
               hotspotCount: result.value.hotspots.length,
               routeDurationLabel: formatRouteEstimateLabel(
                 result.value.estimateTime,
+                t,
               ),
               routeId: result.value.routeId,
               routeName,
@@ -1431,7 +1469,7 @@ export default function CommunityPostCommentsScreen() {
     return () => {
       isActive = false;
     };
-  }, [authSession.isAuthenticated, authSession.tokenType, routeIdsToResolve]);
+  }, [authSession.isAuthenticated, authSession.tokenType, routeIdsToResolve, t]);
 
   function focusCommentComposer() {
     requestAnimationFrame(() => {
@@ -1519,8 +1557,8 @@ export default function CommunityPostCommentsScreen() {
 
     if (!authSession.isAuthenticated) {
       Alert.alert(
-        "Cần đăng nhập",
-        "Bạn cần đăng nhập để thả tim bài viết cộng đồng.",
+        t("community.feed.loginRequiredTitle"),
+        t("community.feed.loginRequiredLike"),
       );
       return;
     }
@@ -1529,8 +1567,8 @@ export default function CommunityPostCommentsScreen() {
 
     if (!accessToken) {
       Alert.alert(
-        "Phiên đăng nhập hết hạn",
-        "Vui lòng đăng nhập lại trước khi thả tim bài viết cộng đồng.",
+        t("community.feed.sessionExpiredTitle"),
+        t("community.feed.sessionExpiredLike"),
       );
       return;
     }
@@ -1598,10 +1636,10 @@ export default function CommunityPostCommentsScreen() {
       }
 
       Alert.alert(
-        "Không thể thả tim",
+        t("community.feed.likeErrorTitle"),
         error instanceof Error
           ? error.message
-          : "Đã có lỗi xảy ra khi thả tim bài viết cộng đồng.",
+          : t("community.feed.likeErrorMessage"),
       );
     } finally {
       setIsLikingPost(false);
@@ -1621,8 +1659,8 @@ export default function CommunityPostCommentsScreen() {
 
     if (!authSession.isAuthenticated) {
       Alert.alert(
-        "Cần đăng nhập",
-        "Bạn cần đăng nhập để bình luận bài viết cộng đồng.",
+        t("community.feed.loginRequiredTitle"),
+        t("community.postComments.loginRequiredCommentMessage"),
       );
       return;
     }
@@ -1631,8 +1669,8 @@ export default function CommunityPostCommentsScreen() {
 
     if (!accessToken) {
       Alert.alert(
-        "Phiên đăng nhập hết hạn",
-        "Vui lòng đăng nhập lại trước khi gửi bình luận.",
+        t("community.feed.sessionExpiredTitle"),
+        t("community.feed.sessionExpiredComment"),
       );
       return;
     }
@@ -1664,10 +1702,10 @@ export default function CommunityPostCommentsScreen() {
       await loadComments();
     } catch (error) {
       Alert.alert(
-        "Không thể gửi bình luận",
+        t("community.feed.commentSubmitErrorTitle"),
         error instanceof Error
           ? error.message
-          : "Đã có lỗi xảy ra khi gửi bình luận cho bài viết cộng đồng.",
+          : t("community.feed.commentSubmitErrorMessage"),
       );
     } finally {
       setIsSubmittingComment(false);
@@ -1684,7 +1722,7 @@ export default function CommunityPostCommentsScreen() {
     post.isLiked === true;
   const trimmedCommentDraft = commentDraft.trim();
   const replyTargetDisplayName = replyTarget
-    ? getCommentDisplayName(replyTarget)
+    ? getCommentDisplayName(replyTarget, t)
     : null;
   const canSubmitComment =
     !isSubmittingComment && trimmedCommentDraft.length > 0;
@@ -1710,7 +1748,7 @@ export default function CommunityPostCommentsScreen() {
             </Pressable>
 
             <Text className="text-[16px] font-semibold text-[#6A5564]">
-              Bình luận
+              {t("community.posts.comment")}
             </Text>
 
             <View className="h-10 w-10" />
@@ -1781,7 +1819,7 @@ export default function CommunityPostCommentsScreen() {
                     style={{ height: 300, width: 300, marginBottom: -75 }}
                   />
                   <Text className="mt-0 text-[15px] font-semibold text-[#111827]">
-                    Chưa có bình luận
+                    {t("community.feed.noCommentsTitle")}
                   </Text>
                   <Text
                     className="mt-0 text-center text-[14px] text-[#6B7280]"
@@ -1790,7 +1828,7 @@ export default function CommunityPostCommentsScreen() {
                       lineHeight: lineHeightFor(14),
                     }}
                   >
-                    Hãy là người đầu tiên để lại cảm nhận cho bài viết này.
+                    {t("community.feed.noCommentsDescription")}
                   </Text>
                 </View>
               ) : null}
@@ -1815,7 +1853,9 @@ export default function CommunityPostCommentsScreen() {
                       lineHeight: lineHeightFor(12),
                     }}
                   >
-                    {`Đang trả lời ${replyTargetDisplayName}`}
+                    {t("community.postComments.replyingToLabel", {
+                      name: replyTargetDisplayName,
+                    })}
                   </Text>
                   <Pressable
                     className="ml-3 h-6 w-6 items-center justify-center rounded-full bg-white"
@@ -1851,8 +1891,10 @@ export default function CommunityPostCommentsScreen() {
                     }}
                     placeholder={
                       replyTargetDisplayName
-                        ? `Trả lời ${replyTargetDisplayName}...`
-                        : "Viết bình luận..."
+                        ? t("community.postComments.replyPlaceholder", {
+                            name: replyTargetDisplayName,
+                          })
+                        : t("community.postComments.commentPlaceholder")
                     }
                     placeholderTextColor="#9CA3AF"
                     returnKeyType="send"
