@@ -67,7 +67,10 @@ import {
 } from "../api/get-hotspot-reviews";
 import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
 import { likeReview } from "../api/like-review";
-import { reportReview } from "../api/report-review";
+import {
+  isDuplicateReportReviewError,
+  reportReview,
+} from "../api/report-review";
 import { deleteReview } from "../api/review-mutations";
 import {
   HiddenStoryUnlockedContent,
@@ -82,6 +85,7 @@ import {
   type ReviewReportReasonItem,
 } from "../components/review-report-sheet";
 import { ReviewDeleteDialog } from "../components/review-delete-dialog";
+import { ReviewReportDuplicateDialog } from "../components/review-report-duplicate-dialog";
 import { ReviewMediaViewer } from "../components/review-media-viewer";
 import { avatarImageUri } from "../data/home-screen.mock";
 import { cacheHotspotDetail } from "../data/hotspot-detail-cache";
@@ -92,7 +96,7 @@ import {
   resolveRouteIdParam,
   resolveSelectedHotspotId,
 } from "../utils/resolve-selected-hotspot-id";
-import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
+import { bodyLineHeightFor, lineHeightFor, textStyle } from "@/lib/text-scale";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type HotspotCoordinate = NonNullable<HotspotDetail["coordinate"]>;
@@ -2138,6 +2142,7 @@ function PersonalExperienceCard({
   onEditReview,
   onPressLike,
   onPressLikeReview,
+  onShowToast,
 }: {
   isReviewActionPending: boolean;
   item: PersonalExperienceItem;
@@ -2145,6 +2150,7 @@ function PersonalExperienceCard({
   onEditReview: (review: HotspotReview) => void;
   onPressLike: (postId: number) => void;
   onPressLikeReview: (reviewId: number) => void;
+  onShowToast: (message: string) => void;
 }) {
   const insets = useSafeAreaInsets();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
@@ -2157,6 +2163,8 @@ function PersonalExperienceCard({
   const [isReportReasonSheetVisible, setIsReportReasonSheetVisible] =
     useState(false);
   const [isReportDraftVisible, setIsReportDraftVisible] = useState(false);
+  const [isDuplicateReportDialogVisible, setIsDuplicateReportDialogVisible] =
+    useState(false);
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const [reportDraft, setReportDraft] = useState("");
   const authSession = useAuthSession();
@@ -2322,11 +2330,14 @@ function PersonalExperienceCard({
       });
 
       handleCloseReportReview(true);
-      Alert.alert(
-        "Đã ghi nhận báo cáo",
-        "Cảm ơn bạn. Chúng tôi sẽ xem xét bài đánh giá này sớm nhất có thể.",
-      );
+      onShowToast("Đã gửi báo cáo tới quản trị viên");
     } catch (error) {
+      if (isDuplicateReportReviewError(error)) {
+        handleCloseReportReview(true);
+        setIsDuplicateReportDialogVisible(true);
+        return;
+      }
+
       Alert.alert(
         "Không thể gửi báo cáo",
         error instanceof Error
@@ -2536,6 +2547,11 @@ function PersonalExperienceCard({
           void handleSubmitReportReview(reportDraft);
         }}
         visible={reportableReview !== null && isReportReasonSheetVisible && isReportDraftVisible}
+      />
+
+      <ReviewReportDuplicateDialog
+        onClose={() => setIsDuplicateReportDialogVisible(false)}
+        visible={isDuplicateReportDialogVisible}
       />
 
       {hasRating ? (
@@ -2766,6 +2782,7 @@ function PersonalExperienceSection({
   onEditReview,
   onPressLike,
   onPressLikeReview,
+  onShowToast,
   sectionTitle,
   showLessLabel = "Ẩn bớt bài",
   showMoreLabel = "Xem tất cả bài",
@@ -2783,6 +2800,7 @@ function PersonalExperienceSection({
   onEditReview: (review: HotspotReview) => void;
   onPressLike: (postId: number) => void;
   onPressLikeReview: (reviewId: number) => void;
+  onShowToast: (message: string) => void;
   sectionTitle: string;
   showLessLabel?: string;
   showMoreLabel?: string;
@@ -2819,6 +2837,7 @@ function PersonalExperienceSection({
               onEditReview={onEditReview}
               onPressLike={onPressLike}
               onPressLikeReview={onPressLikeReview}
+              onShowToast={onShowToast}
             />
           ))
         ) : (
@@ -3095,6 +3114,9 @@ export default function HotspotDetailScreen() {
   const [deletingReviewId, setDeletingReviewId] = useState<number | null>(null);
   const [reviewPendingDeletion, setReviewPendingDeletion] =
     useState<HotspotReview | null>(null);
+  const [hotspotToastMessage, setHotspotToastMessage] = useState<string | null>(
+    null,
+  );
   const [relativeTimeNow, setRelativeTimeNow] = useState(() => Date.now());
   const cachedStoriesEntry = getCachedHotspotStories({
     hotspotId: resolvedHotspotId,
@@ -3108,6 +3130,9 @@ export default function HotspotDetailScreen() {
   }));
   const [isHeroGalleryVisible, setIsHeroGalleryVisible] = useState(true);
   const heroTouchStartRef = useRef<{ pageX: number; pageY: number } | null>(
+    null,
+  );
+  const hotspotToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
   const heroHeight = clampNumber(screenHeight * 0.4, 280, 360);
@@ -3148,6 +3173,33 @@ export default function HotspotDetailScreen() {
       scrollY.value = event.contentOffset.y;
     },
   });
+
+  useEffect(() => {
+    if (hotspotToastTimeoutRef.current) {
+      clearTimeout(hotspotToastTimeoutRef.current);
+      hotspotToastTimeoutRef.current = null;
+    }
+
+    if (!hotspotToastMessage) {
+      return;
+    }
+
+    hotspotToastTimeoutRef.current = setTimeout(() => {
+      setHotspotToastMessage(null);
+      hotspotToastTimeoutRef.current = null;
+    }, 2600);
+
+    return () => {
+      if (hotspotToastTimeoutRef.current) {
+        clearTimeout(hotspotToastTimeoutRef.current);
+        hotspotToastTimeoutRef.current = null;
+      }
+    };
+  }, [hotspotToastMessage]);
+
+  const showHotspotToast = useCallback((message: string) => {
+    setHotspotToastMessage(message);
+  }, [setHotspotToastMessage]);
 
   // Chạy theo focus để bài đánh giá vừa gửi ở màn review-compose hiện ngay khi quay lại.
   useFocusEffect(
@@ -4044,6 +4096,7 @@ export default function HotspotDetailScreen() {
               onEditReview={handleEditHotspotReview}
               onPressLike={() => undefined}
               onPressLikeReview={handlePressLikeHotspotReview}
+              onShowToast={showHotspotToast}
               sectionTitle="Xếp hạng và đánh giá"
               showLessLabel="Ẩn bớt bài đánh giá"
               showMoreLabel="Xem tất cả bài đánh giá"
@@ -4096,6 +4149,40 @@ export default function HotspotDetailScreen() {
           }}
           visible={reviewPendingDeletion !== null}
         />
+
+        {hotspotToastMessage ? (
+          <View
+            pointerEvents="box-none"
+            style={{
+              bottom:
+                Math.max(insets.bottom, 12) +
+                (!isCheckedIn && !isCheckinUiPending ? 88 : 12),
+              left: 10,
+              position: "absolute",
+              right: 10,
+            }}
+          >
+            <Pressable
+              className="rounded-[18px] px-4 py-3"
+              onPress={() => setHotspotToastMessage(null)}
+              style={{
+                backgroundColor: "rgba(33, 33, 33, 0.92)",
+                elevation: 10,
+                shadowColor: "rgba(0, 0, 0, 0.26)",
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 1,
+                shadowRadius: 16,
+              }}
+            >
+              <Text
+                className="text-[14px] font-normal text-white"
+                style={textStyle(14)}
+              >
+                {hotspotToastMessage}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
       </SafeAreaView>
     </View>
   );

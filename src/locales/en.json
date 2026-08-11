@@ -335,6 +335,7 @@
     "community": {
       "title": "Community Today",
       "viewFullLeaderboard": "View the full leaderboard",
+      "guestMessage": "Sign in to see the community leaderboard",
       "loadingTitle": "Loading the leaderboard",
       "loadingNote": "We're updating today's community data.",
       "leaderLabel": "#{{rank}} {{name}} is leading",
@@ -368,7 +369,10 @@
       "loading": "Loading offers...",
       "empty": "No offers available yet. Tap to reload.",
       "error": "Could not load offers. Tap to retry.",
-      "guest": "Sign in to see partner offers"
+      "guest": "Sign in to see partner offers",
+      "guestTitle": "Log in to unlock special offers",
+      "guestDescription": "See partner vouchers, point redemption offers, and nearby rewards after logging in.",
+      "loginAction": "Log in"
     },
     "nearby": {
       "title": "Near You",
@@ -460,7 +464,10 @@
     "groups": {
       "title": "Community Groups",
       "create": "Create Group",
-      "viewAll": "View All"
+      "viewAll": "View All",
+      "loginRequiredTitle": "Log in to view groups",
+      "loginRequiredDescription": "",
+      "loginAction": "Log in"
     },
     "empty": {
       "noPosts": "No posts yet",

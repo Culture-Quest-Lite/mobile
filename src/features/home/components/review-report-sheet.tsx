@@ -294,28 +294,23 @@ function ReviewReportMenuRow({
 
   return (
     <Pressable
-      className={`flex-row items-start gap-2.5 py-2.5 ${isLast ? "" : "border-b border-[#E7E5EF]"}`}
+      className={`py-2.5 ${isLast ? "" : "border-b border-[#E7E5EF]"}`}
       onPress={onPress}
     >
-      <View className="w-6 items-center pt-px">
-        <SymbolView name={item.icon} size={19} tintColor={labelColor} />
-      </View>
-      <View className="min-w-0 flex-1">
+      <Text
+        className="text-[15px] font-normal"
+        style={[textStyle(15), { color: labelColor }]}
+      >
+        {item.label}
+      </Text>
+      {item.description ? (
         <Text
-          className="text-[15px] font-normal"
-          style={[textStyle(15), { color: labelColor }]}
+          className="mt-0.5 text-[12px]"
+          style={[textStyle(12), { color: descriptionColor }]}
         >
-          {item.label}
+          {item.description}
         </Text>
-        {item.description ? (
-          <Text
-            className="mt-0.5 text-[12px]"
-            style={[textStyle(12), { color: descriptionColor }]}
-          >
-            {item.description}
-          </Text>
-        ) : null}
-      </View>
+      ) : null}
     </Pressable>
   );
 }

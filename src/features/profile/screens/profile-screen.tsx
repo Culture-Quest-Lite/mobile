@@ -34,12 +34,15 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 import {
   cacheCommunityPost,
+  removeCachedCommunityPost,
   type CommunityFeedMediaItem,
   type CommunityFeedPost,
   updateCachedCommunityPost,
 } from "@/features/community/data/community-post-cache";
+import { deletePost } from "@/features/home/api/delete-post";
 import { getHotspotById } from "@/features/home/api/get-hotspot-by-id";
 import { likePost } from "@/features/home/api/like-post";
+import { ReviewDeleteDialog } from "@/features/home/components/review-delete-dialog";
 import {
   getApiHotspotRouteSlug,
   getHotspotHref,
@@ -79,6 +82,15 @@ type ResolvedProfileHotspotPreview = {
 type ResolvedProfileRoutePreview = {
   routeId: number;
   routeName: string;
+};
+type ProfileMenuRowItem = {
+  description?: string;
+  icon: SymbolName;
+  isDestructive?: boolean;
+  label: string;
+};
+type ProfilePostMenuItem = ProfileMenuRowItem & {
+  key: "edit-post" | "edit-visibility" | "move-to-trash";
 };
 
 const cardShadow = {
@@ -125,7 +137,7 @@ const profilePostAvatarPalettes = [
 const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
   {
     key: "posts",
-    label: "Bài viết",
+    label: "Tất cả bài viết",
     icon: {
       ios: "rectangle.grid.1x2",
       android: "view_agenda",
@@ -153,47 +165,29 @@ const fallbackPostAuthorName = "Minh Anh";
 /** Khớp `detailTextMaxFontSizeMultiplier` của community-screen để tên tác giả
  * phóng chữ cùng nhịp với bảng tin cộng đồng. */
 const postAuthorMaxFontSizeMultiplier = 1.05;
-const postMenuSections: {
-  items: {
-    description?: string;
-    icon: SymbolName;
-    isDestructive?: boolean;
-    label: string;
-  }[];
-  key: string;
-}[] = [
+const profilePostMenuItems: readonly ProfilePostMenuItem[] = [
   {
-    key: "primary",
-    items: [
-      {
-        label: "Chỉnh sửa bài viết",
-        icon: { ios: "pencil", android: "edit", web: "edit" },
-      },
-      {
-        label: "Chỉnh sửa quyền riêng tư",
-        icon: { ios: "lock", android: "lock", web: "lock" },
-      },
-      {
-        label: "Chuyển vào thùng rác",
-        description: "Các mục trong thùng rác sẽ bị xóa sau 30 ngày.",
-        icon: {
-          ios: "trash",
-          android: "delete_outline",
-          web: "delete_outline",
-        },
-        isDestructive: true,
-      },
-      {
-        label: "Nhận thông báo về bài viết này",
-        icon: {
-          ios: "bell",
-          android: "notifications_none",
-          web: "notifications_none",
-        },
-      },
-    ],
+    key: "edit-post",
+    label: "Chỉnh sửa bài viết",
+    icon: { ios: "pencil", android: "edit", web: "edit" },
   },
-];
+  {
+    key: "edit-visibility",
+    label: "Chỉnh sửa quyền riêng tư",
+    icon: { ios: "lock", android: "lock", web: "lock" },
+  },
+  {
+    key: "move-to-trash",
+    label: "Chuyển vào thùng rác",
+    description: "Các mục trong thùng rác sẽ bị xóa sau 30 ngày.",
+    icon: {
+      ios: "trash",
+      android: "delete_outline",
+      web: "delete_outline",
+    },
+    isDestructive: true,
+  },
+] as const;
 
 const GUEST_MENU_ITEMS: {
   label: string;
@@ -412,6 +406,25 @@ function formatCompactCount(value?: number | null) {
   const formattedValue = resolvedValue / 1000;
 
   return `${formattedValue >= 10 ? formattedValue.toFixed(0) : formattedValue.toFixed(1)}k`;
+}
+
+function getProfilePostNumericId(post: Pick<ProfilePost, "id">) {
+  const parsedPostId = Number.parseInt(post.id, 10);
+
+  return Number.isInteger(parsedPostId) && parsedPostId > 0
+    ? parsedPostId
+    : null;
+}
+
+function shouldShowPostInPrimaryProfileTab(post: ProfilePost) {
+  const normalizedStatus = normalizeProfilePostStatus(post.status);
+  const normalizedVisibility = normalizePostVisibilityValue(post.visibility);
+
+  return (
+    normalizedStatus === "APPROVED" &&
+    (normalizedVisibility === "PUBLIC" ||
+      normalizedVisibility === "FRIENDS")
+  );
 }
 
 function replaceProfilePostLikeState(
@@ -750,6 +763,12 @@ export default function ProfileScreen() {
   } = useRouteParticipants();
   const [tab, setTab] = useState<Tab>("posts");
   const [likingPostIds, setLikingPostIds] = useState<number[]>([]);
+  const [deletingPostIds, setDeletingPostIds] = useState<number[]>([]);
+  const [postPendingDeletion, setPostPendingDeletion] =
+    useState<ProfilePost | null>(null);
+  const [profileToastMessage, setProfileToastMessage] = useState<string | null>(
+    null,
+  );
   const [resolvedPostHotspots, setResolvedPostHotspots] = useState<
     Record<number, ResolvedProfileHotspotPreview>
   >({});
@@ -762,19 +781,17 @@ export default function ProfileScreen() {
   const heroHeight = Math.max(Math.min(safeWidth * 0.88, 320), 280);
   const avatarSize = 112;
   const profileOverlap = avatarSize * 0.52;
-  const approvedPosts = posts.filter(
-    (post) =>
-      normalizeProfilePostStatus(post.status) === "APPROVED" &&
-      normalizePostVisibilityValue(post.visibility) !== "PRIVATE",
+  const primaryTabPosts = posts.filter((post) =>
+    shouldShowPostInPrimaryProfileTab(post),
   );
-  // Tab ổ khóa gom bài chờ duyệt và mọi bài riêng tư (kể cả bài chia sẻ lại).
-  const lockedPosts = posts.filter(
+  // Tab ổ khóa gom toàn bộ phần còn lại: riêng tư, chờ duyệt, bị từ chối
+  // và các trạng thái chưa sẵn sàng hiển thị công khai/bạn bè.
+  const privateTabPosts = posts.filter(
     (post) =>
-      normalizeProfilePostStatus(post.status) === "PENDING" ||
-      (normalizeProfilePostStatus(post.status) === "APPROVED" &&
-        normalizePostVisibilityValue(post.visibility) === "PRIVATE"),
+      normalizeProfilePostStatus(post.status) !== "DELETED" &&
+      !shouldShowPostInPrimaryProfileTab(post),
   );
-  const visiblePosts = tab === "pending-posts" ? lockedPosts : approvedPosts;
+  const visiblePosts = tab === "pending-posts" ? privateTabPosts : primaryTabPosts;
   const visibleHotspotIdsToResolve = useMemo(() => {
     const hotspotIds = new Set<number>();
 
@@ -812,6 +829,13 @@ export default function ProfileScreen() {
   const persistedLikedPostIdsSet = useMemo(
     () => new Set(persistedLikedPostIds),
     [persistedLikedPostIds],
+  );
+  const deletingPostIdsSet = useMemo(
+    () => new Set(deletingPostIds),
+    [deletingPostIds],
+  );
+  const profileToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
   );
   const handleOpenAuth = () => {
     router.push("/login?entry=home" as Href);
@@ -984,6 +1008,29 @@ export default function ProfileScreen() {
       void reloadProfile();
     }, [authSession.isAuthenticated, reloadProfile]),
   );
+
+  useEffect(() => {
+    if (profileToastTimeoutRef.current) {
+      clearTimeout(profileToastTimeoutRef.current);
+      profileToastTimeoutRef.current = null;
+    }
+
+    if (!profileToastMessage) {
+      return;
+    }
+
+    profileToastTimeoutRef.current = setTimeout(() => {
+      setProfileToastMessage(null);
+      profileToastTimeoutRef.current = null;
+    }, 2600);
+
+    return () => {
+      if (profileToastTimeoutRef.current) {
+        clearTimeout(profileToastTimeoutRef.current);
+        profileToastTimeoutRef.current = null;
+      }
+    };
+  }, [profileToastMessage]);
 
   useEffect(() => {
     if (
@@ -1193,9 +1240,171 @@ export default function ProfileScreen() {
         : null;
   const postSectionTitle =
     tab === "pending-posts"
-      ? "Bài viết riêng tư & chờ duyệt"
-      : "Bài viết của bạn";
+      ? "Bài viết riêng tư, chờ duyệt & bị từ chối"
+      : "Tất cả bài viết của bạn";
   const isLoadingVisiblePosts = isLoading && visiblePosts.length === 0;
+  const pendingDeletionPostId = postPendingDeletion
+    ? getProfilePostNumericId(postPendingDeletion)
+    : null;
+
+  function handleEditPost(post: ProfilePost) {
+    const postNumericId = getProfilePostNumericId(post);
+
+    if (postNumericId === null) {
+      Alert.alert(
+        "Không thể chỉnh sửa bài viết",
+        "Không xác định được bài viết cần chỉnh sửa.",
+      );
+      return;
+    }
+
+    cacheCommunityPost(
+      mapProfilePostToCommunityFeedPost(post, {
+        profileName: resolvedDisplayName,
+        profileUsername: resolvedProfileUsername,
+      }),
+    );
+    router.push({
+      pathname: "/community/create",
+      params: {
+        mode: "edit",
+        postId: `${postNumericId}`,
+      },
+    } as Href);
+  }
+
+  function handleEditPostVisibility(post: ProfilePost) {
+    const postNumericId = getProfilePostNumericId(post);
+
+    if (postNumericId === null) {
+      Alert.alert(
+        "Không thể chỉnh sửa quyền riêng tư",
+        "Không xác định được bài viết cần chỉnh sửa quyền riêng tư.",
+      );
+      return;
+    }
+
+    cacheCommunityPost(
+      mapProfilePostToCommunityFeedPost(post, {
+        profileName: resolvedDisplayName,
+        profileUsername: resolvedProfileUsername,
+      }),
+    );
+    router.push({
+      pathname: "/community/post-visibility",
+      params: {
+        mode: "edit",
+        postId: `${postNumericId}`,
+      },
+    } as Href);
+  }
+
+  function handleMovePostToTrash(post: ProfilePost) {
+    const postNumericId = getProfilePostNumericId(post);
+
+    if (postNumericId === null) {
+      Alert.alert(
+        "Không thể chuyển vào thùng rác",
+        "Không xác định được bài viết cần chuyển vào thùng rác.",
+      );
+      return;
+    }
+
+    if (deletingPostIdsSet.has(postNumericId)) {
+      return;
+    }
+
+    setPostPendingDeletion(post);
+  }
+
+  function handleSelectPostOption(
+    post: ProfilePost,
+    item: ProfilePostMenuItem,
+  ) {
+    if (item.key === "edit-post") {
+      handleEditPost(post);
+      return;
+    }
+
+    if (item.key === "edit-visibility") {
+      handleEditPostVisibility(post);
+      return;
+    }
+
+    handleMovePostToTrash(post);
+  }
+
+  async function confirmMovePostToTrash() {
+    const post = postPendingDeletion;
+    const postNumericId =
+      post === null ? null : getProfilePostNumericId(post);
+
+    if (post === null || postNumericId === null) {
+      setPostPendingDeletion(null);
+      return;
+    }
+
+    if (!authSession.isAuthenticated) {
+      setPostPendingDeletion(null);
+      Alert.alert(
+        "Cần đăng nhập",
+        "Bạn cần đăng nhập lại để chuyển bài viết vào thùng rác.",
+      );
+      return;
+    }
+
+    const accessToken = await getValidAccessToken();
+
+    if (!accessToken) {
+      setPostPendingDeletion(null);
+      Alert.alert(
+        "Phiên đăng nhập hết hạn",
+        "Vui lòng đăng nhập lại trước khi chuyển bài viết vào thùng rác.",
+      );
+      return;
+    }
+
+    setDeletingPostIds((current) =>
+      current.includes(postNumericId) ? current : [...current, postNumericId],
+    );
+
+    try {
+      await deletePost({
+        accessToken,
+        postId: postNumericId,
+        tokenType: authSession.tokenType,
+      });
+
+      const deletedPost: ProfilePost = {
+        ...post,
+        status: "DELETED",
+      };
+
+      if (!updateCachedProfilePost(postNumericId, () => deletedPost)) {
+        cacheProfilePost(deletedPost);
+      }
+      removeCachedCommunityPost(postNumericId);
+
+      if (likedPostsAccountKey) {
+        removeLikedPostId(likedPostsAccountKey, postNumericId);
+      }
+
+      setPostPendingDeletion(null);
+      setProfileToastMessage("Đã chuyển bài viết vào thùng rác.");
+      void reloadProfile();
+    } catch (nextError) {
+      Alert.alert(
+        "Không thể chuyển vào thùng rác",
+        nextError instanceof Error
+          ? nextError.message
+          : "Đã có lỗi xảy ra khi chuyển bài viết vào thùng rác.",
+      );
+    } finally {
+      setDeletingPostIds((current) =>
+        current.filter((id) => id !== postNumericId),
+      );
+    }
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-[#F7F8FC]" edges={["left", "right"]}>
@@ -1377,12 +1586,19 @@ export default function ProfileScreen() {
                     return (
                       <PostCard
                         key={post.id}
+                        isDeleting={
+                          Number.isInteger(postNumericId) &&
+                          postNumericId > 0 &&
+                          deletingPostIdsSet.has(postNumericId)
+                        }
                         isLast={index === visiblePosts.length - 1}
                         isLiked={isLiked}
                         isLiking={isLiking}
+                        menuItems={profilePostMenuItems}
                         onLikePost={handleLikePost}
                         onOpenHotspot={handleOpenPostHotspot}
                         onOpenRoute={handleOpenPostRoute}
+                        onSelectPostOption={handleSelectPostOption}
                         pageGutter={gutter}
                         post={post}
                         profileAvatar={profile.avatar}
@@ -1428,6 +1644,59 @@ export default function ProfileScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <ReviewDeleteDialog
+        confirmLabel="Chuyển bài"
+        description="Bài viết sẽ nằm trong thùng rác và bị xóa vĩnh viễn sau 30 ngày."
+        isDeleting={
+          pendingDeletionPostId !== null &&
+          deletingPostIdsSet.has(pendingDeletionPostId)
+        }
+        onCancel={() => {
+          setPostPendingDeletion(null);
+        }}
+        onConfirm={() => {
+          void confirmMovePostToTrash();
+        }}
+        title="Chuyển bài viết vào thùng rác?"
+        visible={postPendingDeletion !== null}
+      />
+
+      {profileToastMessage ? (
+        <View
+          pointerEvents="box-none"
+          style={{
+            bottom: Math.max(insets.bottom, 12) + 12,
+            left: 10,
+            position: "absolute",
+            right: 10,
+          }}
+        >
+          <Pressable
+            className="rounded-[18px] px-4 py-3"
+            onPress={() => {
+              setProfileToastMessage(null);
+            }}
+            style={{
+              backgroundColor: "rgba(33, 33, 33, 0.92)",
+              shadowColor: "rgba(0, 0, 0, 0.26)",
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 1,
+              shadowRadius: 16,
+              elevation: 10,
+            }}
+          >
+            <View className="flex-row items-center">
+              <Text
+                className="flex-1 text-[13px] font-medium text-white"
+                style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
+              >
+                {profileToastMessage}
+              </Text>
+            </View>
+          </Pressable>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -2264,7 +2533,7 @@ function PostMenuRow({
   isLast,
   onPress,
 }: {
-  item: (typeof postMenuSections)[number]["items"][number];
+  item: ProfileMenuRowItem;
   isLast: boolean;
   onPress: () => void;
 }) {
@@ -2273,10 +2542,10 @@ function PostMenuRow({
 
   return (
     <Pressable
-      className={`flex-row items-start gap-3 py-3 ${isLast ? "" : "border-b border-[#E7E5EF]"}`}
+      className={`flex-row items-start gap-2.5 py-2.5 ${isLast ? "" : "border-b border-[#E7E5EF]"}`}
       onPress={onPress}
     >
-      <View className="w-6 items-center pt-0.5">
+      <View className="w-6 items-center pt-px">
         <SymbolView name={item.icon} size={19} tintColor={labelColor} />
       </View>
       <View className="min-w-0 flex-1">
@@ -2307,13 +2576,17 @@ function PostMenuRow({
   );
 }
 
-function PostOptionsSheet({
+function PostOptionsSheet<TItem extends ProfileMenuRowItem>({
   bottomInset,
+  items,
   onClose,
+  onSelectItem,
   visible,
 }: {
   bottomInset: number;
+  items: readonly TItem[];
   onClose: () => void;
+  onSelectItem: (item: TItem) => void;
   visible: boolean;
 }) {
   return (
@@ -2330,31 +2603,22 @@ function PostOptionsSheet({
           className="rounded-t-[28px] bg-white px-3 pt-3"
           style={{ paddingBottom: Math.max(bottomInset, 14) }}
         >
-          <View className="items-center pb-3">
+          <View className="items-center pb-2">
             <View className="h-1.5 w-14 rounded-full bg-[#D3D2DC]" />
           </View>
 
-          <ScrollView
-            bounces={false}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 4 }}
-          >
-            {postMenuSections.map((section) => (
-              <View
-                key={section.key}
-                className="mb-3 rounded-[22px] bg-[#F7F6FB] px-4 py-1"
-              >
-                {section.items.map((item, index) => (
-                  <PostMenuRow
-                    key={`${section.key}-${item.label}`}
-                    item={item}
-                    isLast={index === section.items.length - 1}
-                    onPress={onClose}
-                  />
-                ))}
-              </View>
+          <View className="rounded-[22px] bg-[#F7F6FB] px-4 py-0.5">
+            {items.map((item, index) => (
+              <PostMenuRow
+                key={`${item.label}-${index}`}
+                item={item}
+                isLast={index === items.length - 1}
+                onPress={() => {
+                  onSelectItem(item);
+                }}
+              />
             ))}
-          </ScrollView>
+          </View>
         </View>
       </View>
     </Modal>
@@ -2363,12 +2627,15 @@ function PostOptionsSheet({
 
 function PostCard({
   post,
+  isDeleting,
   isLast,
   isLiked,
   isLiking,
+  menuItems,
   onLikePost,
   onOpenHotspot,
   onOpenRoute,
+  onSelectPostOption,
   pageGutter,
   profileAvatar,
   profileName,
@@ -2377,12 +2644,15 @@ function PostCard({
   resolvedRoutes,
 }: {
   post: ProfilePost;
+  isDeleting: boolean;
   isLast: boolean;
   isLiked: boolean;
   isLiking: boolean;
+  menuItems: readonly ProfilePostMenuItem[];
   onLikePost: (post: ProfilePost) => void;
   onOpenHotspot: (hotspotId: number) => void;
   onOpenRoute: (routeId: number) => void;
+  onSelectPostOption: (post: ProfilePost, item: ProfilePostMenuItem) => void;
   pageGutter: number;
   profileAvatar: string | null;
   profileName: string;
@@ -2551,6 +2821,7 @@ function PostCard({
 
           <Pressable
             className="h-8 w-8 items-center justify-center rounded-full"
+            disabled={isDeleting}
             onPress={() => setIsPostMenuVisible(true)}
           >
             <SymbolView
@@ -2697,8 +2968,15 @@ function PostCard({
 
       <PostOptionsSheet
         bottomInset={insets.bottom}
+        items={menuItems}
         visible={isPostMenuVisible}
         onClose={() => setIsPostMenuVisible(false)}
+        onSelectItem={(item) => {
+          setIsPostMenuVisible(false);
+          requestAnimationFrame(() => {
+            onSelectPostOption(post, item);
+          });
+        }}
       />
     </>
   );
@@ -2970,8 +3248,8 @@ function EmptyPosts({ tab }: { tab: Extract<Tab, "posts" | "pending-posts"> }) {
       />
       <Text className="mt-2 text-[13px] text-[#8E869A]">
         {tab === "pending-posts"
-          ? "Bạn chưa có bài viết riêng tư hoặc đang chờ duyệt"
-          : "Bạn chưa có bài viết nào đã được duyệt"}
+          ? "Bạn chưa có bài viết riêng tư, chờ duyệt hoặc bị từ chối"
+          : "Bạn chưa có bài viết công khai hoặc bạn bè nào đã được duyệt"}
       </Text>
     </View>
   );

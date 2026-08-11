@@ -4,8 +4,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import { type ComponentProps } from "react";
 import {
   ActivityIndicator,
+  type ImageStyle,
   Modal,
   Pressable,
+  type StyleProp,
   Text as RNText,
   View,
 } from "react-native";
@@ -13,6 +15,8 @@ import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 type TextProps = ComponentProps<typeof RNText>;
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
+type DialogImageSource = ComponentProps<typeof Image>["source"];
+type DialogImageContentFit = ComponentProps<typeof Image>["contentFit"];
 
 const deleteReviewImage = require("../../../../assets/images/delete1.png");
 const textMaxFontSizeMultiplier = 1.05;
@@ -41,8 +45,13 @@ export function ReviewDeleteDialog({
     android: "delete_outline",
     web: "delete_outline",
   },
+  confirmGradient = destructiveGradient,
   confirmLabel = "Xóa bài",
   description = "Bài đánh giá và toàn bộ ảnh, video đính kèm sẽ bị xóa khỏi Culture Quest Lite.",
+  dismissAccessibilityLabel = "Đóng hộp thoại xác nhận",
+  imageContentFit = "cover",
+  imageSource = deleteReviewImage,
+  imageStyle,
   isDeleting,
   onCancel,
   onConfirm,
@@ -51,8 +60,13 @@ export function ReviewDeleteDialog({
 }: {
   borderlessButtons?: boolean;
   confirmIcon?: SymbolName;
+  confirmGradient?: readonly [string, string, string];
   confirmLabel?: string;
   description?: string;
+  dismissAccessibilityLabel?: string;
+  imageContentFit?: DialogImageContentFit;
+  imageSource?: DialogImageSource;
+  imageStyle?: StyleProp<ImageStyle>;
   isDeleting: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -75,7 +89,7 @@ export function ReviewDeleteDialog({
     >
       <View className="flex-1 items-center justify-center px-5 py-6">
         <Pressable
-          accessibilityLabel="Đóng xác nhận xóa"
+          accessibilityLabel={dismissAccessibilityLabel}
           className="absolute inset-0 bg-black/50"
           disabled={isDeleting}
           onPress={handleClose}
@@ -94,10 +108,10 @@ export function ReviewDeleteDialog({
           }}
         >
           <Image
-            source={deleteReviewImage}
-            contentFit="cover"
+            source={imageSource}
+            contentFit={imageContentFit}
             transition={140}
-            style={{ height: 130, width: "100%" }}
+            style={[{ height: 130, width: "100%" }, imageStyle]}
           />
 
           <View className="px-4 pb-4 pt-3">
@@ -151,7 +165,7 @@ export function ReviewDeleteDialog({
                 })}
               >
                 <LinearGradient
-                  colors={destructiveGradient}
+                  colors={confirmGradient}
                   end={{ x: 1, y: 0.5 }}
                   start={{ x: 0, y: 0.5 }}
                   style={{

@@ -1,3 +1,4 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { SymbolView } from "@/components/ui/symbol-view";
 import type { CommunityGroupPayload } from "@/features/community/api/group-api";
 import { lineHeightFor } from "@/lib/text-scale";
@@ -109,6 +110,113 @@ export function CommunityCreateGroupCard({ onPress }: { onPress: () => void }) {
           Tạo nhóm của bạn
         </Text>
       </View>
+    </Pressable>
+  );
+}
+
+export function CommunityGroupsLoginRequiredCard({
+  actionLabel,
+  description,
+  onPress,
+  title,
+}: {
+  actionLabel: string;
+  description?: string;
+  onPress: () => void;
+  title: string;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.94 : 1,
+      })}
+    >
+      <LinearGradient
+        className="overflow-hidden rounded-[22px]"
+        colors={["#FFF7FA", "#FFFFFF"] as const}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={[
+          cardShadowStyle,
+          {
+            borderColor: "#F8E0E9",
+            borderWidth: 1,
+            minHeight: 102,
+            paddingHorizontal: 14,
+            paddingVertical: 14,
+          },
+        ]}
+      >
+        <View className="flex-row items-center">
+          <View
+            className="h-[72px] w-[72px] items-center justify-center rounded-full bg-white"
+            style={{
+              borderColor: "#FCE0EB",
+              borderWidth: 1,
+              shadowColor: "rgba(244, 63, 126, 0.14)",
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 1,
+              shadowRadius: 18,
+              elevation: 6,
+            }}
+          >
+            <Image
+              source={require("../../../../assets/images/okhoa.png")}
+              resizeMode="contain"
+              style={{ height: 58, width: 58 }}
+            />
+          </View>
+
+          <View className="ml-4 flex-1">
+            <Text
+              className="text-[15px] font-medium text-[#8F8298]"
+              style={{ includeFontPadding: false, lineHeight: lineHeightFor(16) }}
+            >
+              {title}
+            </Text>
+            {description ? (
+              <Text
+                className="mt-1 text-[12px] text-[#7D7287]"
+                style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
+              >
+                {description}
+              </Text>
+            ) : null}
+            <View className="mt-3 items-center">
+              <LinearGradient
+                colors={["#FF6B98", "#F43F7E"] as const}
+                end={{ x: 1, y: 0.5 }}
+                start={{ x: 0, y: 0.5 }}
+                className="overflow-hidden rounded-full"
+                style={{
+                  alignItems: "center",
+                  flexDirection: "row",
+                  gap: 4,
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                }}
+              >
+                <Text
+                  className="text-[13px] font-semibold text-white"
+                  style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
+                >
+                  {actionLabel}
+                </Text>
+                <SymbolView
+                  name={{
+                    ios: "chevron.right",
+                    android: "chevron_right",
+                    web: "chevron_right",
+                  }}
+                  size={14}
+                  tintColor="#FFFFFF"
+                />
+              </LinearGradient>
+            </View>
+          </View>
+        </View>
+      </LinearGradient>
     </Pressable>
   );
 }

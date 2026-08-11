@@ -1,4 +1,5 @@
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
+import { appToast } from "@/components/ui/app-toast";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -49,7 +50,10 @@ import {
   type HotspotReview,
 } from "@/features/home/api/get-hotspot-reviews";
 import { likeReview } from "@/features/home/api/like-review";
-import { reportReview } from "@/features/home/api/report-review";
+import {
+  isDuplicateReportReviewError,
+  reportReview,
+} from "@/features/home/api/report-review";
 import { deleteReview } from "@/features/home/api/review-mutations";
 import {
   buildReviewReportReasonItems,
@@ -57,6 +61,7 @@ import {
   ReviewReportReasonComposer,
   type ReviewReportReasonItem,
 } from "@/features/home/components/review-report-sheet";
+import { ReviewReportDuplicateDialog } from "@/features/home/components/review-report-duplicate-dialog";
 import { ReviewDeleteDialog } from "@/features/home/components/review-delete-dialog";
 import { avatarImageUri } from "@/features/home/data/home-screen.mock";
 import { cacheHotspotReviewForEdit } from "@/features/home/data/hotspot-review-edit-cache";
@@ -778,6 +783,8 @@ function RouteReviewCard({
     useState(false);
   const [isReportDraftVisible, setIsReportDraftVisible] = useState(false);
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [isDuplicateReportDialogVisible, setIsDuplicateReportDialogVisible] =
+    useState(false);
   const [reportDraft, setReportDraft] = useState("");
   const authSession = useAuthSession();
   const reviewReportReasonItems = useMemo(
@@ -891,11 +898,14 @@ function RouteReviewCard({
       });
 
       handleCloseReportReview(true);
-      Alert.alert(
-        "Đã ghi nhận báo cáo",
-        "Cảm ơn bạn. Chúng tôi sẽ xem xét bài đánh giá này sớm nhất có thể.",
-      );
+      appToast.success("Đã gửi báo cáo tới quản trị viên");
     } catch (error) {
+      if (isDuplicateReportReviewError(error)) {
+        handleCloseReportReview(true);
+        setIsDuplicateReportDialogVisible(true);
+        return;
+      }
+
       Alert.alert(
         "Không thể gửi báo cáo",
         error instanceof Error
@@ -1109,6 +1119,11 @@ function RouteReviewCard({
           void handleSubmitReportReview(reportDraft);
         }}
         visible={isReportReasonSheetVisible && isReportDraftVisible}
+      />
+
+      <ReviewReportDuplicateDialog
+        onClose={() => setIsDuplicateReportDialogVisible(false)}
+        visible={isDuplicateReportDialogVisible}
       />
 
       <View className="mt-1 flex-row items-center">
