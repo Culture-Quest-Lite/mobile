@@ -88,6 +88,7 @@ import {
   CommunityCreateGroupCard,
   CommunityGroupCompactStateCard,
   CommunityGroupListCard,
+  CommunityGroupsLoginRequiredCard,
   CommunityGroupPlaceholderCard,
 } from "../components/community-group-list-ui";
 import {
@@ -522,7 +523,10 @@ function getAvatarPalette(seed: string) {
 }
 
 function buildComposerIdentityFromSession(
-  authSession: AuthSession,
+  authSession: Pick<
+    AuthSession,
+    "displayName" | "isAuthenticated" | "username"
+  >,
   t: (key: string, options?: Record<string, unknown>) => string,
 ): ComposerIdentity {
   const normalizedDisplayName = readMeaningfulText(authSession.displayName);
@@ -543,6 +547,18 @@ function buildComposerIdentityFromSession(
       : t("community.feed.composerIdentity.guest"),
     username: normalizedUsername,
   };
+}
+
+function areComposerIdentitiesEqual(
+  left: ComposerIdentity,
+  right: ComposerIdentity,
+) {
+  return (
+    left.accountKey === right.accountKey &&
+    left.avatarUri === right.avatarUri &&
+    left.displayName === right.displayName &&
+    left.username === right.username
+  );
 }
 
 function buildComposerIdentityFromProfile(
@@ -1056,18 +1072,30 @@ export default function CommunityScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const authSession = useAuthSession();
+  const isAuthenticated = authSession.isAuthenticated;
+  const tokenType = authSession.tokenType;
+  const sessionDisplayName = authSession.displayName;
+  const sessionUsername = authSession.username;
   const insets = useSafeAreaInsets();
   const { gutter, safeWidth } = useScreenLayout({ maxContentWidth: 640 });
-  const communitySessionKey = authSession.isAuthenticated
-    ? authSession.username?.trim() ||
-      authSession.displayName.trim() ||
-      "authenticated-user"
+  const communitySessionKey = isAuthenticated
+    ? sessionUsername?.trim() || sessionDisplayName.trim() || "authenticated-user"
     : "guest";
-  const likedPostsAccountKey = authSession.isAuthenticated
-    ? authSession.username?.trim() || authSession.displayName.trim() || null
+  const likedPostsAccountKey = isAuthenticated
+    ? sessionUsername?.trim() || sessionDisplayName.trim() || null
     : null;
-  const fallbackComposerIdentity =
-    buildComposerIdentityFromSession(authSession, t);
+  const fallbackComposerIdentity = useMemo(
+    () =>
+      buildComposerIdentityFromSession(
+        {
+          displayName: sessionDisplayName,
+          isAuthenticated,
+          username: sessionUsername,
+        },
+        t,
+      ),
+    [isAuthenticated, sessionDisplayName, sessionUsername, t],
+  );
   const [communityFeedPosts, setCommunityFeedPosts] = useState<
     CommunityFeedPost[]
   >([]);
@@ -1136,13 +1164,16 @@ export default function CommunityScreen() {
   const communitySessionKeyRef = useRef(communitySessionKey);
   const communityFeedPostsRef = useRef<CommunityFeedPost[]>([]);
   const shareBarTextOpacity = useMemo(() => new Animated.Value(1), []);
-  const fadeShareBarText = (toValue: number) => {
-    Animated.timing(shareBarTextOpacity, {
-      duration: 140,
-      toValue,
-      useNativeDriver: true,
-    }).start();
-  };
+  const fadeShareBarText = useCallback(
+    (toValue: number) => {
+      Animated.timing(shareBarTextOpacity, {
+        duration: 140,
+        toValue,
+        useNativeDriver: true,
+      }).start();
+    },
+    [shareBarTextOpacity],
+  );
   const hasSkippedInitialFeedFocusRef = useRef(false);
   const communityToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -1531,6 +1562,59 @@ export default function CommunityScreen() {
   );
   const showInitialCommunityLoading =
     communityFeedStatus === "loading" && communityFeedPosts.length === 0;
+  const syncComposerIdentity = useCallback((nextIdentity: ComposerIdentity) => {
+    setComposerIdentity((current) =>
+      areComposerIdentitiesEqual(current, nextIdentity)
+        ? current
+        : nextIdentity,
+    );
+  }, []);
+  const syncCurrentProfileId = useCallback((nextProfileId: string | null) => {
+    setCurrentProfileId((current) =>
+      current === nextProfileId ? current : nextProfileId,
+    );
+  }, []);
+  const openCommunityLogin = useCallback(() => {
+    router.push({
+      pathname: "/login",
+      params: {
+        entry: "home",
+        redirectTo: "/bookings",
+      },
+    } as Href);
+  }, [router]);
+  const promptCommunityLogin = useCallback(
+    (message: string) => {
+      appAlert.alert(
+        t("community.feed.loginRequiredTitle"),
+        message,
+        [
+          {
+            style: "cancel",
+            text: t("common.cancel"),
+          },
+          {
+            onPress: openCommunityLogin,
+            text: t("community.groups.loginAction"),
+          },
+        ],
+        {
+          tone: "info",
+        },
+      );
+    },
+    [openCommunityLogin, t],
+  );
+  const handleOpenCreatePost = useCallback(() => {
+    if (!isAuthenticated) {
+      fadeShareBarText(1);
+      openCommunityLogin();
+      return;
+    }
+
+    fadeShareBarText(0);
+    router.push("/community/create" as Href);
+  }, [fadeShareBarText, isAuthenticated, openCommunityLogin, router]);
 
   const handleRefresh = useCallback(async () => {
     if (isRefreshing) {
@@ -1705,8 +1789,8 @@ export default function CommunityScreen() {
       let isActive = true;
       const sessionKeyAtRequestStart = communitySessionKey;
 
-      async function loadComposerIdentity() {
-        if (!authSession.isAuthenticated) {
+      if (!isAuthenticated) {
+        queueMicrotask(() => {
           if (
             !isActive ||
             communitySessionKeyRef.current !== sessionKeyAtRequestStart
@@ -1714,11 +1798,16 @@ export default function CommunityScreen() {
             return;
           }
 
-          setCurrentProfileId(null);
-          setComposerIdentity(fallbackComposerIdentity);
-          return;
-        }
+          syncCurrentProfileId(null);
+          syncComposerIdentity(fallbackComposerIdentity);
+        });
 
+        return () => {
+          isActive = false;
+        };
+      }
+
+      async function loadComposerIdentity() {
         try {
           const accessToken = await getValidAccessToken();
 
@@ -1730,14 +1819,14 @@ export default function CommunityScreen() {
               return;
             }
 
-            setComposerIdentity(fallbackComposerIdentity);
-            setCurrentProfileId(null);
+            syncComposerIdentity(fallbackComposerIdentity);
+            syncCurrentProfileId(null);
             return;
           }
 
           const profile = await getMyProfile({
             accessToken,
-            tokenType: authSession.tokenType,
+            tokenType,
           });
 
           if (
@@ -1747,8 +1836,8 @@ export default function CommunityScreen() {
             return;
           }
 
-          setCurrentProfileId(profile.id);
-          setComposerIdentity(
+          syncCurrentProfileId(profile.id);
+          syncComposerIdentity(
             buildComposerIdentityFromProfile(profile, fallbackComposerIdentity),
           );
         } catch (error) {
@@ -1763,8 +1852,8 @@ export default function CommunityScreen() {
             return;
           }
 
-          setCurrentProfileId(null);
-          setComposerIdentity(fallbackComposerIdentity);
+          syncCurrentProfileId(null);
+          syncComposerIdentity(fallbackComposerIdentity);
         }
       }
 
@@ -1774,10 +1863,12 @@ export default function CommunityScreen() {
         isActive = false;
       };
     }, [
-      authSession.isAuthenticated,
-      authSession.tokenType,
       communitySessionKey,
       fallbackComposerIdentity,
+      isAuthenticated,
+      syncComposerIdentity,
+      syncCurrentProfileId,
+      tokenType,
     ]),
   );
 
@@ -1790,9 +1881,19 @@ export default function CommunityScreen() {
   );
 
   const openCommunityGroupCreate = () => {
+    if (!isAuthenticated) {
+      openCommunityLogin();
+      return;
+    }
+
     router.push("/community/group-create" as Href);
   };
   const openCommunityGroupsList = () => {
+    if (!isAuthenticated) {
+      openCommunityLogin();
+      return;
+    }
+
     router.push("/community/groups" as Href);
   };
   const handleOpenDiscoverGroup = (group: CommunityGroupPayload) => {
@@ -2064,10 +2165,7 @@ export default function CommunityScreen() {
     }
 
     if (!authSession.isAuthenticated) {
-      appAlert.alert(
-        t("community.feed.loginRequiredTitle"),
-        t("community.feed.loginRequiredLike"),
-      );
+      promptCommunityLogin(t("community.feed.loginRequiredLike"));
       return;
     }
 
@@ -2182,10 +2280,7 @@ export default function CommunityScreen() {
     }
 
     if (!authSession.isAuthenticated) {
-      appAlert.alert(
-        t("community.feed.loginRequiredTitle"),
-        t("community.feed.loginRequiredShare"),
-      );
+      promptCommunityLogin(t("community.feed.loginRequiredShare"));
       return;
     }
 
@@ -2400,10 +2495,7 @@ export default function CommunityScreen() {
 
   function handleOpenReportPost(post: CommunityFeedPost) {
     if (!authSession.isAuthenticated) {
-      appAlert.alert(
-        t("community.feed.loginRequiredTitle"),
-        t("community.feed.report.loginRequired"),
-      );
+      promptCommunityLogin(t("community.feed.report.loginRequired"));
       return;
     }
 
@@ -2501,10 +2593,7 @@ export default function CommunityScreen() {
 
     if (!authSession.isAuthenticated) {
       setPostPendingDeletion(null);
-      appAlert.alert(
-        t("community.feed.loginRequiredTitle"),
-        t("community.feed.loginRequiredTrash"),
-      );
+      promptCommunityLogin(t("community.feed.loginRequiredTrash"));
       return;
     }
 
@@ -2692,10 +2781,7 @@ export default function CommunityScreen() {
           >
             <Pressable
               className="flex-row items-center rounded-[24px] bg-white px-4 py-3"
-              onPress={() => {
-                fadeShareBarText(0);
-                router.push("/community/create" as Href);
-              }}
+              onPress={handleOpenCreatePost}
               onPressIn={() => fadeShareBarText(0)}
               onPressOut={() => fadeShareBarText(1)}
               style={[
@@ -2706,17 +2792,31 @@ export default function CommunityScreen() {
                 },
               ]}
             >
-              <UserAvatar
-                displayName={resolvedComposerIdentity.displayName}
-                size={36}
-                uri={resolvedComposerIdentity.avatarUri}
-                username={resolvedComposerIdentity.username}
-              />
+              {isAuthenticated ? (
+                <UserAvatar
+                  displayName={resolvedComposerIdentity.displayName}
+                  size={36}
+                  uri={resolvedComposerIdentity.avatarUri}
+                  username={resolvedComposerIdentity.username}
+                />
+              ) : (
+                <View className="h-9 w-9 items-center justify-center rounded-full bg-[#FFF1F7]">
+                  <SymbolView
+                    name={{
+                      ios: "person.fill",
+                      android: "person",
+                      web: "person",
+                    }}
+                    size={18}
+                    tintColor="#A06A85"
+                  />
+                </View>
+              )}
               <Animated.Text
                 className="ml-3 flex-1 text-[14px] font-medium text-[#8F8298]"
                 style={[textStyle(14), { opacity: shareBarTextOpacity }]}
               >
-                Hãy chia sẻ trải nghiệm của bạn...
+                {composerPlaceholderText}
               </Animated.Text>
 
               <View
@@ -2741,7 +2841,9 @@ export default function CommunityScreen() {
                 currentProfileId={currentProfileId}
                 errorMessage={communityGroupsError}
                 groups={previewCommunityGroups}
+                isAuthenticated={isAuthenticated}
                 onCreateGroup={openCommunityGroupCreate}
+                onLoginRequired={openCommunityGroupsList}
                 onOpenAll={openCommunityGroupsList}
                 onOpenGroup={handleOpenDiscoverGroup}
                 pageGutter={gutter}
@@ -2911,6 +3013,7 @@ export default function CommunityScreen() {
 
       <CommunityPostOptionsSheet
         bottomInset={insets.bottom}
+        hideIcons
         isSubmitting={isSubmittingReport}
         items={communityReportReasonItems}
         onClose={handleCloseReportPost}
@@ -3033,7 +3136,9 @@ function CommunityDiscoverGroupsSection({
   currentProfileId,
   errorMessage,
   groups,
+  isAuthenticated,
   onCreateGroup,
+  onLoginRequired,
   onOpenAll,
   onOpenGroup,
   pageGutter,
@@ -3042,7 +3147,9 @@ function CommunityDiscoverGroupsSection({
   currentProfileId: string | null;
   errorMessage: string | null;
   groups: readonly CommunityGroupPayload[];
+  isAuthenticated: boolean;
   onCreateGroup: () => void;
+  onLoginRequired: () => void;
   onOpenAll: () => void;
   onOpenGroup: (group: CommunityGroupPayload) => void;
   pageGutter: number;
@@ -3062,16 +3169,30 @@ function CommunityDiscoverGroupsSection({
         >
           {t("community.groups.title")}
         </Text>
-        <Pressable hitSlop={8} onPress={onOpenAll}>
-          <Text
-            className="text-[13px] font-semibold text-[#D97706]"
-            style={textStyle(13)}
-          >
-            {t("community.groups.viewAll")}
-          </Text>
-        </Pressable>
+        {isAuthenticated ? (
+          <Pressable hitSlop={8} onPress={onOpenAll}>
+            <Text
+              className="text-[13px] font-semibold text-[#D97706]"
+              style={textStyle(13)}
+            >
+              {t("community.groups.viewAll")}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
+      {!isAuthenticated ? (
+        <View style={{ marginTop: 12 }}>
+          <CommunityGroupsLoginRequiredCard
+            actionLabel={t("community.groups.loginAction")}
+            description={t("community.groups.loginRequiredDescription")}
+            onPress={onLoginRequired}
+            title={t("community.groups.loginRequiredTitle")}
+          />
+        </View>
+      ) : null}
+
+      {isAuthenticated ? (
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -3112,6 +3233,7 @@ function CommunityDiscoverGroupsSection({
           />
         ) : null}
       </ScrollView>
+      ) : null}
     </View>
   );
 }
@@ -3945,6 +4067,7 @@ function CommunityPostCard({
 
 function CommunityPostOptionsSheet<TItem extends CommunityMenuRowItem>({
   bottomInset,
+  hideIcons = false,
   isSubmitting = false,
   items,
   onClose,
@@ -3953,6 +4076,7 @@ function CommunityPostOptionsSheet<TItem extends CommunityMenuRowItem>({
   visible,
 }: {
   bottomInset: number;
+  hideIcons?: boolean;
   isSubmitting?: boolean;
   items: readonly TItem[];
   onClose: () => void;
@@ -3996,6 +4120,7 @@ function CommunityPostOptionsSheet<TItem extends CommunityMenuRowItem>({
           <View className="rounded-[22px] bg-[#F7F6FB] px-4 py-0.5">
             {items.map((item, index) => (
               <CommunityPostMenuRow
+                hideIcon={hideIcons}
                 key={item.label}
                 isLast={index === items.length - 1}
                 item={item}
@@ -4131,10 +4256,12 @@ function CommunityReportReasonComposer({
 }
 
 function CommunityPostMenuRow({
+  hideIcon = false,
   isLast,
   item,
   onPress,
 }: {
+  hideIcon?: boolean;
   isLast: boolean;
   item: CommunityMenuRowItem;
   onPress: () => void;
@@ -4144,12 +4271,14 @@ function CommunityPostMenuRow({
 
   return (
     <Pressable
-      className={`flex-row items-start gap-2.5 py-2.5 ${isLast ? "" : "border-b border-[#E7E5EF]"}`}
+      className={`flex-row items-start ${hideIcon ? "" : "gap-2.5"} py-2.5 ${isLast ? "" : "border-b border-[#E7E5EF]"}`}
       onPress={onPress}
     >
-      <View className="w-6 items-center pt-px">
-        <SymbolView name={item.icon} size={19} tintColor={labelColor} />
-      </View>
+      {!hideIcon ? (
+        <View className="w-6 items-center pt-px">
+          <SymbolView name={item.icon} size={19} tintColor={labelColor} />
+        </View>
+      ) : null}
       <View className="min-w-0 flex-1">
         <Text
           className="text-[15px] font-normal"

@@ -102,11 +102,12 @@ export default function RegisterScreen() {
     password: false,
     username: false,
   });
-  const heroHeight = isCompactScreen ? 196 : 232;
   const heroTopPadding = insets.top + (isCompactScreen ? 12 : 20);
   const heroBottomPadding = isCompactScreen ? 22 : 36;
-  const logoSize = isCompactScreen ? 106 : 140;
-  const cardOverlapClassName = isCompactScreen ? "-mt-6" : "-mt-8";
+  const logoScale = 1.5;
+  const logoSize = (isCompactScreen ? 106 : 140) * logoScale;
+  const heroHeight = logoSize + heroTopPadding + heroBottomPadding;
+  const cardOverlapClassName = isCompactScreen ? "-mt-4" : "-mt-6";
   const cardTopPadding = isCompactScreen ? 22 : 28;
   const cardBottomPadding = Math.max(
     insets.bottom + (isCompactScreen ? 16 : 20),

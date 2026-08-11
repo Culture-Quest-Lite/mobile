@@ -86,7 +86,7 @@ const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
 const guestPreviewLogo = require("../../../../assets/images/logo3.png");
 const nearbyShowcaseMascot = require("../../../../assets/images/hotspot_nearby.png");
 const continueJourneyEmptyIllustration = require("../../../../assets/images/continnueroute.png");
-
+const premiumBannerReviewLogo = require("../../../../assets/images/review_post.png");
 const heroShadowStyle = {
   shadowColor: "rgba(235, 72, 155, 0.26)",
   shadowOpacity: 1,
@@ -129,6 +129,34 @@ const themeCategoryShadowStyle = {
     height: 6,
   },
   elevation: 3,
+} as const;
+
+const premiumBannerShadowStyle = {
+  shadowColor: "rgba(235, 72, 155, 0.16)",
+  shadowOpacity: 0.66,
+  shadowRadius: 14,
+  shadowOffset: {
+    width: 0,
+    height: 8,
+  },
+  elevation: 5,
+} as const;
+
+const premiumBannerCtaShadowStyle = {
+  shadowColor: "rgba(245, 72, 141, 0.24)",
+  shadowOpacity: 1,
+  shadowRadius: 18,
+  shadowOffset: {
+    width: 0,
+    height: 10,
+  },
+  elevation: 6,
+} as const;
+
+const premiumCrownSymbolName = {
+  ios: "crown.fill",
+  android: "workspace_premium",
+  web: "workspace_premium",
 } as const;
 
 const routeDifficultyStyles: Record<
@@ -528,6 +556,99 @@ function JourneyProgressRing({ progress }: { progress: number }) {
         </Text>
       </View>
     </View>
+  );
+}
+
+function PremiumBannerIllustration() {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        alignItems: "flex-end",
+        height: 118,
+        justifyContent: "flex-start",
+        overflow: "visible",
+        position: "relative",
+        width: 128,
+      }}
+    >
+      <Image
+        source={premiumBannerReviewLogo}
+        contentFit="contain"
+        transition={120}
+        style={{
+          height: 220,
+          marginRight: -60,
+          marginTop: -42,
+          width: 252,
+        }}
+      />
+    </View>
+  );
+}
+
+function PremiumBannerCtaArrow() {
+  const arrowOffset = useSharedValue(0);
+  const arrowOpacity = useSharedValue(0.8);
+
+  useEffect(() => {
+    arrowOffset.set(
+      withRepeat(
+        withTiming(5, {
+          duration: 760,
+          easing: Easing.inOut(Easing.quad),
+          reduceMotion: ReduceMotion.System,
+        }),
+        -1,
+        true,
+        undefined,
+        ReduceMotion.System,
+      ),
+    );
+    arrowOpacity.set(
+      withRepeat(
+        withTiming(1, {
+          duration: 760,
+          easing: Easing.inOut(Easing.quad),
+          reduceMotion: ReduceMotion.System,
+        }),
+        -1,
+        true,
+        undefined,
+        ReduceMotion.System,
+      ),
+    );
+
+    return () => {
+      cancelAnimation(arrowOffset);
+      cancelAnimation(arrowOpacity);
+      arrowOffset.set(0);
+      arrowOpacity.set(0.8);
+    };
+  }, [arrowOffset, arrowOpacity]);
+
+  const animatedArrowStyle = useAnimatedStyle(() => {
+    return {
+      opacity: arrowOpacity.get(),
+      transform: [{ translateX: arrowOffset.get() }],
+    };
+  });
+
+  return (
+    <Animated.View
+      className="ml-1.5 h-[18px] w-[18px] items-center justify-center rounded-full bg-white/15"
+      style={animatedArrowStyle}
+    >
+      <SymbolView
+        name={{
+          ios: "chevron.right",
+          android: "chevron_right",
+          web: "chevron_right",
+        }}
+        size={10}
+        tintColor="#FFFFFF"
+      />
+    </Animated.View>
   );
 }
 
@@ -1094,7 +1215,10 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
 
   return (
     <View className="gap-3">
-      <Text className="text-[18px] font-extrabold text-[#2B2233]">
+      <Text
+        className={homeSectionTitleClassName}
+        style={{ lineHeight: lineHeightFor(17) }}
+      >
         {t("home.guest.unlockTitle")}
       </Text>
 
@@ -1113,7 +1237,10 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
           <View className="flex-row items-start gap-4">
             <View className="flex-1 gap-2">
               <View className="self-start rounded-full bg-white/90 px-3 py-1">
-                <Text className="text-[11px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]">
+                <Text
+                  className="text-[11px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]"
+                  style={{ lineHeight: lineHeightFor(11) }}
+                >
                   {t("home.guest.notLoggedIn")}
                 </Text>
               </View>
@@ -1151,19 +1278,31 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
             </View>
           </View>
 
-          <View className="flex-row flex-wrap gap-2">
-            <View className="rounded-full bg-white/90 px-3 py-2">
-              <Text className="text-[12px] font-bold text-[#D9587F]">
+          <View className="flex-row items-stretch gap-2">
+            <View className="min-h-[54px] flex-1 items-center justify-center rounded-[18px] border border-white/80 bg-white/90 px-2.5 py-2.5">
+              <Text
+                className="text-center text-[11px] font-bold text-[#D9587F]"
+                numberOfLines={2}
+                style={{ lineHeight: lineHeightFor(11) }}
+              >
                 {t("home.guest.benefitProgress")}
               </Text>
             </View>
-            <View className="rounded-full bg-white/90 px-3 py-2">
-              <Text className="text-[12px] font-bold text-[#D9587F]">
+            <View className="min-h-[54px] flex-1 items-center justify-center rounded-[18px] border border-white/80 bg-white/90 px-2.5 py-2.5">
+              <Text
+                className="text-center text-[11px] font-bold text-[#D9587F]"
+                numberOfLines={2}
+                style={{ lineHeight: lineHeightFor(11) }}
+              >
                 {t("home.guest.benefitStories")}
               </Text>
             </View>
-            <View className="rounded-full bg-white/90 px-3 py-2">
-              <Text className="text-[12px] font-bold text-[#D9587F]">
+            <View className="min-h-[54px] flex-1 items-center justify-center rounded-[18px] border border-white/80 bg-white/90 px-2.5 py-2.5">
+              <Text
+                className="text-center text-[11px] font-bold text-[#D9587F]"
+                numberOfLines={2}
+                style={{ lineHeight: lineHeightFor(11) }}
+              >
                 {t("home.guest.benefitVouchers")}
               </Text>
             </View>
@@ -1181,7 +1320,10 @@ function GuestAccessCard({ onPress }: { onPress: () => void }) {
               locations={[0, 0.58, 1]}
               className="relative items-center justify-center px-5 py-3.5"
             >
-              <Text className="text-[15px] font-extrabold text-white">
+              <Text
+                className="text-[15px] font-extrabold text-white"
+                style={{ lineHeight: lineHeightFor(15) }}
+              >
                 {t("home.guest.cta")}
               </Text>
 
@@ -1344,38 +1486,10 @@ function GuestWelcomeHeader({
   onSearchPress: () => void;
 }) {
   const { t } = useTranslation();
-  const logoOffset = useSharedValue(0);
-
-  useEffect(() => {
-    logoOffset.set(
-      withRepeat(
-        withTiming(-8, {
-          duration: 1100,
-          easing: Easing.inOut(Easing.quad),
-          reduceMotion: ReduceMotion.System,
-        }),
-        -1,
-        true,
-        undefined,
-        ReduceMotion.System,
-      ),
-    );
-
-    return () => {
-      cancelAnimation(logoOffset);
-      logoOffset.set(0);
-    };
-  }, [logoOffset]);
-
-  const animatedLogoStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ translateY: logoOffset.get() }],
-    };
-  });
 
   return (
-    <View className="flex-row items-center gap-4 px-1 py-2">
-      <Animated.View style={animatedLogoStyle}>
+    <View className="flex-row items-center gap-4 px-1 pb-2">
+      <View>
         <View className="h-16 w-16 items-center justify-center rounded-full bg-white/95">
           <Image
             source={guestPreviewLogo}
@@ -1384,14 +1498,19 @@ function GuestWelcomeHeader({
             style={{ height: 90, width: 90 }}
           />
         </View>
-      </Animated.View>
+      </View>
 
-      <View className="flex-1 gap-1">
+      <View className="flex-1 gap-0.5">
         <View className="flex-row items-center justify-between gap-3">
           <Pressable className="flex-1" hitSlop={8} onPress={onGreetingPress}>
-            <Text className="text-[18px] font-extrabold tracking-[-0.3px] text-[#2B2233]">
-              {t("home.guest.greeting")}
-            </Text>
+            <View className="gap-0 pt-0.5">
+              <Text
+                className="text-[15px] font-semibold tracking-[-0.3px] text-[#2B2233]"
+                style={{ lineHeight: lineHeightFor(15) }}
+              >
+                {t("home.guest.greeting")}
+              </Text>
+            </View>
           </Pressable>
 
           <View className="flex-row items-center gap-2.5">
@@ -1414,7 +1533,7 @@ function GuestWelcomeHeader({
           </View>
         </View>
 
-        <View className="flex-row items-center gap-1.5">
+        <View className="mt-[-1px] flex-row items-center gap-1.5">
           <SymbolView
             name={{
               ios: "star.fill",
@@ -1424,7 +1543,10 @@ function GuestWelcomeHeader({
             size={14}
             tintColor="#F7B500"
           />
-          <Text className="text-[13px] font-bold text-[#8E869A]">
+          <Text
+            className="text-[11px] text-[#8E869A]"
+            style={{ lineHeight: lineHeightFor(11), marginTop: -1 }}
+          >
             {t("home.guest.loginToSave")}
           </Text>
         </View>
@@ -1633,15 +1755,11 @@ export default function HomeScreen() {
   const nearbyPlacesScrollStartInset = Math.round(
     gutter + nearbyPlacesShowcaseWidth + 10,
   );
-  const voucherMerchantCircleSize = Math.min(
-    Math.max(contentWidth * 0.22, 76),
-    86,
-  );
   const themeCategoryCircleSize = Math.min(Math.max(safeWidth * 0.2, 74), 84);
   const themeCategoryItemWidth = themeCategoryCircleSize + 14;
   const themeCategoryImageSize = Math.round(themeCategoryCircleSize * 0.74);
-  const voucherMerchantLogoSize = Math.round(voucherMerchantCircleSize * 0.88);
-  const voucherMerchantItemWidth = voucherMerchantCircleSize + 14;
+  const homeVoucherCardWidth = Math.min(Math.max(contentWidth * 0.42, 138), 164);
+  const homeVoucherImageHeight = Math.round(homeVoucherCardWidth * 0.62);
   const activeJourneyEmptyIllustrationWidth = Math.min(
     Math.max(contentWidth * 0.38, 134),
     152,
@@ -2491,66 +2609,166 @@ export default function HomeScreen() {
 
           {/* Premium status / upsell banner (driven by real subscription data) */}
           {isPremiumExplorer ? (
-            <View className="overflow-hidden rounded-2xl border border-[#EADFFF] bg-[#F5F0FF] p-3.5 shadow-sm">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1 pr-3">
-                  <View className="mb-1 flex-row items-center gap-1.5 self-start rounded-full bg-[#7C3AED] px-2.5 py-0.5">
+            <LinearGradient
+              colors={["#FFFDFE", "#FBF5FF", "#FFF8F2"]}
+              end={{ x: 1, y: 1 }}
+              start={{ x: 0, y: 0 }}
+              className="overflow-hidden rounded-[26px]"
+              style={[
+                premiumBannerShadowStyle,
+                {
+                  backgroundColor: "#FFFDFE",
+                  borderColor: "#EEE7F2",
+                  borderWidth: 1,
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={["rgba(208, 168, 255, 0.32)", "rgba(208, 168, 255, 0)"]}
+                end={{ x: 1, y: 1 }}
+                start={{ x: 0, y: 0 }}
+                style={{
+                  borderRadius: 90,
+                  height: 180,
+                  position: "absolute",
+                  right: -44,
+                  top: -72,
+                  width: 180,
+                }}
+              />
+
+              <View className="flex-row items-start gap-2 px-4 py-2.5">
+                <View className="flex-1 pr-1">
+                  <View className="mb-1.5 flex-row items-center gap-1.5 self-start rounded-full bg-[#7C3AED] px-2.5 py-1">
                     <SymbolView
-                      name={{
-                        ios: "crown.fill",
-                        android: "workspace_premium",
-                        web: "workspace_premium",
-                      }}
-                      size={10}
+                      name={premiumCrownSymbolName}
+                      size={9}
                       tintColor="#FFFFFF"
                     />
-                    <Text className="text-[9px] font-extrabold uppercase tracking-wider text-white">
+                    <Text
+                      className="text-[8px] font-extrabold uppercase tracking-[0.6px] text-white"
+                      style={{ lineHeight: lineHeightFor(8) }}
+                    >
                       {t("home.premium.activeBadge")}
                     </Text>
                   </View>
-                  <Text className="text-[14px] font-extrabold text-[#2B2233]">
+
+                  <Text
+                    className="text-[13px] font-black text-[#2B2233]"
+                    style={{ lineHeight: lineHeightFor(13) }}
+                  >
                     {t("home.premium.activeTitle")}
                   </Text>
-                  <Text className="mt-0.5 text-[11px] text-[#8E869A]">
+
+                  <Text
+                    className="mt-1 text-[10px] text-[#7F738C]"
+                    style={{ lineHeight: bodyLineHeightFor(10) }}
+                  >
                     {t("home.premium.activeSubtitle")}
                   </Text>
                 </View>
+
+                <View
+                  className="w-[128px] shrink-0 items-end justify-start"
+                  style={{ marginRight: -1, marginTop: -6 }}
+                >
+                  <PremiumBannerIllustration />
+                </View>
               </View>
-            </View>
+            </LinearGradient>
           ) : (
             <Pressable
               onPress={() => router.push("/subscription/premium")}
-              className="overflow-hidden rounded-2xl border border-[#FCDDEC] bg-[#FFF0F7] p-3.5 shadow-sm"
+              className="overflow-hidden rounded-[26px]"
+              style={[
+                premiumBannerShadowStyle,
+                {
+                  backgroundColor: "#FFFCFE",
+                  borderColor: "#F4DFE7",
+                  borderWidth: 1,
+                },
+              ]}
             >
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1 pr-3">
-                  <View className="mb-1 flex-row items-center gap-1.5 self-start rounded-full bg-[#EB489B] px-2.5 py-0.5">
-                    <SymbolView
-                      name={{
-                        ios: "crown.fill",
-                        android: "workspace_premium",
-                        web: "workspace_premium",
-                      }}
-                      size={10}
-                      tintColor="#FFFFFF"
-                    />
-                    <Text className="text-[9px] font-extrabold uppercase tracking-wider text-white">
-                      {t("home.premium.upsellBadge")}
-                    </Text>
+              <LinearGradient
+                colors={["#FFFEFF", "#FFF5FA", "#FFF7EF"]}
+                end={{ x: 1, y: 1 }}
+                start={{ x: 0, y: 0 }}
+                className="rounded-[24px]"
+              >
+                <LinearGradient
+                  colors={["rgba(255, 184, 214, 0.38)", "rgba(255, 184, 214, 0)"]}
+                  end={{ x: 1, y: 1 }}
+                  start={{ x: 0, y: 0 }}
+                  style={{
+                    borderRadius: 92,
+                    height: 184,
+                    position: "absolute",
+                    right: -48,
+                    top: -76,
+                    width: 184,
+                  }}
+                />
+
+                <View className="px-4 py-2.5">
+                  <View className="flex-row items-start gap-2">
+                    <View className="flex-1 pr-1">
+                      <View className="mb-1.5 flex-row items-center gap-1.5 self-start rounded-full bg-[#EC4D94] px-2.5 py-1">
+                        <SymbolView
+                          name={premiumCrownSymbolName}
+                          size={9}
+                          tintColor="#FFFFFF"
+                        />
+                        <Text
+                          className="text-[8px] font-extrabold uppercase tracking-[0.6px] text-white"
+                          style={{ lineHeight: lineHeightFor(8) }}
+                        >
+                          {t("home.premium.upsellBadge")}
+                        </Text>
+                      </View>
+
+                      <Text
+                        className="text-[14px] font-black text-[#2B2233]"
+                        style={{ lineHeight: lineHeightFor(14) }}
+                      >
+                        {t("home.premium.upsellTitle")}
+                      </Text>
+
+                      <Text
+                        className="mt-1 text-[11px] text-[#7F738C]"
+                        style={{ lineHeight: bodyLineHeightFor(11) }}
+                      >
+                        {t("home.premium.upsellSubtitle")}
+                      </Text>
+                    </View>
+
+                    <View
+                      className="w-[128px] shrink-0 items-center justify-start"
+                      style={{ marginRight: -1, marginTop: -6 }}
+                    >
+                      <PremiumBannerIllustration />
+
+                      <LinearGradient
+                        colors={["#FF5E9C", "#F44A90", "#FF8A57"]}
+                        end={{ x: 1, y: 0.5 }}
+                        locations={[0, 0.56, 1]}
+                        start={{ x: 0, y: 0.5 }}
+                        className="mt-[-4px] rounded-full self-center"
+                        style={premiumBannerCtaShadowStyle}
+                      >
+                        <View className="flex-row items-center justify-center px-3.5 py-1.5">
+                          <Text
+                            className="text-[10px] font-extrabold text-white"
+                            style={{ lineHeight: lineHeightFor(10) }}
+                          >
+                            {t("home.premium.upsellCta").replace(/\s*→\s*$/, "")}
+                          </Text>
+                          <PremiumBannerCtaArrow />
+                        </View>
+                      </LinearGradient>
+                    </View>
                   </View>
-                  <Text className="text-[14px] font-extrabold text-[#2B2233]">
-                    {t("home.premium.upsellTitle")}
-                  </Text>
-                  <Text className="mt-0.5 text-[11px] text-[#8E869A]">
-                    {t("home.premium.upsellSubtitle")}
-                  </Text>
                 </View>
-                <View className="flex-row items-center rounded-full bg-[#EB489B] px-3 py-1.5">
-                  <Text className="text-[11px] font-extrabold text-white">
-                    {t("home.premium.upsellCta")}
-                  </Text>
-                </View>
-              </View>
+              </LinearGradient>
             </Pressable>
           )}
 
@@ -2567,13 +2785,22 @@ export default function HomeScreen() {
 
               {featuredRouteCards.length > 0 ? (
                 <Pressable
-                  className="rounded-full bg-[#FFF1F6] px-3.5 py-2"
+                  className="flex-row items-center"
                   hitSlop={6}
                   onPress={handleOpenRoutes}
                 >
-                  <Text className="text-[12px] font-bold text-[#EB489B]">
+                  <Text className={homeSectionActionTextClassName}>
                     {t("home.viewAll")}
                   </Text>
+                  <SymbolView
+                    name={{
+                      ios: "chevron.right",
+                      android: "chevron_right",
+                      web: "chevron_right",
+                    }}
+                    size={14}
+                    tintColor="#D85B86"
+                  />
                 </Pressable>
               ) : null}
             </View>
@@ -3497,143 +3724,137 @@ export default function HomeScreen() {
               </ScrollView>
             )}
 
-            <View className="flex-row items-center justify-between gap-3">
-              <Text className={homeSectionTitleClassName}>
-                {t("home.vouchers.title")}
-              </Text>
+            <View className="gap-4">
+              <View className="flex-row items-start justify-between gap-3">
+                <View className="flex-1">
+                  <Text className={homeSectionTitleClassName}>
+                    {t("home.vouchers.title")}
+                  </Text>
+                </View>
 
-              <Pressable
-                className="flex-row items-center"
-                hitSlop={8}
-                onPress={() => router.push("/vouchers" as Href)}
-              >
-                <Text className={homeSectionActionTextClassName}>
-                  {t("home.viewAll")}
-                </Text>
-                <SymbolView
-                  name={{
-                    ios: "chevron.right",
-                    android: "chevron_right",
-                    web: "chevron_right",
+                <Pressable
+                  className="flex-row items-center"
+                  hitSlop={8}
+                  onPress={() => {
+                    router.push("/vouchers" as Href);
                   }}
-                  size={14}
-                  tintColor="#D85B86"
-                />
-              </Pressable>
-            </View>
+                >
+                  <Text className={homeSectionActionTextClassName}>
+                    {t("home.viewAll")}
+                  </Text>
+                  <SymbolView
+                    name={{
+                      ios: "chevron.right",
+                      android: "chevron_right",
+                      web: "chevron_right",
+                    }}
+                    size={14}
+                    tintColor="#D85B86"
+                  />
+                </Pressable>
+              </View>
 
-            {homeVouchersStatus === "ready" ? (
-              <ScrollView
-                horizontal
-                contentContainerStyle={{
-                  paddingLeft: gutter,
-                  paddingRight: gutter,
-                }}
-                showsHorizontalScrollIndicator={false}
-                style={{
-                  marginHorizontal: -gutter,
-                  width: safeWidth,
-                }}
+              <View
+                className="gap-5 rounded-[28px] bg-white p-4"
+                style={cardShadowStyle}
               >
-                {homeVouchers.map((voucher, index) => (
-                  <Pressable
-                    key={voucher.voucherId}
-                    className={`items-center ${index === homeVouchers.length - 1 ? "" : "mr-4"}`}
-                    onPress={() =>
-                      router.push(`/vouchers/${voucher.voucherId}` as Href)
-                    }
-                    style={{ width: voucherMerchantItemWidth }}
+                {homeVouchersStatus === "ready" ? (
+                  <ScrollView
+                    horizontal
+                    contentContainerStyle={{ paddingRight: 10 }}
+                    showsHorizontalScrollIndicator={false}
                   >
-                    <View
-                      className="items-center"
-                      style={{ width: voucherMerchantItemWidth }}
-                    >
-                      <View
-                        className="items-center justify-center overflow-hidden rounded-full border border-[#F2EDF2] bg-white"
-                        style={[
-                          themeCategoryShadowStyle,
-                          {
-                            height: voucherMerchantCircleSize,
-                            width: voucherMerchantCircleSize,
-                          },
-                        ]}
+                    {homeVouchers.map((voucher, index) => (
+                      <Pressable
+                        key={voucher.voucherId}
+                        className={
+                          index === homeVouchers.length - 1 ? "" : "mr-3.5"
+                        }
+                        style={{ width: homeVoucherCardWidth }}
+                        onPress={() =>
+                          router.push(`/vouchers/${voucher.voucherId}` as Href)
+                        }
                       >
-                        {getVoucherImage(voucher) ? (
-                          <Image
-                            source={{ uri: getVoucherImage(voucher) ?? "" }}
-                            contentFit="cover"
-                            transition={180}
-                            cachePolicy="memory-disk"
-                            style={{
-                              borderRadius: voucherMerchantLogoSize / 2,
-                              height: voucherMerchantLogoSize,
-                              width: voucherMerchantLogoSize,
-                            }}
-                          />
-                        ) : (
-                          <View
-                            className="items-center justify-center rounded-full bg-[#FFF0F7]"
-                            style={{
-                              height: voucherMerchantLogoSize,
-                              width: voucherMerchantLogoSize,
-                            }}
-                          >
-                            <SymbolView
-                              name={{
-                                ios: "ticket.fill",
-                                android: "confirmation_number",
-                                web: "confirmation_number",
-                              }}
-                              size={22}
-                              tintColor="#EB489B"
+                        <View
+                          className="overflow-hidden rounded-[18px] bg-[#FFF0F7]"
+                          style={{ height: homeVoucherImageHeight }}
+                        >
+                          {getVoucherImage(voucher) ? (
+                            <Image
+                              source={{ uri: getVoucherImage(voucher) ?? "" }}
+                              contentFit="cover"
+                              transition={180}
+                              cachePolicy="memory-disk"
+                              style={{ height: "100%", width: "100%" }}
                             />
-                          </View>
-                        )}
-                      </View>
+                          ) : (
+                            <View className="flex-1 items-center justify-center">
+                              <SymbolView
+                                name={{
+                                  ios: "ticket.fill",
+                                  android: "confirmation_number",
+                                  web: "confirmation_number",
+                                }}
+                                size={30}
+                                tintColor="#EB489B"
+                              />
+                            </View>
+                          )}
+                        </View>
 
-                      {/* Mức giảm là thứ người dùng quét mắt tìm, nên bám sát
-                          vòng tròn thay vì nằm lẫn trong phần chữ bên dưới. */}
-                      <View className="-mt-2 rounded-full bg-[#F15B64] px-2 py-[3px]">
-                        <Text className="text-[10px] font-extrabold text-white">
-                          {getHomeVoucherDiscountLabel(voucher)}
+                        <Text
+                          className="mt-2 text-[13px] font-extrabold leading-4 text-[#2B2233]"
+                          numberOfLines={2}
+                        >
+                          {voucher.voucherName}
                         </Text>
-                      </View>
 
-                      <Text
-                        className="mt-1.5 text-center text-[13px] font-semibold leading-4 text-[#2F2A35]"
-                        numberOfLines={2}
-                      >
-                        {voucher.voucherName}
-                      </Text>
+                        <Text
+                          className="mt-0.5 text-[11px] font-semibold text-[#8E869A]"
+                          numberOfLines={1}
+                        >
+                          {voucher.partnerName}
+                        </Text>
 
-                      <Text
-                        className="mt-0.5 text-center text-[11px] font-semibold text-[#8E869A]"
-                        numberOfLines={1}
-                      >
-                        {voucher.partnerName}
-                      </Text>
-                    </View>
+                        <View className="mt-1.5 flex-row items-center justify-between gap-1">
+                          <Text
+                            className="text-[12px] font-extrabold text-[#F15B64]"
+                            numberOfLines={1}
+                          >
+                            {getHomeVoucherDiscountLabel(voucher)}
+                          </Text>
+                          <Text
+                            className="shrink-0 text-[11px] font-bold text-[#C98A10]"
+                            numberOfLines={1}
+                          >
+                            {t("home.vouchers.points", {
+                              points:
+                                voucher.pointsRequired.toLocaleString("vi-VN"),
+                            })}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <Pressable
+                    className="items-center py-6"
+                    disabled={homeVouchersStatus === "loading"}
+                    onPress={() => {
+                      void loadHomeVouchers();
+                    }}
+                  >
+                    <Text className="text-center text-[13px] font-semibold text-[#8E869A]">
+                      {homeVouchersStatus === "loading"
+                        ? t("home.vouchers.loading")
+                        : homeVouchersStatus === "empty"
+                          ? t("home.vouchers.empty")
+                          : t("home.vouchers.error")}
+                    </Text>
                   </Pressable>
-                ))}
-              </ScrollView>
-            ) : homeVouchersStatus === "loading" ? (
-              <SectionEmptyState isLoading />
-            ) : (
-              <Pressable
-                onPress={() => {
-                  void loadHomeVouchers();
-                }}
-              >
-                <SectionEmptyState
-                  description={
-                    homeVouchersStatus === "empty"
-                      ? t("home.vouchers.empty")
-                      : t("home.vouchers.error")
-                  }
-                  title={t("home.vouchers.title")}
-                />
-              </Pressable>
-            )}
+                )}
+              </View>
+            </View>
           </View>
           <View className="gap-4">
             <View>
@@ -3884,7 +4105,7 @@ export default function HomeScreen() {
                         tintColor="#FF5F87"
                       />
                       <Text className="ml-1.5 text-[12px] font-semibold text-[#FF5F87]">
-                        Xem bảng xếp hạng đầy đủ
+                        {t("home.community.viewFullLeaderboard")}
                       </Text>
                     </View>
                   </Pressable>

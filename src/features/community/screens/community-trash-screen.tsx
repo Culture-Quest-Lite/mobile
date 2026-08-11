@@ -1,8 +1,10 @@
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { appAlert } from "@/components/ui/app-dialog";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { getValidAccessToken, useAuthSession } from "@/features/auth/hooks/use-auth-session";
 import { deletePostPermanent } from "@/features/home/api/delete-post-permanent";
+import { restorePost } from "@/features/home/api/restore-post";
 import { ReviewDeleteDialog } from "@/features/home/components/review-delete-dialog";
 import { getMyProfile } from "@/features/profile/api/get-me";
 import { getMyProfilePostsPage } from "@/features/profile/api/get-profile-posts";
@@ -11,7 +13,6 @@ import { bodyTextStyle, textStyle } from "@/lib/text-scale";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Modal,
   Pressable,
   RefreshControl,
@@ -24,6 +25,9 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+const restoreDialogImage = require("../../../../assets/images/restore.png");
+const restoreConfirmGradient = ["#F29AC0", "#EA6BA3", "#DF4E91"] as const;
+
 export default function CommunityTrashScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -34,9 +38,11 @@ export default function CommunityTrashScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentUserAvatarUri, setCurrentUserAvatarUri] = useState<string | null>(null);
   const [menuPost, setMenuPost] = useState<ProfilePost | null>(null);
+  const [postPendingRestore, setPostPendingRestore] = useState<ProfilePost | null>(null);
   const [postPendingPermanentDeletion, setPostPendingPermanentDeletion] =
     useState<ProfilePost | null>(null);
   const [isDeletingPermanently, setIsDeletingPermanently] = useState(false);
+  const [isRestoringPostId, setIsRestoringPostId] = useState<string | null>(null);
   const [selectedPostIds, setSelectedPostIds] = useState<string[]>([]);
   const activeRequestIdRef = useRef(0);
 
@@ -173,11 +179,82 @@ export default function CommunityTrashScreen() {
 
   const handleRestorePost = useCallback((post: ProfilePost) => {
     setMenuPost(null);
-    appAlert.alert(
-      "Khôi phục bài viết",
-      `Chức năng khôi phục bài viết "${post.displayName || post.username}" chưa được tích hợp API.`,
-    );
+    setPostPendingRestore(post);
   }, []);
+
+  const handleCancelRestorePost = useCallback(() => {
+    if (isRestoringPostId) {
+      return;
+    }
+
+    setPostPendingRestore(null);
+  }, [isRestoringPostId]);
+
+  const confirmRestorePost = useCallback(
+    async (post: ProfilePost) => {
+      const postId = Number(post.id);
+
+      if (!Number.isInteger(postId) || postId <= 0) {
+        setMenuPost(null);
+        appAlert.alert(
+          "Không thể khôi phục",
+          "Không xác định được bài viết cần khôi phục.",
+        );
+        return;
+      }
+
+      if (isRestoringPostId === post.id) {
+        return;
+      }
+
+      if (!authSession.isAuthenticated) {
+        setMenuPost(null);
+        appAlert.alert(
+          "Cần đăng nhập",
+          "Bạn cần đăng nhập để khôi phục bài viết.",
+        );
+        return;
+      }
+
+      const accessToken = await getValidAccessToken();
+
+      if (!accessToken) {
+        setMenuPost(null);
+        appAlert.alert(
+          "Phiên đăng nhập hết hạn",
+          "Vui lòng đăng nhập lại trước khi khôi phục bài viết.",
+        );
+        return;
+      }
+
+      setIsRestoringPostId(post.id);
+
+      try {
+        await restorePost({
+          accessToken,
+          postId,
+          tokenType: authSession.tokenType,
+        });
+        setPostPendingRestore(null);
+        await loadDeletedPosts({ isRefreshing: true });
+      } catch (error) {
+        appAlert.alert(
+          "Không thể khôi phục bài viết",
+          error instanceof Error
+            ? error.message
+            : "Đã có lỗi xảy ra khi khôi phục bài viết.",
+        );
+      } finally {
+        setIsRestoringPostId(null);
+      }
+    },
+    [
+      authSession.isAuthenticated,
+      authSession.tokenType,
+      isRestoringPostId,
+      loadDeletedPosts,
+    ],
+  );
 
   const handleDeletePost = useCallback((post: ProfilePost) => {
     setMenuPost(null);
@@ -247,6 +324,10 @@ export default function CommunityTrashScreen() {
     postPendingPermanentDeletion,
   ]);
 
+  if (isLoading) {
+    return <AppLoadingScreen />;
+  }
+
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["left", "right"]}>
       <View
@@ -290,14 +371,7 @@ export default function CommunityTrashScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {isLoading ? (
-          <View className="mt-4 items-center bg-white px-6 py-12">
-            <ActivityIndicator color="#EB489B" size="large" />
-            <Text className="mt-4 text-[14px] font-semibold text-[#2B2233]" style={textStyle(14)}>
-              Đang tải bài viết đã xóa...
-            </Text>
-          </View>
-        ) : errorMessage ? (
+        {errorMessage ? (
           <View className="mt-4 bg-white px-6 py-8">
             <Text className="text-center text-[15px] font-bold text-[#2B2233]" style={textStyle(15)}>
               Không tải được thùng rác
@@ -459,6 +533,36 @@ export default function CommunityTrashScreen() {
 
       <ReviewDeleteDialog
         borderlessButtons
+        confirmGradient={restoreConfirmGradient}
+        confirmIcon={{
+          ios: "arrow.uturn.backward",
+          android: "restore",
+          web: "restore",
+        }}
+        confirmLabel="Khôi phục"
+        description="Bài viết này sẽ được khôi phục và hiển thị lại trong danh sách bài viết của bạn."
+        dismissAccessibilityLabel="Đóng xác nhận khôi phục"
+        imageContentFit="contain"
+        imageSource={restoreDialogImage}
+        imageStyle={{
+          alignSelf: "center",
+          height: 96,
+          marginTop: 14,
+          width: 112,
+        }}
+        isDeleting={isRestoringPostId === postPendingRestore?.id}
+        onCancel={handleCancelRestorePost}
+        onConfirm={() => {
+          if (postPendingRestore) {
+            void confirmRestorePost(postPendingRestore);
+          }
+        }}
+        title="Khôi phục bài viết?"
+        visible={postPendingRestore !== null}
+      />
+
+      <ReviewDeleteDialog
+        borderlessButtons
         confirmLabel="Xóa vĩnh viễn"
         description="Bài viết này sẽ bị xóa vĩnh viễn và không thể khôi phục lại."
         isDeleting={isDeletingPermanently}
@@ -605,7 +709,7 @@ function TrashPostOptionsSheet({
               label="Khôi phục bài viết"
               onPress={() => {
                 if (post) {
-                  onRestore(post);
+                  void onRestore(post);
                 }
               }}
             />

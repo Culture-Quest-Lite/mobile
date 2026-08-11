@@ -18,6 +18,13 @@ export type UserLeaderboardEntryDto = {
   username: string;
 };
 
+type UserLeaderboardEntryResponseDto = Omit<
+  UserLeaderboardEntryDto,
+  "isCurrentUser"
+> & {
+  isCurrentUser: boolean | null;
+};
+
 type UserLeaderboardPageDto = {
   number: number;
   size: number;
@@ -27,6 +34,11 @@ type UserLeaderboardPageDto = {
 
 type GetUserLeaderboardResponse = {
   content: UserLeaderboardEntryDto[];
+  page: UserLeaderboardPageDto;
+};
+
+type GetUserLeaderboardResponsePayload = {
+  content: UserLeaderboardEntryResponseDto[];
   page: UserLeaderboardPageDto;
 };
 
@@ -46,7 +58,13 @@ function isNullableString(value: unknown): value is string | null {
   return typeof value === "string" || value === null;
 }
 
-function isLeaderboardEntryDto(value: unknown): value is UserLeaderboardEntryDto {
+function isNullableBoolean(value: unknown): value is boolean | null {
+  return typeof value === "boolean" || value === null;
+}
+
+function isLeaderboardEntryResponseDto(
+  value: unknown,
+): value is UserLeaderboardEntryResponseDto {
   if (!isObject(value)) {
     return false;
   }
@@ -59,7 +77,7 @@ function isLeaderboardEntryDto(value: unknown): value is UserLeaderboardEntryDto
     isNullableString(value.avatarUrl) &&
     typeof value.totalXp === "number" &&
     isNullableString(value.levelName) &&
-    typeof value.isCurrentUser === "boolean"
+    isNullableBoolean(value.isCurrentUser)
   );
 }
 
@@ -78,12 +96,15 @@ function isLeaderboardPageDto(value: unknown): value is UserLeaderboardPageDto {
 
 function isGetUserLeaderboardResponse(
   value: unknown,
-): value is GetUserLeaderboardResponse {
+): value is GetUserLeaderboardResponsePayload {
   if (!isObject(value) || !Array.isArray(value.content)) {
     return false;
   }
 
-  return value.content.every(isLeaderboardEntryDto) && isLeaderboardPageDto(value.page);
+  return (
+    value.content.every(isLeaderboardEntryResponseDto) &&
+    isLeaderboardPageDto(value.page)
+  );
 }
 
 function serializeError(error: unknown) {
@@ -157,7 +178,7 @@ function getConnectionErrorMessage(url: string) {
 }
 
 function normalizeLeaderboardEntry(
-  entry: UserLeaderboardEntryDto,
+  entry: UserLeaderboardEntryResponseDto,
 ): UserLeaderboardEntryDto | null {
   const normalizedUsername = entry.username.trim();
   const normalizedDisplayName = entry.displayName.trim();
@@ -170,6 +191,7 @@ function normalizeLeaderboardEntry(
     ...entry,
     avatarUrl: entry.avatarUrl?.trim() || null,
     displayName: normalizedDisplayName,
+    isCurrentUser: entry.isCurrentUser === true,
     levelName: entry.levelName?.trim() || null,
     totalXp: Math.max(0, Math.round(entry.totalXp)),
     username: normalizedUsername,

@@ -30,13 +30,26 @@ export function useCommunityGroups() {
   const loadCommunityGroups = useCallback(
     async (isActive?: () => boolean) => {
       const sessionKeyAtRequestStart = communitySessionKey;
+
+      if (!authSession.isAuthenticated) {
+        if (
+          (isActive && !isActive()) ||
+          communitySessionKeyRef.current !== sessionKeyAtRequestStart
+        ) {
+          return;
+        }
+
+        setGroups([]);
+        setErrorMessage(null);
+        setStatus("ready");
+        return;
+      }
+
       setStatus("loading");
       setErrorMessage(null);
 
       try {
-        const accessToken = authSession.isAuthenticated
-          ? await getValidAccessToken()
-          : null;
+        const accessToken = await getValidAccessToken();
         const nextGroups = await getCommunityGroups({
           accessToken: accessToken ?? undefined,
           tokenType: authSession.tokenType,

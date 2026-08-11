@@ -22,9 +22,9 @@
     "login": {
       "title": "Đăng nhập",
       "subtitle": "Nhập tài khoản của bạn để đăng nhập",
-      "username": "Username",
-      "password": "Password",
-      "usernamePlaceholder": "Nhập username",
+      "username": "Tên đăng nhập",
+      "password": "Mật khẩu",
+      "usernamePlaceholder": "Nhập tên đăng nhập",
       "passwordPlaceholder": "Nhập mật khẩu",
       "forgotPassword": "Bạn quên mật khẩu?",
       "loginButton": "Đăng nhập",
@@ -40,12 +40,12 @@
     "register": {
       "title": "Đăng ký",
       "subtitle": "Tạo tài khoản để bắt đầu hành trình",
-      "username": "Username",
+      "username": "Tên đăng nhập",
       "displayName": "Tên hiển thị",
       "email": "Email",
       "password": "Mật khẩu",
       "confirmPassword": "Nhập lại mật khẩu",
-      "usernamePlaceholder": "Chọn username",
+      "usernamePlaceholder": "Chọn tên đăng nhập",
       "displayNamePlaceholder": "Chọn tên hiển thị",
       "emailPlaceholder": "Nhập địa chỉ email",
       "passwordPlaceholder": "Nhập mật khẩu",
@@ -335,6 +335,7 @@
     "community": {
       "title": "Cộng đồng hôm nay",
       "viewFullLeaderboard": "Xem bảng xếp hạng đầy đủ",
+      "guestMessage": "Đăng nhập để xem bảng xếp hạng cộng đồng",
       "loadingTitle": "Đang tải bảng xếp hạng",
       "loadingNote": "Hệ thống đang cập nhật cộng đồng hôm nay.",
       "leaderLabel": "#{{rank}} {{name}} đang dẫn đầu",
@@ -368,7 +369,10 @@
       "loading": "Đang tải ưu đãi...",
       "empty": "Chưa có ưu đãi nào đang mở. Chạm để tải lại.",
       "error": "Không tải được ưu đãi. Chạm để thử lại.",
-      "guest": "Đăng nhập để xem ưu đãi từ đối tác"
+      "guest": "Đăng nhập để xem ưu đãi từ đối tác",
+      "guestTitle": "Đăng nhập để mở ưu đãi đặc biệt",
+      "guestDescription": "Xem voucher đối tác, ưu đãi đổi điểm và quà gần bạn sau khi đăng nhập.",
+      "loginAction": "Đăng nhập"
     },
     "nearby": {
       "title": "Gần bạn",
@@ -475,7 +479,10 @@
     "groups": {
       "title": "Nhóm cộng đồng",
       "create": "Tạo nhóm",
-      "viewAll": "Xem tất cả"
+      "viewAll": "Xem tất cả",
+      "loginRequiredTitle": "Đăng nhập để xem nhóm của tôi",
+      "loginRequiredDescription": "",
+      "loginAction": "Đăng nhập"
     },
     "empty": {
       "noPosts": "Chưa có bài viết nào",
@@ -591,7 +598,7 @@
       },
       "composerPlaceholder": {
         "authenticated": "Chia sẻ trải nghiệm của bạn...",
-        "guest": "Đăng nhập để chia sẻ trải nghiệm của bạn..."
+        "guest": "Đăng nhập để chia sẻ trải nghiệm..."
       },
       "location": {
         "hotspotTagged": "{{count}} địa điểm được gắn",

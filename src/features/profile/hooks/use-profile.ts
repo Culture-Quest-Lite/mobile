@@ -6,7 +6,10 @@ import { routes, type RouteItem } from "@/lib/demo-data";
 
 import { getGamificationLevels } from "../api/get-levels";
 import { getMyProfile } from "../api/get-me";
-import { getUserProfilePosts } from "../api/get-profile-posts";
+import {
+  getMyProfilePosts,
+  getUserProfilePosts,
+} from "../api/get-profile-posts";
 import { useCachedProfilePosts } from "../data/profile-post-cache";
 import { CURRENT_USER_ID, getProfileById, getProfilePosts } from "../data/profile-demo";
 import { applyLevelProgressToProfile } from "../lib/level-progress";
@@ -156,24 +159,27 @@ export function useProfile(userId?: string, options?: UseProfileOptions): UsePro
       setProfile(mergedProfile);
 
       const profileNumericId = Number.parseInt(resolvedProfile.id, 10);
-      const [resolvedPostsResult] =
-        Number.isFinite(profileNumericId) && profileNumericId > 0
-          ? await Promise.allSettled([
-              getUserProfilePosts({
-                accessToken,
-                size: 10,
-                sort: [],
-                status: postStatus,
-                tokenType: authSession.tokenType,
-                userId: profileNumericId,
-              }),
-            ])
-          : [
-              {
-                reason: new Error("Không xác định được tài khoản để tải bài viết."),
-                status: "rejected",
-              } as const,
-            ];
+      const postsRequest = userId
+        ? Number.isFinite(profileNumericId) && profileNumericId > 0
+          ? getUserProfilePosts({
+              accessToken,
+              size: 10,
+              sort: [],
+              status: postStatus,
+              tokenType: authSession.tokenType,
+              userId: profileNumericId,
+            })
+          : Promise.reject(
+              new Error("Không xác định được tài khoản để tải bài viết."),
+            )
+        : getMyProfilePosts({
+            accessToken,
+            size: 10,
+            sort: [],
+            status: postStatus,
+            tokenType: authSession.tokenType,
+          });
+      const [resolvedPostsResult] = await Promise.allSettled([postsRequest]);
 
       if (!isMountedRef.current || requestId !== loadRequestIdRef.current) {
         return;
@@ -214,7 +220,13 @@ export function useProfile(userId?: string, options?: UseProfileOptions): UsePro
         setIsLoading(false);
       }
     }
-  }, [authSession.isAuthenticated, authSession.tokenType, fallbackProfile, postStatus]);
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    fallbackProfile,
+    postStatus,
+    userId,
+  ]);
 
   useEffect(() => {
     if (!authSession.isAuthenticated) {
