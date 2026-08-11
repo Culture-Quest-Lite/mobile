@@ -1543,7 +1543,6 @@ export default function CommunityGroupMembersScreen() {
 
                   return (
                     <MemberRow
-                      actionLabel={t("community.groupMembers.kickAction")}
                       actionPending={normalizedUserId === kickingUserId}
                       key={
                         member.groupParticipantId ??
