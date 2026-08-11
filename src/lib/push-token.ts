@@ -2,6 +2,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
 import { registerNotificationDeviceToken } from "@/features/notification/api/notification-api";
+import { ensureAndroidNotificationChannel } from "@/lib/notifications";
 
 // Cache token trong session để tránh gọi API nhiều lần với cùng token
 let registeredToken: string | null = null;
@@ -19,6 +20,7 @@ export async function getDevicePushToken(): Promise<string | null> {
   }
 
   try {
+    await ensureAndroidNotificationChannel();
     const result = await Notifications.getDevicePushTokenAsync();
     return result.data;
   } catch (error) {

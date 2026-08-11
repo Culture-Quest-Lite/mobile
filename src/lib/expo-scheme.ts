@@ -1,5 +1,7 @@
 import Constants from "expo-constants";
 
+const DEFAULT_EXPO_SCHEME = "culturequestlitemobile";
+
 type ExpoConfigLike = {
   scheme?: unknown;
   android?: {
@@ -34,6 +36,10 @@ export function readExpoScheme() {
     readSchemeCandidate(expoConfig?.android?.scheme) ||
     readSchemeCandidate(expoConfig?.ios?.scheme)
   );
+}
+
+export function getPreferredExpoScheme() {
+  return readExpoScheme() || DEFAULT_EXPO_SCHEME;
 }
 
 export function hasExpoScheme() {

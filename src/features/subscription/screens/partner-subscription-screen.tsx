@@ -22,6 +22,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ScreenHorizontalPadding } from "@/constants/theme";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { getValidAccessToken } from "@/features/auth/hooks/use-auth-session";
+import { getPreferredExpoScheme } from "@/lib/expo-scheme";
 import {
   autocompleteGoongPlaces,
   getGoongPlaceDetail,
@@ -48,7 +49,9 @@ import {
  *
  * Path trỏ về route đang tồn tại (`src/app/subscription/partner.tsx`).
  */
-const PAYOS_REDIRECT_URL = ExpoLinking.createURL("/subscription/partner");
+const PAYOS_REDIRECT_URL = ExpoLinking.createURL("/subscription/partner", {
+  scheme: getPreferredExpoScheme(),
+});
 
 /**
  * Trong Expo Go, createURL trả về `exp://<ip>:8081/--/...` — gửi URL đó lên
