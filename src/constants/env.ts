@@ -10,6 +10,7 @@ const rawUseDevLocationOverride =
 const devLatitude = process.env.EXPO_PUBLIC_DEV_LATITUDE?.trim() ?? '';
 const devLongitude = process.env.EXPO_PUBLIC_DEV_LONGITUDE?.trim() ?? '';
 const goongApiKey = process.env.EXPO_PUBLIC_GOONG_API_KEY?.trim() ?? '';
+const rawGroupWsUrl = process.env.EXPO_PUBLIC_GROUP_WS_URL?.trim() ?? '';
 
 function normalizeUrlPart(value: string) {
   return value.endsWith('/') ? value.slice(0, -1) : value;
@@ -33,6 +34,7 @@ function parseBooleanEnv(value: string) {
 
 const apiBaseUrl = normalizeApiBaseUrl(rawApiBaseUrl);
 const useDevLocationOverride = parseBooleanEnv(rawUseDevLocationOverride);
+const groupWsUrl = normalizeUrlPart(rawGroupWsUrl);
 
 export const PublicEnv = {
   apiBaseUrl,
@@ -45,6 +47,7 @@ export const PublicEnv = {
   facebookRedirectUri,
   googleRedirectUri,
   goongApiKey,
+  groupWsUrl,
 } as const;
 
 export function buildApiUrl(path: string) {
@@ -93,6 +96,10 @@ function collectEnvWarnings() {
 
   if (!PublicEnv.goongApiKey) {
     warnings.push('EXPO_PUBLIC_GOONG_API_KEY is missing. Route polyline will fall back to straight lines.');
+  }
+
+  if (rawGroupWsUrl && !/^wss?:\/\//i.test(rawGroupWsUrl)) {
+    warnings.push('EXPO_PUBLIC_GROUP_WS_URL should start with ws:// or wss://.');
   }
 
   if (

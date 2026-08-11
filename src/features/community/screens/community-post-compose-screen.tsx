@@ -47,7 +47,7 @@ import {
   type Href,
 } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -2053,13 +2053,13 @@ export default function CommunityPostComposeScreen() {
                   result.status === "fulfilled",
               )
               .map((result) =>
-                mapNearbyHotspotToComposerHotspot(result.value),
+                mapNearbyHotspotToComposerHotspot(result.value, t),
               ),
           ),
         );
 
         const mappedRoute = routeResult
-          ? mapRouteToComposerRoute(routeResult)
+          ? mapRouteToComposerRoute(routeResult, t)
           : null;
         setSelectedRoute(mappedRoute);
       } catch (error) {

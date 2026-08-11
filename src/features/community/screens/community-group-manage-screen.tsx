@@ -40,6 +40,7 @@ import {
   getCachedCommunityGroupSession,
   removeCachedCommunityGroupSession,
 } from "../data/community-group-session-store";
+import { removeCachedCommunityGroupJourneySession } from "../data/community-group-journey-store";
 import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 const detailTextMaxFontSizeMultiplier = 1.05;
@@ -94,18 +95,6 @@ function readMeaningfulText(value?: string | null) {
 
 function isNumericIdentifier(value?: string | null) {
   return typeof value === "string" && /^\d+$/.test(value.trim());
-}
-
-function getLocalizedStatusLabel(
-  status: string | null | undefined,
-  t: (key: string) => string,
-) {
-  switch ((status ?? "").trim().toUpperCase()) {
-    case "ACTIVE":
-      return t("community.groupDetail.statusActive");
-    default:
-      return t("community.groupDetail.notUpdated");
-  }
 }
 
 function getInitials(name?: string | null) {
@@ -388,14 +377,12 @@ export default function CommunityGroupManageScreen() {
       async function loadGroupDetail() {
         if (!resolvedRouteValue) {
           setErrorMessage(t("community.groupDetail.missingRouteError"));
-          setKickedMembersCount(null);
           setStatus("error");
           return;
         }
 
         if (!resolvedGroupId) {
           setErrorMessage(t("community.groupManage.missingGroupIdError"));
-          setKickedMembersCount(null);
           setStatus("error");
           return;
         }
@@ -530,6 +517,9 @@ export default function CommunityGroupManageScreen() {
 
       removeCachedCommunityGroupSession(displayGroup?.shareToken);
       removeCachedCommunityGroupSession(resolvedRouteValue);
+      removeCachedCommunityGroupJourneySession(displayGroup?.shareToken);
+      removeCachedCommunityGroupJourneySession(resolvedRouteValue);
+      removeCachedCommunityGroupJourneySession(targetGroupId);
       setIsDeleteConfirmVisible(false);
       appToast.success("Đã xóa nhóm.");
       router.replace("/bookings" as Href);
@@ -614,7 +604,6 @@ export default function CommunityGroupManageScreen() {
   const totalMembersLabel = t("community.groupsScreen.memberCountLabel", {
     count: totalMembersValue,
   });
-  const statusLabel = getLocalizedStatusLabel(displayGroup.status, t);
 
   return (
     <SafeAreaView
@@ -770,22 +759,9 @@ export default function CommunityGroupManageScreen() {
                 badge={`${totalMembersValue}`}
                 description={t("community.groupManage.membersListDescription")}
                 icon="groups"
+                hideDivider
                 label={t("community.groupManage.membersListLabel")}
                 onPress={handleOpenGroupMembers}
-              />
-              <ManagementActionRow
-                badge={
-                  kickedMembersCount === null
-                    ? undefined
-                    : `${kickedMembersCount}`
-                }
-                description={t(
-                  "community.groupManage.kickedMembersDescription",
-                )}
-                hideDivider
-                icon="person-remove"
-                label={t("community.groupManage.kickedMembersLabel")}
-                onPress={handleOpenKickedMembers}
               />
             </SectionCard>
           </View>

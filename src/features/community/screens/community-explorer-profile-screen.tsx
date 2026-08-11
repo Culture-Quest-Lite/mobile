@@ -1506,7 +1506,7 @@ export default function CommunityExplorerProfileScreen() {
     { label: t("community.explorerProfile.followerStat"), value: followerCount },
     { label: t("community.explorerProfile.tabs.posts"), value: postCount },
   ];
-  const visibleTabs = useMemo(() => buildProfileTabs(t), [t]);
+  const visibleTabs = buildProfileTabs(t);
   const resolvedActiveTab = visibleTabs.some((tab) => tab.key === activeTab)
     ? activeTab
     : "posts";

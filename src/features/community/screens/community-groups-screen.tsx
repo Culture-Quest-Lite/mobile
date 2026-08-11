@@ -94,33 +94,9 @@ function formatGroupRowDate(
     return normalizedDateValue.slice(0, 10).replace(/-/g, "/");
   }
 
-  const today = new Date();
-  const isToday =
-    date.getDate() === today.getDate() &&
-    date.getMonth() === today.getMonth() &&
-    date.getFullYear() === today.getFullYear();
-
-  if (isToday) {
-    return t("community.groupsScreen.dateToday");
-  }
-
-  return `${padDatePart(date.getDate())}/${padDatePart(date.getMonth() + 1)}`;
-}
-
-function getLocalizedGroupStatusLabel(
-  status: string | null | undefined,
-  t: (key: string, options?: Record<string, unknown>) => string,
-) {
-  switch ((status ?? "").trim().toUpperCase()) {
-    case "ACTIVE":
-      return t("community.groupsScreen.status.active");
-    case "PENDING":
-      return t("community.groupsScreen.status.pending");
-    case "INACTIVE":
-      return t("community.groupsScreen.status.inactive");
-    default:
-      return t("community.groupsScreen.status.default");
-  }
+  return `${padDatePart(date.getDate())}/${padDatePart(
+    date.getMonth() + 1,
+  )}/${date.getFullYear()}`;
 }
 
 function getGroupAccessLabel(
@@ -279,21 +255,8 @@ function CommunityGroupListRow({
             </Text>
           </View>
 
-          <View className="mt-0.5 flex-row items-center">
-            <View className="h-2 w-2 rounded-full bg-[#4BB862]" />
-            <Text
-              className="ml-1.5 text-[12px] font-normal text-[#7A6F67]"
-              style={{
-                includeFontPadding: false,
-                lineHeight: lineHeightFor(12),
-              }}
-            >
-              {getLocalizedGroupStatusLabel(group.status, t)}
-            </Text>
-          </View>
-
           <View
-            className="mt-1 flex-row flex-wrap items-center"
+            className="mt-1.5 flex-row flex-wrap items-center"
             style={{ columnGap: 8, rowGap: 4 }}
           >
             <View className="flex-row items-center px-2 py-[5px]">
@@ -373,8 +336,9 @@ export default function CommunityGroupsScreen() {
   });
   const { errorMessage, groups, reload, status } = useCommunityGroups();
   const normalizedSearchQuery = normalizeLookupText(searchQuery.trim());
+  const hasActiveSearch = normalizedSearchQuery.length > 0;
   const filteredGroups =
-    normalizedSearchQuery.length === 0
+    !hasActiveSearch
       ? groups
       : groups.filter((group) =>
           normalizeLookupText(group.groupName).includes(normalizedSearchQuery),
@@ -556,9 +520,9 @@ export default function CommunityGroupsScreen() {
           </View>
         </LinearGradient>
 
-        <View className="mt-4 flex-row items-center" style={{ columnGap: 10 }}>
+        <View className="mt-4">
           <View
-            className="h-12 flex-1 flex-row items-center rounded-[18px] border bg-white px-3"
+            className="h-12 flex-row items-center rounded-[18px] border bg-white px-3"
             style={{ borderColor: "#EEE8F3", borderWidth: 1 }}
           >
             <SymbolView
@@ -578,30 +542,6 @@ export default function CommunityGroupsScreen() {
               style={{ includeFontPadding: false }}
               value={searchQuery}
             />
-          </View>
-
-          <View
-            className="h-12 flex-row items-center rounded-[18px] border bg-white px-3.5"
-            style={{ borderColor: "#EEE8F3", borderWidth: 1 }}
-          >
-            <SymbolView
-              name={{
-                ios: "slider.horizontal.3",
-                android: "tune",
-                web: "tune",
-              }}
-              size={15}
-              tintColor="#756B80"
-            />
-            <Text
-              className="ml-1.5 text-[13px] font-normal text-[#756B80]"
-              style={{
-                includeFontPadding: false,
-                lineHeight: lineHeightFor(13),
-              }}
-            >
-              {t("common.filter")}
-            </Text>
           </View>
         </View>
 
@@ -633,14 +573,17 @@ export default function CommunityGroupsScreen() {
           </View>
         ) : null}
 
-        {groups.length > 0 && filteredGroups.length === 0 ? (
+        {groups.length > 0 && hasActiveSearch && filteredGroups.length === 0 ? (
           <View className="mt-4">
-            <CommunityGroupStateCard
-              description={t("community.groupsScreen.searchEmptyDescription")}
-              icon="groups"
-              title={t("community.groupsScreen.searchEmptyTitle")}
-              variant="empty"
-            />
+            <Text
+              className="text-center text-[14px] font-normal text-[#7A6F67]"
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(14),
+              }}
+            >
+              {t("community.groupsScreen.searchEmptyTitle")}
+            </Text>
           </View>
         ) : null}
 

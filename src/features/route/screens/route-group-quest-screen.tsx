@@ -27,6 +27,7 @@ import {
   getCommunityGroups,
   type CommunityGroupPayload,
 } from "@/features/community/api/group-api";
+import { cacheCommunityGroupJourneySession } from "@/features/community/data/community-group-journey-store";
 import { cacheCommunityGroupSession } from "@/features/community/data/community-group-session-store";
 import { getMyProfile } from "@/features/profile/api/get-me";
 import {
@@ -51,8 +52,9 @@ const cardShadow = {
 } as const;
 
 type GroupQuestSuccessState = {
-  detailRouteKey: string;
   groupName: string;
+  groupRouteKey: string;
+  routeId: string;
   routeName: string;
 };
 
@@ -208,11 +210,13 @@ function getGroupAvatarIcon(group: CommunityGroupPayload) {
 function GroupQuestSuccessModal({
   groupName,
   onClose,
+  onViewJourney,
   onViewGroup,
   routeName,
   visible,
 }: Pick<GroupQuestSuccessState, "groupName" | "routeName"> & {
   onClose: () => void;
+  onViewJourney: () => void;
   onViewGroup: () => void;
   visible: boolean;
 }) {
@@ -228,7 +232,7 @@ function GroupQuestSuccessModal({
         <Pressable className="absolute inset-0" onPress={onClose} />
 
         <View
-          className="w-full max-w-[360px] rounded-[28px] bg-white px-5 pb-5 pt-6"
+          className="w-full max-w-[320px] rounded-[24px] bg-white px-4 pb-4 pt-5"
           style={{
             shadowColor: "#1F1630",
             shadowOpacity: 0.2,
@@ -238,7 +242,7 @@ function GroupQuestSuccessModal({
           }}
         >
           <Pressable
-            className="absolute right-3 top-3 h-8 w-8 items-center justify-center rounded-full bg-[#F7F2F5]"
+            className="absolute right-2.5 top-2.5 h-7 w-7 items-center justify-center rounded-full bg-[#F7F2F5]"
             onPress={onClose}
           >
             <SymbolView
@@ -247,7 +251,7 @@ function GroupQuestSuccessModal({
                 ios: "xmark",
                 web: "close",
               }}
-              size={16}
+              size={14}
               tintColor="#746D7C"
             />
           </Pressable>
@@ -259,15 +263,15 @@ function GroupQuestSuccessModal({
               <View className="absolute -right-8 top-5 h-2 w-2 rounded-full bg-[#FFE08A]" />
               <View className="absolute right-0 top-12 h-1.5 w-1.5 rounded-full bg-[#F7BDD7]" />
 
-              <View className="h-20 w-20 items-center justify-center rounded-full bg-[#FFF1F7]">
-                <View className="h-14 w-14 items-center justify-center rounded-full border-[3px] border-[#F7BDD7] bg-white">
+              <View className="h-16 w-16 items-center justify-center rounded-full bg-[#FFF1F7]">
+                <View className="h-12 w-12 items-center justify-center rounded-full border-[3px] border-[#F7BDD7] bg-white">
                   <SymbolView
                     name={{
                       android: "check",
                       ios: "checkmark",
                       web: "check",
                     }}
-                    size={28}
+                    size={24}
                     tintColor="#D95B8D"
                   />
                 </View>
@@ -275,15 +279,15 @@ function GroupQuestSuccessModal({
             </View>
 
             <Text
-              className="mt-4 text-center text-[22px] font-semibold text-[#D95B8D]"
-              style={{ lineHeight: lineHeightFor(22) }}
+              className="mt-3 text-center text-[19px] font-semibold text-[#D95B8D]"
+              style={{ lineHeight: lineHeightFor(19) }}
             >
               Tham gia nhóm thành công
             </Text>
 
             <Text
-              className="mt-2 text-center text-[13px] text-[#746D7C]"
-              style={{ lineHeight: bodyLineHeightFor(13) }}
+              className="mt-1.5 text-center text-[12px] text-[#746D7C]"
+              style={{ lineHeight: bodyLineHeightFor(12) }}
             >
               Bạn đã tham gia vào nhóm{" "}
               <Text className="font-semibold text-[#D95B8D]">{groupName}</Text>
@@ -292,29 +296,29 @@ function GroupQuestSuccessModal({
             </Text>
           </View>
 
-          <View className="mt-5 gap-2.5">
-            <View className="flex-row items-center rounded-[18px] border border-[#F0DEE7] bg-[#FFF8FB] px-4 py-3">
-              <View className="h-10 w-10 items-center justify-center rounded-full bg-[#F8EEF4]">
+          <View className="mt-4 gap-2">
+            <View className="flex-row items-center rounded-[16px] border border-[#F0DEE7] bg-[#FFF8FB] px-3.5 py-2.5">
+              <View className="h-9 w-9 items-center justify-center rounded-full bg-[#F8EEF4]">
                 <SymbolView
                   name={{
                     android: "route",
                     ios: "point.topleft.down.curvedto.point.bottomright.up",
                     web: "route",
                   }}
-                  size={16}
+                  size={14}
                   tintColor="#D95B8D"
                 />
               </View>
-              <View className="ml-3 min-w-0 flex-1">
+              <View className="ml-2.5 min-w-0 flex-1">
                 <Text
-                  className="text-[11px] text-[#8E869A]"
-                  style={{ lineHeight: lineHeightFor(11) }}
+                  className="text-[10px] text-[#8E869A]"
+                  style={{ lineHeight: lineHeightFor(10) }}
                 >
                   Lộ trình
                 </Text>
                 <Text
-                  className="mt-0.5 text-[13px] font-semibold text-[#2B2233]"
-                  style={{ lineHeight: lineHeightFor(13) }}
+                  className="mt-0.5 text-[12px] font-semibold text-[#2B2233]"
+                  style={{ lineHeight: lineHeightFor(12) }}
                 >
                   {routeName}
                 </Text>
@@ -325,33 +329,33 @@ function GroupQuestSuccessModal({
                   ios: "chevron.right",
                   web: "chevron_right",
                 }}
-                size={16}
+                size={14}
                 tintColor="#8E869A"
               />
             </View>
 
-            <View className="flex-row items-center rounded-[18px] border border-[#F0DEE7] bg-[#FFF8FB] px-4 py-3">
-              <View className="h-10 w-10 items-center justify-center rounded-full bg-[#F8EEF4]">
+            <View className="flex-row items-center rounded-[16px] border border-[#F0DEE7] bg-[#FFF8FB] px-3.5 py-2.5">
+              <View className="h-9 w-9 items-center justify-center rounded-full bg-[#F8EEF4]">
                 <SymbolView
                   name={{
                     android: "groups",
                     ios: "person.2",
                     web: "groups",
                   }}
-                  size={16}
+                  size={14}
                   tintColor="#D95B8D"
                 />
               </View>
-              <View className="ml-3 min-w-0 flex-1">
+              <View className="ml-2.5 min-w-0 flex-1">
                 <Text
-                  className="text-[11px] text-[#8E869A]"
-                  style={{ lineHeight: lineHeightFor(11) }}
+                  className="text-[10px] text-[#8E869A]"
+                  style={{ lineHeight: lineHeightFor(10) }}
                 >
                   Nhóm
                 </Text>
                 <Text
-                  className="mt-0.5 text-[13px] font-semibold text-[#2B2233]"
-                  style={{ lineHeight: lineHeightFor(13) }}
+                  className="mt-0.5 text-[12px] font-semibold text-[#2B2233]"
+                  style={{ lineHeight: lineHeightFor(12) }}
                 >
                   {groupName}
                 </Text>
@@ -362,33 +366,33 @@ function GroupQuestSuccessModal({
                   ios: "chevron.right",
                   web: "chevron_right",
                 }}
-                size={16}
+                size={14}
                 tintColor="#8E869A"
               />
             </View>
           </View>
 
           <Pressable
-            className="mt-5 rounded-[16px] bg-[#D95B8D] py-3.5"
-            onPress={onViewGroup}
+            className="mt-4 rounded-[14px] bg-[#D95B8D] py-2.5"
+            onPress={onViewJourney}
           >
             <Text
-              className="text-center text-[15px] font-semibold text-white"
-              style={{ lineHeight: lineHeightFor(15) }}
+              className="text-center text-[14px] font-semibold text-white"
+              style={{ lineHeight: lineHeightFor(14) }}
             >
-              Xem nhóm
+              Xem hành trình nhóm
             </Text>
           </Pressable>
 
           <Pressable
-            className="mt-3 rounded-[16px] border border-[#F0DEE7] bg-white py-3.5"
-            onPress={onClose}
+            className="mt-2.5 rounded-[14px] border border-[#F0DEE7] bg-white py-2.5"
+            onPress={onViewGroup}
           >
             <Text
-              className="text-center text-[15px] font-semibold text-[#D95B8D]"
-              style={{ lineHeight: lineHeightFor(15) }}
+              className="text-center text-[14px] font-semibold text-[#D95B8D]"
+              style={{ lineHeight: lineHeightFor(14) }}
             >
-              Đóng
+              Về chi tiết nhóm
             </Text>
           </Pressable>
         </View>
@@ -608,16 +612,28 @@ export default function RouteGroupQuestScreen() {
             source: "listed",
           })
         : null;
-      const detailRouteKey =
-        readMeaningfulText(cachedGroup?.groupId) ??
+      const groupRouteKey =
         readMeaningfulText(cachedGroup?.shareToken) ??
+        readMeaningfulText(cachedGroup?.groupId) ??
         normalizedGroupId;
 
-      setSuccessState({
-        detailRouteKey,
+      cacheCommunityGroupJourneySession({
+        groupId: readMeaningfulText(cachedGroup?.groupId) ?? normalizedGroupId,
         groupName: selectedGroup
           ? getCommunityGroupDisplayName(selectedGroup)
           : `Nhóm #${normalizedGroupId}`,
+        routeId: resolvedRouteId,
+        routeName: routeDisplayName,
+        shareToken: readMeaningfulText(cachedGroup?.shareToken),
+        startedAt: Date.now(),
+      });
+
+      setSuccessState({
+        groupRouteKey,
+        groupName: selectedGroup
+          ? getCommunityGroupDisplayName(selectedGroup)
+          : `Nhóm #${normalizedGroupId}`,
+        routeId: resolvedRouteId,
         routeName: routeDisplayName,
       });
     } catch (error) {
@@ -1074,19 +1090,35 @@ export default function RouteGroupQuestScreen() {
             setSuccessState(null);
             router.back();
           }}
-          onViewGroup={() => {
-            const detailRouteKey = readMeaningfulText(
-              successState.detailRouteKey,
-            );
+          onViewJourney={() => {
+            const groupRouteKey = readMeaningfulText(successState.groupRouteKey);
+            const routeId = readMeaningfulText(successState.routeId);
             setSuccessState(null);
 
-            if (!detailRouteKey) {
+            if (!groupRouteKey) {
+              router.back();
+              return;
+            }
+
+            const query = routeId
+              ? `?routeId=${encodeURIComponent(routeId)}&routeName=${encodeURIComponent(successState.routeName)}`
+              : `?routeName=${encodeURIComponent(successState.routeName)}`;
+
+            router.push(
+              `/community/group/${encodeURIComponent(groupRouteKey)}/journey${query}` as Href,
+            );
+          }}
+          onViewGroup={() => {
+            const groupRouteKey = readMeaningfulText(successState.groupRouteKey);
+            setSuccessState(null);
+
+            if (!groupRouteKey) {
               router.back();
               return;
             }
 
             router.push(
-              `/community/group/${encodeURIComponent(detailRouteKey)}` as Href,
+              `/community/group/${encodeURIComponent(groupRouteKey)}` as Href,
             );
           }}
         />

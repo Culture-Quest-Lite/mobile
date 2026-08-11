@@ -783,7 +783,7 @@ export default function CommunityGroupCreateScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {resolvedIsInviteCandidatesLoading ? (
+            {isInviteCandidatesLoading ? (
               <View className="items-center px-4 py-8">
                 <ActivityIndicator color={screenPalette.accent} size="small" />
                 <Text

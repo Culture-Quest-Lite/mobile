@@ -3705,7 +3705,7 @@ export default function HomeScreen() {
                           <Text className="text-center text-[13px] font-semibold text-[#1F2940]">
                             {activeCommunityBoard.summaryLabel}
                           </Text>
-                          <Text className="mt-1 text-center text-[12px] leading-[16px] text-[#8F8290]">
+                          <Text className="mt-1 text-center text-[13px] leading-[18px] text-[#8F8290]">
                             {activeCommunityBoard.summaryNote}
                           </Text>
                         </>
@@ -3732,15 +3732,13 @@ export default function HomeScreen() {
                                 style={[
                                   communityRowShadowStyle,
                                   {
-                                    backgroundColor: isChampion
-                                      ? "#FFF9EC"
-                                      : entry.isCurrentUser
-                                        ? "#FFF7FA"
-                                        : "#FFFFFF",
-                                    borderColor: isChampion
-                                      ? "#F4D493"
-                                      : entry.isCurrentUser
-                                        ? "#F8D8E3"
+                                    backgroundColor: entry.isCurrentUser
+                                      ? "#FFF7FA"
+                                      : "#FFFFFF",
+                                    borderColor: entry.isCurrentUser
+                                      ? "#F8D8E3"
+                                      : isChampion
+                                        ? "#F4D493"
                                         : "#EEF1F4",
                                     borderWidth: 1,
                                   },
@@ -3874,7 +3872,7 @@ export default function HomeScreen() {
                   </View>
 
                   <Pressable
-                    className="rounded-[20px] border border-[#F3E7ED] bg-white px-4 py-3"
+                    className="mt-2 rounded-[20px] border border-[#F3E7ED] bg-white px-4 py-3"
                     onPress={handleOpenCommunityLeaderboard}
                     style={communityRowShadowStyle}
                   >

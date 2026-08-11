@@ -547,7 +547,7 @@
         "default": "Nhóm cộng đồng"
       },
       "access": {
-        "approvalRequired": "Cần leader duyệt",
+        "approvalRequired": "Duyệt khi tham gia",
         "openJoin": "Tham gia tự do"
       },
       "memberCountLabel": "{{count}} thành viên",
@@ -799,8 +799,8 @@
       "creatorFallback": "Explorer #{{id}}",
       "notUpdated": "Chưa cập nhật",
       "noDataYet": "Chưa có dữ liệu",
-      "requiredApprovalYes": "Có",
-      "requiredApprovalNo": "Không",
+      "requiredApprovalYes": "Duyệt khi tham gia",
+      "requiredApprovalNo": "Tham gia tự do",
       "viewMembersAction": "Xem thành viên nhóm",
       "leavingAction": "Đang rời nhóm...",
       "infoSectionTitle": "Thông tin nhóm",
@@ -814,7 +814,7 @@
       "statusActive": "Đang hoạt động",
       "inviteSectionTitle": "Mời thành viên tham gia",
       "refreshLinkA11y": "Làm mới liên kết tham gia",
-      "refreshLinkAction": "Làm mới link",
+      "refreshLinkAction": "Làm mới liên kết",
       "copyLinkA11y": "Sao chép liên kết tham gia",
       "linkCopied": "Đã sao chép liên kết",
       "copyLink": "Sao chép liên kết",

@@ -86,8 +86,8 @@ function StatChip({
       </View>
       <View className="shrink flex-row items-center gap-1">
         <Text
-          className="text-[11px] font-semibold text-[#2B2233]"
-          style={{ lineHeight: lineHeightFor(11) }}
+          className="text-[13px] font-semibold text-[#2B2233]"
+          style={{ lineHeight: lineHeightFor(13) }}
         >
           {value}
         </Text>
@@ -246,17 +246,17 @@ function FeaturedRouteCard({
 
       <View className="min-w-0 px-2.5 pb-2.5 pt-2">
         <Text
-          className="text-[15px] font-semibold text-[#2B2233]"
+          className="text-[16px] font-semibold text-[#2B2233]"
           numberOfLines={2}
-          style={{ lineHeight: lineHeightFor(15) }}
+          style={{ lineHeight: lineHeightFor(16) }}
         >
           {item.title}
         </Text>
         {item.description ? (
           <Text
-            className="mt-1 text-[13px] font-medium text-[#807683]"
+            className="mt-1 text-[14px] font-medium text-[#807683]"
             numberOfLines={3}
-            style={{ lineHeight: bodyLineHeightFor(13) }}
+            style={{ lineHeight: bodyLineHeightFor(14) }}
           >
             {item.description}
           </Text>
@@ -361,9 +361,9 @@ function RelatedStoryCard({
         <View className="min-w-0 flex-1 justify-center px-2.5 py-2">
           <View className="mb-0.5 flex-row items-start justify-between gap-2">
             <Text
-              className="flex-1 text-[14px] font-semibold text-[#2B2233]"
+              className="flex-1 text-[15px] font-semibold text-[#2B2233]"
               numberOfLines={1}
-              style={{ lineHeight: lineHeightFor(14) }}
+              style={{ lineHeight: lineHeightFor(15) }}
             >
               {item.title}
             </Text>
@@ -403,9 +403,9 @@ function RelatedStoryCard({
 
           {item.content ? (
             <Text
-              className="text-[12px] font-medium text-[#7B7287]"
+              className="text-[13px] font-medium text-[#7B7287]"
               numberOfLines={2}
-              style={{ lineHeight: bodyLineHeightFor(12) }}
+              style={{ lineHeight: bodyLineHeightFor(13) }}
             >
               {item.content}
             </Text>
@@ -579,8 +579,8 @@ export default function ThemeDetailScreen() {
             </Pressable>
 
             <Text
-              className="px-4 text-[18px] font-medium text-[#2B2233]"
-              style={{ lineHeight: lineHeightFor(18) }}
+              className="px-4 text-[20px] font-medium text-[#2B2233]"
+              style={{ lineHeight: lineHeightFor(20) }}
             >
               {themeTitle}
             </Text>
@@ -643,8 +643,8 @@ export default function ThemeDetailScreen() {
 
               <View className="min-w-0 flex-1 items-center pr-1">
                 <Text
-                  className="text-[22px] font-semibold text-[#3A2230]"
-                  style={{ lineHeight: lineHeightFor(22) }}
+                  className="text-[24px] font-semibold text-[#3A2230]"
+                  style={{ lineHeight: lineHeightFor(24) }}
                 >
                   {themeModel.title}
                 </Text>

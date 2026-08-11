@@ -49,7 +49,14 @@ import {
   type HotspotReview,
 } from "@/features/home/api/get-hotspot-reviews";
 import { likeReview } from "@/features/home/api/like-review";
+import { reportReview } from "@/features/home/api/report-review";
 import { deleteReview } from "@/features/home/api/review-mutations";
+import {
+  buildReviewReportReasonItems,
+  ReviewReportOptionsSheet,
+  ReviewReportReasonComposer,
+  type ReviewReportReasonItem,
+} from "@/features/home/components/review-report-sheet";
 import { ReviewDeleteDialog } from "@/features/home/components/review-delete-dialog";
 import { avatarImageUri } from "@/features/home/data/home-screen.mock";
 import { cacheHotspotReviewForEdit } from "@/features/home/data/hotspot-review-edit-cache";
@@ -767,11 +774,22 @@ function RouteReviewCard({
     left: number;
     top: number;
   } | null>(null);
+  const [isReportReasonSheetVisible, setIsReportReasonSheetVisible] =
+    useState(false);
+  const [isReportDraftVisible, setIsReportDraftVisible] = useState(false);
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [reportDraft, setReportDraft] = useState("");
+  const authSession = useAuthSession();
+  const reviewReportReasonItems = useMemo(
+    () => buildReviewReportReasonItems(),
+    [],
+  );
   const manageableReview = review.review.isOwner ? review.review : null;
   const reportableReview = review.review;
+  const isReviewMenuDisabled = isReviewActionPending || isSubmittingReport;
 
   const handleOpenReviewMenu = (event: GestureResponderEvent) => {
-    if (isReviewActionPending) {
+    if (isReviewMenuDisabled) {
       return;
     }
 
@@ -798,13 +816,96 @@ function RouteReviewCard({
     setReviewMenuAnchor({ left, top });
   };
 
-  const handleReportReview = () => {
+  const handleOpenReportReview = () => {
     setReviewMenuAnchor(null);
-    Alert.alert(
-      "Đã ghi nhận báo cáo",
-      "Cảm ơn bạn. Chúng tôi sẽ xem xét bài đánh giá này sớm nhất có thể.",
-    );
+
+    setReportDraft("");
+    setIsReportDraftVisible(false);
+    setIsReportReasonSheetVisible(true);
   };
+
+  const handleCloseReportReview = (force = false) => {
+    if (!force && isSubmittingReport) {
+      return;
+    }
+
+    setIsReportReasonSheetVisible(false);
+    setIsReportDraftVisible(false);
+    setReportDraft("");
+  };
+
+  const handleSelectReportReason = (reason: ReviewReportReasonItem) => {
+    if (reason.isFreeText) {
+      setIsReportDraftVisible(true);
+      return;
+    }
+
+    void handleSubmitReportReview(reason.key);
+  };
+
+  async function handleSubmitReportReview(comment: string) {
+    const reviewId = reportableReview.reviewId;
+    const normalizedComment = comment.trim();
+
+    if (!normalizedComment) {
+      return;
+    }
+
+    if (typeof reviewId !== "number" || reviewId <= 0) {
+      handleCloseReportReview();
+      Alert.alert(
+        "Không thể gửi báo cáo",
+        "Không xác định được bài đánh giá cần báo cáo.",
+      );
+      return;
+    }
+
+    if (!authSession.isAuthenticated) {
+      handleCloseReportReview();
+      Alert.alert(
+        "Cần đăng nhập",
+        "Bạn cần đăng nhập để báo cáo bài đánh giá này.",
+      );
+      return;
+    }
+
+    const accessToken = await getValidAccessToken();
+
+    if (!accessToken) {
+      handleCloseReportReview();
+      Alert.alert(
+        "Phiên đăng nhập hết hạn",
+        "Vui lòng đăng nhập lại trước khi gửi báo cáo.",
+      );
+      return;
+    }
+
+    setIsSubmittingReport(true);
+
+    try {
+      await reportReview({
+        accessToken,
+        comment: normalizedComment,
+        reviewId,
+        tokenType: authSession.tokenType,
+      });
+
+      handleCloseReportReview(true);
+      Alert.alert(
+        "Đã ghi nhận báo cáo",
+        "Cảm ơn bạn. Chúng tôi sẽ xem xét bài đánh giá này sớm nhất có thể.",
+      );
+    } catch (error) {
+      Alert.alert(
+        "Không thể gửi báo cáo",
+        error instanceof Error
+          ? error.message
+          : "Đã có lỗi xảy ra khi gửi báo cáo bài đánh giá.",
+      );
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  }
 
   return (
     <View className="px-0.5 py-3">
@@ -834,14 +935,14 @@ function RouteReviewCard({
           <Pressable
             accessibilityLabel="Mở tùy chọn bài đánh giá"
             accessibilityRole="button"
-            accessibilityState={{ disabled: isReviewActionPending }}
+            accessibilityState={{ disabled: isReviewMenuDisabled }}
             className="ml-1 h-9 w-9 items-center justify-center rounded-full"
-            disabled={isReviewActionPending}
+            disabled={isReviewMenuDisabled}
             hitSlop={8}
             onPress={handleOpenReviewMenu}
-            style={{ opacity: isReviewActionPending ? 0.5 : 1 }}
+            style={{ opacity: isReviewMenuDisabled ? 0.5 : 1 }}
           >
-            {isReviewActionPending ? (
+            {isReviewMenuDisabled ? (
               <ActivityIndicator color="#8A7B83" size="small" />
             ) : (
               <SymbolView
@@ -860,7 +961,13 @@ function RouteReviewCard({
 
       <Modal
         animationType="fade"
-        onRequestClose={() => setReviewMenuAnchor(null)}
+        onRequestClose={() => {
+          if (isReviewMenuDisabled) {
+            return;
+          }
+
+          setReviewMenuAnchor(null);
+        }}
         statusBarTranslucent
         transparent
         visible={reviewMenuAnchor !== null}
@@ -869,7 +976,13 @@ function RouteReviewCard({
           <Pressable
             accessibilityLabel="Đóng tùy chọn bài đánh giá"
             className="absolute inset-0"
-            onPress={() => setReviewMenuAnchor(null)}
+            onPress={() => {
+              if (isReviewMenuDisabled) {
+                return;
+              }
+
+              setReviewMenuAnchor(null);
+            }}
           />
 
           {reviewMenuAnchor ? (
@@ -944,7 +1057,7 @@ function RouteReviewCard({
                 <Pressable
                   accessibilityRole="button"
                   className="flex-row items-center px-4"
-                  onPress={handleReportReview}
+                  onPress={handleOpenReportReview}
                   style={{ height: 52 }}
                 >
                   <SymbolView
@@ -968,6 +1081,35 @@ function RouteReviewCard({
           ) : null}
         </View>
       </Modal>
+
+      <ReviewReportOptionsSheet
+        bottomInset={insets.bottom}
+        isSubmitting={isSubmittingReport}
+        items={reviewReportReasonItems}
+        onClose={handleCloseReportReview}
+        onSelectItem={handleSelectReportReason}
+        title="Báo cáo đánh giá"
+        visible={isReportReasonSheetVisible && !isReportDraftVisible}
+      />
+
+      <ReviewReportReasonComposer
+        bottomInset={insets.bottom}
+        draft={reportDraft}
+        isSubmitting={isSubmittingReport}
+        onBack={() => {
+          if (isSubmittingReport) {
+            return;
+          }
+
+          setIsReportDraftVisible(false);
+        }}
+        onChangeDraft={setReportDraft}
+        onClose={handleCloseReportReview}
+        onSubmit={() => {
+          void handleSubmitReportReview(reportDraft);
+        }}
+        visible={isReportReasonSheetVisible && isReportDraftVisible}
+      />
 
       <View className="mt-1 flex-row items-center">
         <RouteRatingStars rating={review.rating} size={13} />
