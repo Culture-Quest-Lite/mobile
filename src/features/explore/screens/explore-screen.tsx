@@ -2,25 +2,24 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { type Href, useFocusEffect, useRouter } from 'expo-router';
-import { SymbolView } from '@/components/ui/symbol-view';
-import { UserAvatar } from '@/components/ui/user-avatar';
-import { ScreenHorizontalPadding } from '@/constants/theme';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
+  FlatList,
   Pressable,
   ScrollView,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
+import { SymbolView } from '@/components/ui/symbol-view';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { getValidAccessToken, useAuthSession } from '@/features/auth/hooks/use-auth-session';
-import { AppMap } from '@/features/map/components/app-map';
+import { AppMap, type AppMapPoint } from '@/features/map/components/app-map';
 import { getGamificationLevels } from '@/features/profile/api/get-levels';
 import { getMyProfile } from '@/features/profile/api/get-me';
 import { setPremiumStatusFromProfile, usePremiumStatus } from '@/features/profile/hooks/use-premium-status';
@@ -40,10 +39,18 @@ import {
   type RouteDto,
 } from '@/features/route/api/route-api';
 import {
+  ExploreBottomSheet,
+  getExploreSheetHeights,
+  type ExploreSheetSnap,
+} from '@/features/explore/components/explore-bottom-sheet';
+import { useCheckedInApiHotspots } from '@/lib/checkin-store';
+import {
   type AppCoordinate,
   ensureForegroundLocationPermission,
+  formatDistance,
   getDevelopmentLocationOverride,
   getDeviceCoordinate,
+  getDistanceMeters,
 } from '@/lib/location';
 
 const gradientColors = ['#EB489B', '#F58752', '#FFC93C'] as const;
@@ -58,12 +65,49 @@ const defaultCoordinate: AppCoordinate = {
   source: 'dev-override',
 };
 
+/** Bán kính tìm quanh vị trí hiện tại, tính bằng km. */
+const radiusOptions = [1, 3, 5, 10] as const;
+const defaultRadiusKm = 5;
+
+const allTagsKey = 'all';
+
+/** Thẻ địa điểm trong sheet cao cố định để `getItemLayout` cuộn tới đúng thẻ. */
+const placeRowHeight = 96;
+const placeRowGap = 12;
+
+/**
+ * Sheet chia đúng như tab Hành trình: tuyến do hệ thống xuất bản (OFFICIAL) và
+ * tuyến do người dùng khác chia sẻ (CUSTOM) là hai nhóm riêng.
+ */
+type ExploreSheetTab = 'places' | 'official' | 'community';
+
+const markerColors = {
+  checkedIn: '#B7B2BE',
+  default: '#5B9BFF',
+  routeStop: '#7C3AED',
+  selected: '#EB489B',
+} as const;
+
 type ExplorerSummary = {
   avatar: string | null;
   isPremium: boolean;
   level: number | null;
   name: string;
   username: string;
+};
+
+type ExplorePlace = {
+  category: string;
+  distanceMeters: number | null;
+  hotspotId: number;
+  imageUri: string;
+  isCheckedIn: boolean;
+  latitude: number;
+  longitude: number;
+  rating: number | null;
+  reviews: number;
+  title: string;
+  xp: number;
 };
 
 function ExplorerHeaderAvatar({
@@ -78,12 +122,12 @@ function ExplorerHeaderAvatar({
         colors={gradientColors}
         end={{ x: 1, y: 0.9 }}
         start={{ x: 0, y: 0.1 }}
-        className="h-16 w-16 rounded-full p-[2px]"
+        className="h-11 w-11 rounded-full p-[2px]"
       >
-        <View className="flex-1 items-center justify-center rounded-full bg-white p-[3px]">
+        <View className="flex-1 items-center justify-center rounded-full bg-white p-[2px]">
           <UserAvatar
             displayName={name}
-            size={54}
+            size={35}
             uri={avatar}
             username={username}
           />
@@ -91,61 +135,12 @@ function ExplorerHeaderAvatar({
       </LinearGradient>
 
       {typeof level === 'number' ? (
-        <View className="absolute -bottom-1 -right-2 rounded-full border-2 border-white bg-[#b1741e] px-2.5 py-1">
-          <Text className="text-[11px] font-extrabold text-white">{`Lv.${level}`}</Text>
+        <View className="absolute -bottom-1 -right-1 rounded-full border-2 border-white bg-[#b1741e] px-1.5 py-[1px]">
+          <Text className="text-[9px] font-extrabold text-white">{`Lv.${level}`}</Text>
         </View>
       ) : null}
     </View>
   );
-}
-
-type ApiPlaceCard = {
-  id: string;
-  title: string;
-  category: string;
-  badge: string;
-  distance: string;
-  rating: string;
-  reward: string;
-  reviews: string;
-  imageUri: string;
-  latitude: number;
-  longitude: number;
-};
-
-const heroShadowStyle = {
-  shadowColor: 'rgba(235, 72, 155, 0.24)',
-  shadowOpacity: 1,
-  shadowRadius: 22,
-  shadowOffset: { width: 0, height: 16 },
-  elevation: 14,
-} as const;
-
-/** Dùng chung với Home để hai tab không lệch cỡ chữ tiêu đề section. */
-const sectionTitleClassName =
-  'text-[17px] font-extrabold leading-[22px] text-[#2B2233]';
-
-const cardShadowStyle = {
-  shadowColor: 'rgba(15, 23, 42, 0.12)',
-  shadowOpacity: 1,
-  shadowRadius: 14,
-  shadowOffset: { width: 0, height: 8 },
-  elevation: 5,
-} as const;
-
-function getDifficultyLabel(difficulty?: string, t?: (key: string) => string) {
-  if (!t) return difficulty || 'Easy';
-
-  switch (difficulty?.toUpperCase()) {
-    case 'EASY':
-      return t('home.difficulty.easy');
-    case 'MEDIUM':
-      return t('home.difficulty.medium');
-    case 'HARD':
-      return t('home.difficulty.hard');
-    default:
-      return difficulty || t('home.difficulty.easy');
-  }
 }
 
 function getHotspotImage(hotspot: NearbyHotspotDto) {
@@ -161,75 +156,170 @@ function getRouteImage(route: RouteDto) {
   return getRouteCoverUrl(route) || fallbackRouteImage;
 }
 
-function mapHotspotToPlace(hotspot: NearbyHotspotDto, t: (key: string) => string): ApiPlaceCard {
-  const firstTag = hotspot.tags[0]?.tagName || t('explore.categories.heritage');
-
+function mapHotspotToPlace(
+  hotspot: NearbyHotspotDto,
+  origin: AppCoordinate | null,
+  fallbackCategory: string,
+): ExplorePlace {
   return {
-    badge: hotspot.status || 'PUBLISHED',
-    category: firstTag,
-    distance: t('explore.places.nearYou'),
-    id: String(hotspot.hotspotId),
+    category: hotspot.tags[0]?.tagName?.trim() || fallbackCategory,
+    distanceMeters: origin
+      ? getDistanceMeters(origin, {
+          latitude: hotspot.latitude,
+          longitude: hotspot.longitude,
+        })
+      : null,
+    hotspotId: hotspot.hotspotId,
     imageUri: getHotspotImage(hotspot),
+    isCheckedIn: hotspot.isCheckedIn === true,
     latitude: hotspot.latitude,
     longitude: hotspot.longitude,
-    rating: '4.8',
-    reward: `+${hotspot.xp ?? hotspot.point ?? 0}`,
-    reviews: '0',
+    rating: typeof hotspot.averageRating === 'number' ? hotspot.averageRating : null,
+    reviews: hotspot.totalReviews ?? 0,
     title: hotspot.hotspotName,
+    xp: hotspot.xp ?? hotspot.point ?? 0,
   };
 }
 
-function ExploreMap({
-  places,
-  routes,
-  onRoutePress,
-}: {
-  places: ApiPlaceCard[];
-  routes: RouteDto[];
-  onRoutePress: (routeId: number) => void;
-}) {
-  const { t } = useTranslation();
+function getRouteStopCoordinates(route: RouteDto | null) {
+  if (!route) {
+    return [];
+  }
 
-  const routePoints = routes[0]?.hotspots
-    ?.filter((stop) => Number.isFinite(stop.latitude) && Number.isFinite(stop.longitude))
+  return (route.hotspots ?? [])
+    .filter(
+      (stop) =>
+        Number.isFinite(Number(stop.latitude)) &&
+        Number.isFinite(Number(stop.longitude)),
+    )
     .map((stop) => ({
-      id: stop.hotspotId,
-      title: stop.hotspotName || `Điểm #${stop.hotspotId}`,
-      description: stop.address,
       latitude: Number(stop.latitude),
       longitude: Number(stop.longitude),
     }));
+}
 
-  const placePoints = places.map((place) => ({
-    id: place.id,
-    title: place.title,
-    description: `${place.category} · ${place.distance}`,
-    latitude: place.latitude,
-    longitude: place.longitude,
-  }));
-
-  const points = routePoints?.length ? routePoints : placePoints;
-
+function FilterChip({
+  active,
+  label,
+  onPress,
+}: {
+  active: boolean;
+  label: string;
+  onPress: () => void;
+}) {
   return (
-    <View className="mx-5 overflow-hidden rounded-[22px] border border-[#EEF1F4] bg-[#E8F0FE]">
-      <AppMap
-        points={points}
-        height={230}
-        showsUserLocation
-        onPointPress={(point) => {
-          const route = routes.find((item) => String(item.routeId) === String(point.id));
-          if (route) onRoutePress(route.routeId);
-        }}
-      />
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      className={`mr-2 rounded-full border px-3.5 py-2 ${
+        active ? 'border-[#EB489B] bg-[#EB489B]' : 'border-[#EEF1F4] bg-white'
+      }`}
+      onPress={onPress}
+    >
+      <Text
+        className={`text-[12px] font-bold ${active ? 'text-white' : 'text-[#6F6678]'}`}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
 
-      <View className="absolute left-3 top-3 rounded-full bg-white px-3 py-1.5 shadow">
-        <Text className="text-[12px] font-bold text-[#2B2233]">
-          {t('explore.map.summary', {
-            places: places.length,
-            routes: routes.length,
-          })}
-        </Text>
-      </View>
+function MapControlButton({
+  accessibilityLabel,
+  backgroundColor,
+  icon,
+  onPress,
+  tintColor,
+}: {
+  accessibilityLabel: string;
+  backgroundColor: string;
+  icon: Parameters<typeof SymbolView>[0]['name'];
+  onPress: () => void;
+  tintColor: string;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      className="h-11 w-11 items-center justify-center rounded-[16px]"
+      onPress={onPress}
+      style={{
+        backgroundColor,
+        elevation: 6,
+        shadowColor: 'rgba(31, 22, 48, 0.2)',
+        shadowOffset: { height: 6, width: 0 },
+        shadowOpacity: 1,
+        shadowRadius: 12,
+      }}
+    >
+      <SymbolView name={icon} size={19} tintColor={tintColor} />
+    </Pressable>
+  );
+}
+
+/**
+ * Nút hành động nổi trên bản đồ, dạng viên thuốc có nhãn chữ.
+ *
+ * Vì sao không để icon trơn như nút định vị: biểu tượng "tia sáng" và "chấm ghi
+ * hình" không có nghĩa phổ quát, người dùng phải bấm thử mới biết nó làm gì.
+ * Nút định vị thì giữ nguyên icon trơn vì đó là quy ước ai cũng hiểu.
+ */
+function MapActionButton({
+  backgroundColor,
+  icon,
+  isPro,
+  label,
+  onPress,
+}: {
+  backgroundColor: string;
+  icon: Parameters<typeof SymbolView>[0]['name'];
+  isPro?: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      className="h-11 flex-row items-center rounded-full pl-3 pr-3.5"
+      onPress={onPress}
+      style={{
+        backgroundColor,
+        elevation: 6,
+        shadowColor: 'rgba(31, 22, 48, 0.2)',
+        shadowOffset: { height: 6, width: 0 },
+        shadowOpacity: 1,
+        shadowRadius: 12,
+      }}
+    >
+      <SymbolView name={icon} size={17} tintColor="#FFFFFF" />
+
+      <Text className="ml-1.5 text-[12px] font-extrabold text-white">
+        {label}
+      </Text>
+
+      {isPro ? (
+        <View className="ml-1.5 rounded-full bg-white/25 px-1.5 py-[1px]">
+          <Text className="text-[9px] font-extrabold text-white">PRO</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function SheetEmptyState({
+  description,
+  title,
+}: {
+  description: string;
+  title: string;
+}) {
+  return (
+    <View className="mx-4 rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
+      <Text className="text-[15px] font-bold text-[#3B4454]">{title}</Text>
+      <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+        {description}
+      </Text>
     </View>
   );
 }
@@ -238,48 +328,130 @@ export default function ExploreScreen() {
   const router = useRouter();
   const session = useAuthSession();
   const { requirePremium } = usePremiumStatus();
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const { t } = useTranslation();
-  const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [activeRouteIndex, setActiveRouteIndex] = useState(0);
-  const [apiRoutes, setApiRoutes] = useState<RouteDto[]>([]);
-  const [nearbyPlaces, setNearbyPlaces] = useState<ApiPlaceCard[]>([]);
-  const [isRoutesLoading, setIsRoutesLoading] = useState(true);
+  const checkedInHotspotIds = useCheckedInApiHotspots();
+
+  const [activeTag, setActiveTag] = useState<string>(allTagsKey);
+  const [radiusKm, setRadiusKm] = useState<number>(defaultRadiusKm);
+  const [onlyNotVisited, setOnlyNotVisited] = useState(false);
+  const [sheetSnap, setSheetSnap] = useState<ExploreSheetSnap>('half');
+  const [sheetTab, setSheetTab] = useState<ExploreSheetTab>('places');
+  const [selectedPlaceId, setSelectedPlaceId] = useState<number | null>(null);
+  const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
+  const [places, setPlaces] = useState<ExplorePlace[]>([]);
+  const [officialRoutes, setOfficialRoutes] = useState<RouteDto[]>([]);
+  const [communityRoutes, setCommunityRoutes] = useState<RouteDto[]>([]);
   const [isPlacesLoading, setIsPlacesLoading] = useState(true);
-  const [routeError, setRouteError] = useState<string | null>(null);
+  const [isRoutesLoading, setIsRoutesLoading] = useState(true);
   const [placeError, setPlaceError] = useState<string | null>(null);
+  const [routeError, setRouteError] = useState<string | null>(null);
   const [explorerSummary, setExplorerSummary] = useState<ExplorerSummary | null>(null);
-  const carouselRef = useRef<ScrollView>(null);
-  const activeRouteIndexRef = useRef(0);
+  const [mapAreaHeight, setMapAreaHeight] = useState(0);
+  const [reloadToken, setReloadToken] = useState(0);
+  const placeListRef = useRef<FlatList<ExplorePlace>>(null);
 
   const safeWidth = Math.max(width, 320);
-  const gutter = ScreenHorizontalPadding;
-  const contentWidth = Math.max(safeWidth - gutter * 2, 280);
-  const snapInterval = safeWidth;
-  const routeCardWidth = Math.max(contentWidth, 280);
+  const sheetHeights = useMemo(
+    () => getExploreSheetHeights(mapAreaHeight || height),
+    [height, mapAreaHeight],
+  );
+  // Phải memo: AppMap dùng object này trong dependency của effect fit map, tạo
+  // mới mỗi lần render sẽ khiến bản đồ tự animate lại liên tục.
+  const mapEdgePadding = useMemo(
+    () => ({
+      bottom: sheetHeights.peek + 40,
+      left: 48,
+      right: 48,
+      top: 56,
+    }),
+    [sheetHeights.peek],
+  );
 
-  const categories = useMemo(() => [
-    { key: 'all', label: t('explore.categories.all') },
-    { key: 'history', label: t('explore.categories.history') },
-    { key: 'architecture', label: t('explore.categories.architecture') },
-    { key: 'culture', label: t('explore.categories.culture') },
-    { key: 'cuisine', label: t('explore.categories.cuisine') },
-    { key: 'heritage', label: t('explore.categories.heritage') },
-  ], [t]);
+  const visiblePlaces = useMemo(() => {
+    const checkedInSet = new Set(checkedInHotspotIds);
 
-  const filteredPlaces = useMemo(() => {
-    if (activeCategory === 'all') return nearbyPlaces;
-    const selectedCategory = categories.find(c => c.key === activeCategory);
-    if (!selectedCategory) return nearbyPlaces;
-    return nearbyPlaces.filter((p) => p.category === selectedCategory.label);
-  }, [activeCategory, nearbyPlaces, categories]);
+    return places
+      .map((place) => ({
+        ...place,
+        isCheckedIn: place.isCheckedIn || checkedInSet.has(place.hotspotId),
+      }))
+      .filter((place) => {
+        if (activeTag !== allTagsKey && place.category !== activeTag) {
+          return false;
+        }
 
-  const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / snapInterval);
-    const bounded = Math.min(Math.max(nextIndex, 0), Math.max(apiRoutes.length - 1, 0));
-    activeRouteIndexRef.current = bounded;
-    setActiveRouteIndex(bounded);
-  };
+        return !(onlyNotVisited && place.isCheckedIn);
+      })
+      .sort((left, right) => {
+        if (left.distanceMeters === null || right.distanceMeters === null) {
+          return 0;
+        }
+
+        return left.distanceMeters - right.distanceMeters;
+      });
+  }, [activeTag, checkedInHotspotIds, onlyNotVisited, places]);
+
+  const tagOptions = useMemo(() => {
+    const seen = new Map<string, number>();
+
+    for (const place of places) {
+      seen.set(place.category, (seen.get(place.category) ?? 0) + 1);
+    }
+
+    return Array.from(seen.entries())
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 8)
+      .map(([label]) => label);
+  }, [places]);
+
+  const visibleRoutes = sheetTab === 'community' ? communityRoutes : officialRoutes;
+
+  const selectedRoute = useMemo(
+    () =>
+      [...officialRoutes, ...communityRoutes].find(
+        (route) => route.routeId === selectedRouteId,
+      ) ?? null,
+    [communityRoutes, officialRoutes, selectedRouteId],
+  );
+
+  const routeCoordinates = useMemo(
+    () => getRouteStopCoordinates(selectedRoute),
+    [selectedRoute],
+  );
+
+  const mapPoints = useMemo<AppMapPoint[]>(() => {
+    if (selectedRoute) {
+      return (selectedRoute.hotspots ?? [])
+        .filter(
+          (stop) =>
+            Number.isFinite(Number(stop.latitude)) &&
+            Number.isFinite(Number(stop.longitude)),
+        )
+        .map((stop) => ({
+          accentColor: markerColors.routeStop,
+          id: `route-stop-${stop.hotspotId}`,
+          latitude: Number(stop.latitude),
+          longitude: Number(stop.longitude),
+          title: stop.hotspotName || selectedRoute.routeName,
+          description: stop.address,
+        }));
+    }
+
+    return visiblePlaces.map((place) => ({
+      accentColor:
+        place.hotspotId === selectedPlaceId
+          ? markerColors.selected
+          : place.isCheckedIn
+            ? markerColors.checkedIn
+            : markerColors.default,
+      id: place.hotspotId,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      title: place.title,
+      description: place.category,
+    }));
+  }, [selectedPlaceId, selectedRoute, visiblePlaces]);
 
   useFocusEffect(
     useCallback(() => {
@@ -323,7 +495,7 @@ export default function ExploreScreen() {
             avatar: profile.avatar?.trim() || null,
             isPremium: profile.isPremium,
             level: profile.level,
-            name: resolvedName || 'Ngọc',
+            name: resolvedName,
             username: profile.username.trim(),
           });
         } catch (error) {
@@ -351,28 +523,69 @@ export default function ExploreScreen() {
 
       try {
         const accessToken = await getValidAccessToken();
-        const result = await searchRoutes({
-          accessToken,
-          page: 0,
-          size: 10,
-          sortBy: 'routeId',
-          sortDirection: 'DESC',
-          status: 'PUBLISHED',
-          tokenType: session.tokenType,
-        });
+        // Cùng hai nguồn với tab Hành trình: OFFICIAL là tuyến hệ thống xuất
+        // bản, CUSTOM là tuyến người dùng chia sẻ sau khi được duyệt.
+        const [officialResult, communityResult] = await Promise.allSettled([
+          searchRoutes({
+            accessToken,
+            page: 0,
+            size: 20,
+            sortBy: 'routeId',
+            sortDirection: 'DESC',
+            status: 'PUBLISHED',
+            tokenType: session.tokenType,
+            type: 'OFFICIAL',
+          }),
+          searchRoutes({
+            accessToken,
+            page: 0,
+            size: 20,
+            sortBy: 'routeId',
+            sortDirection: 'DESC',
+            status: 'PUBLISHED',
+            tokenType: session.tokenType,
+            type: 'CUSTOM',
+          }),
+        ]);
 
         if (cancelled) return;
 
-        const publishedRoutes = result.content.filter((route) => {
-          const status = route.status?.toUpperCase();
-          return status === 'PUBLISHED' || status === 'APPROVED';
-        });
+        setOfficialRoutes(
+          officialResult.status === 'fulfilled'
+            ? officialResult.value.content
+            : [],
+        );
+        setCommunityRoutes(
+          communityResult.status === 'fulfilled'
+            ? communityResult.value.content
+            : [],
+        );
 
-        setApiRoutes(publishedRoutes.length > 0 ? publishedRoutes : result.content);
+        if (officialResult.status === 'rejected') {
+          console.warn('[explore] load official routes failed', {
+            error: officialResult.reason,
+          });
+        }
+
+        if (communityResult.status === 'rejected') {
+          console.warn('[explore] load community routes failed', {
+            error: communityResult.reason,
+          });
+        }
+
+        setRouteError(
+          officialResult.status === 'rejected' &&
+            communityResult.status === 'rejected'
+            ? t('explore.routes.loadError')
+            : null,
+        );
       } catch (error) {
         if (cancelled) return;
-        setApiRoutes([]);
-        setRouteError(error instanceof Error ? error.message : 'Không thể tải tuyến từ API.');
+        setOfficialRoutes([]);
+        setCommunityRoutes([]);
+        setRouteError(
+          error instanceof Error ? error.message : t('explore.routes.loadError'),
+        );
       } finally {
         if (!cancelled) setIsRoutesLoading(false);
       }
@@ -383,6 +596,7 @@ export default function ExploreScreen() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.tokenType]);
 
   useEffect(() => {
@@ -412,18 +626,29 @@ export default function ExploreScreen() {
         const accessToken = await getValidAccessToken();
         const hotspots = await getNearbyHotspots({
           accessToken,
-          distance: 10,
+          distance: radiusKm,
           latitude: coordinate.latitude,
           longitude: coordinate.longitude,
           tokenType: session.tokenType,
         });
 
         if (cancelled) return;
-        setNearbyPlaces(hotspots.map((h) => mapHotspotToPlace(h, t)));
+
+        setPlaces(
+          hotspots.map((hotspot) =>
+            mapHotspotToPlace(
+              hotspot,
+              coordinate,
+              t('explore.categories.heritage'),
+            ),
+          ),
+        );
       } catch (error) {
         if (cancelled) return;
-        setNearbyPlaces([]);
-        setPlaceError(error instanceof Error ? error.message : 'Không thể tải địa điểm gần bạn.');
+        setPlaces([]);
+        setPlaceError(
+          error instanceof Error ? error.message : t('explore.places.loadError'),
+        );
       } finally {
         if (!cancelled) setIsPlacesLoading(false);
       }
@@ -434,28 +659,14 @@ export default function ExploreScreen() {
     return () => {
       cancelled = true;
     };
-  }, [session.tokenType]);
-
-  useEffect(() => {
-    if (apiRoutes.length <= 1) return;
-
-    const timer = setInterval(() => {
-      const nextIndex = (activeRouteIndexRef.current + 1) % apiRoutes.length;
-      carouselRef.current?.scrollTo({ x: nextIndex * snapInterval, y: 0, animated: true });
-      activeRouteIndexRef.current = nextIndex;
-      setActiveRouteIndex(nextIndex);
-    }, 4200);
-
-    return () => clearInterval(timer);
-  }, [apiRoutes.length, snapInterval]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [radiusKm, reloadToken, session.tokenType]);
 
   function openRoute(routeId: number) {
     router.push(`/route/${routeId}` as Href);
   }
 
-  function openPlace(place: ApiPlaceCard) {
-    const hotspotId = Number(place.id);
-
+  function openPlace(hotspotId: number) {
     if (!Number.isInteger(hotspotId) || hotspotId <= 0) {
       return;
     }
@@ -463,544 +674,488 @@ export default function ExploreScreen() {
     router.push(getHotspotHref(getApiHotspotRouteSlug(hotspotId), hotspotId));
   }
 
+  function focusPlace(hotspotId: number) {
+    setSelectedRouteId(null);
+    setSelectedPlaceId(hotspotId);
+    setSheetSnap('peek');
+
+    const index = visiblePlaces.findIndex(
+      (place) => place.hotspotId === hotspotId,
+    );
+
+    if (index >= 0) {
+      placeListRef.current?.scrollToIndex({ animated: true, index });
+    }
+  }
+
+  function handleMarkerPress(point: AppMapPoint) {
+    // Khi đang xem một tuyến, ghim trên bản đồ là điểm dừng của tuyến đó nên
+    // chạm vào sẽ mở thẳng chi tiết điểm dừng.
+    if (selectedRoute) {
+      openPlace(Number(`${point.id}`.replace('route-stop-', '')));
+      return;
+    }
+
+    const hotspotId = Number(point.id);
+
+    if (!Number.isInteger(hotspotId)) {
+      return;
+    }
+
+    setSheetTab('places');
+    focusPlace(hotspotId);
+  }
+
+  function handlePlaceRowPress(place: ExplorePlace) {
+    if (place.hotspotId === selectedPlaceId) {
+      openPlace(place.hotspotId);
+      return;
+    }
+
+    focusPlace(place.hotspotId);
+  }
+
+  function handleRouteRowPress(route: RouteDto) {
+    if (route.routeId === selectedRouteId) {
+      openRoute(route.routeId);
+      return;
+    }
+
+    setSelectedPlaceId(null);
+    setSelectedRouteId(route.routeId);
+    setSheetSnap('peek');
+  }
+
   const explorerName =
     explorerSummary?.name.trim() ||
     session.displayName.trim() ||
     session.username?.trim() ||
-    'Ngọc';
+    '';
   const explorerUsername =
     explorerSummary?.username.trim() || session.username?.trim() || explorerName;
-  const explorerAvatar = explorerSummary?.avatar ?? null;
-  const explorerLevel = explorerSummary?.level ?? null;
-  const isPremiumExplorer = explorerSummary?.isPremium ?? false;
+
+  const sheetHeader = (
+    <View className="gap-3">
+      <View className="flex-row items-center gap-1.5">
+        {(['places', 'official', 'community'] as const).map((tab) => {
+          const active = tab === sheetTab;
+
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              className={`rounded-full px-3 py-1.5 ${active ? 'bg-[#FDEBF3]' : 'bg-[#F5F3F7]'}`}
+              key={tab}
+              onPress={() => {
+                setSheetTab(tab);
+                setSelectedRouteId(null);
+              }}
+            >
+              <Text
+                className={`text-[12px] font-bold ${active ? 'text-[#EB489B]' : 'text-[#8E869A]'}`}
+              >
+                {t(`explore.sheet.tab.${tab}`)}
+              </Text>
+            </Pressable>
+          );
+        })}
+
+        <View className="flex-1" />
+
+        <Text className="text-[12px] font-semibold text-[#8E869A]">
+          {sheetTab === 'places'
+            ? t('explore.sheet.placesCount', { count: visiblePlaces.length })
+            : t('explore.sheet.routesCount', { count: visibleRoutes.length })}
+        </Text>
+      </View>
+
+      {selectedRoute ? (
+        <Pressable
+          className="flex-row items-center justify-between rounded-[16px] bg-[#F6F1FF] px-3 py-2.5"
+          onPress={() => setSelectedRouteId(null)}
+        >
+          <Text className="flex-1 text-[12px] font-bold text-[#5B21B6]" numberOfLines={1}>
+            {t('explore.sheet.showingRoute', { name: selectedRoute.routeName })}
+          </Text>
+          <Text className="text-[12px] font-bold text-[#7C3AED]">
+            {t('explore.sheet.clearRoute')}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['top', 'left', 'right']}>
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingBottom: 32 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="gap-6 px-4 pb-2 pt-4">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1 flex-row items-center gap-3.5 pr-3">
-              <ExplorerHeaderAvatar
-                avatar={explorerAvatar}
-                level={explorerLevel}
-                name={explorerName}
-                username={explorerUsername}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView className="flex-1 bg-white" edges={['top', 'left', 'right']}>
+        {/* Header nằm trên nền trắng riêng thay vì nổi trên bản đồ: chữ và chip
+            lọc không còn bị hoạ tiết bản đồ nuốt mất. */}
+        <View
+          className="gap-2.5 bg-white px-4 pb-2.5 pt-2"
+          style={{
+            elevation: 4,
+            shadowColor: 'rgba(31, 22, 48, 0.12)',
+            shadowOffset: { height: 4, width: 0 },
+            shadowOpacity: 1,
+            shadowRadius: 10,
+            zIndex: 10,
+          }}
+        >
+          <View className="flex-row items-center gap-2.5">
+            <ExplorerHeaderAvatar
+              avatar={explorerSummary?.avatar ?? null}
+              level={explorerSummary?.level ?? null}
+              name={explorerName}
+              username={explorerUsername}
+            />
+
+            <Pressable
+              accessibilityRole="search"
+              className="h-11 flex-1 flex-row items-center rounded-full border border-[#EEF1F4] bg-[#FAF7FC] px-4"
+              onPress={() => router.push('/hotspots/search' as Href)}
+            >
+              <SymbolView
+                name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
+                size={16}
+                tintColor="#AA9FB0"
               />
+              <Text className="ml-2 flex-1 text-[13px] text-[#AA9FB0]" numberOfLines={1}>
+                {t('explore.search.placeholder')}
+              </Text>
+            </Pressable>
 
-              <View className="flex-1 gap-0.5">
-                <Text
-                  className="text-[15px] font-extrabold tracking-[-0.3px] text-[#2B2233]"
-                  numberOfLines={1}
-                >
-                  {t('explore.greeting', { name: explorerName })}
-                </Text>
-                <Text className="text-[11px] leading-4 text-[#8E869A]">
-                  {t('explore.readyToExplore')}
-                </Text>
-              </View>
-            </View>
-
-            <View className="flex-row items-center gap-2.5">
-              <Pressable
-                accessibilityLabel="Mở địa điểm gần bạn"
-                className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
-                hitSlop={8}
-                onPress={() => router.push('/hotspots')}
-              >
-                <SymbolView
-                  name={{ ios: 'location', android: 'my_location', web: 'my_location' }}
-                  size={16}
-                  tintColor="#F58752"
-                />
-              </Pressable>
-
-              <Pressable
-                accessibilityLabel="Mở danh sách địa danh"
-                className="h-10 w-10 items-center justify-center rounded-full bg-[#FAF7FC]"
-                hitSlop={8}
-                onPress={() => router.push('/hotspots')}
-              >
-                <SymbolView
-                  name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
-                  size={16}
-                  tintColor="#8E869A"
-                />
-              </Pressable>
-
-              <Pressable
-                accessibilityLabel="Mở thông báo"
-                className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
-                hitSlop={8}
-                onPress={() => router.push('/notifications' as Href)}
-              >
-                <SymbolView
-                  name={{ ios: 'bell', android: 'notifications', web: 'notifications' }}
-                  size={16}
-                  tintColor="#EB489B"
-                />
-              </Pressable>
-            </View>
+            <Pressable
+              accessibilityLabel={t('explore.a11y.notifications')}
+              accessibilityRole="button"
+              className="h-11 w-11 items-center justify-center rounded-[16px] bg-[#FFF1F6]"
+              hitSlop={6}
+              onPress={() => router.push('/notifications' as Href)}
+            >
+              <SymbolView
+                name={{ ios: 'bell', android: 'notifications', web: 'notifications' }}
+                size={19}
+                tintColor="#EB489B"
+              />
+            </Pressable>
           </View>
 
-          {/* Ô tìm kiếm chỉ là điểm vào của màn tìm kiếm hotspot, không tự nhập tại chỗ. */}
-          <Pressable
-            accessibilityRole="search"
-            className="flex-row items-center rounded-[26px] border border-[#F3EDF7] bg-[#FAF7FC] px-4 py-3.5"
-            onPress={() => router.push('/hotspots/search' as Href)}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingRight: 8, paddingVertical: 2 }}
+            style={{ marginHorizontal: -16, paddingHorizontal: 16, width: safeWidth }}
           >
-            <SymbolView
-              name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
-              size={16}
-              tintColor="#AA9FB0"
-            />
-            <Text className="ml-2 text-[15px] text-[#AA9FB0]">
-              {t('explore.search.placeholder')}
-            </Text>
-          </Pressable>
+            {radiusOptions.map((option) => (
+              <FilterChip
+                active={option === radiusKm}
+                key={`radius-${option}`}
+                label={t('explore.filters.radius', { value: option })}
+                onPress={() => {
+                  setRadiusKm(option);
+                  setSelectedPlaceId(null);
+                }}
+              />
+            ))}
 
-          {/* Quick Actions Toolbar */}
-          <View className="flex-row items-center justify-between rounded-2xl border border-[#FCDDEC] bg-[#FFF8FC] p-3 shadow-sm">
-            <Pressable
+            <View className="mr-2 h-6 w-px self-center bg-[#E3E0E8]" />
+
+            <FilterChip
+              active={onlyNotVisited}
+              label={t('explore.filters.notVisited')}
+              onPress={() => setOnlyNotVisited((current) => !current)}
+            />
+
+            <FilterChip
+              active={activeTag === allTagsKey}
+              label={t('explore.filters.allTags')}
+              onPress={() => setActiveTag(allTagsKey)}
+            />
+
+            {tagOptions.map((tag) => (
+              <FilterChip
+                active={activeTag === tag}
+                key={`tag-${tag}`}
+                label={tag}
+                onPress={() =>
+                  setActiveTag((current) => (current === tag ? allTagsKey : tag))
+                }
+              />
+            ))}
+          </ScrollView>
+        </View>
+
+        <View
+          className="flex-1 overflow-hidden"
+          onLayout={(event) => setMapAreaHeight(event.nativeEvent.layout.height)}
+        >
+          {mapAreaHeight > 0 ? (
+            <AppMap
+              borderRadius={0}
+              connectPointsWhenRouteMissing={false}
+              fitEdgePadding={mapEdgePadding}
+              focusVerticalOffsetRatio={0.18}
+              focusedPointId={selectedPlaceId}
+              height={mapAreaHeight}
+              highlightedPointId={selectedPlaceId}
+              onPointPress={handleMarkerPress}
+              points={mapPoints}
+              routeCoordinates={routeCoordinates}
+              showsMyLocationButton={false}
+              showsUserLocation
+            />
+          ) : null}
+
+          <View
+            className="absolute right-4 items-end gap-2.5"
+            style={{ bottom: sheetHeights.peek + 16 }}
+          >
+            <MapControlButton
+              accessibilityLabel={t('explore.a11y.recenter')}
+              backgroundColor="#FFFFFF"
+              icon={{ ios: 'location', android: 'my_location', web: 'my_location' }}
               onPress={() => {
-                if (!requirePremium("Tạo kế hoạch hành trình (User Plan)")) return;
+                setSelectedPlaceId(null);
+                setSelectedRouteId(null);
+                setReloadToken((current) => current + 1);
+              }}
+              tintColor="#2B2233"
+            />
+
+            {/* Hai lối tắt Premium, thay cho hàng nút Plan/Record cũ ở đầu màn. */}
+            <MapActionButton
+              backgroundColor="#7C3AED"
+              icon={{ ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }}
+              isPro
+              label={t('explore.actions.plan')}
+              onPress={() => {
+                if (!requirePremium(t('explore.actions.planPremiumFeature'))) return;
+
                 router.push('/route/custom/plan');
               }}
-              className="flex-1 items-center gap-1.5"
-            >
-              <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#7C3AED]">
-                <SymbolView
-                  name={{
-                    ios: 'sparkles',
-                    android: 'auto_awesome',
-                    web: 'auto_awesome',
-                  }}
-                  size={20}
-                  tintColor="#FFFFFF"
-                />
-              </View>
-              <Text className="text-center text-[11px] font-extrabold text-[#2B2233]">
-                {t('explore.features.userPlan')}
-              </Text>
-              <View className="rounded-full bg-[#7C3AED] px-1.5 py-0.5">
-                <Text className="text-[8px] font-extrabold text-white">PRO</Text>
-              </View>
-            </Pressable>
+            />
 
-            <Pressable
+            <MapActionButton
+              backgroundColor="#EB489B"
+              icon={{
+                ios: 'record.circle',
+                android: 'radio_button_checked',
+                web: 'radio_button_checked',
+              }}
+              isPro
+              label={t('explore.actions.record')}
               onPress={() => {
-                if (!requirePremium('Ghi hành trình cá nhân (Record Journey)')) return;
+                if (!requirePremium(t('explore.actions.recordPremiumFeature'))) return;
+
                 router.push('/route/custom/record');
               }}
-              className="flex-1 items-center gap-1.5"
-            >
-              <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#EB489B]">
-                <SymbolView
-                  name={{
-                    ios: 'record.circle.fill',
-                    android: 'radio_button_checked',
-                    web: 'radio_button_checked',
-                  }}
-                  size={20}
-                  tintColor="#FFFFFF"
-                />
-              </View>
-              <Text className="text-center text-[11px] font-extrabold text-[#2B2233]">
-                {t('explore.features.record')}
-              </Text>
-              <View className="rounded-full bg-[#EB489B] px-1.5 py-0.5">
-                <Text className="text-[8px] font-extrabold text-white">PRO</Text>
-              </View>
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.push('/route')}
-              className="flex-1 items-center gap-1.5"
-            >
-              <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#F58752]">
-                <SymbolView
-                  name={{
-                    ios: 'map',
-                    android: 'map',
-                    web: 'map',
-                  }}
-                  size={20}
-                  tintColor="#FFFFFF"
-                />
-              </View>
-              <Text className="text-center text-[11px] font-bold text-[#2B2233]">
-                {t('explore.features.routes')}
-              </Text>
-            </Pressable>
-
+            />
           </View>
 
-          {/* Premium status / upsell card (driven by real subscription data) */}
-          {isPremiumExplorer ? (
-            <View
-              className="overflow-hidden rounded-[28px] border border-[#E9D5FF] bg-[#FAF5FF] p-5"
-              style={heroShadowStyle}
-            >
-              <View className="absolute -right-5 -top-6 h-24 w-24 rounded-full bg-[#E9D5FF]/70" />
-              <View className="absolute -bottom-8 right-14 h-20 w-20 rounded-full bg-[#FBCFE8]/60" />
-
-              <View className="flex-row items-start justify-between gap-4">
-                <View className="flex-1">
-                  <View className="mb-3 flex-row items-center gap-2 self-start rounded-full bg-white px-3 py-1.5">
-                    <SymbolView
-                      name={{
-                        ios: 'crown.fill',
-                        android: 'workspace_premium',
-                        web: 'workspace_premium',
-                      }}
-                      size={13}
-                      tintColor="#7C3AED"
-                    />
-                    <Text className="text-[10px] font-extrabold uppercase tracking-[1px] text-[#7C3AED]">
-                      {t('explore.premium.explorer')}
-                    </Text>
-                  </View>
-
-                  <Text className="text-[19px] font-black leading-6 text-[#2B2233]">
-                    {t('explore.premium.activeTitle')}
-                  </Text>
-                  <Text className="mt-2 text-[13px] leading-5 text-[#6F6678]">
-                    {t('explore.premium.activeDescription')}
-                  </Text>
-                </View>
-
-                <View className="mt-2 h-16 w-16 items-center justify-center rounded-[22px] bg-white">
-                  <SymbolView
-                    name={{
-                      ios: 'crown.fill',
-                      android: 'workspace_premium',
-                      web: 'workspace_premium',
-                    }}
-                    size={30}
-                    tintColor="#7C3AED"
-                  />
-                </View>
-              </View>
-            </View>
-          ) : (
-            <Pressable
-              onPress={() => router.push('/subscription/premium')}
-              className="overflow-hidden rounded-[28px] border border-[#E9D5FF] bg-[#FAF5FF] p-5"
-              style={heroShadowStyle}
-            >
-              <View className="absolute -right-5 -top-6 h-24 w-24 rounded-full bg-[#E9D5FF]/70" />
-              <View className="absolute -bottom-8 right-14 h-20 w-20 rounded-full bg-[#FBCFE8]/60" />
-
-              <View className="flex-row items-start justify-between gap-4">
-                <View className="flex-1">
-                  <View className="mb-3 flex-row items-center gap-2 self-start rounded-full bg-white px-3 py-1.5">
-                    <SymbolView
-                      name={{
-                        ios: 'sparkles',
-                        android: 'auto_awesome',
-                        web: 'auto_awesome',
-                      }}
-                      size={13}
-                      tintColor="#7C3AED"
-                    />
-                    <Text className="text-[10px] font-extrabold uppercase tracking-[1px] text-[#7C3AED]">
-                      {t('explore.premium.title')}
-                    </Text>
-                  </View>
-
-                  <Text className="text-[19px] font-black leading-6 text-[#2B2233]">
-                    {t('explore.premium.subtitle')}
-                  </Text>
-                  <Text className="mt-2 text-[13px] leading-5 text-[#6F6678]">
-                    {t('explore.premium.upsellDescription')}
-                  </Text>
-
-                  <View className="mt-4 flex-row items-center gap-2 self-start rounded-full bg-[#7C3AED] px-4 py-2.5">
-                    <Text className="text-[12px] font-extrabold text-white">
-                      {t('explore.premium.cta')}
-                    </Text>
-                    <SymbolView
-                      name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-                      size={14}
-                      tintColor="#FFFFFF"
-                    />
-                  </View>
-                </View>
-
-                <View className="mt-2 h-16 w-16 items-center justify-center rounded-[22px] bg-white">
-                  <SymbolView
-                    name={{
-                      ios: 'crown.fill',
-                      android: 'workspace_premium',
-                      web: 'workspace_premium',
-                    }}
-                    size={30}
-                    tintColor="#7C3AED"
-                  />
-                </View>
-              </View>
-            </Pressable>
-          )}
-
-        </View>
-
-        <View className="mb-6">
-          <View
-            className="mb-3 flex-row items-center justify-between"
-            style={{ paddingHorizontal: gutter }}
+          <ExploreBottomSheet
+            header={sheetHeader}
+            maxHeight={mapAreaHeight || height}
+            onSnapChange={setSheetSnap}
+            snap={sheetSnap}
           >
-            <Text className={sectionTitleClassName}>{t('explore.map.title')}</Text>
-          </View>
-          <ExploreMap
-            places={filteredPlaces}
-            routes={apiRoutes}
-            onRoutePress={openRoute}
-          />
-          {placeError ? (
-            <Text className="mx-4 mt-2 text-[11px] text-[#D84C3E]">{placeError}</Text>
-          ) : null}
-        </View>
+            {sheetTab === 'places' ? (
+              isPlacesLoading ? (
+                <View className="items-center py-8">
+                  <ActivityIndicator color="#EB489B" />
+                </View>
+              ) : visiblePlaces.length === 0 ? (
+                <SheetEmptyState
+                  description={
+                    placeError ??
+                    t('explore.sheet.emptyPlacesDescription', { radius: radiusKm })
+                  }
+                  title={t('explore.sheet.emptyPlacesTitle')}
+                />
+              ) : (
+                <FlatList
+                  contentContainerStyle={{
+                    gap: placeRowGap,
+                    paddingBottom: 28,
+                    paddingHorizontal: 16,
+                    paddingTop: 6,
+                  }}
+                  data={visiblePlaces}
+                  getItemLayout={(_data, index) => ({
+                    index,
+                    length: placeRowHeight + placeRowGap,
+                    offset: (placeRowHeight + placeRowGap) * index,
+                  })}
+                  keyExtractor={(place) => `${place.hotspotId}`}
+                  onScrollToIndexFailed={() => {}}
+                  ref={placeListRef}
+                  renderItem={({ item }) => {
+                    const selected = item.hotspotId === selectedPlaceId;
 
-        <View className="gap-6 px-4">
-          <View className="gap-4">
-            <View className="flex-row items-center justify-between">
-              <Text className={sectionTitleClassName}>{t('explore.routes.title')}</Text>
-              {!isRoutesLoading ? (
-                <Text className="text-[12px] font-semibold text-[#8E869A]">
-                  {t('explore.routes.count', { count: apiRoutes.length })}
-                </Text>
-              ) : null}
-            </View>
+                    return (
+                      <Pressable
+                        className={`flex-row items-center rounded-[18px] border px-3 ${
+                          selected
+                            ? 'border-[#F7C2DC] bg-[#FFF6FA]'
+                            : 'border-[#EEF1F4] bg-white'
+                        }`}
+                        onPress={() => handlePlaceRowPress(item)}
+                        style={{ height: placeRowHeight }}
+                      >
+                        <Image
+                          source={item.imageUri}
+                          contentFit="cover"
+                          transition={160}
+                          cachePolicy="memory-disk"
+                          style={{ borderRadius: 14, height: 70, width: 70 }}
+                        />
 
-            {isRoutesLoading ? (
-              <View className="h-[260px] items-center justify-center rounded-[22px] bg-[#FAF7FC]">
+                        <View className="ml-3 flex-1">
+                          <Text
+                            className="text-[14px] font-extrabold text-[#2B2233]"
+                            numberOfLines={1}
+                          >
+                            {item.title}
+                          </Text>
+
+                          <Text
+                            className="mt-0.5 text-[12px] text-[#8E869A]"
+                            numberOfLines={1}
+                          >
+                            {item.category}
+                            {item.distanceMeters === null
+                              ? ''
+                              : ` · ${formatDistance(item.distanceMeters)}`}
+                          </Text>
+
+                          <View className="mt-1.5 flex-row items-center gap-2">
+                            {item.rating === null ? null : (
+                              <View className="flex-row items-center gap-1">
+                                <SymbolView
+                                  name={{ ios: 'star.fill', android: 'star', web: 'star' }}
+                                  size={11}
+                                  tintColor="#F58752"
+                                />
+                                <Text className="text-[11px] font-bold text-[#2B2233]">
+                                  {item.rating.toFixed(1)}
+                                </Text>
+                                <Text className="text-[11px] text-[#8E869A]">
+                                  ({item.reviews})
+                                </Text>
+                              </View>
+                            )}
+
+                            <View className="rounded-full bg-[#FFF7E8] px-2 py-[3px]">
+                              <Text className="text-[10px] font-extrabold text-[#D97706]">
+                                +{item.xp} XP
+                              </Text>
+                            </View>
+
+                            {item.isCheckedIn ? (
+                              <View className="rounded-full bg-[#EAF7EF] px-2 py-[3px]">
+                                <Text className="text-[10px] font-extrabold text-[#2A8A52]">
+                                  {t('explore.places.checkedIn')}
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        </View>
+
+                        {selected ? (
+                          <View className="ml-2 flex-row items-center">
+                            <Text className="text-[11px] font-extrabold text-[#EB489B]">
+                              {t('explore.sheet.viewDetail')}
+                            </Text>
+                            <SymbolView
+                              name={{
+                                ios: 'chevron.right',
+                                android: 'chevron_right',
+                                web: 'chevron_right',
+                              }}
+                              size={13}
+                              tintColor="#EB489B"
+                            />
+                          </View>
+                        ) : null}
+                      </Pressable>
+                    );
+                  }}
+                  showsVerticalScrollIndicator={false}
+                />
+              )
+            ) : isRoutesLoading ? (
+              <View className="items-center py-8">
                 <ActivityIndicator color="#EB489B" />
               </View>
-            ) : apiRoutes.length === 0 ? (
-              <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] p-5">
-                <Text className="text-[15px] font-bold text-[#3B4454]">
-                  {t('explore.routes.emptyTitle')}
-                </Text>
-                <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
-                  {routeError || t('explore.routes.emptyDescription')}
-                </Text>
-              </View>
+            ) : visibleRoutes.length === 0 ? (
+              <SheetEmptyState
+                description={routeError ?? t('explore.routes.emptyDescription')}
+                title={t('explore.routes.emptyTitle')}
+              />
             ) : (
               <ScrollView
-                ref={carouselRef}
-                horizontal
-                pagingEnabled
-                snapToAlignment="start"
-                snapToInterval={snapInterval}
-                decelerationRate="fast"
-                bounces={false}
-                showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={handleScrollEnd}
-                style={{ width, marginHorizontal: -20 }}
+                contentContainerStyle={{
+                  gap: placeRowGap,
+                  paddingBottom: 28,
+                  paddingHorizontal: 16,
+                  paddingTop: 6,
+                }}
+                showsVerticalScrollIndicator={false}
               >
-                {apiRoutes.map((route) => (
-                  <View
-                    key={route.routeId}
-                    className="items-start"
-                    style={{ width: snapInterval, paddingLeft: 20 }}
-                  >
-                    <View
-                      className="overflow-hidden rounded-[30px] bg-[#2B2233]"
-                      style={[heroShadowStyle, { width: routeCardWidth }]}
+                {visibleRoutes.map((route) => {
+                  const selected = route.routeId === selectedRouteId;
+
+                  return (
+                    <Pressable
+                      className={`flex-row items-center rounded-[18px] border px-3 ${
+                        selected
+                          ? 'border-[#D8C7FB] bg-[#F9F5FF]'
+                          : 'border-[#EEF1F4] bg-white'
+                      }`}
+                      key={route.routeId}
+                      onPress={() => handleRouteRowPress(route)}
+                      style={{ height: placeRowHeight }}
                     >
                       <Image
                         source={getRouteImage(route)}
                         contentFit="cover"
-                        transition={220}
+                        transition={160}
                         cachePolicy="memory-disk"
-                        style={{ height: 220, width: '100%' }}
+                        style={{ borderRadius: 14, height: 70, width: 70 }}
                       />
-                      <LinearGradient
-                        colors={[
-                          'rgba(36, 28, 44, 0.12)',
-                          'rgba(36, 28, 44, 0.58)',
-                          'rgba(36, 28, 44, 0.96)',
-                        ]}
-                        start={{ x: 0.5, y: 0 }}
-                        end={{ x: 0.5, y: 1 }}
-                        className="absolute inset-0 px-5 py-5"
-                      >
-                        <View className="flex-1 justify-end gap-3">
-                          <Text className="text-[12px] font-semibold uppercase tracking-[0.8px] text-white/70">
-                            {t('explore.routes.heritageLabel')} ·{' '}
-                            {getDifficultyLabel(route.difficulty, t)}
-                          </Text>
-                          <Text className="text-[24px] font-extrabold leading-[30px] text-white" numberOfLines={2}>
-                            {route.routeName}
-                          </Text>
-                          <Text className="text-[13px] leading-5 text-white/85" numberOfLines={2}>
-                            {route.description || t('explore.routes.descriptionFallback')}
-                          </Text>
-                          <View className="flex-row flex-wrap gap-2 pt-1">
-                            {[
-                              `${getRouteStopCount(route)} ${t('explore.routes.stops')}`,
-                              `${route.totalDistance || 0} km`,
-                              `${route.estimateTime || 0} phút`,
-                            ].map((tag) => (
-                              <View key={tag} className="rounded-full bg-white/15 px-3 py-1.5">
-                                <Text className="text-[12px] font-semibold text-white">{tag}</Text>
-                              </View>
-                            ))}
-                          </View>
-                          <View className="flex-row items-center justify-between pt-1">
-                            <Pressable
-                              onPress={() => openRoute(route.routeId)}
-                              className="rounded-full bg-white px-4 py-2.5"
-                            >
-                              <Text className="text-[13px] font-extrabold text-[#EB489B]">
-                                {t('explore.routes.viewRoute')}
-                              </Text>
-                            </Pressable>
-                            <View className="rounded-full bg-[#FFF7E8] px-3 py-1.5">
-                              <Text className="text-[11px] font-extrabold text-[#D97706]">
-                                +{route.xp} XP
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-                      </LinearGradient>
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
 
-            {apiRoutes.length > 1 ? (
-              <View className="flex-row items-center justify-center gap-2">
-                {apiRoutes.map((_, index) => (
-                  <View
-                    key={index}
-                    className={`rounded-full ${
-                      index === activeRouteIndex
-                        ? 'h-2.5 w-8 bg-[#EB489B]'
-                        : 'h-2.5 w-2.5 bg-[#F3C9D9]'
-                    }`}
-                  />
-                ))}
-              </View>
-            ) : null}
-          </View>
-
-          <View className="gap-4">
-            <Text className={sectionTitleClassName}>
-              {t('explore.places.nearYou')}
-            </Text>
-
-            {/* Bộ lọc chủ đề đứng ngay trên danh sách nó lọc, thay vì nằm tận
-                đầu màn hình cách đó hai section. */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingVertical: 2 }}
-            >
-              {categories.map((category) => {
-                const selected = category.key === activeCategory;
-                return (
-                  <Pressable
-                    key={category.key}
-                    onPress={() => setActiveCategory(category.key)}
-                    className={`mr-2.5 rounded-full border px-4 py-2 ${
-                      selected
-                        ? 'border-[#EB489B] bg-[#FDEBF3]'
-                        : 'border-[#EEF1F4] bg-white'
-                    }`}
-                  >
-                    <Text
-                      className={`text-[13px] font-bold ${
-                        selected ? 'text-[#EB489B]' : 'text-[#8E869A]'
-                      }`}
-                    >
-                      {category.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {isPlacesLoading ? (
-              <View className="items-center py-8">
-                <ActivityIndicator color="#EB489B" />
-              </View>
-            ) : filteredPlaces.length === 0 ? (
-              <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
-                <Text className="text-[15px] font-bold text-[#3B4454]">
-                  {t('explore.places.emptyTitle')}
-                </Text>
-                <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
-                  {t('explore.places.emptyDescription')}
-                </Text>
-              </View>
-            ) : (
-              <View className="gap-4">
-                {filteredPlaces.map((place) => (
-                  <Pressable
-                    key={place.id}
-                    className="overflow-hidden rounded-[22px] border border-[#EEF1F4] bg-white"
-                    onPress={() => openPlace(place)}
-                    style={cardShadowStyle}
-                  >
-                    <Image
-                      source={place.imageUri}
-                      contentFit="cover"
-                      style={{ height: 130, width: '100%' }}
-                    />
-                    <View className="px-4 py-4">
-                      <View className="flex-row items-center justify-between gap-3">
+                      <View className="ml-3 flex-1">
                         <Text
-                          className="flex-1 text-[15px] font-extrabold text-[#2B2233]"
+                          className="text-[14px] font-extrabold text-[#2B2233]"
                           numberOfLines={1}
                         >
-                          {place.title}
+                          {route.routeName}
                         </Text>
-                        <View className="rounded-full bg-[#FFF7E8] px-2.5 py-1">
-                          <Text className="text-[11px] font-extrabold text-[#D97706]">
-                            {place.reward} XP
-                          </Text>
+
+                        <Text className="mt-0.5 text-[12px] text-[#8E869A]" numberOfLines={1}>
+                          {`${getRouteStopCount(route)} ${t('explore.routes.stops')} · ${route.totalDistance || 0} km · ${route.estimateTime || 0} ${t('explore.routes.minutes')}`}
+                        </Text>
+
+                        <View className="mt-1.5 flex-row items-center gap-2">
+                          <View className="rounded-full bg-[#FFF7E8] px-2 py-[3px]">
+                            <Text className="text-[10px] font-extrabold text-[#D97706]">
+                              +{route.xp} XP
+                            </Text>
+                          </View>
+
+                          {selected ? (
+                            <Text className="text-[11px] font-extrabold text-[#7C3AED]">
+                              {t('explore.sheet.viewDetail')} ›
+                            </Text>
+                          ) : null}
                         </View>
                       </View>
-                      <Text className="mt-1 text-[13px] text-[#8E869A]" numberOfLines={1}>
-                        {place.category} · {place.badge}
-                      </Text>
-                      <View className="mt-3 flex-row items-center justify-between">
-                        <View className="flex-row items-center gap-1.5">
-                          <SymbolView
-                            name={{ ios: 'star.fill', android: 'star', web: 'star' }}
-                            size={13}
-                            tintColor="#F58752"
-                          />
-                          <Text className="text-[13px] font-bold text-[#2B2233]">
-                            {place.rating}
-                          </Text>
-                          <Text className="text-[12px] text-[#8E869A]">
-                            {t('home.nearby.reviewCount', { value: place.reviews })}
-                          </Text>
-                        </View>
-                        <View className="flex-row items-center gap-1">
-                          <SymbolView
-                            name={{ ios: 'location.fill', android: 'place', web: 'place' }}
-                            size={12}
-                            tintColor="#8E869A"
-                          />
-                          <Text className="text-[12px] text-[#8E869A]">{place.distance}</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </Pressable>
-                ))}
-              </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
             )}
-          </View>
+          </ExploreBottomSheet>
         </View>
-      </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
-

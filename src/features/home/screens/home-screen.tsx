@@ -1744,6 +1744,8 @@ export default function HomeScreen() {
           return;
         }
 
+        // Chỉ lấy tuyến OFFICIAL, khớp với tab "Chính thức" ở màn Hành trình -
+        // trước đây không truyền `type` nên carousel trộn lẫn cả tuyến cộng đồng.
         const routePage = await searchRoutes({
           accessToken,
           page: 0,
@@ -1751,6 +1753,7 @@ export default function HomeScreen() {
           sortDirection: "DESC",
           status: "PUBLISHED",
           tokenType: authSession.tokenType,
+          type: "OFFICIAL",
         });
 
         if (!isActive) {

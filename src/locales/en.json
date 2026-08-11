@@ -397,56 +397,51 @@
     }
   },
   "explore": {
-    "greeting": "Hello {{name}}",
-    "readyToExplore": "Ready to explore",
     "categories": {
-      "all": "All",
-      "history": "History",
-      "architecture": "Architecture",
-      "culture": "Culture",
-      "cuisine": "Cuisine",
       "heritage": "Heritage"
-    },
-    "premium": {
-      "title": "CultureQuest Premium",
-      "subtitle": "Explore More",
-      "explorer": "Premium Explorer",
-      "activeTitle": "Your account is Premium",
-      "activeDescription": "Exclusive routes, AI planning, live journey recording and an ad-free experience are unlocked.",
-      "upsellDescription": "Unlock exclusive routes, earn more XP and enjoy an ad-free experience.",
-      "cta": "See Premium benefits"
-    },
-    "features": {
-      "userPlan": "User Plan",
-      "record": "Record",
-      "routes": "Routes"
     },
     "search": {
       "placeholder": "Search spots, routes, challenges..."
     },
-    "map": {
-      "showingRoute": "Showing route",
-      "showingPlaces": "Showing places",
-      "title": "Places map",
-      "summary": "{{places}} places · {{routes}} routes"
-    },
     "places": {
-      "nearYou": "Near you",
-      "viewAll": "View all places",
-      "emptyTitle": "No matching places",
-      "emptyDescription": "No places belong to the selected theme."
+      "checkedIn": "Visited",
+      "loadError": "Could not load places near you."
     },
     "routes": {
-      "title": "Suggested Routes",
-      "viewAll": "View all routes",
       "stops": "stops",
-      "startJourney": "Start Journey",
-      "count": "{{count}} routes",
       "emptyTitle": "No routes yet",
       "emptyDescription": "No published routes are available yet.",
-      "heritageLabel": "Heritage route",
-      "descriptionFallback": "Explore a curated heritage route.",
-      "viewRoute": "View route"
+      "minutes": "min",
+      "loadError": "Could not load routes from the server."
+    },
+    "a11y": {
+      "notifications": "Open notifications",
+      "recenter": "Back to my location"
+    },
+    "filters": {
+      "radius": "{{value}} km",
+      "notVisited": "Not visited",
+      "allTags": "All"
+    },
+    "sheet": {
+      "placesCount": "{{count}} places",
+      "routesCount": "{{count}} routes",
+      "viewDetail": "View details",
+      "showingRoute": "Viewing route {{name}}",
+      "clearRoute": "Clear",
+      "emptyPlacesTitle": "No matching places",
+      "emptyPlacesDescription": "No places found within {{radius}} km using the current filters.",
+      "tab": {
+        "places": "Places",
+        "official": "Official",
+        "community": "Community"
+      }
+    },
+    "actions": {
+      "plan": "Plan",
+      "record": "Record journey",
+      "planPremiumFeature": "Journey planning (User Plan)",
+      "recordPremiumFeature": "Personal journey recording (Record Journey)"
     }
   },
   "community": {
