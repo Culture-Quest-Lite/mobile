@@ -1195,6 +1195,7 @@ export default function ProfileScreen() {
     tab === "pending-posts"
       ? "Bài viết riêng tư & chờ duyệt"
       : "Bài viết của bạn";
+  const isLoadingVisiblePosts = isLoading && visiblePosts.length === 0;
 
   return (
     <SafeAreaView className="flex-1 bg-[#F7F8FC]" edges={["left", "right"]}>
@@ -1348,7 +1349,12 @@ export default function ProfileScreen() {
 
           <View className="mt-4">
             {tab === "posts" || tab === "pending-posts" ? (
-              visiblePosts.length === 0 ? (
+              isLoadingVisiblePosts ? (
+                <View>
+                  <ProfilePostsSectionHeader title={postSectionTitle} />
+                  <ProfileSectionLoading />
+                </View>
+              ) : visiblePosts.length === 0 ? (
                 <View>
                   <ProfilePostsSectionHeader title={postSectionTitle} />
                   <EmptyPosts tab={tab} />
@@ -1399,9 +1405,7 @@ export default function ProfileScreen() {
 
                 {isLoadingRouteParticipants &&
                 routeParticipants.length === 0 ? (
-                  <View className="items-center py-12">
-                    <ActivityIndicator color="#EB489B" />
-                  </View>
+                  <ProfileSectionLoading />
                 ) : routeParticipants.length === 0 ? (
                   <EmptyRoutes />
                 ) : (
@@ -2940,6 +2944,14 @@ function ProfilePostsSectionHeader({ title }: { title: string }) {
   return (
     <View className="mb-3 px-1">
       <Text className="text-[14px] font-semibold text-[#2B2233]">{title}</Text>
+    </View>
+  );
+}
+
+function ProfileSectionLoading() {
+  return (
+    <View className="items-center py-12">
+      <ActivityIndicator color="#EB489B" />
     </View>
   );
 }

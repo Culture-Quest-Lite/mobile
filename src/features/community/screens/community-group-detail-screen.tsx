@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Alert,
   BackHandler,
+  Image,
   ImageBackground,
   Modal,
   Pressable,
@@ -45,6 +46,10 @@ import {
 } from "../api/group-api";
 import { CommunityGroupStateCard } from "../components/community-group-ui";
 import {
+  getCachedCommunityGroupJourneySession,
+  removeCachedCommunityGroupJourneySession,
+} from "../data/community-group-journey-store";
+import {
   cacheCommunityGroupSession,
   getCachedCommunityGroupSession,
   removeCachedCommunityGroupSession,
@@ -52,6 +57,7 @@ import {
 import { buildCommunityInviteWebUrl } from "../lib/community-group-invite-links";
 
 const HERO_IMAGE = require("../../../../assets/images/hero.jpg");
+const GROUP_JOURNEY_EMPTY_IMAGE = require("../../../../assets/images/continnueroute.png");
 const detailTextMaxFontSizeMultiplier = 1.05;
 
 const palette = {
@@ -138,43 +144,26 @@ function formatGroupDate(
   const date = new Date(normalizedDateValue);
 
   if (Number.isNaN(date.getTime())) {
-    return normalizedDateValue.replace("T", " ");
+    return normalizedDateValue.slice(0, 10).replace(/-/g, "/");
   }
 
   return `${padDatePart(date.getDate())}/${padDatePart(
     date.getMonth() + 1,
-  )}/${date.getFullYear()} ${padDatePart(date.getHours())}:${padDatePart(
-    date.getMinutes(),
-  )}:${padDatePart(date.getSeconds())}`;
+  )}/${date.getFullYear()}`;
 }
 
-function resolveStatusChipPalette(status?: string | null) {
-  switch ((status ?? "").trim().toUpperCase()) {
-    case "ACTIVE":
-      return {
-        backgroundColor: "#EAF8EE",
-        dotColor: "#39C16C",
-        textColor: "#21A453",
-      };
-    default:
-      return {
-        backgroundColor: "#F8EEF4",
-        dotColor: palette.accentStrong,
-        textColor: "#8A5570",
-      };
+function formatJourneyStartedLabel(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "Vừa bắt đầu";
   }
-}
 
-function getLocalizedStatusLabel(
-  status: string | null | undefined,
-  t: (key: string) => string,
-) {
-  switch ((status ?? "").trim().toUpperCase()) {
-    case "ACTIVE":
-      return t("community.groupDetail.statusActive");
-    default:
-      return t("community.groupDetail.notUpdated");
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Vừa bắt đầu";
   }
+
+  return `${`${date.getHours()}`.padStart(2, "0")}:${`${date.getMinutes()}`.padStart(2, "0")} · ${`${date.getDate()}`.padStart(2, "0")}/${`${date.getMonth() + 1}`.padStart(2, "0")}`;
 }
 
 function GroupSection({
@@ -193,8 +182,8 @@ function GroupSection({
       }}
     >
       <Text
-        className="text-[14px] font-extrabold"
-        style={{ color: palette.primaryText, lineHeight: lineHeightFor(14) }}
+        className="text-[15px] font-extrabold"
+        style={{ color: palette.primaryText, lineHeight: lineHeightFor(15) }}
       >
         {title}
       </Text>
@@ -239,10 +228,10 @@ function GroupInfoRow({
 
       <View className="flex-1">
         <Text
-          className="text-[12px]"
+          className="text-[14px]"
           style={{
             color: palette.mutedText,
-            lineHeight: bodyLineHeightFor(12),
+            lineHeight: bodyLineHeightFor(14),
           }}
         >
           {label}
@@ -255,18 +244,18 @@ function GroupInfoRow({
           style={{ backgroundColor: badgeTone.background }}
         >
           <Text
-            className="text-right text-[13px] font-semibold"
-            style={{ color: badgeTone.text, lineHeight: bodyLineHeightFor(13) }}
+            className="text-right text-[14px]"
+            style={{ color: badgeTone.text, lineHeight: bodyLineHeightFor(14) }}
           >
             {value}
           </Text>
         </View>
       ) : (
         <Text
-          className="ml-3 text-right text-[13px] font-semibold"
+          className="ml-3 text-right text-[14px]"
           style={{
             color: palette.primaryText,
-            lineHeight: bodyLineHeightFor(13),
+            lineHeight: bodyLineHeightFor(14),
           }}
         >
           {value}
@@ -301,8 +290,8 @@ function GroupInviteSection({
     >
       <View className="flex-row items-center justify-between gap-3">
         <Text
-          className="flex-1 text-[14px] font-extrabold"
-          style={{ color: palette.primaryText, lineHeight: lineHeightFor(14) }}
+          className="flex-1 text-[15px] font-extrabold"
+          style={{ color: palette.primaryText, lineHeight: lineHeightFor(15) }}
         >
           {t("community.groupDetail.inviteSectionTitle")}
         </Text>
@@ -320,10 +309,10 @@ function GroupInviteSection({
               <ActivityIndicator color={palette.accentStrong} size="small" />
             ) : (
               <Text
-                className="text-[12px] font-extrabold"
+                className="text-[13px]"
                 style={{
                   color: palette.accentStrong,
-                  lineHeight: bodyLineHeightFor(12),
+                  lineHeight: bodyLineHeightFor(13),
                 }}
               >
                 {t("community.groupDetail.refreshLinkAction")}
@@ -353,9 +342,9 @@ function GroupInviteSection({
 
         <View className="flex-1">
           <Text
-            className="text-[13px]"
+            className="text-[14px]"
             selectable
-            style={{ color: "#4B5563", lineHeight: bodyLineHeightFor(13) }}
+            style={{ color: "#4B5563", lineHeight: bodyLineHeightFor(14) }}
           >
             {link}
           </Text>
@@ -383,15 +372,235 @@ function GroupInviteSection({
           tintColor={palette.accentStrong}
         />
         <Text
-          className="ml-1.5 text-[13px] font-extrabold"
+          className="ml-1.5 text-[14px]"
           style={{
             color: palette.accentStrong,
-            lineHeight: bodyLineHeightFor(13),
+            lineHeight: bodyLineHeightFor(14),
           }}
         >
           {copied
             ? t("community.groupDetail.linkCopied")
             : t("community.groupDetail.copyLink")}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function GroupJourneySection({
+  hasActiveJourney,
+  onPress,
+  routeName,
+  startedAtLabel,
+}: {
+  hasActiveJourney: boolean;
+  onPress?: (() => void) | undefined;
+  routeName?: string | null;
+  startedAtLabel?: string | null;
+}) {
+  if (!hasActiveJourney) {
+    return (
+      <View
+        className="rounded-[22px] border px-4 py-3"
+        style={{
+          backgroundColor: palette.surface,
+          borderColor: "#F5E6DA",
+        }}
+      >
+        <View className="flex-row items-start justify-between gap-3">
+          <Text
+            className="text-[15px] font-extrabold"
+            style={{
+              color: palette.primaryText,
+              lineHeight: lineHeightFor(15),
+            }}
+          >
+            Hành trình nhóm
+          </Text>
+
+          <View
+            className="rounded-full px-2.5 py-1"
+            style={{ backgroundColor: "#FFF1E8" }}
+          >
+            <Text
+              className="text-[10px]"
+              style={{ color: "#F47D52", lineHeight: lineHeightFor(10) }}
+            >
+              Chưa bắt đầu
+            </Text>
+          </View>
+        </View>
+
+        <View className="mt-3 flex-row items-center gap-3">
+          <Image
+            source={GROUP_JOURNEY_EMPTY_IMAGE}
+            resizeMode="contain"
+            style={{ height: 132, width: 150 }}
+          />
+
+          <View className="min-w-0 flex-1">
+            <Text
+              className="text-[14px]"
+              style={{
+                color: palette.primaryText,
+                lineHeight: lineHeightFor(14),
+              }}
+            >
+              Chưa có hành trình đang diễn ra
+            </Text>
+            <Text
+              className="mt-1 text-[13px]"
+              style={{
+                color: palette.mutedText,
+                lineHeight: bodyLineHeightFor(13),
+              }}
+            >
+              Sau khi bắt đầu hành trình cùng nhóm, vị trí live sẽ hiển thị tại
+              đây.
+            </Text>
+
+            <Pressable
+              className="mt-2.5 self-start rounded-[14px] px-3.5 py-2.5"
+              disabled={!onPress}
+              onPress={onPress}
+              style={({ pressed }) => ({
+                backgroundColor: "#FF7FA5",
+                opacity: !onPress ? 0.6 : pressed ? 0.84 : 1,
+              })}
+            >
+              <View className="flex-row items-center">
+                <SymbolView
+                  name={{
+                    android: "location_on",
+                    ios: "location.fill",
+                    web: "location_on",
+                  }}
+                  size={15}
+                  tintColor="#FFFFFF"
+                />
+                <Text
+                  className="ml-1.5 text-[14px]"
+                  style={{
+                    color: "#FFFFFF",
+                    lineHeight: bodyLineHeightFor(14),
+                  }}
+                >
+                  Bắt đầu hành trình
+                </Text>
+              </View>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      className="rounded-[22px] border px-4 py-3"
+      style={{
+        backgroundColor: palette.surface,
+        borderColor: "#F5D7E2",
+      }}
+    >
+      <View className="flex-row items-start justify-between gap-3">
+        <Text
+          className="text-[15px] font-extrabold"
+          style={{ color: palette.primaryText, lineHeight: lineHeightFor(15) }}
+        >
+          Hành trình nhóm
+        </Text>
+
+        <View
+          className="flex-row items-center rounded-full px-2.5 py-1"
+          style={{
+            backgroundColor: "#EAF8EE",
+          }}
+        >
+          <View
+            className="mr-1.5 h-2 w-2 rounded-full"
+            style={{ backgroundColor: "#2FB861" }}
+          />
+          <Text
+            className="text-[11px]"
+            style={{
+              color: "#21A453",
+              lineHeight: lineHeightFor(11),
+            }}
+          >
+            Đang diễn ra
+          </Text>
+        </View>
+      </View>
+
+      <View className="mt-3 flex-row items-center">
+        <SymbolView
+          name={{
+            android: "route",
+            ios: "map.fill",
+            web: "route",
+          }}
+          size={14}
+          tintColor={palette.mutedText}
+        />
+        <Text
+          className="ml-1.5 text-[14px]"
+          style={{
+            color: palette.mutedText,
+            lineHeight: lineHeightFor(14),
+          }}
+        >
+          {`Nhóm đang đi route ${routeName ?? "Hành trình nhóm"}`}
+        </Text>
+      </View>
+
+      <View className="mt-2 flex-row items-center">
+        <SymbolView
+          name={{
+            android: "schedule",
+            ios: "clock.fill",
+            web: "schedule",
+          }}
+          size={14}
+          tintColor="#F37E8E"
+        />
+        <Text
+          className="ml-1.5 text-[14px]"
+          style={{
+            color: palette.mutedText,
+            lineHeight: bodyLineHeightFor(14),
+          }}
+        >
+          {`Bắt đầu tham gia:  ${startedAtLabel ?? "vừa bắt đầu"}`}
+        </Text>
+      </View>
+
+      <Pressable
+        className="mt-4 flex-row items-center justify-center rounded-[14px] px-3 py-3"
+        disabled={!onPress}
+        onPress={onPress}
+        style={({ pressed }) => ({
+          backgroundColor: "#FFF5F8",
+          opacity: !onPress ? 0.72 : pressed ? 0.84 : 1,
+        })}
+      >
+        <SymbolView
+          name={{
+            android: "location_on",
+            ios: "location.fill",
+            web: "location_on",
+          }}
+          size={16}
+          tintColor={palette.accentStrong}
+        />
+        <Text
+          className="ml-1.5 text-[14px]"
+          style={{
+            color: palette.accentStrong,
+            lineHeight: bodyLineHeightFor(14),
+          }}
+        >
+          Theo dõi live vị trí thành viên
         </Text>
       </Pressable>
     </View>
@@ -699,6 +908,9 @@ export default function CommunityGroupDetailScreen() {
   );
 
   const displayGroup = groupDetail ?? cachedGroupSession;
+  const cachedJourneySession =
+    getCachedCommunityGroupJourneySession(resolvedRouteValue) ??
+    getCachedCommunityGroupJourneySession(resolvedGroupId);
   const inviteWebUrl = !displayGroup?.shareToken
     ? null
     : (cachedGroupSession?.inviteWebUrl ??
@@ -774,6 +986,27 @@ export default function CommunityGroupDetailScreen() {
     );
   };
 
+  const handleOpenGroupJourney = () => {
+    const nextShareToken = displayGroup?.shareToken ?? resolvedRouteValue;
+
+    if (!nextShareToken) {
+      appToast.error("Không xác định được nhóm để mở hành trình.");
+      return;
+    }
+
+    const routeName = readMeaningfulText(cachedJourneySession?.routeName);
+    const routeId = readMeaningfulText(cachedJourneySession?.routeId);
+    const query = routeId
+      ? `?routeId=${encodeURIComponent(routeId)}&routeName=${encodeURIComponent(routeName ?? "Hành trình nhóm")}`
+      : routeName
+        ? `?routeName=${encodeURIComponent(routeName)}`
+        : "";
+
+    router.push(
+      `/community/group/${encodeURIComponent(nextShareToken)}/journey${query}` as Href,
+    );
+  };
+
   const handleLeaveGroup = async () => {
     if (isLeavePending) {
       return;
@@ -807,6 +1040,9 @@ export default function CommunityGroupDetailScreen() {
 
       removeCachedCommunityGroupSession(displayGroup?.shareToken);
       removeCachedCommunityGroupSession(leftGroup.shareToken);
+      removeCachedCommunityGroupJourneySession(displayGroup?.shareToken);
+      removeCachedCommunityGroupJourneySession(leftGroup.shareToken);
+      removeCachedCommunityGroupJourneySession(effectiveGroupId);
       setIsGroupMenuVisible(false);
       appToast.success(t("community.groupDetail.leaveSuccess"));
       router.replace("/bookings" as Href);
@@ -952,20 +1188,21 @@ export default function CommunityGroupDetailScreen() {
           id: displayGroup.createdBy,
         })
       : t("community.groupDetail.notUpdated");
-  const statusChipPalette = resolveStatusChipPalette(displayGroup.status);
-  const statusLabel = getLocalizedStatusLabel(displayGroup.status, t);
   const totalMembersLabel =
     typeof displayGroup.totalMembers === "number"
       ? t("community.groupsScreen.memberCountLabel", {
           count: displayGroup.totalMembers,
         })
       : t("community.groupDetail.noDataYet");
+  const roleLabel = isLeader
+    ? t("community.groupMembers.roleLeader")
+    : t("community.groupMembers.roleMember");
   const requiredApprovalLabel =
     displayGroup.requiredApproval === null
       ? t("community.groupDetail.notUpdated")
       : displayGroup.requiredApproval
-        ? t("community.groupDetail.requiredApprovalYes")
-        : t("community.groupDetail.requiredApprovalNo");
+        ? t("community.groupsScreen.access.approvalRequired")
+        : t("community.groupsScreen.access.openJoin");
   const groupMenuActions = [
     {
       icon: "groups" as SymbolName,
@@ -1076,57 +1313,56 @@ export default function CommunityGroupDetailScreen() {
               borderColor: palette.border,
             }}
           >
-            <View className="flex-row items-center gap-2">
-              <Text
-                className="flex-1 text-[18px] font-semibold"
-                numberOfLines={2}
-                style={{
-                  color: palette.primaryText,
-                  lineHeight: lineHeightFor(18),
-                }}
-              >
-                {displayGroup.groupName ??
-                  t("community.groupDetail.defaultGroupName")}
-              </Text>
-
+            <View className="flex-row items-center">
               <View
-                className="rounded-full px-2 py-1"
-                style={{ backgroundColor: statusChipPalette.backgroundColor }}
+                className="mr-3 h-14 w-14 items-center justify-center rounded-[18px]"
+                style={{ backgroundColor: "#FFF3F7" }}
               >
-                <View className="flex-row items-center">
-                  <View
-                    className="mr-1.5 h-2 w-2 rounded-full"
-                    style={{ backgroundColor: statusChipPalette.dotColor }}
+                <SymbolView
+                  name={{
+                    ios: "person.3.fill",
+                    android: "groups",
+                    web: "groups",
+                  }}
+                  size={26}
+                  tintColor={palette.accentStrong}
+                />
+              </View>
+
+              <View className="min-w-0 flex-1">
+                <Text
+                  className="text-[21px] font-semibold"
+                  numberOfLines={2}
+                  style={{
+                    color: palette.primaryText,
+                    lineHeight: lineHeightFor(21),
+                  }}
+                >
+                  {displayGroup.groupName ??
+                    t("community.groupDetail.defaultGroupName")}
+                </Text>
+
+                <View className="mt-1.5 flex-row items-center">
+                  <SymbolView
+                    name={{
+                      ios: "person.2.fill",
+                      android: "groups",
+                      web: "groups",
+                    }}
+                    size={15}
+                    tintColor={palette.mutedText}
                   />
                   <Text
-                    className="text-[10px] font-extrabold"
-                    style={{ color: statusChipPalette.textColor, lineHeight: lineHeightFor(10) }}
+                    className="ml-1.5 text-[15px]"
+                    style={{
+                      color: palette.mutedText,
+                      lineHeight: bodyLineHeightFor(15),
+                    }}
                   >
-                    {statusLabel}
+                    {totalMembersLabel}
                   </Text>
                 </View>
               </View>
-            </View>
-
-            <View className="mt-1.5 flex-row items-center">
-              <SymbolView
-                name={{
-                  ios: "person.2.fill",
-                  android: "groups",
-                  web: "groups",
-                }}
-                size={14}
-                tintColor={palette.mutedText}
-              />
-              <Text
-                className="ml-1.5 text-[13px]"
-                style={{
-                  color: palette.mutedText,
-                  lineHeight: bodyLineHeightFor(13),
-                }}
-              >
-                {totalMembersLabel}
-              </Text>
             </View>
           </View>
 
@@ -1139,8 +1375,11 @@ export default function CommunityGroupDetailScreen() {
               }}
             >
               <Text
-                className="text-[12px]"
-                style={{ color: palette.warmText, lineHeight: bodyLineHeightFor(12) }}
+                className="text-[13px]"
+                style={{
+                  color: palette.warmText,
+                  lineHeight: bodyLineHeightFor(13),
+                }}
               >
                 {errorMessage}
               </Text>
@@ -1163,11 +1402,14 @@ export default function CommunityGroupDetailScreen() {
                     : t("community.groupDetail.notUpdated")
                 }
               />
+              <GroupInfoRow icon="badge" label="Vai trò" value={roleLabel} />
               <GroupInfoRow
                 icon="shield"
                 label={t("community.groupDetail.requiredApprovalLabel")}
                 tone={
-                  displayGroup.requiredApproval === false ? "success" : undefined
+                  displayGroup.requiredApproval === false
+                    ? "success"
+                    : undefined
                 }
                 value={requiredApprovalLabel}
               />
@@ -1177,13 +1419,18 @@ export default function CommunityGroupDetailScreen() {
                 label={t("community.groupDetail.createdAtLabel")}
                 value={formatGroupDate(displayGroup.createdAt, t)}
               />
-              <GroupInfoRow
-                hideDivider
-                icon="update"
-                label={t("community.groupDetail.updatedAtLabel")}
-                value={formatGroupDate(displayGroup.updatedAt, t)}
-              />
             </GroupSection>
+          </View>
+
+          <View className="mt-3.5">
+            <GroupJourneySection
+              hasActiveJourney={Boolean(cachedJourneySession)}
+              onPress={handleOpenGroupJourney}
+              routeName={readMeaningfulText(cachedJourneySession?.routeName)}
+              startedAtLabel={formatJourneyStartedLabel(
+                cachedJourneySession?.startedAt,
+              )}
+            />
           </View>
 
           {inviteWebUrl ? (
@@ -1207,8 +1454,11 @@ export default function CommunityGroupDetailScreen() {
           ) : null}
 
           <Text
-            className="mt-4 text-center text-[11px]"
-            style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(11) }}
+            className="mt-4 text-center text-[12px]"
+            style={{
+              color: palette.mutedText,
+              lineHeight: bodyLineHeightFor(12),
+            }}
           >
             {t("community.groupDetail.footerNote")}
           </Text>

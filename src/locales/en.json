@@ -532,8 +532,8 @@
         "default": "Community group"
       },
       "access": {
-        "approvalRequired": "Leader approval required",
-        "openJoin": "Open to join"
+        "approvalRequired": "Approval required to join",
+        "openJoin": "Free to join"
       },
       "memberCountLabel": "{{count}} members",
       "heroTitle": "Your Groups",
@@ -784,8 +784,8 @@
       "creatorFallback": "Explorer #{{id}}",
       "notUpdated": "Not updated yet",
       "noDataYet": "No data yet",
-      "requiredApprovalYes": "Yes",
-      "requiredApprovalNo": "No",
+      "requiredApprovalYes": "Approval required to join",
+      "requiredApprovalNo": "Free to join",
       "viewMembersAction": "View group members",
       "leavingAction": "Leaving...",
       "infoSectionTitle": "Group information",

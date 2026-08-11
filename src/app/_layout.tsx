@@ -173,6 +173,7 @@ export default function RootLayout() {
             <Stack.Screen name="community/group-created/[shareToken]" />
             <Stack.Screen name="community/groups" />
             <Stack.Screen name="community/group/[shareToken]" />
+            <Stack.Screen name="community/group/[shareToken]/journey" />
             <Stack.Screen name="community/group/[shareToken]/manage" />
             <Stack.Screen name="community/group/[shareToken]/members" />
             <Stack.Screen name="community/group/[shareToken]/settings" />

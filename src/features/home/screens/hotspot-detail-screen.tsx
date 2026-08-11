@@ -67,6 +67,7 @@ import {
 } from "../api/get-hotspot-reviews";
 import type { NearbyHotspotDto } from "../api/get-nearby-hotspots";
 import { likeReview } from "../api/like-review";
+import { reportReview } from "../api/report-review";
 import { deleteReview } from "../api/review-mutations";
 import {
   HiddenStoryUnlockedContent,
@@ -74,6 +75,12 @@ import {
   hiddenStoryActionGradientColors,
 } from "../components/hidden-story-unlocked-content";
 import { HotspotGpsCheckinOverlay } from "../components/hotspot-gps-checkin-overlay";
+import {
+  buildReviewReportReasonItems,
+  ReviewReportOptionsSheet,
+  ReviewReportReasonComposer,
+  type ReviewReportReasonItem,
+} from "../components/review-report-sheet";
 import { ReviewDeleteDialog } from "../components/review-delete-dialog";
 import { ReviewMediaViewer } from "../components/review-media-viewer";
 import { avatarImageUri } from "../data/home-screen.mock";
@@ -2147,6 +2154,16 @@ function PersonalExperienceCard({
     top: number;
   } | null>(null);
   const [viewerMediaIndex, setViewerMediaIndex] = useState<number | null>(null);
+  const [isReportReasonSheetVisible, setIsReportReasonSheetVisible] =
+    useState(false);
+  const [isReportDraftVisible, setIsReportDraftVisible] = useState(false);
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [reportDraft, setReportDraft] = useState("");
+  const authSession = useAuthSession();
+  const reviewReportReasonItems = useMemo(
+    () => buildReviewReportReasonItems(),
+    [],
+  );
   const hasSingleMedia = item.media.length === 1;
   const hasTwoMedia = item.media.length === 2;
   const hasThreeMedia = item.media.length === 3;
@@ -2201,9 +2218,10 @@ function PersonalExperienceCard({
   const canLike = likeablePostId !== null || likeableReviewId !== null;
   const manageableReview = item.review?.isOwner ? item.review : null;
   const reportableReview = item.review ?? null;
+  const isReviewMenuDisabled = isReviewActionPending || isSubmittingReport;
 
   const handleOpenReviewMenu = (event: GestureResponderEvent) => {
-    if (isReviewActionPending || reportableReview === null) {
+    if (isReviewMenuDisabled || reportableReview === null) {
       return;
     }
 
@@ -2230,14 +2248,95 @@ function PersonalExperienceCard({
     setReviewMenuAnchor({ left, top });
   };
 
-  const handleReportReview = () => {
+  const handleOpenReportReview = () => {
     setReviewMenuAnchor(null);
-
-    Alert.alert(
-      "Đã ghi nhận báo cáo",
-      "Cảm ơn bạn. Chúng tôi sẽ xem xét bài đánh giá này sớm nhất có thể.",
-    );
+    setReportDraft("");
+    setIsReportDraftVisible(false);
+    setIsReportReasonSheetVisible(true);
   };
+
+  const handleCloseReportReview = (force = false) => {
+    if (!force && isSubmittingReport) {
+      return;
+    }
+
+    setIsReportReasonSheetVisible(false);
+    setIsReportDraftVisible(false);
+    setReportDraft("");
+  };
+
+  const handleSelectReportReason = (reason: ReviewReportReasonItem) => {
+    if (reason.isFreeText) {
+      setIsReportDraftVisible(true);
+      return;
+    }
+
+    void handleSubmitReportReview(reason.key);
+  };
+
+  async function handleSubmitReportReview(comment: string) {
+    const reviewId = reportableReview?.reviewId ?? null;
+    const normalizedComment = comment.trim();
+
+    if (!normalizedComment) {
+      return;
+    }
+
+    if (typeof reviewId !== "number" || reviewId <= 0) {
+      handleCloseReportReview();
+      Alert.alert(
+        "Không thể gửi báo cáo",
+        "Không xác định được bài đánh giá cần báo cáo.",
+      );
+      return;
+    }
+
+    if (!authSession.isAuthenticated) {
+      handleCloseReportReview();
+      Alert.alert(
+        "Cần đăng nhập",
+        "Bạn cần đăng nhập để báo cáo bài đánh giá này.",
+      );
+      return;
+    }
+
+    const accessToken = await getValidAccessToken();
+
+    if (!accessToken) {
+      handleCloseReportReview();
+      Alert.alert(
+        "Phiên đăng nhập hết hạn",
+        "Vui lòng đăng nhập lại trước khi gửi báo cáo.",
+      );
+      return;
+    }
+
+    setIsSubmittingReport(true);
+
+    try {
+      await reportReview({
+        accessToken,
+        comment: normalizedComment,
+        reviewId,
+        tokenType: authSession.tokenType,
+      });
+
+      handleCloseReportReview(true);
+      Alert.alert(
+        "Đã ghi nhận báo cáo",
+        "Cảm ơn bạn. Chúng tôi sẽ xem xét bài đánh giá này sớm nhất có thể.",
+      );
+    } catch (error) {
+      Alert.alert(
+        "Không thể gửi báo cáo",
+        error instanceof Error
+          ? error.message
+          : "Đã có lỗi xảy ra khi gửi báo cáo bài đánh giá.",
+      );
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  }
 
   return (
     <View
@@ -2272,14 +2371,14 @@ function PersonalExperienceCard({
           <Pressable
             accessibilityLabel="Mở tùy chọn bài đánh giá"
             accessibilityRole="button"
-            accessibilityState={{ disabled: isReviewActionPending }}
+            accessibilityState={{ disabled: isReviewMenuDisabled }}
             className="ml-1 h-9 w-9 items-center justify-center rounded-full"
-            disabled={isReviewActionPending}
+            disabled={isReviewMenuDisabled}
             hitSlop={8}
             onPress={handleOpenReviewMenu}
-            style={{ opacity: isReviewActionPending ? 0.5 : 1 }}
+            style={{ opacity: isReviewMenuDisabled ? 0.5 : 1 }}
           >
-            {isReviewActionPending ? (
+            {isReviewMenuDisabled ? (
               <ActivityIndicator color="#8A7B83" size="small" />
             ) : (
               <SymbolView
@@ -2298,7 +2397,13 @@ function PersonalExperienceCard({
 
       <Modal
         animationType="fade"
-        onRequestClose={() => setReviewMenuAnchor(null)}
+        onRequestClose={() => {
+          if (isReviewMenuDisabled) {
+            return;
+          }
+
+          setReviewMenuAnchor(null);
+        }}
         statusBarTranslucent
         transparent
         visible={reviewMenuAnchor !== null}
@@ -2307,7 +2412,13 @@ function PersonalExperienceCard({
           <Pressable
             accessibilityLabel="Đóng tùy chọn bài đánh giá"
             className="absolute inset-0"
-            onPress={() => setReviewMenuAnchor(null)}
+            onPress={() => {
+              if (isReviewMenuDisabled) {
+                return;
+              }
+
+              setReviewMenuAnchor(null);
+            }}
           />
 
           {reviewMenuAnchor ? (
@@ -2376,7 +2487,7 @@ function PersonalExperienceCard({
                 <Pressable
                   accessibilityRole="button"
                   className="flex-row items-center px-4"
-                  onPress={handleReportReview}
+                  onPress={handleOpenReportReview}
                   style={{ height: 52 }}
                 >
                   <SymbolView
@@ -2397,6 +2508,35 @@ function PersonalExperienceCard({
           ) : null}
         </View>
       </Modal>
+
+      <ReviewReportOptionsSheet
+        bottomInset={insets.bottom}
+        isSubmitting={isSubmittingReport}
+        items={reviewReportReasonItems}
+        onClose={handleCloseReportReview}
+        onSelectItem={handleSelectReportReason}
+        title="Báo cáo đánh giá"
+        visible={reportableReview !== null && isReportReasonSheetVisible && !isReportDraftVisible}
+      />
+
+      <ReviewReportReasonComposer
+        bottomInset={insets.bottom}
+        draft={reportDraft}
+        isSubmitting={isSubmittingReport}
+        onBack={() => {
+          if (isSubmittingReport) {
+            return;
+          }
+
+          setIsReportDraftVisible(false);
+        }}
+        onChangeDraft={setReportDraft}
+        onClose={handleCloseReportReview}
+        onSubmit={() => {
+          void handleSubmitReportReview(reportDraft);
+        }}
+        visible={reportableReview !== null && isReportReasonSheetVisible && isReportDraftVisible}
+      />
 
       {hasRating ? (
         <View className="mt-1 flex-row items-center">

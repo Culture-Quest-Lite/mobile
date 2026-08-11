@@ -394,7 +394,7 @@ function StoryPhotoAlbum({
         <StoryAlbumTile
           imageUri={firstImage}
           onPress={() => onSelectImage(0)}
-          style={{ height: 224 }}
+          style={{ height: 252 }}
         />
       ) : null}
 
@@ -403,7 +403,7 @@ function StoryPhotoAlbum({
           <StoryAlbumTile
             imageUri={firstImage}
             onPress={() => onSelectImage(0)}
-            style={{ flex: 1, height: 192 }}
+            style={{ flex: 1, height: 216 }}
           />
 
           <View style={{ flex: 1, rowGap: 8 }}>
@@ -412,7 +412,7 @@ function StoryPhotoAlbum({
               onPress={() => onSelectImage(1)}
               style={{
                 flex: thirdImage ? undefined : 1,
-                height: thirdImage ? 92 : 192,
+                height: thirdImage ? 104 : 216,
               }}
             />
 
@@ -423,12 +423,48 @@ function StoryPhotoAlbum({
                 overlayLabel={
                   extraImageCount > 0 ? `+${extraImageCount}` : null
                 }
-                style={{ height: 92 }}
+                style={{ height: 104 }}
               />
             ) : null}
           </View>
         </View>
       ) : null}
+    </View>
+  );
+}
+
+function StorySectionHeader({
+  description,
+  icon,
+  title,
+}: {
+  description: string;
+  icon: SymbolName;
+  title: string;
+}) {
+  return (
+    <View className="flex-row items-start">
+      <View
+        className="h-10 w-10 items-center justify-center rounded-full"
+        style={{ backgroundColor: "#EEF4FF" }}
+      >
+        <SymbolView name={icon} size={18} tintColor="#4C6EDB" />
+      </View>
+
+      <View className="ml-3 flex-1">
+        <Text
+          className="text-[18px] font-semibold text-[#2D241D]"
+          style={{ lineHeight: lineHeightFor(18) }}
+        >
+          {title}
+        </Text>
+        <Text
+          className="mt-[-1px] text-[13px]"
+          style={{ color: "#7A6F67", lineHeight: lineHeightFor(13) }}
+        >
+          {description}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -950,11 +986,11 @@ export default function HotspotStoryDetailScreen() {
           <View
             style={{
               paddingHorizontal: ScreenHorizontalPadding,
-              paddingTop: 6,
+              paddingTop: 24,
             }}
           >
             <View>
-              <View className="mt-2 flex-row flex-wrap items-center gap-1">
+              <View className="mt-3 flex-row flex-wrap items-center gap-1">
                 {story.tagLabel ? (
                   <View className="rounded-full bg-[#FFF0F6] px-3 py-1.5">
                     <Text
@@ -968,13 +1004,13 @@ export default function HotspotStoryDetailScreen() {
               </View>
 
               <Text
-                className="mt-0 text-[22px] font-semibold text-[#2B2233]"
+                className="mt-1 text-[22px] font-semibold text-[#2B2233]"
                 style={{ lineHeight: lineHeightFor(22) }}
               >
                 {story.title}
               </Text>
 
-              <View className="mt-1">
+              <View className="mt-3">
                 <Text
                   className="text-[15px] text-[#6F657A]"
                   numberOfLines={isDescriptionExpanded ? undefined : 8}
@@ -1008,7 +1044,7 @@ export default function HotspotStoryDetailScreen() {
               </View>
             </View>
 
-            <View className="mt-4">
+            <View className="mt-6">
               <StoryPhotoAlbum
                 images={gallery}
                 onSelectImage={handleOpenImageViewer}
@@ -1016,6 +1052,93 @@ export default function HotspotStoryDetailScreen() {
             </View>
 
             <View className="mt-8">
+              <StorySectionHeader
+                description={
+                  story.videoDescription.trim() ||
+                  "Xem thêm tư liệu trực quan của câu chuyện này."
+                }
+                icon={
+                  {
+                    ios: "play.rectangle.fill",
+                    android: "smart_display",
+                    web: "smart_display",
+                  } as SymbolName
+                }
+                title={story.videoTitle.trim() || "Video câu chuyện"}
+              />
+
+              <View className="mt-4">
+                <View
+                  className="overflow-hidden rounded-[8px]"
+                  style={{ backgroundColor: palette.surfaceStrong }}
+                >
+                  {hasVideoUrl ? (
+                    <VideoView
+                      player={videoPlayer}
+                      contentFit="cover"
+                      nativeControls
+                      style={{ height: 200, width: "100%" }}
+                    />
+                  ) : (
+                    <Pressable
+                      accessibilityLabel="Mở ảnh toàn màn hình"
+                      accessibilityRole="button"
+                      disabled={gallery.length === 0}
+                      onPress={() => handleOpenImageViewer(activeIndex)}
+                    >
+                      <View>
+                        <Image
+                          source={heroImageSource}
+                          contentFit="cover"
+                          contentPosition="center"
+                          transition={150}
+                          cachePolicy="memory-disk"
+                          style={{ height: 190, width: "100%" }}
+                        />
+                        <View className="absolute inset-0 items-center justify-center bg-black/28">
+                          <View className="h-14 w-14 items-center justify-center rounded-full bg-white/90">
+                            <SymbolView
+                              name={
+                                {
+                                  ios: "arrow.up.left.and.arrow.down.right",
+                                  android: "zoom_out_map",
+                                  web: "zoom_out_map",
+                                } as SymbolName
+                              }
+                              size={22}
+                              tintColor={palette.accent}
+                            />
+                          </View>
+                        </View>
+                      </View>
+                    </Pressable>
+                  )}
+                </View>
+
+                {videoStatusLabel ? (
+                  <Text
+                    className="mt-2 text-[15px]"
+                    style={{
+                      color: palette.mutedText,
+                      lineHeight: bodyLineHeightFor(15),
+                    }}
+                  >
+                    {videoStatusLabel}
+                  </Text>
+                ) : null}
+
+                {videoErrorMessage ? (
+                  <Text
+                    className="mt-1 text-[14px] text-[#C2410C]"
+                    style={{ lineHeight: lineHeightFor(14) }}
+                  >
+                    {videoErrorMessage}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+
+            <View className="mt-10">
               <StoryAudioOverviewCard
                 durationLabel={audioMetaDurationLabel}
                 hotspotName={hotspot.title}
@@ -1023,7 +1146,7 @@ export default function HotspotStoryDetailScreen() {
               />
             </View>
 
-            <View className="mt-8">
+            <View className="mt-5">
               <View
                 className="rounded-[16px] px-4 py-3"
                 style={{ backgroundColor: pageBackground }}
@@ -1205,7 +1328,7 @@ export default function HotspotStoryDetailScreen() {
             </View>
 
             {audioScript ? (
-              <View className="mt-3">
+              <View className="mt-5">
                 <Text
                   className="text-[18px] font-semibold text-[#201B18]"
                   style={{ lineHeight: lineHeightFor(18) }}
@@ -1251,72 +1374,6 @@ export default function HotspotStoryDetailScreen() {
               </View>
             ) : null}
 
-            <View className="mt-6">
-              <View
-                className="overflow-hidden rounded-[8px]"
-                style={{ backgroundColor: palette.surfaceStrong }}
-              >
-                {hasVideoUrl ? (
-                  <VideoView
-                    player={videoPlayer}
-                    contentFit="cover"
-                    nativeControls
-                    style={{ height: 200, width: "100%" }}
-                  />
-                ) : (
-                  <Pressable
-                    accessibilityLabel="Mở ảnh toàn màn hình"
-                    accessibilityRole="button"
-                    disabled={gallery.length === 0}
-                    onPress={() => handleOpenImageViewer(activeIndex)}
-                  >
-                    <View>
-                      <Image
-                        source={heroImageSource}
-                        contentFit="cover"
-                        contentPosition="center"
-                        transition={150}
-                        cachePolicy="memory-disk"
-                        style={{ height: 190, width: "100%" }}
-                      />
-                      <View className="absolute inset-0 items-center justify-center bg-black/28">
-                        <View className="h-14 w-14 items-center justify-center rounded-full bg-white/90">
-                          <SymbolView
-                            name={
-                              {
-                                ios: "arrow.up.left.and.arrow.down.right",
-                                android: "zoom_out_map",
-                                web: "zoom_out_map",
-                              } as SymbolName
-                            }
-                            size={22}
-                            tintColor={palette.accent}
-                          />
-                        </View>
-                      </View>
-                    </View>
-                  </Pressable>
-                )}
-              </View>
-
-              {videoStatusLabel ? (
-                <Text
-                  className="mt-2 text-[15px]"
-                  style={{ color: palette.mutedText, lineHeight: bodyLineHeightFor(15) }}
-                >
-                  {videoStatusLabel}
-                </Text>
-              ) : null}
-
-              {videoErrorMessage ? (
-                <Text
-                  className="mt-1 text-[14px] text-[#C2410C]"
-                  style={{ lineHeight: lineHeightFor(14) }}
-                >
-                  {videoErrorMessage}
-                </Text>
-              ) : null}
-            </View>
           </View>
         </ScrollView>
       </SafeAreaView>

@@ -507,7 +507,7 @@ export function buildHotspotThemeStoriesFromApi(
       tagLabel: nextTagLabel,
       title: nextTitle,
       videoDescription: videoUrl
-        ? "Video của story này đã sẵn sàng từ API."
+        ? "Xem đoạn video ngắn để cảm nhận rõ hơn về câu chuyện"
         : fallbackStory.videoDescription,
       videoDurationLabel: videoUrl ? "Video API" : fallbackStory.videoDurationLabel,
       videoPoster: nextGallery[0] ?? fallbackStory.videoPoster,
