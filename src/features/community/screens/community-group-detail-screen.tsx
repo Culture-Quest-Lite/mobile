@@ -11,7 +11,6 @@ import { useCallback, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
-  Alert,
   BackHandler,
   Image,
   ImageBackground,
@@ -27,6 +26,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import { appAlert } from "@/components/ui/app-dialog";
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { appToast } from "@/components/ui/app-toast";
 import { SymbolView, type SymbolName } from "@/components/ui/symbol-view";
@@ -1058,7 +1058,7 @@ export default function CommunityGroupDetailScreen() {
   };
 
   const handleConfirmLeaveGroup = () => {
-    Alert.alert(
+    appAlert.alert(
       t("community.groupDetail.leaveConfirmTitle"),
       t("community.groupDetail.leaveConfirmDescription"),
       [

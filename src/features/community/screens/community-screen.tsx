@@ -1,3 +1,4 @@
+import { appAlert } from "@/components/ui/app-dialog";
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar, UserAvatarFallback } from "@/components/ui/user-avatar";
@@ -15,7 +16,6 @@ import {
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Image,
   KeyboardAvoidingView,
@@ -1583,6 +1583,28 @@ export default function CommunityScreen() {
       },
     } as Href);
   }, [router]);
+  const promptCommunityLogin = useCallback(
+    (message: string) => {
+      appAlert.alert(
+        t("community.feed.loginRequiredTitle"),
+        message,
+        [
+          {
+            style: "cancel",
+            text: t("common.cancel"),
+          },
+          {
+            onPress: openCommunityLogin,
+            text: t("community.groups.loginAction"),
+          },
+        ],
+        {
+          tone: "info",
+        },
+      );
+    },
+    [openCommunityLogin, t],
+  );
   const handleOpenCreatePost = useCallback(() => {
     if (!isAuthenticated) {
       fadeShareBarText(1);
@@ -1628,7 +1650,7 @@ export default function CommunityScreen() {
         );
         setCommunityFeedStatus("error");
       } else {
-        Alert.alert(
+        appAlert.alert(
           t("community.feed.refreshErrorTitle"),
           error instanceof Error
             ? error.message
@@ -1881,7 +1903,7 @@ export default function CommunityScreen() {
     });
 
     if (!cachedGroup) {
-      Alert.alert(
+      appAlert.alert(
         t("community.groupsCommon.openErrorTitle"),
         t("community.groupsCommon.openErrorMessage"),
       );
@@ -2071,7 +2093,7 @@ export default function CommunityScreen() {
     }
 
     if (!trimmedComment) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.missingContentTitle"),
         t("community.feed.missingCommentMessage"),
       );
@@ -2081,7 +2103,7 @@ export default function CommunityScreen() {
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.sessionExpiredTitle"),
         t("community.feed.sessionExpiredComment"),
       );
@@ -2116,7 +2138,7 @@ export default function CommunityScreen() {
       setCommentDraft("");
       await handleReloadPostComments(postNumericId);
     } catch (error) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.commentSubmitErrorTitle"),
         error instanceof Error
           ? error.message
@@ -2143,14 +2165,14 @@ export default function CommunityScreen() {
     }
 
     if (!authSession.isAuthenticated) {
-      openCommunityLogin();
+      promptCommunityLogin(t("community.feed.loginRequiredLike"));
       return;
     }
 
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.sessionExpiredTitle"),
         t("community.feed.sessionExpiredLike"),
       );
@@ -2233,7 +2255,7 @@ export default function CommunityScreen() {
         }
       }
 
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.likeErrorTitle"),
         error instanceof Error
           ? error.message
@@ -2250,7 +2272,7 @@ export default function CommunityScreen() {
     const postNumericId = post.postNumericId;
 
     if (typeof postNumericId !== "number" || postNumericId <= 0) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.shareErrorTitle"),
         t("community.feed.shareInvalidIdMessage"),
       );
@@ -2258,7 +2280,7 @@ export default function CommunityScreen() {
     }
 
     if (!authSession.isAuthenticated) {
-      openCommunityLogin();
+      promptCommunityLogin(t("community.feed.loginRequiredShare"));
       return;
     }
 
@@ -2288,7 +2310,7 @@ export default function CommunityScreen() {
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.sessionExpiredTitle"),
         t("community.feed.sessionExpiredShare"),
       );
@@ -2356,7 +2378,7 @@ export default function CommunityScreen() {
           : t("community.feed.sharedPublicToast"),
       );
     } catch (error) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.shareErrorTitle"),
         error instanceof Error
           ? error.message
@@ -2371,7 +2393,7 @@ export default function CommunityScreen() {
     const postNumericId = post.postNumericId;
 
     if (typeof postNumericId !== "number" || postNumericId <= 0) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.editErrorTitle"),
         t("community.feed.editUnknownPostMessage"),
       );
@@ -2392,7 +2414,7 @@ export default function CommunityScreen() {
     const postNumericId = post.postNumericId;
 
     if (typeof postNumericId !== "number" || postNumericId <= 0) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.editErrorTitle"),
         t("community.feed.editVisibilityUnknownPostMessage"),
       );
@@ -2413,7 +2435,7 @@ export default function CommunityScreen() {
     const postNumericId = post.postNumericId;
 
     if (typeof postNumericId !== "number" || postNumericId <= 0) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.trashErrorTitle"),
         t("community.feed.trashInvalidIdMessage"),
       );
@@ -2473,7 +2495,7 @@ export default function CommunityScreen() {
 
   function handleOpenReportPost(post: CommunityFeedPost) {
     if (!authSession.isAuthenticated) {
-      openCommunityLogin();
+      promptCommunityLogin(t("community.feed.report.loginRequired"));
       return;
     }
 
@@ -2514,7 +2536,7 @@ export default function CommunityScreen() {
     if (typeof postNumericId !== "number" || postNumericId <= 0) {
       setReportPostTarget(null);
       setIsReportDraftVisible(false);
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.report.failureTitle"),
         t("community.feed.report.invalidPost"),
       );
@@ -2526,7 +2548,7 @@ export default function CommunityScreen() {
     if (!accessToken) {
       setReportPostTarget(null);
       setIsReportDraftVisible(false);
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.sessionExpiredTitle"),
         t("community.feed.report.sessionExpired"),
       );
@@ -2548,7 +2570,7 @@ export default function CommunityScreen() {
       setReportDraft("");
       showCommunityToast(t("community.feed.report.successToast"));
     } catch (error) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.report.failureTitle"),
         error instanceof Error
           ? error.message
@@ -2571,7 +2593,7 @@ export default function CommunityScreen() {
 
     if (!authSession.isAuthenticated) {
       setPostPendingDeletion(null);
-      openCommunityLogin();
+      promptCommunityLogin(t("community.feed.loginRequiredTrash"));
       return;
     }
 
@@ -2579,7 +2601,7 @@ export default function CommunityScreen() {
 
     if (!accessToken) {
       setPostPendingDeletion(null);
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.sessionExpiredTitle"),
         t("community.feed.sessionExpiredTrash"),
       );
@@ -2624,7 +2646,7 @@ export default function CommunityScreen() {
       setPostPendingDeletion(null);
       setCommunityToastMessage(t("community.feed.trashSuccessToast"));
     } catch (error) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.trashErrorTitle"),
         error instanceof Error
           ? error.message

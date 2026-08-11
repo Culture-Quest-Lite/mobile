@@ -401,51 +401,51 @@
     }
   },
   "explore": {
-    "greeting": "Chào {{name}}",
-    "readyToExplore": "Sẵn sàng khám phá",
     "categories": {
-      "all": "Tất cả",
-      "history": "Lịch sử",
-      "architecture": "Kiến trúc",
-      "culture": "Văn hoá",
-      "cuisine": "Ẩm thực",
       "heritage": "Di sản"
-    },
-    "featured": {
-      "title": "Nổi bật hôm nay"
-    },
-    "premium": {
-      "title": "CultureQuest Premium",
-      "subtitle": "Khám phá nhiều hơn",
-      "explorer": "Premium Explorer"
-    },
-    "features": {
-      "userPlan": "User Plan",
-      "record": "Record",
-      "routes": "Tuyến đường"
     },
     "search": {
       "placeholder": "Tìm điểm, tuyến, thử thách..."
     },
-    "map": {
-      "showingRoute": "Đang hiển thị tuyến",
-      "showingPlaces": "Đang hiển thị địa điểm"
-    },
-    "missions": {
-      "title": "Nhiệm vụ gần bạn",
-      "checkpoint": "Còn {{count}} checkpoint để mở huy hiệu",
-      "completeBefore": "Hoàn thành trước {{time}}",
-      "bonusReward": "Thưởng thêm khi check-in đúng giờ"
-    },
     "places": {
-      "nearYou": "Gần bạn",
-      "viewAll": "Xem tất cả địa điểm"
+      "checkedIn": "Đã đi",
+      "loadError": "Không thể tải địa điểm gần bạn."
     },
     "routes": {
-      "title": "Tuyến gợi ý",
-      "viewAll": "Xem tất cả tuyến",
       "stops": "điểm",
-      "startJourney": "Bắt đầu hành trình"
+      "emptyTitle": "Chưa có tuyến nào",
+      "emptyDescription": "Hệ thống chưa có tuyến nào được xuất bản.",
+      "minutes": "phút",
+      "loadError": "Không thể tải tuyến từ máy chủ."
+    },
+    "a11y": {
+      "notifications": "Mở thông báo",
+      "recenter": "Về vị trí của tôi"
+    },
+    "filters": {
+      "radius": "{{value}} km",
+      "notVisited": "Chưa đi",
+      "allTags": "Tất cả"
+    },
+    "sheet": {
+      "placesCount": "{{count}} địa điểm",
+      "routesCount": "{{count}} tuyến",
+      "viewDetail": "Xem chi tiết",
+      "showingRoute": "Đang xem tuyến {{name}}",
+      "clearRoute": "Bỏ chọn",
+      "emptyPlacesTitle": "Chưa có địa điểm phù hợp",
+      "emptyPlacesDescription": "Không tìm thấy địa điểm nào trong bán kính {{radius}} km với bộ lọc hiện tại.",
+      "tab": {
+        "places": "Địa điểm",
+        "official": "Chính thức",
+        "community": "Cộng đồng"
+      }
+    },
+    "actions": {
+      "plan": "Kế hoạch",
+      "record": "Ghi hành trình",
+      "planPremiumFeature": "Tạo kế hoạch hành trình (User Plan)",
+      "recordPremiumFeature": "Ghi hành trình cá nhân (Record Journey)"
     }
   },
   "community": {

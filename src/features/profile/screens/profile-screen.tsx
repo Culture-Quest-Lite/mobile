@@ -1,3 +1,4 @@
+import { appAlert } from "@/components/ui/app-dialog";
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -15,7 +16,6 @@ import {
 } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -875,7 +875,7 @@ export default function ProfileScreen() {
       }
 
       if (!authSession.isAuthenticated) {
-        Alert.alert(
+        appAlert.alert(
           "Cần đăng nhập",
           "Bạn cần đăng nhập để thả tim bài viết trong hồ sơ.",
         );
@@ -885,7 +885,7 @@ export default function ProfileScreen() {
       const accessToken = await getValidAccessToken();
 
       if (!accessToken) {
-        Alert.alert(
+        appAlert.alert(
           "Phiên đăng nhập hết hạn",
           "Vui lòng đăng nhập lại trước khi thả tim bài viết trong hồ sơ.",
         );
@@ -973,7 +973,7 @@ export default function ProfileScreen() {
           }
         }
 
-        Alert.alert(
+        appAlert.alert(
           "Không thể thả tim",
           nextError instanceof Error
             ? nextError.message

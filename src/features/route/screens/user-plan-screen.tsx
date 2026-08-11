@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { routeSystemAlert } from "@/features/route/components/route-system-alert";
 
 import {
   getValidAccessToken,
@@ -40,6 +39,7 @@ import {
   getDevelopmentLocationOverride,
   getDeviceCoordinate,
 } from "@/lib/location";
+import { appAlert } from "@/components/ui/app-dialog";
 
 type PlannedStop = AppMapPoint & {
   hotspotId?: number;
@@ -182,7 +182,7 @@ export default function UserPlanScreen() {
 
   function addStop(stop: PlannedStop) {
     if (stops.some((item) => String(item.id) === String(stop.id))) {
-      routeSystemAlert.alert("Địa điểm đã có", "Điểm này đã nằm trong kế hoạch.");
+      appAlert.alert("Địa điểm đã có", "Điểm này đã nằm trong kế hoạch.");
       return;
     }
     setStops((current) => [...current, stop]);
@@ -257,7 +257,7 @@ export default function UserPlanScreen() {
         await loadNearbyHotspots(coordinate.latitude, coordinate.longitude);
       } catch (error) {
         if (showError) {
-          routeSystemAlert.alert(
+          appAlert.alert(
             "Không thể lấy vị trí",
             error instanceof Error ? error.message : "Vui lòng thử lại.",
           );
@@ -442,7 +442,7 @@ export default function UserPlanScreen() {
   async function generateAiTextSuggestion() {
     const prompt = aiPrompt.trim();
     if (!prompt) {
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Nhập mô tả chuyến đi",
         "Ví dụ: Tôi muốn tham quan các địa điểm lịch sử trong một buổi sáng.",
       );
@@ -472,7 +472,7 @@ export default function UserPlanScreen() {
           : "Không tìm thấy hotspot phù hợp với mô tả hiện tại. Hãy thử mô tả rộng hơn.",
       );
     } catch (error) {
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Không thể nhận gợi ý",
         error instanceof Error ? error.message : "Vui lòng thử lại.",
       );
@@ -503,7 +503,7 @@ export default function UserPlanScreen() {
     );
     if (stops.length < 2) return;
     if (hotspotIds.length !== stops.length) {
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Chưa thể tối ưu",
       );
       return;
@@ -529,7 +529,7 @@ export default function UserPlanScreen() {
       setIsReviewed(false);
       setCurrentPlan(null);
     } catch (error) {
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Không thể tối ưu",
         error instanceof Error ? error.message : "Vui lòng thử lại.",
       );
@@ -546,7 +546,7 @@ export default function UserPlanScreen() {
         useCurrentLocationAsOrigin: true,
       });
     } catch (error) {
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Không thể mở Google Maps",
         error instanceof Error ? error.message : "Vui lòng thử lại.",
       );
@@ -558,7 +558,7 @@ export default function UserPlanScreen() {
       item.hotspotId ? [item.hotspotId] : [],
     );
     if (hotspotIds.length !== stops.length) {
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Không thể lưu kế hoạch",
         
       );
@@ -576,12 +576,12 @@ export default function UserPlanScreen() {
       });
       setCurrentPlan(plan);
       setIsReviewed(true);
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Đã tạo kế hoạch",
         `Kế hoạch #${plan.userPlanId} đã được lưu ở trạng thái ${plan.status}.`,
       );
     } catch (error) {
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Không thể tạo kế hoạch",
         error instanceof Error ? error.message : "Vui lòng thử lại.",
       );
@@ -599,12 +599,12 @@ export default function UserPlanScreen() {
         currentPlan.userPlanId,
       );
       setCurrentPlan(started);
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Đã bắt đầu hành trình",
         "Kế hoạch đã chuyển sang trạng thái STARTED.",
       );
     } catch (error) {
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Không thể bắt đầu",
         error instanceof Error ? error.message : "Vui lòng thử lại.",
       );

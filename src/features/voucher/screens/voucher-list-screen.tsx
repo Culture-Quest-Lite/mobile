@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Pressable,
   RefreshControl,
@@ -21,6 +21,7 @@ import {
   filterVouchersByKeyword,
   getAvailableVouchers,
   getVoucherImage,
+  groupVouchersByPartner,
   type Voucher,
 } from "../api/voucher-api";
 
@@ -36,6 +37,7 @@ export default function VoucherListScreen() {
   const authSession = useAuthSession();
   const [items, setItems] = useState<Voucher[]>([]);
   const [search, setSearch] = useState("");
+  const [partnerId, setPartnerId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,32 +46,42 @@ export default function VoucherListScreen() {
     router.push("/login?entry=home");
   };
 
+  const partnerGroups = useMemo(() => groupVouchersByPartner(items), [items]);
+
+  const visibleItems = useMemo(
+    () =>
+      partnerId === null
+        ? items
+        : items.filter((voucher) => voucher.partnerId === partnerId),
+    [items, partnerId],
+  );
+
   const load = useCallback(
     async (keyword = search, refresh = false) => {
-      if (!authSession.isAuthenticated) {
-        setItems([]);
-        setError(null);
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-
       refresh ? setRefreshing(true) : setLoading(true);
       setError(null);
 
       try {
-        const token = await getValidAccessToken();
-        if (!token) {
-          setItems([]);
-          return;
-        }
+        // `GET /api/vouchers/**` là public nên khách chưa đăng nhập vẫn xem
+        // được danh sách; token chỉ đính kèm khi đã đăng nhập.
+        const token = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
 
         const page = await getAvailableVouchers(
           { search: keyword, size: 50 },
           token,
         );
         // Backend `/available` chưa lọc theo từ khoá nên phải lọc lại ở client.
-        setItems(filterVouchersByKeyword(page.content ?? [], keyword));
+        const nextItems = filterVouchersByKeyword(page.content ?? [], keyword);
+        setItems(nextItems);
+        // Giữ nguyên quán đang chọn nếu quán đó vẫn còn voucher.
+        setPartnerId((current) =>
+          current !== null &&
+          nextItems.some((voucher) => voucher.partnerId === current)
+            ? current
+            : null,
+        );
       } catch (e) {
         setError(e instanceof Error ? e.message : "Không thể tải voucher.");
       } finally {
@@ -81,13 +93,7 @@ export default function VoucherListScreen() {
   );
 
   useEffect(() => {
-    if (authSession.isAuthenticated) {
-      void load("");
-    } else {
-      setLoading(false);
-      setItems([]);
-      setError(null);
-    }
+    void load("");
   }, [authSession.isAuthenticated]);
 
   return (
@@ -122,65 +128,91 @@ export default function VoucherListScreen() {
               Đổi điểm khám phá lấy ưu đãi từ đối tác
             </Text>
           </View>
+          {authSession.isAuthenticated ? (
+            <Pressable
+              className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF0F7]"
+              onPress={() => router.push("/vouchers/my")}
+            >
+              <SymbolView
+                name={{
+                  ios: "ticket.fill",
+                  android: "confirmation_number",
+                  web: "confirmation_number",
+                }}
+                size={19}
+                tintColor="#D93682"
+              />
+            </Pressable>
+          ) : null}
         </View>
 
-        {authSession.isAuthenticated ? (
-          <View className="mt-4 flex-row items-center rounded-2xl bg-[#F5F1F6] px-3">
-            <SymbolView
-              name={{ ios: "magnifyingglass", android: "search", web: "search" }}
-              size={18}
-              tintColor="#8E869A"
-            />
-            <TextInput
-              className="flex-1 px-3 py-3 text-[14px] text-[#2B2233]"
-              placeholder="Tìm voucher hoặc đối tác"
-              placeholderTextColor="#AAA2B3"
-              value={search}
-              onChangeText={setSearch}
-              onSubmitEditing={() => void load(search)}
-              returnKeyType="search"
-            />
-            <Pressable onPress={() => void load(search)}>
-              <Text className="font-bold text-[#EB489B]">Tìm</Text>
+        <View className="mt-4 flex-row items-center rounded-2xl bg-[#F5F1F6] px-3">
+          <SymbolView
+            name={{ ios: "magnifyingglass", android: "search", web: "search" }}
+            size={18}
+            tintColor="#8E869A"
+          />
+          <TextInput
+            className="flex-1 px-3 py-3 text-[14px] text-[#2B2233]"
+            placeholder="Tìm voucher hoặc đối tác"
+            placeholderTextColor="#AAA2B3"
+            value={search}
+            onChangeText={setSearch}
+            onSubmitEditing={() => void load(search)}
+            returnKeyType="search"
+          />
+          <Pressable onPress={() => void load(search)}>
+            <Text className="font-bold text-[#EB489B]">Tìm</Text>
+          </Pressable>
+        </View>
+
+        {partnerGroups.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="mt-3 -mx-4"
+            contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+          >
+            <Pressable
+              className={`rounded-full px-4 py-2 ${
+                partnerId === null ? "bg-[#EB489B]" : "bg-[#F5F1F6]"
+              }`}
+              onPress={() => setPartnerId(null)}
+            >
+              <Text
+                className={`text-[13px] font-bold ${
+                  partnerId === null ? "text-white" : "text-[#6F6877]"
+                }`}
+              >
+                Tất cả quán ({items.length})
+              </Text>
             </Pressable>
-          </View>
+            {partnerGroups.map((group) => {
+              const active = group.partnerId === partnerId;
+              return (
+                <Pressable
+                  key={group.partnerId}
+                  className={`rounded-full px-4 py-2 ${
+                    active ? "bg-[#EB489B]" : "bg-[#F5F1F6]"
+                  }`}
+                  onPress={() => setPartnerId(active ? null : group.partnerId)}
+                >
+                  <Text
+                    className={`text-[13px] font-bold ${
+                      active ? "text-white" : "text-[#6F6877]"
+                    }`}
+                    numberOfLines={1}
+                  >
+                    {group.partnerName} ({group.count})
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         ) : null}
       </View>
 
-      {!authSession.isAuthenticated ? (
-        <View className="flex-1 items-center justify-center px-6">
-          <View
-            className="w-full items-center rounded-[28px] bg-white px-6 py-8"
-            style={{ elevation: 2 }}
-          >
-            <View className="h-20 w-20 items-center justify-center rounded-full bg-[#FFF0F7]">
-              <SymbolView
-                name={{
-                  ios: "person.crop.circle.badge.exclamationmark",
-                  android: "person",
-                  web: "person",
-                }}
-                size={42}
-                tintColor="#EB489B"
-              />
-            </View>
-            <Text className="mt-5 text-center text-[21px] font-black text-[#2B2233]">
-              Bạn cần đăng nhập
-            </Text>
-            <Text className="mt-2 text-center text-[14px] leading-6 text-[#8E869A]">
-              Đăng nhập để xem voucher đang có và sử dụng điểm khám phá để đổi ưu đãi.
-            </Text>
-            <Pressable
-              className="mt-6 w-full items-center rounded-full bg-[#EB489B] py-4"
-              onPress={goToLogin}
-            >
-              <Text className="text-[16px] font-black text-white">
-                Đăng nhập ngay
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : loading ? (
+      {loading ? (
         <AppLoadingScreen mode="embedded" />
       ) : (
         <ScrollView
@@ -203,7 +235,24 @@ export default function VoucherListScreen() {
             </Pressable>
           ) : null}
 
-          {!error && items.length === 0 ? (
+          {!authSession.isAuthenticated ? (
+            <Pressable
+              className="mb-3 flex-row items-center rounded-2xl bg-[#FFF0F7] p-4"
+              onPress={goToLogin}
+            >
+              <View className="flex-1 pr-3">
+                <Text className="text-[14px] font-black text-[#2B2233]">
+                  Đăng nhập để đổi voucher
+                </Text>
+                <Text className="mt-1 text-[12px] text-[#8E869A]">
+                  Bạn đang xem ở chế độ khách — đăng nhập để dùng điểm khám phá.
+                </Text>
+              </View>
+              <Text className="font-bold text-[#EB489B]">Đăng nhập</Text>
+            </Pressable>
+          ) : null}
+
+          {!error && visibleItems.length === 0 ? (
             <View className="items-center py-20">
               <Text className="text-[18px] font-black text-[#2B2233]">
                 Chưa có voucher phù hợp
@@ -215,7 +264,7 @@ export default function VoucherListScreen() {
           ) : null}
 
           <View className="gap-3">
-            {items.map((voucher) => {
+            {visibleItems.map((voucher) => {
               const image = getVoucherImage(voucher);
               return (
                 <Pressable

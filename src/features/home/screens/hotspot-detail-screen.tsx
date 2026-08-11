@@ -1,3 +1,4 @@
+import { appAlert } from "@/components/ui/app-dialog";
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { ScreenHorizontalPadding } from "@/constants/theme";
@@ -21,7 +22,6 @@ import {
 } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -2292,7 +2292,7 @@ function PersonalExperienceCard({
 
     if (typeof reviewId !== "number" || reviewId <= 0) {
       handleCloseReportReview();
-      Alert.alert(
+      appAlert.alert(
         "Không thể gửi báo cáo",
         "Không xác định được bài đánh giá cần báo cáo.",
       );
@@ -2301,7 +2301,7 @@ function PersonalExperienceCard({
 
     if (!authSession.isAuthenticated) {
       handleCloseReportReview();
-      Alert.alert(
+      appAlert.alert(
         "Cần đăng nhập",
         "Bạn cần đăng nhập để báo cáo bài đánh giá này.",
       );
@@ -2312,7 +2312,7 @@ function PersonalExperienceCard({
 
     if (!accessToken) {
       handleCloseReportReview();
-      Alert.alert(
+      appAlert.alert(
         "Phiên đăng nhập hết hạn",
         "Vui lòng đăng nhập lại trước khi gửi báo cáo.",
       );
@@ -2337,8 +2337,7 @@ function PersonalExperienceCard({
         setIsDuplicateReportDialogVisible(true);
         return;
       }
-
-      Alert.alert(
+      appAlert.alert(
         "Không thể gửi báo cáo",
         error instanceof Error
           ? error.message
@@ -3302,7 +3301,7 @@ export default function HotspotDetailScreen() {
     }
 
     if (!authSession.isAuthenticated) {
-      Alert.alert(
+      appAlert.alert(
         "Cần đăng nhập",
         "Bạn cần đăng nhập để thả tim bài đánh giá này.",
       );
@@ -3312,7 +3311,7 @@ export default function HotspotDetailScreen() {
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      Alert.alert(
+      appAlert.alert(
         "Phiên đăng nhập hết hạn",
         "Vui lòng đăng nhập lại trước khi thả tim bài đánh giá.",
       );
@@ -3368,7 +3367,7 @@ export default function HotspotDetailScreen() {
       }
     } catch (error) {
       applyReviewLikeState(currentIsLiked, currentLikeCount);
-      Alert.alert(
+      appAlert.alert(
         "Không thể thả tim",
         error instanceof Error
           ? error.message
@@ -3697,7 +3696,7 @@ export default function HotspotDetailScreen() {
 
     if (!authSession.isAuthenticated) {
       setReviewPendingDeletion(null);
-      Alert.alert("Cần đăng nhập", "Bạn cần đăng nhập để xóa bài đánh giá.");
+      appAlert.alert("Cần đăng nhập", "Bạn cần đăng nhập để xóa bài đánh giá.");
       return;
     }
 
@@ -3708,7 +3707,7 @@ export default function HotspotDetailScreen() {
 
       if (!accessToken) {
         setReviewPendingDeletion(null);
-        Alert.alert(
+        appAlert.alert(
           "Phiên đăng nhập hết hạn",
           "Vui lòng đăng nhập lại trước khi xóa bài đánh giá.",
         );
@@ -3727,9 +3726,9 @@ export default function HotspotDetailScreen() {
         ),
       );
       setReviewPendingDeletion(null);
-      Alert.alert("Đã xóa", "Bài đánh giá đã được xóa.");
+      appAlert.alert("Đã xóa", "Bài đánh giá đã được xóa.");
     } catch (error) {
-      Alert.alert(
+      appAlert.alert(
         "Không thể xóa bài",
         error instanceof Error
           ? error.message

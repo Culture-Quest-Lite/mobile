@@ -6,7 +6,6 @@ import { useCallback, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   Text as RNText,
   ScrollView,
@@ -19,6 +18,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import { appAlert } from "@/components/ui/app-dialog";
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { appToast } from "@/components/ui/app-toast";
 import { SymbolView } from "@/components/ui/symbol-view";
@@ -251,7 +251,7 @@ export default function CommunityGroupSettingsScreen() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permissionResult.granted) {
-      Alert.alert(
+      appAlert.alert(
         "Cần cấp quyền",
         "Hãy cho phép truy cập thư viện ảnh để chọn ảnh nhóm.",
       );

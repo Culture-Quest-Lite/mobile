@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { appAlert } from "@/components/ui/app-dialog";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { ScreenHorizontalPadding } from "@/constants/theme";
 import {
@@ -36,7 +37,6 @@ import {
   joinRouteGroupQuest,
   type RouteDto,
 } from "@/features/route/api/route-api";
-import { routeSystemAlert } from "@/features/route/components/route-system-alert";
 import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 const fallbackRouteImage =
@@ -637,7 +637,7 @@ export default function RouteGroupQuestScreen() {
         routeName: routeDisplayName,
       });
     } catch (error) {
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Không thể tham gia nhóm",
         error instanceof Error ? error.message : "Vui lòng thử lại sau.",
       );

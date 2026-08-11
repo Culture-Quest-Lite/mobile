@@ -3,7 +3,6 @@ import { useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Fragment, useEffect, useState } from "react";
 import {
-  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -15,6 +14,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { appAlert } from "@/components/ui/app-dialog";
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { SymbolView } from "@/components/ui/symbol-view";
 import {
@@ -406,7 +406,7 @@ export default function CommunityGroupsScreen() {
     });
 
     if (!cachedGroup) {
-      Alert.alert(
+      appAlert.alert(
         t("community.groupsCommon.openErrorTitle"),
         t("community.groupsCommon.openErrorMessage"),
       );

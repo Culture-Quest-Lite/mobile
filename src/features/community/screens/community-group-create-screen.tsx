@@ -4,6 +4,7 @@ import {
   fieldErrorColor,
   fieldWarningColor,
 } from "@/components/ui/field-error";
+import { appAlert } from "@/components/ui/app-dialog";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { ScreenHorizontalPadding } from "@/constants/theme";
@@ -29,7 +30,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -400,7 +400,7 @@ export default function CommunityGroupCreateScreen() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permissionResult.granted) {
-      Alert.alert(
+      appAlert.alert(
         "Cần cấp quyền",
         "Hãy cho phép truy cập thư viện ảnh để chọn ảnh nhóm.",
       );

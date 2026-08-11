@@ -1,3 +1,4 @@
+import { appAlert } from "@/components/ui/app-dialog";
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { appToast } from "@/components/ui/app-toast";
 import { SymbolView } from "@/components/ui/symbol-view";
@@ -11,7 +12,6 @@ import {
 } from "expo-router";
 import {
   ActivityIndicator,
-  Alert,
   type GestureResponderEvent,
   Modal,
   Pressable,
@@ -24,7 +24,6 @@ import {
 
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { routeSystemAlert } from "@/features/route/components/route-system-alert";
 
 import {
   type ReactNode,
@@ -860,7 +859,7 @@ function RouteReviewCard({
 
     if (typeof reviewId !== "number" || reviewId <= 0) {
       handleCloseReportReview();
-      Alert.alert(
+      appAlert.alert(
         "Không thể gửi báo cáo",
         "Không xác định được bài đánh giá cần báo cáo.",
       );
@@ -869,7 +868,7 @@ function RouteReviewCard({
 
     if (!authSession.isAuthenticated) {
       handleCloseReportReview();
-      Alert.alert(
+      appAlert.alert(
         "Cần đăng nhập",
         "Bạn cần đăng nhập để báo cáo bài đánh giá này.",
       );
@@ -880,7 +879,7 @@ function RouteReviewCard({
 
     if (!accessToken) {
       handleCloseReportReview();
-      Alert.alert(
+      appAlert.alert(
         "Phiên đăng nhập hết hạn",
         "Vui lòng đăng nhập lại trước khi gửi báo cáo.",
       );
@@ -905,8 +904,7 @@ function RouteReviewCard({
         setIsDuplicateReportDialogVisible(true);
         return;
       }
-
-      Alert.alert(
+      appAlert.alert(
         "Không thể gửi báo cáo",
         error instanceof Error
           ? error.message
@@ -1574,7 +1572,7 @@ export default function RouteDetailScreen() {
 
     if (!session.isAuthenticated) {
       setReviewPendingDeletion(null);
-      Alert.alert("Cần đăng nhập", "Bạn cần đăng nhập để xóa bài đánh giá.");
+      appAlert.alert("Cần đăng nhập", "Bạn cần đăng nhập để xóa bài đánh giá.");
       return;
     }
 
@@ -1585,7 +1583,7 @@ export default function RouteDetailScreen() {
 
       if (!accessToken) {
         setReviewPendingDeletion(null);
-        Alert.alert(
+        appAlert.alert(
           "Phiên đăng nhập hết hạn",
           "Vui lòng đăng nhập lại trước khi xóa bài đánh giá.",
         );
@@ -1604,9 +1602,9 @@ export default function RouteDetailScreen() {
         ),
       );
       setReviewPendingDeletion(null);
-      Alert.alert("Đã xóa", "Bài đánh giá đã được xóa.");
+      appAlert.alert("Đã xóa", "Bài đánh giá đã được xóa.");
     } catch (deleteError) {
-      Alert.alert(
+      appAlert.alert(
         "Không thể xóa bài",
         deleteError instanceof Error
           ? deleteError.message
@@ -1635,7 +1633,7 @@ export default function RouteDetailScreen() {
     }
 
     if (!session.isAuthenticated) {
-      Alert.alert(
+      appAlert.alert(
         "Cần đăng nhập",
         "Bạn cần đăng nhập để thả tim bài đánh giá này.",
       );
@@ -1645,7 +1643,7 @@ export default function RouteDetailScreen() {
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      Alert.alert(
+      appAlert.alert(
         "Phiên đăng nhập hết hạn",
         "Vui lòng đăng nhập lại trước khi thả tim bài đánh giá.",
       );
@@ -1699,7 +1697,7 @@ export default function RouteDetailScreen() {
       }
     } catch (likeError) {
       applyReviewLikeState(currentIsLiked, currentLikeCount);
-      Alert.alert(
+      appAlert.alert(
         "Không thể thả tim",
         likeError instanceof Error
           ? likeError.message
@@ -1729,7 +1727,7 @@ export default function RouteDetailScreen() {
         });
         setIsSavedRoute(false);
         setSavedRouteId(null);
-        routeSystemAlert.alert(
+        appAlert.alert(
           "Đã bỏ lưu",
           "Tuyến đã được xóa khỏi danh sách đã lưu.",
         );
@@ -1753,12 +1751,12 @@ export default function RouteDetailScreen() {
           ? nextSavedRouteId
           : null,
       );
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Đã lưu tuyến",
         "Tuyến này đã được thêm vào danh sách đã lưu.",
       );
     } catch (saveError) {
-      routeSystemAlert.alert(
+      appAlert.alert(
         isSavedRoute ? "Không thể bỏ lưu tuyến" : "Không thể lưu tuyến",
         saveError instanceof Error
           ? saveError.message
@@ -1784,7 +1782,7 @@ export default function RouteDetailScreen() {
       }
       router.push(continueHref);
     } catch (startError) {
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Không thể bắt đầu tuyến",
         startError instanceof Error
           ? startError.message
@@ -2090,7 +2088,7 @@ export default function RouteDetailScreen() {
                     travelMode: "driving",
                     useCurrentLocationAsOrigin: true,
                   }).catch((error) => {
-                    routeSystemAlert.alert(
+                    appAlert.alert(
                       "Không thể mở Google Maps",
                       error instanceof Error
                         ? error.message
@@ -2334,7 +2332,7 @@ export default function RouteDetailScreen() {
                 <Pressable
                   onPress={() => {
                     if (!isFinished) {
-                      routeSystemAlert.alert(
+                      appAlert.alert(
                         "Chưa thể đánh giá tuyến",
                         `Bạn còn ${Math.max(totalStops - completed, 0)} điểm check-in để hoàn thành tuyến.`,
                       );
