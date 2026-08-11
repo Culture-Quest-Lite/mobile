@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ScreenHorizontalPadding } from "@/constants/theme";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { getValidAccessToken } from "@/features/auth/hooks/use-auth-session";
+import { getPreferredExpoScheme } from "@/lib/expo-scheme";
 import { refreshPremiumStatus } from "@/features/profile/hooks/use-premium-status";
 import {
   type BillingCycle,
@@ -45,7 +46,9 @@ import {
  *
  * Path trỏ về đúng route đang tồn tại (`src/app/subscription/premium.tsx`).
  */
-const PAYOS_REDIRECT_URL = ExpoLinking.createURL("/subscription/premium");
+const PAYOS_REDIRECT_URL = ExpoLinking.createURL("/subscription/premium", {
+  scheme: getPreferredExpoScheme(),
+});
 
 /**
  * Trong Expo Go, `createURL` trả về `exp://<ip>:8081/--/...` — gửi URL đó lên
