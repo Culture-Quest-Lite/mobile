@@ -1,3 +1,4 @@
+import { appAlert } from "@/components/ui/app-dialog";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
@@ -55,7 +56,6 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -1102,7 +1102,7 @@ export default function CommunityExplorerProfileScreen() {
       }
 
       if (!authSession.isAuthenticated) {
-        Alert.alert(
+        appAlert.alert(
           t("community.feed.loginRequiredTitle"),
           t("community.feed.loginRequiredLike"),
         );
@@ -1112,7 +1112,7 @@ export default function CommunityExplorerProfileScreen() {
       const accessToken = await getValidAccessToken();
 
       if (!accessToken) {
-        Alert.alert(
+        appAlert.alert(
           t("community.feed.sessionExpiredTitle"),
           t("community.feed.sessionExpiredLike"),
         );
@@ -1183,7 +1183,7 @@ export default function CommunityExplorerProfileScreen() {
           }
         }
 
-        Alert.alert(
+        appAlert.alert(
           t("community.feed.likeErrorTitle"),
           error instanceof Error
             ? error.message
@@ -1210,7 +1210,7 @@ export default function CommunityExplorerProfileScreen() {
       const postNumericId = post.postNumericId;
 
       if (typeof postNumericId !== "number" || postNumericId <= 0) {
-        Alert.alert(
+        appAlert.alert(
           t("community.feed.shareErrorTitle"),
           t("community.feed.shareInvalidIdMessage"),
         );
@@ -1218,7 +1218,7 @@ export default function CommunityExplorerProfileScreen() {
       }
 
       if (!authSession.isAuthenticated) {
-        Alert.alert(
+        appAlert.alert(
           t("community.feed.loginRequiredTitle"),
           t("community.feed.loginRequiredShare"),
         );
@@ -1253,7 +1253,7 @@ export default function CommunityExplorerProfileScreen() {
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.sessionExpiredTitle"),
         t("community.feed.sessionExpiredShare"),
       );
@@ -1284,14 +1284,14 @@ export default function CommunityExplorerProfileScreen() {
       setSharePostTarget(null);
       setShareDraft("");
       setShareVisibility("PUBLIC");
-      Alert.alert(
+      appAlert.alert(
         t("community.explorerProfile.sharedAlertTitle"),
         normalizePostVisibilityValue(sharedPost.visibility) === "PRIVATE"
           ? t("community.explorerProfile.sharedPrivateMessage")
           : t("community.explorerProfile.sharedPublicMessage"),
       );
     } catch (error) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.shareErrorTitle"),
         error instanceof Error
           ? error.message
@@ -1525,7 +1525,7 @@ export default function CommunityExplorerProfileScreen() {
     }
 
     if (!authSession.isAuthenticated) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.loginRequiredTitle"),
         t("community.explorerProfile.loginToFollowMessage"),
       );
@@ -1535,7 +1535,7 @@ export default function CommunityExplorerProfileScreen() {
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.sessionExpiredTitle"),
         t("community.explorerProfile.sessionExpiredFollowMessage"),
       );
@@ -1566,7 +1566,7 @@ export default function CommunityExplorerProfileScreen() {
         [explorerId]: followResponse.totalFollowers,
       }));
     } catch (error) {
-      Alert.alert(
+      appAlert.alert(
         t("community.explorerProfile.followErrorTitle"),
         error instanceof Error
           ? error.message

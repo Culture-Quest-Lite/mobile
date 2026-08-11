@@ -1,4 +1,4 @@
-import { Alert, Linking, Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 
 import {
   ensureForegroundLocationPermission,
@@ -6,6 +6,7 @@ import {
 } from "@/lib/location";
 import { ensureNotificationPermission } from "@/lib/notifications";
 import { readStoredJson, writeStoredJson } from "@/lib/persistent-json-storage";
+import { appAlert } from "@/components/ui/app-dialog";
 
 const STARTUP_PERMISSION_STORAGE_KEY = "startup-permissions";
 
@@ -44,7 +45,7 @@ function readStartupPermissionState() {
 /**
  * The OS refuses to show its own dialog once the user has denied a permission
  * for good, so Settings is the only way back. Nag about it at most once per
- * install, using the platform alert -- no in-app dialog of our own.
+ * install, bằng popup dùng chung của app (`appAlert`) để đồng bộ với các màn khác.
  */
 function showSettingsHintOnce(outcomes: StartupPermissionOutcome[]) {
   const blocked = outcomes.filter(
@@ -64,7 +65,7 @@ function showSettingsHintOnce(outcomes: StartupPermissionOutcome[]) {
     .map((outcome) => PERMISSION_LABELS[outcome.kind])
     .join(" và ");
 
-  Alert.alert(
+  appAlert.alert(
     "Bật quyền trong Cài đặt",
     `Culture Quest cần quyền ${blockedLabels} để gợi ý địa điểm gần bạn và báo tin mới. Bạn đã từ chối trước đó nên hệ thống không hỏi lại được nữa.`,
     [

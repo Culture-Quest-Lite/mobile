@@ -374,59 +374,74 @@
       "title": "Near You",
       "rating": "Rating",
       "reviews": "reviews",
-      "nearYou": "Near you"
+      "nearYou": "Near you",
+      "reviewCount": "{{value}} reviews",
+      "openingHoursUpdating": "Hours coming soon",
+      "noData": "No data",
+      "checkedIn": "Checked in",
+      "viewStory": "View story",
+      "emptyTitle": "No matching places",
+      "enableGps": "Turn on GPS to load places near you.",
+      "allowLocation": "Allow location access to load places near you.",
+      "unknownLocation": "Could not determine your current location.",
+      "loadError": "No matching place data.",
+      "emptyRadius": "No matching data within {{radius}} of your current location.",
+      "emptyRadiusDevOverride": "No matching data within {{radius}} of test coordinate {{coordinate}}.",
+      "devOverrideNote": "Showing places within {{radius}} of test coordinate {{coordinate}}."
     },
     "themes": {
       "title": "Explore by Theme",
-      "viewAll": "View all themes"
+      "viewAll": "View all themes",
+      "sectionTitle": "Themes",
+      "empty": "No matching theme data from the API."
     }
   },
   "explore": {
-    "greeting": "Hello {{name}}",
-    "readyToExplore": "Ready to explore",
     "categories": {
-      "all": "All",
-      "history": "History",
-      "architecture": "Architecture",
-      "culture": "Culture",
-      "cuisine": "Cuisine",
       "heritage": "Heritage"
-    },
-    "featured": {
-      "title": "Featured Today"
-    },
-    "premium": {
-      "title": "CultureQuest Premium",
-      "subtitle": "Explore More",
-      "explorer": "Premium Explorer"
-    },
-    "features": {
-      "userPlan": "User Plan",
-      "record": "Record",
-      "routes": "Routes"
     },
     "search": {
       "placeholder": "Search spots, routes, challenges..."
     },
-    "map": {
-      "showingRoute": "Showing route",
-      "showingPlaces": "Showing places"
-    },
-    "missions": {
-      "title": "Missions Near You",
-      "checkpoint": "{{count}} checkpoints left to unlock badge",
-      "completeBefore": "Complete before {{time}}",
-      "bonusReward": "Bonus reward for check-in on time"
-    },
     "places": {
-      "nearYou": "Near you",
-      "viewAll": "View all places"
+      "checkedIn": "Visited",
+      "loadError": "Could not load places near you."
     },
     "routes": {
-      "title": "Suggested Routes",
-      "viewAll": "View all routes",
       "stops": "stops",
-      "startJourney": "Start Journey"
+      "emptyTitle": "No routes yet",
+      "emptyDescription": "No published routes are available yet.",
+      "minutes": "min",
+      "loadError": "Could not load routes from the server."
+    },
+    "a11y": {
+      "notifications": "Open notifications",
+      "recenter": "Back to my location"
+    },
+    "filters": {
+      "radius": "{{value}} km",
+      "notVisited": "Not visited",
+      "allTags": "All"
+    },
+    "sheet": {
+      "placesCount": "{{count}} places",
+      "routesCount": "{{count}} routes",
+      "viewDetail": "View details",
+      "showingRoute": "Viewing route {{name}}",
+      "clearRoute": "Clear",
+      "emptyPlacesTitle": "No matching places",
+      "emptyPlacesDescription": "No places found within {{radius}} km using the current filters.",
+      "tab": {
+        "places": "Places",
+        "official": "Official",
+        "community": "Community"
+      }
+    },
+    "actions": {
+      "plan": "Plan",
+      "record": "Record journey",
+      "planPremiumFeature": "Journey planning (User Plan)",
+      "recordPremiumFeature": "Personal journey recording (Record Journey)"
     }
   },
   "community": {

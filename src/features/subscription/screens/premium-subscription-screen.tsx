@@ -3,7 +3,6 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   Image,
   Linking,
@@ -16,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ScreenHorizontalPadding } from "@/constants/theme";
+import { appAlert } from "@/components/ui/app-dialog";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { getValidAccessToken } from "@/features/auth/hooks/use-auth-session";
 import { getPreferredExpoScheme } from "@/lib/expo-scheme";
@@ -390,7 +390,7 @@ export default function PremiumSubscriptionScreen() {
           if (!isMountedRef.current) return;
           setPayment(null);
           setErrorMessage(null);
-          Alert.alert(
+          appAlert.alert(
             "Kích hoạt Premium thành công",
             "Tài khoản của bạn đã được nâng cấp. Toàn bộ tính năng Premium đã sẵn sàng.",
           );
@@ -406,7 +406,7 @@ export default function PremiumSubscriptionScreen() {
           setErrorMessage(
             "PayOS báo giao dịch không thành công. Vui lòng đăng ký lại nếu bạn vẫn muốn nâng cấp Premium.",
           );
-          Alert.alert(
+          appAlert.alert(
             "Thanh toán không thành công",
             "Giao dịch đã bị huỷ hoặc thất bại. Tài khoản của bạn chưa bị trừ tiền cho gói này.",
           );
@@ -494,13 +494,13 @@ export default function PremiumSubscriptionScreen() {
       }
     }
     if (resolveQrImageUri(paymentResponse.qrCode)) {
-      Alert.alert(
+      appAlert.alert(
         "Không mở được trang thanh toán",
         "Bạn có thể quét mã QR bên dưới để thanh toán.",
       );
       return;
     }
-    Alert.alert(
+    appAlert.alert(
       "Không mở được trang thanh toán",
       "Hệ thống chưa trả liên kết thanh toán hợp lệ. Vui lòng thử đăng ký lại.",
     );
@@ -508,12 +508,12 @@ export default function PremiumSubscriptionScreen() {
 
   async function handleSubscribe() {
     if (!selectedPlan) {
-      Alert.alert("Chưa chọn gói", "Vui lòng chọn một gói Premium.");
+      appAlert.alert("Chưa chọn gói", "Vui lòng chọn một gói Premium.");
       return;
     }
     const accessToken = await getValidAccessToken();
     if (!accessToken) {
-      Alert.alert("Cần đăng nhập", "Vui lòng đăng nhập để đăng ký gói Premium.");
+      appAlert.alert("Cần đăng nhập", "Vui lòng đăng nhập để đăng ký gói Premium.");
       return;
     }
 

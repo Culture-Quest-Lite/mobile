@@ -1,3 +1,4 @@
+import { appAlert } from "@/components/ui/app-dialog";
 import { appToast, type AppToastTone } from "@/components/ui/app-toast";
 import { FieldError, fieldErrorBorderColor } from "@/components/ui/field-error";
 import { SymbolView } from "@/components/ui/symbol-view";
@@ -51,7 +52,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -2320,7 +2320,7 @@ export default function CommunityPostComposeScreen() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permissionResult.granted) {
-      Alert.alert(
+      appAlert.alert(
         t("community.postCompose.permissionRequiredTitle"),
         t("community.postCompose.permissionRequiredMessage"),
       );
@@ -2611,7 +2611,7 @@ export default function CommunityPostComposeScreen() {
     setHasAttemptedSubmit(true);
 
     if (!authSession.isAuthenticated) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.loginRequiredTitle"),
         t("community.postCompose.loginRequiredSubmitMessage"),
       );
@@ -2628,7 +2628,7 @@ export default function CommunityPostComposeScreen() {
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.sessionExpiredTitle"),
         t("community.postCompose.sessionExpiredSubmitMessage"),
       );

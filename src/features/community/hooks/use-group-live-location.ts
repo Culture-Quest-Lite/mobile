@@ -1,7 +1,7 @@
 import { Client, type IMessage, type StompSubscription } from "@stomp/stompjs";
 import * as Location from "expo-location";
 import { useEffect, useRef, useState } from "react";
-import { Alert, AppState, type AppStateStatus } from "react-native";
+import { AppState, type AppStateStatus } from "react-native";
 
 import { PublicEnv } from "@/constants/env";
 import {
@@ -9,6 +9,7 @@ import {
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 import { ensureForegroundLocationPermission, getDevelopmentLocationOverride } from "@/lib/location";
+import { appAlert } from "@/components/ui/app-dialog";
 
 export type GroupLiveLocationMessage = {
   latitude: number;
@@ -369,7 +370,7 @@ export function useGroupLiveLocation({
             }
 
             void pauseRealtime("group_forced_stop");
-            Alert.alert(
+            appAlert.alert(
               "Thông báo",
               "Trưởng nhóm đã kết thúc phiên chia sẻ vị trí.",
             );

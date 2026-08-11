@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, ScrollView, Share, Text, View } from "react-native";
+import { ScrollView, Share, Text, View } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -18,6 +18,7 @@ import {
   CommunityGroupTopBar,
 } from "../components/community-group-ui";
 import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
+import { appAlert } from "@/components/ui/app-dialog";
 
 export default function CommunityGroupInviteMembersScreen() {
   const router = useRouter();
@@ -64,7 +65,7 @@ export default function CommunityGroupInviteMembersScreen() {
         title: t("community.groupInvite.headerTitle"),
       });
     } catch (error) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.shareErrorTitle"),
         error instanceof Error
           ? error.message

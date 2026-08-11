@@ -9,7 +9,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   Text,
@@ -23,6 +22,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import { appAlert } from "@/components/ui/app-dialog";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import {
@@ -1556,7 +1556,7 @@ export default function CommunityPostCommentsScreen() {
     }
 
     if (!authSession.isAuthenticated) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.loginRequiredTitle"),
         t("community.feed.loginRequiredLike"),
       );
@@ -1566,7 +1566,7 @@ export default function CommunityPostCommentsScreen() {
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.sessionExpiredTitle"),
         t("community.feed.sessionExpiredLike"),
       );
@@ -1635,7 +1635,7 @@ export default function CommunityPostCommentsScreen() {
         }
       }
 
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.likeErrorTitle"),
         error instanceof Error
           ? error.message
@@ -1658,7 +1658,7 @@ export default function CommunityPostCommentsScreen() {
     }
 
     if (!authSession.isAuthenticated) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.loginRequiredTitle"),
         t("community.postComments.loginRequiredCommentMessage"),
       );
@@ -1668,7 +1668,7 @@ export default function CommunityPostCommentsScreen() {
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.sessionExpiredTitle"),
         t("community.feed.sessionExpiredComment"),
       );
@@ -1701,7 +1701,7 @@ export default function CommunityPostCommentsScreen() {
       setReplyTarget(null);
       await loadComments();
     } catch (error) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.commentSubmitErrorTitle"),
         error instanceof Error
           ? error.message

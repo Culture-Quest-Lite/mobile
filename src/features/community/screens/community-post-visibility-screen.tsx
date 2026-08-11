@@ -1,3 +1,4 @@
+import { appAlert } from "@/components/ui/app-dialog";
 import { appToast, type AppToastTone } from "@/components/ui/app-toast";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { ScreenHorizontalPadding } from "@/constants/theme";
@@ -30,7 +31,6 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   Pressable,
   Text,
@@ -318,7 +318,7 @@ export default function CommunityPostVisibilityScreen() {
     }
 
     if (!authSession.isAuthenticated) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.loginRequiredTitle"),
         t("community.postVisibility.loginRequiredMessage"),
       );
@@ -326,7 +326,7 @@ export default function CommunityPostVisibilityScreen() {
     }
 
     if (!Number.isInteger(resolvedPostId) || resolvedPostId <= 0) {
-      Alert.alert(
+      appAlert.alert(
         t("community.postVisibility.cannotUpdateTitle"),
         t("community.postVisibility.missingPostIdSubmitError"),
       );
@@ -334,7 +334,7 @@ export default function CommunityPostVisibilityScreen() {
     }
 
     if (editingPostContent === null) {
-      Alert.alert(
+      appAlert.alert(
         t("community.postVisibility.cannotUpdateTitle"),
         t("community.postVisibility.postDataNotReadyError"),
       );
@@ -344,7 +344,7 @@ export default function CommunityPostVisibilityScreen() {
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      Alert.alert(
+      appAlert.alert(
         t("community.feed.sessionExpiredTitle"),
         t("community.postVisibility.sessionExpiredSubmitMessage"),
       );
@@ -386,7 +386,7 @@ export default function CommunityPostVisibilityScreen() {
         },
       });
     } catch (error) {
-      Alert.alert(
+      appAlert.alert(
         t("community.postVisibility.cannotUpdateTitle"),
         error instanceof Error
           ? error.message
