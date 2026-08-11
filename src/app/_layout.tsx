@@ -19,8 +19,8 @@ import '@/lib/nativewind';
 import { requestStartupPermissions } from '@/lib/startup-permissions';
 import { initI18n } from '@/lib/i18n';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AppDialogHost } from '@/components/ui/app-dialog';
 import { AppToastHost } from '@/components/ui/app-toast';
-import { RouteSystemAlertHost } from '@/features/route/components/route-system-alert';
 import { usePushTokenRegistration } from '@/features/notification/hooks/use-push-token-registration';
 
 /**
@@ -188,6 +188,7 @@ export default function RootLayout() {
             <Stack.Screen name="settings/language" />
             <Stack.Screen name="notifications" />
             <Stack.Screen name="vouchers/index" />
+            <Stack.Screen name="vouchers/my" />
             <Stack.Screen name="vouchers/[id]" />
             <Stack.Screen name="subscription" />
             <Stack.Screen name="route/[id]" />
@@ -210,7 +211,7 @@ export default function RootLayout() {
             <Stack.Screen name="+not-found" />
           </Stack>
           <AppToastHost />
-          <RouteSystemAlertHost />
+          <AppDialogHost />
         </ThemeProvider>
       </KeyboardProvider>
     </SafeAreaProvider>

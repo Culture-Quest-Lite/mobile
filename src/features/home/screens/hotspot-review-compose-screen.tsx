@@ -1,3 +1,4 @@
+import { appAlert } from "@/components/ui/app-dialog";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
@@ -6,7 +7,6 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState, type ComponentProps } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -478,7 +478,7 @@ export default function HotspotReviewComposeScreen() {
 
   const handleOpenHotspotDetail = () => {
     if (!targetDetailHref) {
-      Alert.alert(
+      appAlert.alert(
         `${targetLabelPrefix} đánh giá`,
         `Không xác định được ${isRouteReviewMode ? "tuyến" : "hotspot"} để mở trang chi tiết.`,
       );
@@ -526,7 +526,7 @@ export default function HotspotReviewComposeScreen() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permissionResult.granted) {
-      Alert.alert(
+      appAlert.alert(
         "Cần cấp quyền",
         "Hãy cho phép truy cập thư viện để thêm ảnh và video vào bài đánh giá.",
       );
@@ -580,7 +580,7 @@ export default function HotspotReviewComposeScreen() {
     }
 
     if (!authSession.isAuthenticated) {
-      Alert.alert(
+      appAlert.alert(
         "Cần đăng nhập",
         `Bạn cần đăng nhập để ${isEditMode ? "chỉnh sửa" : "đăng"} bài đánh giá.`,
       );
@@ -588,7 +588,7 @@ export default function HotspotReviewComposeScreen() {
     }
 
     if (isEditMode && (!editingReview || !editingReview.isOwner)) {
-      Alert.alert(
+      appAlert.alert(
         "Không thể chỉnh sửa",
         "Không tìm thấy dữ liệu bài đánh giá của bạn. Hãy quay lại và mở lại menu chỉnh sửa.",
       );
@@ -596,7 +596,7 @@ export default function HotspotReviewComposeScreen() {
     }
 
     if (resolvedTargetId === null) {
-      Alert.alert(
+      appAlert.alert(
         `Thiếu ${isRouteReviewMode ? "tuyến" : "hotspot"}`,
         `Không xác định được ${isRouteReviewMode ? "tuyến" : "hotspot"} hiện tại để gắn vào bài đánh giá.`,
       );
@@ -606,7 +606,7 @@ export default function HotspotReviewComposeScreen() {
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      Alert.alert(
+      appAlert.alert(
         "Phiên đăng nhập hết hạn",
         "Vui lòng đăng nhập lại trước khi đăng bài đánh giá.",
       );

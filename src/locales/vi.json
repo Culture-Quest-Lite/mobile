@@ -407,13 +407,14 @@
       "cuisine": "Ẩm thực",
       "heritage": "Di sản"
     },
-    "featured": {
-      "title": "Nổi bật hôm nay"
-    },
     "premium": {
       "title": "CultureQuest Premium",
       "subtitle": "Khám phá nhiều hơn",
-      "explorer": "Premium Explorer"
+      "explorer": "Premium Explorer",
+      "activeTitle": "Tài khoản của bạn đã là Premium",
+      "activeDescription": "Hành trình độc quyền, AI lập kế hoạch, ghi hành trình Live và trải nghiệm không quảng cáo đã được mở khóa.",
+      "upsellDescription": "Mở khóa hành trình độc quyền, nhận thêm XP và tận hưởng trải nghiệm không quảng cáo.",
+      "cta": "Xem quyền lợi Premium"
     },
     "features": {
       "userPlan": "User Plan",
@@ -425,23 +426,27 @@
     },
     "map": {
       "showingRoute": "Đang hiển thị tuyến",
-      "showingPlaces": "Đang hiển thị địa điểm"
-    },
-    "missions": {
-      "title": "Nhiệm vụ gần bạn",
-      "checkpoint": "Còn {{count}} checkpoint để mở huy hiệu",
-      "completeBefore": "Hoàn thành trước {{time}}",
-      "bonusReward": "Thưởng thêm khi check-in đúng giờ"
+      "showingPlaces": "Đang hiển thị địa điểm",
+      "title": "Bản đồ địa điểm",
+      "summary": "{{places}} địa điểm · {{routes}} tuyến"
     },
     "places": {
       "nearYou": "Gần bạn",
-      "viewAll": "Xem tất cả địa điểm"
+      "viewAll": "Xem tất cả địa điểm",
+      "emptyTitle": "Chưa có địa điểm phù hợp",
+      "emptyDescription": "Không có địa điểm nào thuộc chủ đề đang chọn."
     },
     "routes": {
       "title": "Tuyến gợi ý",
       "viewAll": "Xem tất cả tuyến",
       "stops": "điểm",
-      "startJourney": "Bắt đầu hành trình"
+      "startJourney": "Bắt đầu hành trình",
+      "count": "{{count}} tuyến",
+      "emptyTitle": "Chưa có tuyến nào",
+      "emptyDescription": "Hệ thống chưa có tuyến nào được xuất bản.",
+      "heritageLabel": "Tuyến di sản",
+      "descriptionFallback": "Khám phá tuyến di sản được curator xây dựng.",
+      "viewRoute": "Xem tuyến"
     }
   },
   "community": {

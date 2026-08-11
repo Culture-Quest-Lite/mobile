@@ -11,9 +11,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { appAlert } from "@/components/ui/app-dialog";
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { ScreenHorizontalPadding } from "@/constants/theme";
-import { routeSystemAlert } from "@/features/route/components/route-system-alert";
 
 import { SymbolView } from "@/components/ui/symbol-view";
 import {
@@ -240,7 +240,7 @@ export default function UserPlanDetailScreen() {
 
       router.push(continueHref);
     } catch (caught) {
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Không thể tiếp tục hành trình",
         caught instanceof Error ? caught.message : "Vui lòng thử lại.",
       );

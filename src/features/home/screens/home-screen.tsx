@@ -572,12 +572,7 @@ type NearbyPlaceListItem = {
 };
 
 type CommunityLeaderboardStatus = "empty" | "error" | "loading" | "ready";
-type HomeVouchersSectionStatus =
-  | "empty"
-  | "error"
-  | "guest"
-  | "loading"
-  | "ready";
+type HomeVouchersSectionStatus = "empty" | "error" | "loading" | "ready";
 
 /** Số voucher hiển thị ở carousel Home; xem đủ thì bấm "Xem tất cả". */
 const homeVouchersPreviewSize = 8;
@@ -1651,8 +1646,6 @@ export default function HomeScreen() {
     Math.max(contentWidth * 0.38, 134),
     152,
   );
-  const homeVoucherCardWidth = Math.min(Math.max(contentWidth * 0.42, 138), 164);
-  const homeVoucherImageHeight = Math.round(homeVoucherCardWidth * 0.62);
   const currentJourney = !isGuest ? activeJourneyView : null;
   const activeJourneyProgress = currentJourney
     ? Math.min(Math.max(currentJourney.progress, 0), 100)
@@ -2236,8 +2229,8 @@ export default function HomeScreen() {
   }, [loadCommunityLeaderboard]);
 
   /**
-   * `/api/vouchers/available` không nằm trong PUBLIC_GET_ENDPOINTS nên bắt buộc
-   * phải có token; khách chưa đăng nhập chỉ thấy lời mời đăng nhập.
+   * `/api/vouchers/**` (GET) nằm trong PUBLIC_GET_ENDPOINTS nên khách chưa đăng
+   * nhập vẫn xem được carousel; token chỉ đính kèm khi đã đăng nhập.
    * Không gắn vào `markInitialHomeLoadPartResolved` để section này không chặn
    * màn hình loading đầu tiên của Home.
    */
@@ -2246,24 +2239,14 @@ export default function HomeScreen() {
     homeVouchersRequestRef.current = requestId;
     const isActive = () => homeVouchersRequestRef.current === requestId;
 
-    if (!authSession.isAuthenticated) {
-      setHomeVouchers([]);
-      setHomeVouchersStatus("guest");
-      return;
-    }
-
     setHomeVouchersStatus("loading");
 
     try {
-      const accessToken = await getValidAccessToken();
+      const accessToken = authSession.isAuthenticated
+        ? await getValidAccessToken()
+        : null;
 
       if (!isActive()) {
-        return;
-      }
-
-      if (!accessToken) {
-        setHomeVouchers([]);
-        setHomeVouchersStatus("guest");
         return;
       }
 
@@ -3511,132 +3494,143 @@ export default function HomeScreen() {
               </ScrollView>
             )}
 
-            <View className="gap-4">
-              <View className="flex-row items-start justify-between gap-3">
-                <View className="flex-1">
-                  <Text className={homeSectionTitleClassName}>
-                    {t("home.vouchers.title")}
-                  </Text>
-                </View>
+            <View className="flex-row items-center justify-between gap-3">
+              <Text className={homeSectionTitleClassName}>
+                {t("home.vouchers.title")}
+              </Text>
 
-                <Pressable
-                  className="rounded-full bg-[#FFF4EF] px-3.5 py-2"
-                  onPress={() => router.push("/vouchers" as Href)}
-                >
-                  <Text className="text-[12px] font-bold text-[#F58752]">
-                    {t("home.viewAll")}
-                  </Text>
-                </Pressable>
-              </View>
-
-              <View
-                className="gap-5 rounded-[28px] bg-white p-4"
-                style={cardShadowStyle}
+              <Pressable
+                className="flex-row items-center"
+                hitSlop={8}
+                onPress={() => router.push("/vouchers" as Href)}
               >
-                {homeVouchersStatus === "ready" ? (
-                  <ScrollView
-                    horizontal
-                    contentContainerStyle={{ paddingRight: 10 }}
-                    showsHorizontalScrollIndicator={false}
-                  >
-                    {homeVouchers.map((voucher, index) => (
-                      <Pressable
-                        key={voucher.voucherId}
-                        className={
-                          index === homeVouchers.length - 1 ? "" : "mr-3.5"
-                        }
-                        style={{ width: homeVoucherCardWidth }}
-                        onPress={() =>
-                          router.push(`/vouchers/${voucher.voucherId}` as Href)
-                        }
-                      >
-                        <View
-                          className="overflow-hidden rounded-[18px] bg-[#FFF0F7]"
-                          style={{ height: homeVoucherImageHeight }}
-                        >
-                          {getVoucherImage(voucher) ? (
-                            <Image
-                              source={{ uri: getVoucherImage(voucher) ?? "" }}
-                              contentFit="cover"
-                              transition={180}
-                              cachePolicy="memory-disk"
-                              style={{ height: "100%", width: "100%" }}
-                            />
-                          ) : (
-                            <View className="flex-1 items-center justify-center">
-                              <SymbolView
-                                name={{
-                                  ios: "ticket.fill",
-                                  android: "confirmation_number",
-                                  web: "confirmation_number",
-                                }}
-                                size={30}
-                                tintColor="#EB489B"
-                              />
-                            </View>
-                          )}
-                        </View>
-
-                        <Text
-                          className="mt-2 text-[13px] font-extrabold leading-4 text-[#2B2233]"
-                          numberOfLines={2}
-                        >
-                          {voucher.voucherName}
-                        </Text>
-
-                        <Text
-                          className="mt-0.5 text-[11px] font-semibold text-[#8E869A]"
-                          numberOfLines={1}
-                        >
-                          {voucher.partnerName}
-                        </Text>
-
-                        <View className="mt-1.5 flex-row items-center justify-between gap-1">
-                          <Text
-                            className="text-[12px] font-extrabold text-[#F15B64]"
-                            numberOfLines={1}
-                          >
-                            {getHomeVoucherDiscountLabel(voucher)}
-                          </Text>
-                          <Text
-                            className="shrink-0 text-[11px] font-bold text-[#C98A10]"
-                            numberOfLines={1}
-                          >
-                            {t("home.vouchers.points", {
-                              points:
-                                voucher.pointsRequired.toLocaleString("vi-VN"),
-                            })}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                ) : (
-                  <Pressable
-                    className="items-center py-6"
-                    disabled={homeVouchersStatus === "loading"}
-                    onPress={() => {
-                      if (homeVouchersStatus === "guest") {
-                        router.push("/vouchers" as Href);
-                        return;
-                      }
-
-                      void loadHomeVouchers();
-                    }}
-                  >
-                    <Text className="text-center text-[13px] font-semibold text-[#8E869A]">
-                      {homeVouchersStatus === "loading"
-                        ? t("home.vouchers.loading")
-                        : homeVouchersStatus === "guest"
-                          ? t("home.vouchers.guest")
-                          : homeVouchersStatus === "empty"
-                            ? t("home.vouchers.empty")
-                            : t("home.vouchers.error")}
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
+                <Text className={homeSectionActionTextClassName}>
+                  {t("home.viewAll")}
+                </Text>
+                <SymbolView
+                  name={{
+                    ios: "chevron.right",
+                    android: "chevron_right",
+                    web: "chevron_right",
+                  }}
+                  size={14}
+                  tintColor="#D85B86"
+                />
+              </Pressable>
             </View>
+
+            {homeVouchersStatus === "ready" ? (
+              <ScrollView
+                horizontal
+                contentContainerStyle={{
+                  paddingLeft: gutter,
+                  paddingRight: gutter,
+                }}
+                showsHorizontalScrollIndicator={false}
+                style={{
+                  marginHorizontal: -gutter,
+                  width: safeWidth,
+                }}
+              >
+                {homeVouchers.map((voucher, index) => (
+                  <Pressable
+                    key={voucher.voucherId}
+                    className={`items-center ${index === homeVouchers.length - 1 ? "" : "mr-4"}`}
+                    onPress={() =>
+                      router.push(`/vouchers/${voucher.voucherId}` as Href)
+                    }
+                    style={{ width: voucherMerchantItemWidth }}
+                  >
+                    <View
+                      className="items-center"
+                      style={{ width: voucherMerchantItemWidth }}
+                    >
+                      <View
+                        className="items-center justify-center overflow-hidden rounded-full border border-[#F2EDF2] bg-white"
+                        style={[
+                          themeCategoryShadowStyle,
+                          {
+                            height: voucherMerchantCircleSize,
+                            width: voucherMerchantCircleSize,
+                          },
+                        ]}
+                      >
+                        {getVoucherImage(voucher) ? (
+                          <Image
+                            source={{ uri: getVoucherImage(voucher) ?? "" }}
+                            contentFit="cover"
+                            transition={180}
+                            cachePolicy="memory-disk"
+                            style={{
+                              borderRadius: voucherMerchantLogoSize / 2,
+                              height: voucherMerchantLogoSize,
+                              width: voucherMerchantLogoSize,
+                            }}
+                          />
+                        ) : (
+                          <View
+                            className="items-center justify-center rounded-full bg-[#FFF0F7]"
+                            style={{
+                              height: voucherMerchantLogoSize,
+                              width: voucherMerchantLogoSize,
+                            }}
+                          >
+                            <SymbolView
+                              name={{
+                                ios: "ticket.fill",
+                                android: "confirmation_number",
+                                web: "confirmation_number",
+                              }}
+                              size={22}
+                              tintColor="#EB489B"
+                            />
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Mức giảm là thứ người dùng quét mắt tìm, nên bám sát
+                          vòng tròn thay vì nằm lẫn trong phần chữ bên dưới. */}
+                      <View className="-mt-2 rounded-full bg-[#F15B64] px-2 py-[3px]">
+                        <Text className="text-[10px] font-extrabold text-white">
+                          {getHomeVoucherDiscountLabel(voucher)}
+                        </Text>
+                      </View>
+
+                      <Text
+                        className="mt-1.5 text-center text-[13px] font-semibold leading-4 text-[#2F2A35]"
+                        numberOfLines={2}
+                      >
+                        {voucher.voucherName}
+                      </Text>
+
+                      <Text
+                        className="mt-0.5 text-center text-[11px] font-semibold text-[#8E869A]"
+                        numberOfLines={1}
+                      >
+                        {voucher.partnerName}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : homeVouchersStatus === "loading" ? (
+              <SectionEmptyState isLoading />
+            ) : (
+              <Pressable
+                onPress={() => {
+                  void loadHomeVouchers();
+                }}
+              >
+                <SectionEmptyState
+                  description={
+                    homeVouchersStatus === "empty"
+                      ? t("home.vouchers.empty")
+                      : t("home.vouchers.error")
+                  }
+                  title={t("home.vouchers.title")}
+                />
+              </Pressable>
+            )}
           </View>
           <View className="gap-4">
             <View>

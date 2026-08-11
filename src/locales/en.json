@@ -374,11 +374,26 @@
       "title": "Near You",
       "rating": "Rating",
       "reviews": "reviews",
-      "nearYou": "Near you"
+      "nearYou": "Near you",
+      "reviewCount": "{{value}} reviews",
+      "openingHoursUpdating": "Hours coming soon",
+      "noData": "No data",
+      "checkedIn": "Checked in",
+      "viewStory": "View story",
+      "emptyTitle": "No matching places",
+      "enableGps": "Turn on GPS to load places near you.",
+      "allowLocation": "Allow location access to load places near you.",
+      "unknownLocation": "Could not determine your current location.",
+      "loadError": "No matching place data.",
+      "emptyRadius": "No matching data within {{radius}} of your current location.",
+      "emptyRadiusDevOverride": "No matching data within {{radius}} of test coordinate {{coordinate}}.",
+      "devOverrideNote": "Showing places within {{radius}} of test coordinate {{coordinate}}."
     },
     "themes": {
       "title": "Explore by Theme",
-      "viewAll": "View all themes"
+      "viewAll": "View all themes",
+      "sectionTitle": "Themes",
+      "empty": "No matching theme data from the API."
     }
   },
   "explore": {
@@ -392,13 +407,14 @@
       "cuisine": "Cuisine",
       "heritage": "Heritage"
     },
-    "featured": {
-      "title": "Featured Today"
-    },
     "premium": {
       "title": "CultureQuest Premium",
       "subtitle": "Explore More",
-      "explorer": "Premium Explorer"
+      "explorer": "Premium Explorer",
+      "activeTitle": "Your account is Premium",
+      "activeDescription": "Exclusive routes, AI planning, live journey recording and an ad-free experience are unlocked.",
+      "upsellDescription": "Unlock exclusive routes, earn more XP and enjoy an ad-free experience.",
+      "cta": "See Premium benefits"
     },
     "features": {
       "userPlan": "User Plan",
@@ -410,23 +426,27 @@
     },
     "map": {
       "showingRoute": "Showing route",
-      "showingPlaces": "Showing places"
-    },
-    "missions": {
-      "title": "Missions Near You",
-      "checkpoint": "{{count}} checkpoints left to unlock badge",
-      "completeBefore": "Complete before {{time}}",
-      "bonusReward": "Bonus reward for check-in on time"
+      "showingPlaces": "Showing places",
+      "title": "Places map",
+      "summary": "{{places}} places · {{routes}} routes"
     },
     "places": {
       "nearYou": "Near you",
-      "viewAll": "View all places"
+      "viewAll": "View all places",
+      "emptyTitle": "No matching places",
+      "emptyDescription": "No places belong to the selected theme."
     },
     "routes": {
       "title": "Suggested Routes",
       "viewAll": "View all routes",
       "stops": "stops",
-      "startJourney": "Start Journey"
+      "startJourney": "Start Journey",
+      "count": "{{count}} routes",
+      "emptyTitle": "No routes yet",
+      "emptyDescription": "No published routes are available yet.",
+      "heritageLabel": "Heritage route",
+      "descriptionFallback": "Explore a curated heritage route.",
+      "viewRoute": "View route"
     }
   },
   "community": {

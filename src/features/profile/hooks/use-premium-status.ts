@@ -3,7 +3,7 @@ import { type Href, useRouter } from "expo-router";
 
 import { getValidAccessToken, useAuthSession } from "@/features/auth/hooks/use-auth-session";
 import { getMyProfile } from "@/features/profile/api/get-me";
-import { routeSystemAlert } from "@/features/route/components/route-system-alert";
+import { appAlert } from "@/components/ui/app-dialog";
 
 /**
  * Nguồn "isPremium" DÙNG CHUNG cho cả app.
@@ -163,7 +163,7 @@ export function usePremiumStatus() {
       // Cổng chặn đang TẮT -> cho qua hết. Bật lại bằng PREMIUM_GATE_ENABLED.
       if (!PREMIUM_GATE_ENABLED) return true;
       if (snapshot.isPremium) return true;
-      routeSystemAlert.alert(
+      appAlert.alert(
         "Tính năng dành cho Premium",
         `${featureLabel} chỉ dành cho tài khoản Premium. Hãy nâng cấp để mở khoá.`,
       );

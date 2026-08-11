@@ -5,7 +5,7 @@ import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import { SymbolView } from '@/components/ui/symbol-view';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { ScreenHorizontalPadding } from '@/constants/theme';
-import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   type NativeScrollEvent,
@@ -30,6 +30,10 @@ import {
   getNearbyHotspots,
 } from '@/features/home/api/get-nearby-hotspots';
 import {
+  getApiHotspotRouteSlug,
+  getHotspotHref,
+} from '@/features/home/data/hotspots';
+import {
   getRouteCoverUrl,
   getRouteStopCount,
   searchRoutes,
@@ -53,9 +57,6 @@ const defaultCoordinate: AppCoordinate = {
   accuracy: null,
   source: 'dev-override',
 };
-
-type SymbolName = ComponentProps<typeof SymbolView>['name'];
-
 
 type ExplorerSummary = {
   avatar: string | null;
@@ -112,38 +113,6 @@ type ApiPlaceCard = {
   longitude: number;
 };
 
-type MissionCard = {
-  icon: SymbolName;
-  iconBackground: string;
-  label: string;
-  reward: string;
-  subtitle: string;
-};
-
-const missions: MissionCard[] = [
-  {
-    icon: { ios: 'figure.walk', android: 'directions_walk', web: 'directions_walk' },
-    iconBackground: '#FFE9E3',
-    label: 'Săn dấu ấn Chợ Lớn',
-    reward: '+120 XP',
-    subtitle: 'Còn 2 checkpoint để mở huy hiệu',
-  },
-  {
-    icon: { ios: 'paintbrush', android: 'brush', web: 'brush' },
-    iconBackground: '#FDEFD9',
-    label: 'Bảo tàng Mỹ thuật',
-    reward: '+80 XP',
-    subtitle: 'Hoàn thành trước 18:00 hôm nay',
-  },
-  {
-    icon: { ios: 'music.note', android: 'music_note', web: 'music_note' },
-    iconBackground: '#E6F7F4',
-    label: 'Đêm nhạc dân gian',
-    reward: '+160 XP',
-    subtitle: 'Thưởng thêm khi check-in đúng giờ',
-  },
-];
-
 const heroShadowStyle = {
   shadowColor: 'rgba(235, 72, 155, 0.24)',
   shadowOpacity: 1,
@@ -152,12 +121,16 @@ const heroShadowStyle = {
   elevation: 14,
 } as const;
 
+/** Dùng chung với Home để hai tab không lệch cỡ chữ tiêu đề section. */
+const sectionTitleClassName =
+  'text-[17px] font-extrabold leading-[22px] text-[#2B2233]';
+
 const cardShadowStyle = {
-  shadowColor: 'rgba(245, 135, 82, 0.14)',
+  shadowColor: 'rgba(15, 23, 42, 0.12)',
   shadowOpacity: 1,
-  shadowRadius: 16,
-  shadowOffset: { width: 0, height: 10 },
-  elevation: 7,
+  shadowRadius: 14,
+  shadowOffset: { width: 0, height: 8 },
+  elevation: 5,
 } as const;
 
 function getDifficultyLabel(difficulty?: string, t?: (key: string) => string) {
@@ -215,6 +188,8 @@ function ExploreMap({
   routes: RouteDto[];
   onRoutePress: (routeId: number) => void;
 }) {
+  const { t } = useTranslation();
+
   const routePoints = routes[0]?.hotspots
     ?.filter((stop) => Number.isFinite(stop.latitude) && Number.isFinite(stop.longitude))
     .map((stop) => ({
@@ -236,7 +211,7 @@ function ExploreMap({
   const points = routePoints?.length ? routePoints : placePoints;
 
   return (
-    <View className="mx-5 overflow-hidden rounded-[28px] bg-[#E8F0FE]">
+    <View className="mx-5 overflow-hidden rounded-[22px] border border-[#EEF1F4] bg-[#E8F0FE]">
       <AppMap
         points={points}
         height={230}
@@ -249,7 +224,10 @@ function ExploreMap({
 
       <View className="absolute left-3 top-3 rounded-full bg-white px-3 py-1.5 shadow">
         <Text className="text-[12px] font-bold text-[#2B2233]">
-          {places.length} địa điểm · {routes.length} tuyến
+          {t('explore.map.summary', {
+            places: places.length,
+            routes: routes.length,
+          })}
         </Text>
       </View>
     </View>
@@ -475,6 +453,16 @@ export default function ExploreScreen() {
     router.push(`/route/${routeId}` as Href);
   }
 
+  function openPlace(place: ApiPlaceCard) {
+    const hotspotId = Number(place.id);
+
+    if (!Number.isInteger(hotspotId) || hotspotId <= 0) {
+      return;
+    }
+
+    router.push(getHotspotHref(getApiHotspotRouteSlug(hotspotId), hotspotId));
+  }
+
   const explorerName =
     explorerSummary?.name.trim() ||
     session.displayName.trim() ||
@@ -558,44 +546,21 @@ export default function ExploreScreen() {
             </View>
           </View>
 
-          <View className="rounded-[28px] bg-[#F7F3EA] p-4">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-3">
-                <Text className="text-[13px] font-semibold uppercase tracking-[1px] text-[#8A7D6D]">
-                  {t('explore.featured.title')}
-                </Text>
-                <Text className="mt-1 text-[18px] font-bold text-[#2B2233]">
-                  {apiRoutes[0]?.routeName || 'Khám phá ẩm thực Sài Gòn'}
-                </Text>
-              </View>
-              <View className="rounded-full bg-white px-3 py-2">
-                <Text className="text-[11px] font-semibold uppercase text-[#B86D2A]">
-                  XP +{apiRoutes[0]?.xp ?? 320}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Search & Filter Bar */}
-          <View className="flex-row items-center gap-3">
-            <View className="flex-1 flex-row items-center rounded-[26px] bg-[#FAF7FC] px-4 py-3.5 border border-[#F3EDF7]">
-              <SymbolView
-                name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
-                size={16}
-                tintColor="#AA9FB0"
-              />
-              <Text className="ml-2 text-[15px] text-[#AA9FB0]">
-                {t('explore.search.placeholder')}
-              </Text>
-            </View>
-            <Pressable className="h-11 w-11 items-center justify-center rounded-[18px] bg-[#FFF4EF]">
-              <SymbolView
-                name={{ ios: 'slider.horizontal.3', android: 'tune', web: 'tune' }}
-                size={16}
-                tintColor="#EB489B"
-              />
-            </Pressable>
-          </View>
+          {/* Ô tìm kiếm chỉ là điểm vào của màn tìm kiếm hotspot, không tự nhập tại chỗ. */}
+          <Pressable
+            accessibilityRole="search"
+            className="flex-row items-center rounded-[26px] border border-[#F3EDF7] bg-[#FAF7FC] px-4 py-3.5"
+            onPress={() => router.push('/hotspots/search' as Href)}
+          >
+            <SymbolView
+              name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
+              size={16}
+              tintColor="#AA9FB0"
+            />
+            <Text className="ml-2 text-[15px] text-[#AA9FB0]">
+              {t('explore.search.placeholder')}
+            </Text>
+          </Pressable>
 
           {/* Quick Actions Toolbar */}
           <View className="flex-row items-center justify-between rounded-2xl border border-[#FCDDEC] bg-[#FFF8FC] p-3 shadow-sm">
@@ -699,11 +664,11 @@ export default function ExploreScreen() {
                     </Text>
                   </View>
 
-                  <Text className="text-[22px] font-black leading-7 text-[#2B2233]">
-                    Tài khoản của bạn đã là Premium
+                  <Text className="text-[19px] font-black leading-6 text-[#2B2233]">
+                    {t('explore.premium.activeTitle')}
                   </Text>
                   <Text className="mt-2 text-[13px] leading-5 text-[#6F6678]">
-                    Hành trình độc quyền, AI lập kế hoạch, ghi hành trình Live và trải nghiệm không quảng cáo đã được mở khóa.
+                    {t('explore.premium.activeDescription')}
                   </Text>
                 </View>
 
@@ -746,16 +711,16 @@ export default function ExploreScreen() {
                     </Text>
                   </View>
 
-                  <Text className="text-[22px] font-black leading-7 text-[#2B2233]">
+                  <Text className="text-[19px] font-black leading-6 text-[#2B2233]">
                     {t('explore.premium.subtitle')}
                   </Text>
                   <Text className="mt-2 text-[13px] leading-5 text-[#6F6678]">
-                    Mở khóa hành trình độc quyền, nhận thêm XP và tận hưởng trải nghiệm không quảng cáo.
+                    {t('explore.premium.upsellDescription')}
                   </Text>
 
                   <View className="mt-4 flex-row items-center gap-2 self-start rounded-full bg-[#7C3AED] px-4 py-2.5">
                     <Text className="text-[12px] font-extrabold text-white">
-                      Xem quyền lợi Premium
+                      {t('explore.premium.cta')}
                     </Text>
                     <SymbolView
                       name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
@@ -780,57 +745,6 @@ export default function ExploreScreen() {
             </Pressable>
           )}
 
-          {/* Daily Featured Banner */}
-          <View className="rounded-[28px] bg-[#F7F3EA] p-4 border border-[#EBE3D5]">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-3">
-                <Text className="text-[12px] font-semibold uppercase tracking-[1px] text-[#8A7D6D]">
-                  {t('explore.featured.title')}
-                </Text>
-                <Text className="mt-1 text-[17px] font-bold text-[#2B2233]">
-                  {apiRoutes[0]?.routeName || 'Khám phá ẩm thực Sài Gòn'}
-                </Text>
-              </View>
-              <View className="rounded-full bg-white px-3 py-2 border border-[#E5DFD2]">
-                <Text className="text-[11px] font-semibold uppercase text-[#B86D2A]">
-                  XP +{apiRoutes[0]?.xp ?? 320}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Category Filter Pills */}
-          <View className="gap-2">
-            <Text className="text-[14px] font-extrabold text-[#2B2233]">
-              Lọc theo chủ đề:
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingVertical: 2 }}
-            >
-              {categories.map((category) => {
-                const selected = category.key === activeCategory;
-                return (
-                  <Pressable
-                    key={category.key}
-                    onPress={() => setActiveCategory(category.key)}
-                    className={`mr-2.5 rounded-full border px-4 py-2 ${
-                      selected ? 'border-[#BB8B4D] bg-[#FBF1E5]' : 'border-[#E5DFD2] bg-white'
-                    }`}
-                  >
-                    <Text
-                      className={`text-[13px] font-bold ${
-                        selected ? 'text-[#A2672B]' : 'text-[#6E6B62]'
-                      }`}
-                    >
-                      {category.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
         </View>
 
         <View className="mb-6">
@@ -838,10 +752,7 @@ export default function ExploreScreen() {
             className="mb-3 flex-row items-center justify-between"
             style={{ paddingHorizontal: gutter }}
           >
-              <Text className="text-[19px] font-bold text-[#2B2233]">Bản đồ địa điểm</Text>
-            <Pressable className="rounded-full bg-[#FFF4EF] px-3 py-2">
-              <Text className="text-[14px] font-semibold text-[#F58752]">Toàn màn hình</Text>
-            </Pressable>
+            <Text className={sectionTitleClassName}>{t('explore.map.title')}</Text>
           </View>
           <ExploreMap
             places={filteredPlaces}
@@ -849,30 +760,32 @@ export default function ExploreScreen() {
             onRoutePress={openRoute}
           />
           {placeError ? (
-            <Text className="mx-4 mt-2 text-[11px] text-[#B86D2A]">{placeError}</Text>
+            <Text className="mx-4 mt-2 text-[11px] text-[#D84C3E]">{placeError}</Text>
           ) : null}
         </View>
 
         <View className="gap-6 px-4">
           <View className="gap-4">
             <View className="flex-row items-center justify-between">
-              <Text className="text-[22px] font-bold text-[#2B2233]">{t('explore.routes.title')}</Text>
+              <Text className={sectionTitleClassName}>{t('explore.routes.title')}</Text>
               {!isRoutesLoading ? (
-                <Text className="text-[12px] font-semibold text-[#8A7D6D]">
-                  {`${apiRoutes.length} tuyến`}
+                <Text className="text-[12px] font-semibold text-[#8E869A]">
+                  {t('explore.routes.count', { count: apiRoutes.length })}
                 </Text>
               ) : null}
             </View>
 
             {isRoutesLoading ? (
-              <View className="h-[260px] items-center justify-center rounded-[30px] bg-[#F7F3EA]">
+              <View className="h-[260px] items-center justify-center rounded-[22px] bg-[#FAF7FC]">
                 <ActivityIndicator color="#EB489B" />
               </View>
             ) : apiRoutes.length === 0 ? (
-              <View className="rounded-[28px] border border-[#E6DDD1] bg-[#FCFAF5] p-5">
-                <Text className="text-[15px] font-bold text-[#2B2233]">Chưa có tuyến publish</Text>
-                <Text className="mt-1 text-[12px] text-[#8E869A]">
-                  {routeError || 'Backend chưa trả về tuyến PUBLISHED.'}
+              <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] p-5">
+                <Text className="text-[15px] font-bold text-[#3B4454]">
+                  {t('explore.routes.emptyTitle')}
+                </Text>
+                <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+                  {routeError || t('explore.routes.emptyDescription')}
                 </Text>
               </View>
             ) : (
@@ -916,14 +829,15 @@ export default function ExploreScreen() {
                         className="absolute inset-0 px-5 py-5"
                       >
                         <View className="flex-1 justify-end gap-3">
-                          <Text className="text-[12px] font-semibold uppercase tracking-[0.8px] text-[#E9D7C5]">
-                            Tuyến di sản · {getDifficultyLabel(route.difficulty, t)}
+                          <Text className="text-[12px] font-semibold uppercase tracking-[0.8px] text-white/70">
+                            {t('explore.routes.heritageLabel')} ·{' '}
+                            {getDifficultyLabel(route.difficulty, t)}
                           </Text>
-                          <Text className="text-[28px] font-extrabold leading-[36px] text-white" numberOfLines={2}>
+                          <Text className="text-[24px] font-extrabold leading-[30px] text-white" numberOfLines={2}>
                             {route.routeName}
                           </Text>
-                          <Text className="text-[13px] leading-5 text-[#F4E4DA]" numberOfLines={2}>
-                            {route.description || 'Khám phá tuyến di sản được curator xây dựng.'}
+                          <Text className="text-[13px] leading-5 text-white/85" numberOfLines={2}>
+                            {route.description || t('explore.routes.descriptionFallback')}
                           </Text>
                           <View className="flex-row flex-wrap gap-2 pt-1">
                             {[
@@ -939,14 +853,14 @@ export default function ExploreScreen() {
                           <View className="flex-row items-center justify-between pt-1">
                             <Pressable
                               onPress={() => openRoute(route.routeId)}
-                              className="rounded-full bg-white/90 px-4 py-2.5"
+                              className="rounded-full bg-white px-4 py-2.5"
                             >
-                              <Text className="text-[14px] font-extrabold text-[#D9587F]">
-                                Xem route
+                              <Text className="text-[13px] font-extrabold text-[#EB489B]">
+                                {t('explore.routes.viewRoute')}
                               </Text>
                             </Pressable>
-                            <View className="rounded-full bg-[#FFB400] px-3 py-1.5">
-                              <Text className="text-[12px] font-extrabold text-[#2B2233]">
+                            <View className="rounded-full bg-[#FFF7E8] px-3 py-1.5">
+                              <Text className="text-[11px] font-extrabold text-[#D97706]">
                                 +{route.xp} XP
                               </Text>
                             </View>
@@ -976,21 +890,52 @@ export default function ExploreScreen() {
           </View>
 
           <View className="gap-4">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-[19px] font-bold text-[#2B2233]">{t('explore.places.nearYou')}</Text>
-              <Pressable className="rounded-full bg-[#FFF4EF] px-3 py-2">
-                <Text className="text-[14px] font-semibold text-[#F58752]">Xem bản đồ</Text>
-              </Pressable>
-            </View>
+            <Text className={sectionTitleClassName}>
+              {t('explore.places.nearYou')}
+            </Text>
+
+            {/* Bộ lọc chủ đề đứng ngay trên danh sách nó lọc, thay vì nằm tận
+                đầu màn hình cách đó hai section. */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingVertical: 2 }}
+            >
+              {categories.map((category) => {
+                const selected = category.key === activeCategory;
+                return (
+                  <Pressable
+                    key={category.key}
+                    onPress={() => setActiveCategory(category.key)}
+                    className={`mr-2.5 rounded-full border px-4 py-2 ${
+                      selected
+                        ? 'border-[#EB489B] bg-[#FDEBF3]'
+                        : 'border-[#EEF1F4] bg-white'
+                    }`}
+                  >
+                    <Text
+                      className={`text-[13px] font-bold ${
+                        selected ? 'text-[#EB489B]' : 'text-[#8E869A]'
+                      }`}
+                    >
+                      {category.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
 
             {isPlacesLoading ? (
               <View className="items-center py-8">
                 <ActivityIndicator color="#EB489B" />
               </View>
             ) : filteredPlaces.length === 0 ? (
-              <View className="items-center py-8">
-                <Text className="text-[15px] text-[#8E869A]">
-                  Không có địa điểm cho danh mục này
+              <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
+                <Text className="text-[15px] font-bold text-[#3B4454]">
+                  {t('explore.places.emptyTitle')}
+                </Text>
+                <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+                  {t('explore.places.emptyDescription')}
                 </Text>
               </View>
             ) : (
@@ -998,7 +943,9 @@ export default function ExploreScreen() {
                 {filteredPlaces.map((place) => (
                   <Pressable
                     key={place.id}
-                    className="overflow-hidden rounded-[28px] border border-[#E6DDD1] bg-[#FCFAF5]"
+                    className="overflow-hidden rounded-[22px] border border-[#EEF1F4] bg-white"
+                    onPress={() => openPlace(place)}
+                    style={cardShadowStyle}
                   >
                     <Image
                       source={place.imageUri}
@@ -1006,40 +953,43 @@ export default function ExploreScreen() {
                       style={{ height: 130, width: '100%' }}
                     />
                     <View className="px-4 py-4">
-                      <View className="flex-row items-center justify-between">
-                        <Text className="text-[17px] font-bold text-[#2B2233]" numberOfLines={1}>
+                      <View className="flex-row items-center justify-between gap-3">
+                        <Text
+                          className="flex-1 text-[15px] font-extrabold text-[#2B2233]"
+                          numberOfLines={1}
+                        >
                           {place.title}
                         </Text>
-                        <View className="rounded-full bg-[#FFF5E8] px-3 py-1.5">
-                          <Text className="text-[13px] font-semibold text-[#B86D2A]">
+                        <View className="rounded-full bg-[#FFF7E8] px-2.5 py-1">
+                          <Text className="text-[11px] font-extrabold text-[#D97706]">
                             {place.reward} XP
                           </Text>
                         </View>
                       </View>
-                      <Text className="mt-1 text-[14px] text-[#6E6B62]">
+                      <Text className="mt-1 text-[13px] text-[#8E869A]" numberOfLines={1}>
                         {place.category} · {place.badge}
                       </Text>
                       <View className="mt-3 flex-row items-center justify-between">
-                        <View className="flex-row items-center gap-2">
+                        <View className="flex-row items-center gap-1.5">
                           <SymbolView
                             name={{ ios: 'star.fill', android: 'star', web: 'star' }}
                             size={13}
-                            tintColor="#D18C2F"
+                            tintColor="#F58752"
                           />
-                          <Text className="text-[14px] font-semibold text-[#2B2233]">
+                          <Text className="text-[13px] font-bold text-[#2B2233]">
                             {place.rating}
                           </Text>
-                          <Text className="text-[13px] text-[#8A7D6D]">
-                            ({place.reviews} đánh giá)
+                          <Text className="text-[12px] text-[#8E869A]">
+                            {t('home.nearby.reviewCount', { value: place.reviews })}
                           </Text>
                         </View>
                         <View className="flex-row items-center gap-1">
                           <SymbolView
                             name={{ ios: 'location.fill', android: 'place', web: 'place' }}
                             size={12}
-                            tintColor="#8A7D6D"
+                            tintColor="#8E869A"
                           />
-                          <Text className="text-[13px] text-[#8A7D6D]">{place.distance}</Text>
+                          <Text className="text-[12px] text-[#8E869A]">{place.distance}</Text>
                         </View>
                       </View>
                     </View>
@@ -1047,41 +997,6 @@ export default function ExploreScreen() {
                 ))}
               </View>
             )}
-          </View>
-
-          <View
-            className="gap-4 rounded-[28px] bg-[#FFF8FC] p-4"
-            style={cardShadowStyle}
-          >
-            <View className="flex-row items-center justify-between">
-              <Text className="text-[19px] font-bold text-[#2B2233]">Nhiệm vụ nổi bật</Text>
-              <Pressable>
-                <Text className="text-[15px] font-bold text-[#F58752]">Xem tất cả</Text>
-              </Pressable>
-            </View>
-
-            <View className="gap-3">
-              {missions.map((item) => (
-                <View
-                  key={item.label}
-                  className="flex-row items-center rounded-[22px] bg-white px-3 py-3.5"
-                >
-                  <View
-                    className="mr-3 h-10 w-10 items-center justify-center rounded-full"
-                    style={{ backgroundColor: item.iconBackground }}
-                  >
-                    <SymbolView name={item.icon} size={16} tintColor="#3D3446" />
-                  </View>
-                  <View className="flex-1 pr-3">
-                    <Text className="text-[17px] font-extrabold text-[#2B2233]">{item.label}</Text>
-                    <Text className="mt-0.5 text-[13px] leading-4 text-[#8E869A]">
-                      {item.subtitle}
-                    </Text>
-                  </View>
-                  <Text className="text-[18px] font-extrabold text-[#2B2233]">{item.reward}</Text>
-                </View>
-              ))}
-            </View>
           </View>
         </View>
       </ScrollView>

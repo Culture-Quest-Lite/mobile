@@ -1,3 +1,4 @@
+import { appAlert } from "@/components/ui/app-dialog";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { getValidAccessToken, useAuthSession } from "@/features/auth/hooks/use-auth-session";
@@ -11,7 +12,6 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   RefreshControl,
@@ -173,7 +173,7 @@ export default function CommunityTrashScreen() {
 
   const handleRestorePost = useCallback((post: ProfilePost) => {
     setMenuPost(null);
-    Alert.alert(
+    appAlert.alert(
       "Khôi phục bài viết",
       `Chức năng khôi phục bài viết "${post.displayName || post.username}" chưa được tích hợp API.`,
     );
@@ -198,12 +198,12 @@ export default function CommunityTrashScreen() {
 
     if (!post || !Number.isInteger(postId) || postId <= 0) {
       setPostPendingPermanentDeletion(null);
-      Alert.alert("Không thể xóa", "Không xác định được bài viết cần xóa.");
+      appAlert.alert("Không thể xóa", "Không xác định được bài viết cần xóa.");
       return;
     }
 
     if (!authSession.isAuthenticated) {
-      Alert.alert(
+      appAlert.alert(
         "Cần đăng nhập",
         "Bạn cần đăng nhập để xóa vĩnh viễn bài viết.",
       );
@@ -213,7 +213,7 @@ export default function CommunityTrashScreen() {
     const accessToken = await getValidAccessToken();
 
     if (!accessToken) {
-      Alert.alert(
+      appAlert.alert(
         "Phiên đăng nhập hết hạn",
         "Vui lòng đăng nhập lại trước khi xóa vĩnh viễn bài viết.",
       );
@@ -231,7 +231,7 @@ export default function CommunityTrashScreen() {
       setPostPendingPermanentDeletion(null);
       await loadDeletedPosts();
     } catch (error) {
-      Alert.alert(
+      appAlert.alert(
         "Không thể xóa bài viết",
         error instanceof Error
           ? error.message

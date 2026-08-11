@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   Text,
@@ -11,6 +10,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
+import { appAlert } from "@/components/ui/app-dialog";
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { ScreenHorizontalPadding } from "@/constants/theme";
 import { SymbolView } from "@/components/ui/symbol-view";
@@ -21,6 +21,7 @@ import {
 import {
   getVoucherById,
   getVoucherImage,
+  getVoucherRedeemCode,
   redeemVoucher,
   type Voucher,
   type VoucherUsage,
@@ -43,7 +44,7 @@ export default function VoucherDetailScreen() {
   };
 
   useEffect(() => {
-    if (!authSession.isAuthenticated || !Number.isFinite(voucherId)) {
+    if (!Number.isFinite(voucherId)) {
       setLoading(false);
       setVoucher(null);
       setError(null);
@@ -56,8 +57,11 @@ export default function VoucherDetailScreen() {
 
     void (async () => {
       try {
-        const token = await getValidAccessToken();
-        if (!token) return;
+        // `GET /api/vouchers/{id}` là public — khách vẫn xem được chi tiết,
+        // token chỉ dùng khi đã đăng nhập.
+        const token = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
         const result = await getVoucherById(voucherId, token);
         if (!cancelled) setVoucher(result);
       } catch (e) {
@@ -79,7 +83,12 @@ export default function VoucherDetailScreen() {
   const handleRedeem = () => {
     if (!voucher) return;
 
-    Alert.alert(
+    if (!authSession.isAuthenticated) {
+      goToLogin();
+      return;
+    }
+
+    appAlert.alert(
       "Xác nhận đổi voucher",
       `Bạn sẽ dùng ${voucher.pointsRequired.toLocaleString("vi-VN")} điểm để đổi voucher này.`,
       [
@@ -106,7 +115,7 @@ export default function VoucherDetailScreen() {
                   : current,
               );
             } catch (e) {
-              Alert.alert(
+              appAlert.alert(
                 "Không thể đổi voucher",
                 e instanceof Error ? e.message : "Vui lòng thử lại.",
               );
@@ -118,71 +127,6 @@ export default function VoucherDetailScreen() {
       ],
     );
   };
-
-  if (!authSession.isAuthenticated) {
-    return (
-      <SafeAreaView
-        className="flex-1 bg-[#FFF9F6]"
-        edges={["left", "right", "bottom"]}
-      >
-        <View
-          className="flex-row items-center bg-white px-4 pb-4"
-          style={{ paddingTop: insets.top + 10 }}
-        >
-          <Pressable
-            className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF0F7]"
-            onPress={() => router.back()}
-          >
-            <SymbolView
-              name={{
-                ios: "chevron.left",
-                android: "arrow_back",
-                web: "arrow_back",
-              }}
-              size={19}
-              tintColor="#D93682"
-            />
-          </Pressable>
-          <Text className="ml-3 text-[20px] font-black text-[#2B2233]">
-            Chi tiết voucher
-          </Text>
-        </View>
-
-        <View className="flex-1 items-center justify-center px-6">
-          <View
-            className="w-full items-center rounded-[28px] bg-white px-6 py-8"
-            style={{ elevation: 2 }}
-          >
-            <View className="h-20 w-20 items-center justify-center rounded-full bg-[#FFF0F7]">
-              <SymbolView
-                name={{
-                  ios: "lock.fill",
-                  android: "lock",
-                  web: "lock",
-                }}
-                size={38}
-                tintColor="#EB489B"
-              />
-            </View>
-            <Text className="mt-5 text-center text-[21px] font-black text-[#2B2233]">
-              Bạn cần đăng nhập
-            </Text>
-            <Text className="mt-2 text-center text-[14px] leading-6 text-[#8E869A]">
-              Đăng nhập để xem chi tiết và đổi voucher bằng điểm của bạn.
-            </Text>
-            <Pressable
-              className="mt-6 w-full items-center rounded-full bg-[#EB489B] py-4"
-              onPress={goToLogin}
-            >
-              <Text className="text-[16px] font-black text-white">
-                Đăng nhập ngay
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   if (loading) {
     return <AppLoadingScreen />;
@@ -333,17 +277,26 @@ export default function VoucherDetailScreen() {
                 Đổi voucher thành công
               </Text>
               <Text className="mt-2 text-[12px] text-[#4F7B5D]">
-                Mã voucher của bạn
+                Mã sử dụng của bạn
               </Text>
               <Text
                 selectable
                 className="mt-1 text-[25px] font-black tracking-[3px] text-[#176C3B]"
               >
-                {usage.voucherCode}
+                {getVoucherRedeemCode(usage)}
               </Text>
               <Text className="mt-2 text-[12px] text-[#4F7B5D]">
-                Hãy đưa mã này cho đối tác khi sử dụng.
+                Hãy đưa mã này cho đối tác khi sử dụng. Bạn có thể xem lại trong
+                “Voucher của tôi”.
               </Text>
+              <Pressable
+                className="mt-3 items-center rounded-full bg-[#238A4D] py-3"
+                onPress={() => router.push("/vouchers/my")}
+              >
+                <Text className="text-[14px] font-black text-white">
+                  Xem voucher của tôi
+                </Text>
+              </Pressable>
             </View>
           ) : null}
         </View>
@@ -373,7 +326,9 @@ export default function VoucherDetailScreen() {
                 ? "Đã đổi voucher"
                 : voucher.quantityRemaining <= 0
                   ? "Voucher đã hết"
-                  : `Đổi với ${voucher.pointsRequired.toLocaleString("vi-VN")} điểm`}
+                  : !authSession.isAuthenticated
+                    ? "Đăng nhập để đổi voucher"
+                    : `Đổi với ${voucher.pointsRequired.toLocaleString("vi-VN")} điểm`}
             </Text>
           )}
         </Pressable>

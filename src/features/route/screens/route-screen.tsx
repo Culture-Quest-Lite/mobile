@@ -26,7 +26,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { routeSystemAlert } from "@/features/route/components/route-system-alert";
 
 import {
   getValidAccessToken,
@@ -53,6 +52,7 @@ import {
   type RouteGroupDemo,
 } from "@/features/route/data/route-group-demo";
 import { usePremiumStatus } from "@/features/profile/hooks/use-premium-status";
+import { appAlert } from "@/components/ui/app-dialog";
 
 type Tab =
   | "official"
@@ -515,7 +515,7 @@ export default function RouteScreen() {
     );
     const routeName = targetProgress?.route?.routeName || "tuyến này";
 
-    routeSystemAlert.alert(
+    appAlert.alert(
       "Xác nhận bỏ tuyến",
       `Bạn có chắc chắn muốn bỏ ${routeName}? Tiến độ hiện tại sẽ bị dừng lại.`,
       [
@@ -543,9 +543,9 @@ export default function RouteScreen() {
                     route.id !== String(targetProgress?.routeId ?? progressId),
                 ),
               );
-              routeSystemAlert.alert("Đã bỏ tuyến", "Tiến độ tuyến này đã được dừng.");
+              appAlert.alert("Đã bỏ tuyến", "Tiến độ tuyến này đã được dừng.");
             } catch (error) {
-              routeSystemAlert.alert(
+              appAlert.alert(
                 "Không thể bỏ tuyến",
                 error instanceof Error
                   ? error.message
@@ -562,7 +562,7 @@ export default function RouteScreen() {
   async function handleUnsaveRoute(savedRouteId: number, routeName: string) {
     if (removingSavedRouteId !== null) return;
 
-    routeSystemAlert.alert(
+    appAlert.alert(
       "Bỏ lưu tuyến",
       `Bạn có chắc chắn muốn bỏ lưu ${routeName}?`,
       [
@@ -587,7 +587,7 @@ export default function RouteScreen() {
                 ),
               );
             } catch (error) {
-              routeSystemAlert.alert(
+              appAlert.alert(
                 "Không thể bỏ lưu tuyến",
                 error instanceof Error
                   ? error.message
@@ -1348,7 +1348,7 @@ function MyGroupsTab({
                   <Pressable
                     className="flex-1 rounded-2xl bg-[#EB489B] py-3"
                     onPress={() =>
-                      routeSystemAlert.alert(
+                      appAlert.alert(
                         meta.label,
                         `${meta.helper}\n\nĐây là UI demo dùng dữ liệu giả để bạn duyệt flow group route.`,
                       )
@@ -1361,7 +1361,7 @@ function MyGroupsTab({
                   <Pressable
                     className="rounded-2xl border border-[#E6DFF1] bg-[#FBF9FE] px-4 py-3"
                     onPress={() =>
-                      routeSystemAlert.alert(
+                      appAlert.alert(
                         "Chia sẻ nhóm",
                         `UI demo: chia sẻ lời mời ${group.visibility === "LINK" ? "bằng link" : "cho bạn đang follow"}.`,
                       )

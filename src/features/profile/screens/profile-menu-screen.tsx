@@ -1,3 +1,4 @@
+import { appAlert } from "@/components/ui/app-dialog";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { ScreenHorizontalPadding } from "@/constants/theme";
 import * as ImagePicker from "expo-image-picker";
@@ -6,7 +7,6 @@ import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   Text as RNText,
   ScrollView,
@@ -116,7 +116,7 @@ export default function ProfileMenuScreen() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permissionResult.granted) {
-      Alert.alert(
+      appAlert.alert(
         "Cần cấp quyền",
         "Hãy cho phép truy cập thư viện để đổi ảnh đại diện.",
       );
@@ -165,7 +165,7 @@ export default function ProfileMenuScreen() {
 
       await reloadProfile();
     } catch (error) {
-      Alert.alert("Không thể đổi ảnh đại diện", getUpdateProfileErrorMessage(error));
+      appAlert.alert("Không thể đổi ảnh đại diện", getUpdateProfileErrorMessage(error));
     } finally {
       setIsChangingAvatar(false);
     }
@@ -180,7 +180,7 @@ export default function ProfileMenuScreen() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permissionResult.granted) {
-      Alert.alert(
+      appAlert.alert(
         "Cần cấp quyền",
         "Hãy cho phép truy cập thư viện để đổi ảnh bìa.",
       );
@@ -229,7 +229,7 @@ export default function ProfileMenuScreen() {
 
       await reloadProfile();
     } catch (error) {
-      Alert.alert("Không thể đổi ảnh bìa", getUpdateCoverErrorMessage(error));
+      appAlert.alert("Không thể đổi ảnh bìa", getUpdateCoverErrorMessage(error));
     } finally {
       setIsChangingCover(false);
     }
@@ -268,6 +268,12 @@ export default function ProfileMenuScreen() {
       label: t('profile.menu.vouchers'),
       onPress: () => {
         router.push("/vouchers" as Href);
+      },
+    },
+    {
+      label: t('vouchers.myVouchers'),
+      onPress: () => {
+        router.push("/vouchers/my" as Href);
       },
     },
   ];

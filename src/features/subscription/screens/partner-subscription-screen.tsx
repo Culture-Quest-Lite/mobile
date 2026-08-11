@@ -4,7 +4,6 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Linking,
   Modal,
@@ -20,6 +19,7 @@ import MapView, { Marker, PROVIDER_GOOGLE, type Region } from "react-native-maps
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ScreenHorizontalPadding } from "@/constants/theme";
+import { appAlert } from "@/components/ui/app-dialog";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { getValidAccessToken } from "@/features/auth/hooks/use-auth-session";
 import { getPreferredExpoScheme } from "@/lib/expo-scheme";
@@ -442,7 +442,7 @@ export default function PartnerSubscriptionScreen() {
   async function pickDocumentFile() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert("Thiếu quyền truy cập", "Vui lòng cấp quyền chọn ảnh giấy tờ xác minh.");
+      appAlert.alert("Thiếu quyền truy cập", "Vui lòng cấp quyền chọn ảnh giấy tờ xác minh.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -459,13 +459,13 @@ export default function PartnerSubscriptionScreen() {
     setLongitude(formatCoordinateInput(coordinate.longitude));
     setLatitude(formatCoordinateInput(coordinate.latitude));
     setIsCoordinateMapVisible(false);
-    Alert.alert("Đã lưu vị trí", "App đã lưu tọa độ shop từ bản đồ.");
+    appAlert.alert("Đã lưu vị trí", "App đã lưu tọa độ shop từ bản đồ.");
   }
 
   async function pickShopImages() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert("Thiếu quyền truy cập", "Vui lòng cấp quyền chọn ảnh shop.");
+      appAlert.alert("Thiếu quyền truy cập", "Vui lòng cấp quyền chọn ảnh shop.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -493,7 +493,7 @@ export default function PartnerSubscriptionScreen() {
   function handleContinueToPayment() {
     const validationMessage = validateStep1();
     if (validationMessage) {
-      Alert.alert("Thiếu thông tin", validationMessage);
+      appAlert.alert("Thiếu thông tin", validationMessage);
       return;
     }
     setCurrentStep(2);
@@ -515,14 +515,14 @@ export default function PartnerSubscriptionScreen() {
   async function handleRegisterAndPay() {
     const validationMessage = validateStep1();
     if (validationMessage) {
-      Alert.alert("Thiếu thông tin", validationMessage);
+      appAlert.alert("Thiếu thông tin", validationMessage);
       setCurrentStep(1);
       return;
     }
 
     const accessToken = await getValidAccessToken();
     if (!accessToken || !selectedPlan || !documentFile) {
-      Alert.alert("Cần đăng nhập", "Vui lòng đăng nhập trước khi đăng ký gói Partner.");
+      appAlert.alert("Cần đăng nhập", "Vui lòng đăng nhập trước khi đăng ký gói Partner.");
       return;
     }
 
@@ -580,13 +580,13 @@ export default function PartnerSubscriptionScreen() {
       }
     }
     if (paymentResponse.qrCodeUrl || paymentResponse.qrCode) {
-      Alert.alert(
+      appAlert.alert(
         "Không mở được trang thanh toán",
         "Bạn có thể quét mã QR bên dưới để chuyển khoản qua ngân hàng.",
       );
       return;
     }
-    Alert.alert(
+    appAlert.alert(
       "Không mở được trang thanh toán",
       "Hệ thống chưa trả liên kết hoặc mã QR để thanh toán bằng ngân hàng.",
     );

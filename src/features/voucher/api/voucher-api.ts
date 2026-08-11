@@ -47,7 +47,13 @@ export type VoucherPage = {
 export type VoucherUsage = {
   voucherUsageId: number;
   voucherId: number;
+  /** Mã chung của chiến dịch voucher — MỌI người đổi đều có mã này. */
   voucherCode: string;
+  /**
+   * Mã riêng của từng lượt đổi (base62, 10 ký tự) do backend sinh ở
+   * `VoucherUsageUtils.generateToken`. Đây mới là mã người dùng đưa cho đối tác.
+   */
+  voucherUsageCode?: string | null;
   voucherName: string;
   description?: string | null;
   pointsRequired: number;
@@ -55,6 +61,16 @@ export type VoucherUsage = {
   usedAt?: string | null;
   expiredAt?: string | null;
   isUsed: boolean;
+};
+
+export type VoucherUsagePage = {
+  content: VoucherUsage[];
+  number: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first?: boolean;
+  last?: boolean;
 };
 
 /** Khớp `VoucherFilter.java`. */
@@ -104,6 +120,8 @@ export async function getAvailableVouchers(
   // (ACTIVE + còn số lượng + trong thời gian hiệu lực) và BỎ QUA search/
   // partnerId/status — chỉ page/size/sortBy/sortDir là có tác dụng. Vẫn gửi
   // lên để khi backend hỗ trợ thì không phải sửa lại client.
+  // `GET /api/vouchers/**` nằm trong `PUBLIC_GET_ENDPOINTS` nên `accessToken`
+  // là tuỳ chọn — khách chưa đăng nhập vẫn xem được danh sách.
   if (params.search?.trim()) query.set("search", params.search.trim());
   if (params.status) query.set("status", params.status);
   if (params.partnerId) query.set("partnerId", String(params.partnerId));
@@ -143,8 +161,83 @@ export async function redeemVoucher(voucherId: number, accessToken: string) {
   return ensureOk<VoucherUsage>(response, "Không thể đổi voucher");
 }
 
+/**
+ * Voucher người dùng đã đổi — `GET /api/users/my-vouchers`.
+ * Backend đổi `sortBy=createdAt` thành `redeemedAt`, nên để mặc định là được.
+ */
+export async function getMyRedeemedVouchers(
+  params: AvailableVoucherParams = {},
+  accessToken: string,
+) {
+  const query = new URLSearchParams();
+  query.set("page", String(params.page ?? 0));
+  query.set("size", String(params.size ?? 20));
+  query.set("sortBy", params.sortBy ?? "redeemedAt");
+  query.set("sortDir", params.sortDir ?? "desc");
+
+  const response = await fetch(
+    resolveApiUrl(`/api/users/my-vouchers?${query.toString()}`),
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  return ensureOk<VoucherUsagePage>(
+    response,
+    "Không lấy được voucher của bạn",
+  );
+}
+
 export function getVoucherImage(voucher: Voucher) {
   return voucher.imageUrl?.trim() ? voucher.imageUrl : null;
+}
+
+/**
+ * Mã đưa cho đối tác quét/nhập. Ưu tiên `voucherUsageCode` (mã riêng từng lượt
+ * đổi); `voucherCode` chỉ là fallback cho bản backend cũ chưa có trường này.
+ */
+export function getVoucherRedeemCode(usage: VoucherUsage) {
+  return usage.voucherUsageCode?.trim() || usage.voucherCode;
+}
+
+export function isVoucherUsageExpired(usage: VoucherUsage) {
+  if (usage.isUsed || !usage.expiredAt) return false;
+  return new Date(usage.expiredAt).getTime() < Date.now();
+}
+
+export type VoucherPartnerGroup = {
+  partnerId: number;
+  partnerName: string;
+  count: number;
+};
+
+/**
+ * Gom voucher theo đối tác để dựng bộ lọc "quán".
+ *
+ * Đây là thứ duy nhất liên quan tới "địa điểm" mà client làm được lúc này:
+ * `VoucherResponse` chỉ có `partnerId`/`partnerName`, KHÔNG có `address` hay
+ * toạ độ (`partner_info.location` chỉ lộ qua endpoint dành cho PARTNER/ADMIN).
+ * Muốn lọc theo khoảng cách hoặc theo tuyến thì bắt buộc backend phải trả thêm
+ * toạ độ quán — xem ghi chú ở `getAvailableVouchers`.
+ */
+export function groupVouchersByPartner(
+  vouchers: Voucher[],
+): VoucherPartnerGroup[] {
+  const groups = new Map<number, VoucherPartnerGroup>();
+
+  for (const voucher of vouchers) {
+    const existing = groups.get(voucher.partnerId);
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+    groups.set(voucher.partnerId, {
+      partnerId: voucher.partnerId,
+      partnerName: voucher.partnerName,
+      count: 1,
+    });
+  }
+
+  return [...groups.values()].sort((a, b) =>
+    b.count - a.count || a.partnerName.localeCompare(b.partnerName, "vi"),
+  );
 }
 
 /** Backend chưa lọc theo từ khoá ở `/available`, nên lọc tại client. */
