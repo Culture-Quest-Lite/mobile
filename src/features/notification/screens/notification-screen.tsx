@@ -37,8 +37,8 @@ function formatNotificationTime(value: string) {
   }).format(date);
 }
 
-function getNotificationIcon(type: string) {
-  const normalizedType = type.trim().toUpperCase();
+function getNotificationIcon(type?: string | null) {
+  const normalizedType = typeof type === "string" ? type.trim().toUpperCase() : "";
 
   if (normalizedType.includes("SUBSCRIPTION")) {
     return { ios: "crown.fill", android: "workspace_premium", web: "workspace_premium" } as const;
