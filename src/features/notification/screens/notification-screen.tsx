@@ -20,6 +20,115 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
+import { lineHeightFor } from "@/lib/text-scale";
+
+const unreadNotificationCardShadow = {
+  shadowColor: "rgba(30, 50, 78, 0.10)",
+  shadowOpacity: 1,
+  shadowRadius: 18,
+  shadowOffset: { width: 0, height: 8 },
+  elevation: 5,
+} as const;
+const meaninglessNotificationValues = new Set([
+  "",
+  "string",
+  "null",
+  "undefined",
+]);
+
+function normalizeNotificationText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function replaceAdminLabel(value: string) {
+  return value.replace(/\badmin\b/giu, "Quản trị viên");
+}
+
+function stripNotificationReferenceIds(value: string) {
+  return value
+    .replace(
+      /\b(đánh giá|bài viết|tuyến đường|bình luận|check[- ]?in)\s*#\d+\b/giu,
+      "$1",
+    )
+    .replace(/\b(?:mã|id)\s*#?\d+\b/giu, "")
+    .replace(/\s+#\d+\b/gu, "");
+}
+
+function removeMeaninglessReason(value: string) {
+  return value
+    .replace(
+      /\s*(?:với\s+)?lý do:\s*(string|null|undefined)\b\.?/giu,
+      ".",
+    )
+    .replace(/\s*lý do:\s*(?:string|null|undefined)\b\.?/giu, ".");
+}
+
+function humanizeNotificationCopy(value: string) {
+  let nextValue = normalizeNotificationText(value);
+
+  if (!nextValue) {
+    return "";
+  }
+
+  nextValue = replaceAdminLabel(nextValue);
+  nextValue = stripNotificationReferenceIds(nextValue);
+  nextValue = removeMeaninglessReason(nextValue);
+  nextValue = nextValue.replace(
+    /\b(đánh giá|bài viết|tuyến đường|bình luận)\s+mà\s+bạn\b/giu,
+    "$1 bạn đã",
+  );
+  nextValue = nextValue.replace(
+    /\bđã bị Quản trị viên xử lý\b/giu,
+    "đã được Quản trị viên xử lý",
+  );
+  nextValue = nextValue.replace(
+    /\bđã bị hệ thống xử lý\b/giu,
+    "đã được hệ thống xử lý",
+  );
+  nextValue = nextValue.replace(/\s+([,.:;!?])/g, "$1");
+  nextValue = nextValue.replace(/([.!?])\s*\./g, "$1");
+  nextValue = normalizeNotificationText(nextValue);
+
+  if (/^[.!?]+$/.test(nextValue)) {
+    return "";
+  }
+
+  return meaninglessNotificationValues.has(nextValue.toLowerCase())
+    ? ""
+    : nextValue;
+}
+
+function ensureNotificationSentence(value: string) {
+  const normalizedValue = humanizeNotificationCopy(value);
+
+  if (!normalizedValue) {
+    return "";
+  }
+
+  return /[.!?]$/.test(normalizedValue)
+    ? normalizedValue
+    : `${normalizedValue}.`;
+}
+
+function getFormattedNotificationTitle(notification: AppNotification) {
+  const normalizedTitle = humanizeNotificationCopy(notification.title);
+
+  if (normalizedTitle) {
+    return normalizedTitle;
+  }
+
+  return "Thông báo mới";
+}
+
+function getFormattedNotificationMessage(notification: AppNotification) {
+  const normalizedMessage = ensureNotificationSentence(notification.message);
+
+  if (normalizedMessage) {
+    return normalizedMessage;
+  }
+
+  return "Bạn có một thông báo mới.";
+}
 
 function formatNotificationTime(value: string) {
   const date = new Date(value);
@@ -77,7 +186,11 @@ export default function NotificationScreen() {
       return;
     }
 
-    refresh ? setIsRefreshing(true) : setIsLoading(true);
+    if (refresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
     setErrorMessage(null);
 
     try {
@@ -165,7 +278,10 @@ export default function NotificationScreen() {
           />
         </Pressable>
 
-        <Text className="flex-1 text-center text-[20px] font-black text-[#2B2233]">
+        <Text
+          className="flex-1 text-center text-[20px] font-extrabold text-[#2B2233]"
+          style={{ lineHeight: lineHeightFor(20) }}
+        >
           Thông báo
         </Text>
         <View className="h-10 w-10" />
@@ -201,54 +317,80 @@ export default function NotificationScreen() {
                   tintColor="#EB489B"
                 />
               </View>
-              <Text className="mt-4 text-[17px] font-black text-[#2B2233]">
+              <Text
+                className="mt-4 text-[16px] font-semibold text-[#2B2233]"
+                style={{ lineHeight: lineHeightFor(16) }}
+              >
                 Chưa có thông báo
               </Text>
-              <Text className="mt-2 text-center text-[13px] leading-5 text-[#8E869A]">
+              <Text
+                className="mt-2 text-center text-[15px] text-[#8E869A]"
+                style={{ lineHeight: lineHeightFor(15) }}
+              >
                 Những cập nhật về hành trình, điểm thưởng và đăng ký sẽ xuất hiện tại đây.
               </Text>
             </View>
           ) : (
             <View className="gap-3">
-              {notifications.map((notification) => (
-                <Pressable
-                  key={notification.id}
-                  className={`flex-row gap-3 rounded-[22px] border p-4 ${
-                    notification.isRead
-                      ? "border-[#EEEAF2] bg-white"
-                      : "border-[#FFD5E6] bg-[#FFF7FB]"
-                  }`}
-                  onPress={() => void handleNotificationPress(notification)}
-                >
-                  <View className="h-11 w-11 items-center justify-center rounded-full bg-[#FFF0F7]">
-                    <SymbolView
-                      name={getNotificationIcon(notification.notificationType)}
-                      size={20}
-                      tintColor="#EB489B"
-                    />
-                  </View>
+              {notifications.map((notification) => {
+                const displayTitle = getFormattedNotificationTitle(notification);
+                const displayMessage = getFormattedNotificationMessage(notification);
 
-                  <View className="min-w-0 flex-1">
-                    <View className="flex-row items-start gap-2">
-                      <Text
-                        className="min-w-0 flex-1 text-[15px] font-extrabold text-[#2B2233]"
-                        numberOfLines={2}
-                      >
-                        {notification.title}
-                      </Text>
-                      {!notification.isRead ? (
-                        <View className="mt-1.5 h-2.5 w-2.5 rounded-full bg-[#EB489B]" />
-                      ) : null}
+                return (
+                  <Pressable
+                    key={notification.id}
+                    className="flex-row gap-3 rounded-[22px] border border-[#EEEAF2] bg-white p-4"
+                    onPress={() => void handleNotificationPress(notification)}
+                    style={
+                      notification.isRead ? undefined : unreadNotificationCardShadow
+                    }
+                  >
+                    <View className="h-11 w-11 items-center justify-center rounded-full bg-[#FFF0F7]">
+                      <SymbolView
+                        name={getNotificationIcon(notification.notificationType)}
+                        size={20}
+                        tintColor="#EB489B"
+                      />
                     </View>
-                    <Text className="mt-1 text-[13px] leading-5 text-[#665D70]">
-                      {notification.message}
-                    </Text>
-                    <Text className="mt-2 text-[11px] font-semibold text-[#A198AA]">
-                      {formatNotificationTime(notification.createdAt)}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))}
+
+                    <View className="min-w-0 flex-1">
+                      <View className="flex-row items-start gap-2">
+                        <Text
+                          className={`min-w-0 flex-1 text-[15px] ${
+                            notification.isRead
+                              ? "font-medium text-[#4A4251]"
+                              : "font-semibold text-[#2B2233]"
+                          }`}
+                          numberOfLines={2}
+                          style={{ lineHeight: lineHeightFor(15) }}
+                        >
+                          {displayTitle}
+                        </Text>
+                      </View>
+                      <Text
+                        className={`mt-1 text-[15px] ${
+                          notification.isRead
+                            ? "text-[#7A7282]"
+                            : "text-[#665D70]"
+                        }`}
+                        style={{ lineHeight: lineHeightFor(15) }}
+                      >
+                        {displayMessage}
+                      </Text>
+                      <Text
+                        className={`mt-2 text-[12px] ${
+                          notification.isRead
+                            ? "text-[#B1A9BA]"
+                            : "text-[#A198AA]"
+                        }`}
+                        style={{ lineHeight: lineHeightFor(12) }}
+                      >
+                        {formatNotificationTime(notification.createdAt)}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
             </View>
           )}
         </ScrollView>

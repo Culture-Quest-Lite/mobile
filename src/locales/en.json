@@ -724,6 +724,7 @@
       "processingLabel": "Processing...",
       "followedLabel": "Following",
       "followLabel": "Follow",
+      "unfollowLabel": "Unfollow",
       "messageA11y": "Message explorer",
       "messageLabel": "Message",
       "noPublicPosts": "This explorer doesn't have any public posts yet.",

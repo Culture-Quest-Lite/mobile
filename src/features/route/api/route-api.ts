@@ -916,13 +916,6 @@ export async function getUserRouteProgressList({
   const url = `${resolveRouteParticipantUrl("/api/v1/route-participants")}?${params.toString()}`;
   const body = await fetchRouteJson(url, accessToken, tokenType);
   const unwrappedBody = unwrapApiBody(body);
-  // Response mới gói metadata trong "page", response cũ để phẳng ở gốc.
-  const pageMeta =
-    isObject(unwrappedBody) && isObject(unwrappedBody.page)
-      ? unwrappedBody.page
-      : isObject(unwrappedBody)
-        ? unwrappedBody
-        : null;
   const rawContent = readPageContent(body);
   const content = rawContent.map(parseUserRouteProgress).filter(isNonNull);
   // PagedModel gói metadata trong `page`; giữ fallback phẳng cho response cũ.
@@ -969,7 +962,7 @@ export async function saveRoute({
   tokenType,
 }: RouteIdRequest) {
   requireAccessToken(accessToken);
-  const url = resolveRouteUrl(`/api/v1/saved-routes/save/${routeId}`);
+  const url = resolveRouteParticipantUrl(`/api/v1/saved-routes/save/${routeId}`);
   const body = await fetchRouteJson(url, accessToken, tokenType, {
     method: "POST",
   });
@@ -982,7 +975,9 @@ export async function unSaveRoute({
   tokenType,
 }: AuthenticatedRouteRequest & { savedRouteId: number | string }) {
   requireAccessToken(accessToken);
-  const url = resolveRouteUrl(`/api/v1/saved-routes/un-save/${savedRouteId}`);
+  const url = resolveRouteParticipantUrl(
+    `/api/v1/saved-routes/un-save/${savedRouteId}`,
+  );
   return fetchRouteJson(url, accessToken, tokenType, { method: "DELETE" });
 }
 
@@ -991,7 +986,7 @@ export async function getSavedRoutes({
   tokenType,
 }: AuthenticatedRouteRequest = {}) {
   requireAccessToken(accessToken);
-  const url = resolveRouteUrl("/api/v1/saved-routes");
+  const url = resolveRouteParticipantUrl("/api/v1/saved-routes");
   const body = await fetchRouteJson(url, accessToken, tokenType);
   const rawList = readPageContent(body);
   return rawList.map(parseSavedRoute).filter(isNonNull);
