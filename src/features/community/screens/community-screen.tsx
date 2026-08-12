@@ -2840,11 +2840,13 @@ export default function CommunityScreen() {
               </View>
 
               <CircleIconButton
+                accessibilityLabel={t("explore.a11y.notifications")}
                 icon={{
                   ios: "bell",
                   android: "notifications",
                   web: "notifications",
                 }}
+                onPress={() => router.push("/notifications" as Href)}
               />
             </View>
           </View>
@@ -3197,10 +3199,20 @@ export default function CommunityScreen() {
   );
 }
 
-function CircleIconButton({ icon }: { icon: SymbolName }) {
+function CircleIconButton({
+  accessibilityLabel,
+  icon,
+  onPress,
+}: {
+  accessibilityLabel?: string;
+  icon: SymbolName;
+  onPress?: () => void;
+}) {
   return (
     <Pressable
+      accessibilityLabel={accessibilityLabel}
       className="h-9 w-9 items-center justify-center rounded-full border"
+      onPress={onPress}
       style={{
         backgroundColor: "rgba(255,255,255,0.92)",
         borderColor: subtleBorderColor,

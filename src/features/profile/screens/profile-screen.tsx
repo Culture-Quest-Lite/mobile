@@ -73,9 +73,13 @@ import {
   type ProfileRouteParticipant,
   useRouteParticipants,
 } from "../hooks/use-route-participants";
+import {
+  type ProfileSavedRoute,
+  useSavedRoutes,
+} from "../hooks/use-saved-routes";
 import type { ProfilePost, ProfilePostStatus } from "../types";
 
-type Tab = "posts" | "pending-posts" | "routes";
+type Tab = "posts" | "pending-posts" | "routes" | "saved-routes";
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type ProfileHiddenPostsFilter = "PRIVATE" | "PENDING" | "REPORTED" | "REJECTED";
 type ResolvedProfileHotspotPreview = {
@@ -164,6 +168,15 @@ const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
     key: "routes",
     label: "Tuyến đường",
     icon: { ios: "map", android: "route", web: "route" },
+  },
+  {
+    key: "saved-routes",
+    label: "Tuyến đường đã lưu",
+    icon: {
+      ios: "bookmark.fill",
+      android: "bookmark",
+      web: "bookmark",
+    },
   },
 ];
 const routeParticipantFallbackCover =
@@ -966,7 +979,14 @@ export default function ProfileScreen() {
     error: routeParticipantsError,
     isLoading: isLoadingRouteParticipants,
     participants: routeParticipants,
+    reload: reloadRouteParticipants,
   } = useRouteParticipants();
+  const {
+    error: savedRoutesError,
+    isLoading: isLoadingSavedRoutes,
+    reload: reloadSavedRoutes,
+    routes: savedRoutes,
+  } = useSavedRoutes();
   const [tab, setTab] = useState<Tab>("posts");
   const [hiddenPostsFilter, setHiddenPostsFilter] =
     useState<ProfileHiddenPostsFilter>("PRIVATE");
@@ -1029,8 +1049,16 @@ export default function ProfileScreen() {
       ),
     [hiddenPostsFilter, privateTabPosts],
   );
-  const visiblePosts =
-    tab === "pending-posts" ? filteredPrivateTabPosts : primaryTabPosts;
+  const visiblePosts = useMemo(() => {
+    switch (tab) {
+      case "posts":
+        return primaryTabPosts;
+      case "pending-posts":
+        return filteredPrivateTabPosts;
+      default:
+        return [];
+    }
+  }, [filteredPrivateTabPosts, primaryTabPosts, tab]);
   const visibleHotspotIdsToResolve = useMemo(() => {
     const hotspotIds = new Set<number>();
 
@@ -1241,8 +1269,17 @@ export default function ProfileScreen() {
         return;
       }
 
-      void reloadProfile();
-    }, [authSession.isAuthenticated, reloadProfile]),
+      void Promise.allSettled([
+        reloadProfile(),
+        reloadRouteParticipants(),
+        reloadSavedRoutes(),
+      ]);
+    }, [
+      authSession.isAuthenticated,
+      reloadProfile,
+      reloadRouteParticipants,
+      reloadSavedRoutes,
+    ]),
   );
 
   useEffect(() => {
@@ -1406,8 +1443,12 @@ export default function ProfileScreen() {
   ]);
   const isReloadingProfile = isLoading && Boolean(profile);
   const handleRefreshProfile = useCallback(() => {
-    void reloadProfile();
-  }, [reloadProfile]);
+    void Promise.allSettled([
+      reloadProfile(),
+      reloadRouteParticipants(),
+      reloadSavedRoutes(),
+    ]);
+  }, [reloadProfile, reloadRouteParticipants, reloadSavedRoutes]);
 
   if (!authSession.isAuthenticated) {
     return (
@@ -1898,30 +1939,62 @@ export default function ProfileScreen() {
               )
             ) : (
               <View>
-                <ProfilePostsSectionHeader title="Tuyến đường của bạn" />
+                {tab === "routes" ? (
+                  <View>
+                    <ProfilePostsSectionHeader title="Tuyến đường của bạn" />
 
-                {routeParticipantsError ? (
-                  <InlineNotice message={routeParticipantsError.message} />
-                ) : null}
+                    {routeParticipantsError ? (
+                      <InlineNotice message={routeParticipantsError.message} />
+                    ) : null}
 
-                {isLoadingRouteParticipants &&
-                routeParticipants.length === 0 ? (
-                  <ProfileSectionLoading />
-                ) : routeParticipants.length === 0 ? (
-                  <EmptyRoutes />
+                    {isLoadingRouteParticipants &&
+                    routeParticipants.length === 0 ? (
+                      <ProfileSectionLoading />
+                    ) : routeParticipants.length === 0 ? (
+                      <EmptyRoutes />
+                    ) : (
+                      <View>
+                        {routeParticipants.map((participant, index) => (
+                          <RouteParticipantCard
+                            isLast={index === routeParticipants.length - 1}
+                            key={participant.userRouteProgressId}
+                            onPress={() =>
+                              router.push(`/route/${participant.routeId}` as Href)
+                            }
+                            pageGutter={gutter}
+                            participant={participant}
+                          />
+                        ))}
+                      </View>
+                    )}
+                  </View>
                 ) : (
                   <View>
-                    {routeParticipants.map((participant, index) => (
-                      <RouteParticipantCard
-                        isLast={index === routeParticipants.length - 1}
-                        key={participant.userRouteProgressId}
-                        onPress={() =>
-                          router.push(`/route/${participant.routeId}` as Href)
-                        }
-                        pageGutter={gutter}
-                        participant={participant}
-                      />
-                    ))}
+                    <ProfilePostsSectionHeader title="Tuyến đường đã lưu" />
+
+                    {savedRoutesError ? (
+                      <InlineNotice message={savedRoutesError.message} />
+                    ) : null}
+
+                    {isLoadingSavedRoutes && savedRoutes.length === 0 ? (
+                      <ProfileSectionLoading />
+                    ) : savedRoutes.length === 0 ? (
+                      <EmptySavedRoutes />
+                    ) : (
+                      <View>
+                        {savedRoutes.map((savedRoute, index) => (
+                          <SavedRouteCard
+                            isLast={index === savedRoutes.length - 1}
+                            key={savedRoute.savedRouteId}
+                            onPress={() =>
+                              router.push(`/route/${savedRoute.routeId}` as Href)
+                            }
+                            pageGutter={gutter}
+                            savedRoute={savedRoute}
+                          />
+                        ))}
+                      </View>
+                    )}
                   </View>
                 )}
               </View>
@@ -3339,25 +3412,6 @@ function RouteParticipantCard({
               style={{ height: 116, width: 116 }}
               transition={180}
             />
-
-            {participant.xp ? (
-              <LinearGradient
-                className="absolute left-2 top-2 rounded-full px-2 py-1"
-                colors={["#FFD84D", "#F59E0B"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <Text
-                  className="text-[11px] font-extrabold text-[#5A3400]"
-                  style={{
-                    includeFontPadding: false,
-                    lineHeight: lineHeightFor(11),
-                  }}
-                >
-                  +{formatCompactCount(participant.xp)} XP
-                </Text>
-              </LinearGradient>
-            ) : null}
           </View>
 
           <View className="ml-3 min-w-0 flex-1">
@@ -3403,6 +3457,216 @@ function RouteParticipantCard({
                   }}
                 >
                   {statusLabel}
+                </Text>
+              </View>
+            </View>
+
+            <View className="mt-[2px] flex-row flex-wrap items-center gap-1">
+              {ratingLabel ? (
+                <View className="flex-row items-center gap-1">
+                  <SymbolView
+                    name={{ ios: "star.fill", android: "star", web: "star" }}
+                    size={12}
+                    tintColor="#F59E0B"
+                  />
+                  <Text
+                    className="text-[13px] text-[#D97706]"
+                    style={{
+                      includeFontPadding: false,
+                      lineHeight: lineHeightFor(13),
+                    }}
+                  >
+                    {ratingLabel}
+                  </Text>
+                </View>
+              ) : null}
+
+              {ratingLabel ? (
+                <Text
+                  className="text-[13px] text-[#C49A72]"
+                  style={{
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(13),
+                  }}
+                >
+                  ·
+                </Text>
+              ) : null}
+
+              <Text
+                className="text-[13px] text-[#E59A54]"
+                numberOfLines={1}
+                style={{
+                  includeFontPadding: false,
+                  lineHeight: lineHeightFor(13),
+                }}
+              >
+                {progressLabel}
+              </Text>
+            </View>
+
+            <View className="mt-[2px] flex-row items-start gap-1">
+              <SymbolView
+                name={{
+                  ios: "mappin.and.ellipse",
+                  android: "place",
+                  web: "place",
+                }}
+                size={12}
+                tintColor="#A38D9F"
+              />
+              <Text
+                className="min-w-0 flex-1 text-[13px] text-[#776B77]"
+                numberOfLines={1}
+                style={{
+                  includeFontPadding: false,
+                  lineHeight: lineHeightFor(13),
+                }}
+              >
+                {addressLabel}
+              </Text>
+            </View>
+
+            <View className="mt-[3px] flex-row items-center">
+              <View className="flex-row flex-wrap items-center gap-2">
+                {footerMetaItems.map((item) => (
+                  <View className="flex-row items-center gap-1" key={item}>
+                    <SymbolView
+                      name={{
+                        ios: "clock",
+                        android: "schedule",
+                        web: "schedule",
+                      }}
+                      size={12}
+                      tintColor="#A38D9F"
+                    />
+                    <Text
+                      className="text-[13px] text-[#8A7D86]"
+                      numberOfLines={1}
+                      style={{
+                        includeFontPadding: false,
+                        lineHeight: lineHeightFor(13),
+                      }}
+                    >
+                      {item}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        </View>
+      </Pressable>
+
+      {isLast ? null : (
+        <View
+          style={{
+            backgroundColor: "#ECE6EA",
+            height: StyleSheet.hairlineWidth,
+            marginHorizontal: -pageGutter,
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function SavedRouteCard({
+  isLast,
+  onPress,
+  pageGutter,
+  savedRoute,
+}: {
+  isLast: boolean;
+  onPress: () => void;
+  pageGutter: number;
+  savedRoute: ProfileSavedRoute;
+}) {
+  const routeName =
+    savedRoute.routeName?.trim() || `Tuyến đường #${savedRoute.routeId}`;
+  const savedDateLabel = formatRouteParticipantDate(savedRoute.savedAt ?? null);
+  const ratingLabel = formatRouteParticipantRating(savedRoute.rating);
+  const progressLabel = `${savedRoute.totalStops} điểm dừng`;
+  const addressLabel =
+    savedRoute.address?.trim() ||
+    savedRoute.description ||
+    "Nhấn để xem chi tiết tuyến đường.";
+  const footerMetaItems = [
+    savedRoute.estimateTime ? `${savedRoute.estimateTime} phút` : null,
+    savedRoute.totalDistance ? `${savedRoute.totalDistance} km` : null,
+  ].filter((item): item is string => Boolean(item));
+  const activityLabel = savedDateLabel
+    ? `Đã lưu ${savedDateLabel}`
+    : "Đã lưu vào thư viện của bạn";
+  const statusTone = {
+    backgroundColor: "#FFF4E5",
+    borderColor: "#F8D3A8",
+    textColor: "#B45309",
+  };
+
+  return (
+    <>
+      <Pressable
+        className="py-3"
+        onPress={onPress}
+        style={({ pressed }) => ({
+          opacity: pressed ? 0.72 : 1,
+        })}
+      >
+        <View className="flex-row items-center">
+          <View className="overflow-hidden rounded-[18px] bg-[#EDF2F7]">
+            <Image
+              cachePolicy="memory-disk"
+              contentFit="cover"
+              source={savedRoute.cover ?? routeParticipantFallbackCover}
+              style={{ height: 116, width: 116 }}
+              transition={180}
+            />
+          </View>
+
+          <View className="ml-3 min-w-0 flex-1">
+            <View className="flex-row items-start gap-1.5">
+              <View className="min-w-0 flex-1">
+                <Text
+                  className="text-[17px] font-semibold text-[#2F2432]"
+                  maxFontSizeMultiplier={postAuthorMaxFontSizeMultiplier}
+                  numberOfLines={1}
+                  style={{
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(17),
+                  }}
+                >
+                  {routeName}
+                </Text>
+
+                <Text
+                  className="mt-[2px] text-[13px] text-[#8A7D86]"
+                  numberOfLines={1}
+                  style={{
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(13),
+                  }}
+                >
+                  {activityLabel}
+                </Text>
+              </View>
+
+              <View
+                className="rounded-full border px-2 py-[3px]"
+                style={{
+                  backgroundColor: statusTone.backgroundColor,
+                  borderColor: statusTone.borderColor,
+                }}
+              >
+                <Text
+                  className="text-[10px] font-bold"
+                  style={{
+                    color: statusTone.textColor,
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(10),
+                  }}
+                >
+                  Đã lưu
                 </Text>
               </View>
             </View>
@@ -3615,6 +3879,21 @@ function EmptyRoutes() {
       />
       <Text className="mt-2 text-[13px] text-[#8E869A]">
         Bạn chưa tham gia tuyến đường nào
+      </Text>
+    </View>
+  );
+}
+
+function EmptySavedRoutes() {
+  return (
+    <View className="items-center py-12">
+      <SymbolView
+        name={{ ios: "bookmark", android: "bookmark", web: "bookmark" }}
+        size={30}
+        tintColor="#AA9FB0"
+      />
+      <Text className="mt-2 text-[13px] text-[#8E869A]">
+        Bạn chưa lưu tuyến đường nào
       </Text>
     </View>
   );

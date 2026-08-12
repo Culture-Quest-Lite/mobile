@@ -61,6 +61,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -151,6 +152,7 @@ const avatarPalettes = [
 ] as const;
 const meaninglessTextValues = new Set(["", "string", "null", "undefined"]);
 const fallbackPostTimestamp = "03/08/2026";
+const explorerPostAuthorMaxFontSizeMultiplier = 1.05;
 
 function readMeaningfulText(value?: string | null) {
   if (typeof value !== "string") {
@@ -1511,15 +1513,19 @@ export default function CommunityExplorerProfileScreen() {
     ? activeTab
     : "posts";
 
-  async function handleFollowPress() {
+  async function handleFollowAction(nextIsFollowing: boolean) {
     if (!explorerId) {
+      return;
+    }
+
+    if (nextIsFollowing === isFollowingProfile) {
       return;
     }
 
     if (!canCallFollowApi) {
       setFollowOverrides((current) => ({
         ...current,
-        [explorerId]: !(current[explorerId] ?? initialIsFollowing),
+        [explorerId]: nextIsFollowing,
       }));
       return;
     }
@@ -1545,13 +1551,13 @@ export default function CommunityExplorerProfileScreen() {
     setIsFollowRequestPending(true);
 
     try {
-      const followResponse = isFollowingProfile
-        ? await unfollowUser({
+      const followResponse = nextIsFollowing
+        ? await followUser({
             accessToken,
             tokenType: authSession.tokenType,
             userId: numericExplorerId,
           })
-        : await followUser({
+        : await unfollowUser({
             accessToken,
             tokenType: authSession.tokenType,
             userId: numericExplorerId,
@@ -1575,6 +1581,14 @@ export default function CommunityExplorerProfileScreen() {
     } finally {
       setIsFollowRequestPending(false);
     }
+  }
+
+  function handleFollowPress() {
+    void handleFollowAction(true);
+  }
+
+  function handleUnfollowPress() {
+    void handleFollowAction(false);
   }
 
   return (
@@ -1687,26 +1701,24 @@ export default function CommunityExplorerProfileScreen() {
 
             <View className="mt-2.5 flex-row items-center justify-center gap-2">
               <Pressable
-                accessibilityLabel={
-                  isFollowingProfile
-                    ? t("community.explorerProfile.unfollowA11y")
-                    : t("community.explorerProfile.followA11y")
-                }
+                accessibilityLabel={t("community.explorerProfile.followA11y")}
                 className={`min-w-[128px] rounded-full px-5 py-2.5 ${
-                  isFollowingProfile ? "bg-[#EDEFF4]" : "bg-[#FF4D73]"
+                  isFollowingProfile
+                    ? "border border-[#FFD1DF] bg-[#FFF2F7]"
+                    : "bg-[#FF4D73]"
                 }`}
-                disabled={isFollowRequestPending}
-                onPress={() => {
-                  void handleFollowPress();
-                }}
+                disabled={isFollowRequestPending || isFollowingProfile}
+                onPress={handleFollowPress}
                 style={[
                   cardShadow,
-                  isFollowRequestPending ? { opacity: 0.7 } : null,
+                  isFollowRequestPending || isFollowingProfile
+                    ? { opacity: 0.7 }
+                    : null,
                 ]}
               >
                 <Text
                   className={`text-center text-[14px] font-extrabold ${
-                    isFollowingProfile ? "text-[#2B2233]" : "text-white"
+                    isFollowingProfile ? "text-[#C43874]" : "text-white"
                   }`}
                 >
                   {isFollowRequestPending
@@ -1718,11 +1730,26 @@ export default function CommunityExplorerProfileScreen() {
               </Pressable>
 
               <Pressable
-                accessibilityLabel={t("community.explorerProfile.messageA11y")}
-                className="rounded-full border border-[#E6E8EE] bg-white px-4 py-2.5"
+                accessibilityLabel={t("community.explorerProfile.unfollowA11y")}
+                className={`rounded-full border px-4 py-2.5 ${
+                  isFollowingProfile
+                    ? "border-[#E6E8EE] bg-white"
+                    : "border-[#E6E8EE] bg-white"
+                }`}
+                disabled={isFollowRequestPending || !isFollowingProfile}
+                onPress={handleUnfollowPress}
+                style={
+                  isFollowRequestPending || !isFollowingProfile
+                    ? { opacity: 0.6 }
+                    : undefined
+                }
               >
-                <Text className="text-[14px] font-bold text-[#2B2233]">
-                  {t("community.explorerProfile.messageLabel")}
+                <Text
+                  className={`text-[14px] font-bold ${
+                    isFollowingProfile ? "text-[#2B2233]" : "text-[#2B2233]"
+                  }`}
+                >
+                  {t("community.explorerProfile.unfollowLabel")}
                 </Text>
               </Pressable>
             </View>
@@ -1777,6 +1804,7 @@ export default function CommunityExplorerProfileScreen() {
                 onOpenHotspot={handleOpenPostHotspot}
                 onOpenRoute={handleOpenPostRoute}
                 onSharePost={handleOpenSharePostComposer}
+                pageGutter={gutter}
                 posts={displayedPosts}
                 profile={profile}
                 resolvedHotspots={resolvedPostHotspots}
@@ -2105,6 +2133,7 @@ function PostsTabContent({
   onOpenHotspot,
   onOpenRoute,
   onSharePost,
+  pageGutter,
   posts,
   profile,
   resolvedHotspots,
@@ -2121,6 +2150,7 @@ function PostsTabContent({
   onOpenHotspot: (hotspotId: number) => void;
   onOpenRoute: (routeId: number) => void;
   onSharePost: (post: CommunityFeedPost) => void;
+  pageGutter: number;
   posts: CommunityFeedPost[];
   profile: CommunityExplorerProfile;
   resolvedHotspots: Record<number, ResolvedExplorerHotspotPreview>;
@@ -2175,6 +2205,7 @@ function PostsTabContent({
             onOpenHotspot={onOpenHotspot}
             onOpenRoute={onOpenRoute}
             onSharePost={onSharePost}
+            pageGutter={pageGutter}
             post={post}
             profile={profile}
             resolvedHotspots={resolvedHotspots}
@@ -2208,8 +2239,8 @@ function ExplorerExpandablePostCaption({ text }: { text: string }) {
 
   return (
     <Text
-      className="text-[13px] text-[#2B232D]"
-      style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
+      className="text-[14px] text-[#2B232D]"
+      style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
     >
       {expanded || !shouldTruncate ? normalizedText : collapsedText}
       {shouldTruncate ? (
@@ -2229,8 +2260,8 @@ function ExplorerPostTagChip({ label }: { label: string }) {
   return (
     <View className="mr-2 mt-1.5 rounded-full bg-[#F4F1F4] px-3 py-0.5">
       <Text
-        className="text-[12px] text-[#7D7680]"
-        style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
+        className="text-[14px] text-[#7D7680]"
+        style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
       >
         {label}
       </Text>
@@ -2370,17 +2401,18 @@ function ExplorerSharedPostCard({
 
         <View className="ml-2.5 flex-1 pr-2">
           <Text
-            className="text-[14px] font-bold text-[#2F2432]"
+            className="text-[16px] font-semibold text-[#2F2432]"
+            maxFontSizeMultiplier={explorerPostAuthorMaxFontSizeMultiplier}
             numberOfLines={1}
-            style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(16) }}
           >
             {author}
           </Text>
 
           <View className="mt-0.5 flex-row items-center gap-1">
             <Text
-              className="text-[12px] text-[#8A7D86]"
-              style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
+              className="text-[14px] text-[#8A7D86]"
+              style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
             >
               {formatProfileDate(sharedPost.createdAt) ?? fallbackPostTimestamp}
             </Text>
@@ -2451,15 +2483,15 @@ function ExplorerPostRouteCard({
         </View>
         <View className="flex-1 pr-2">
           <Text
-            className="text-[12px] font-semibold text-[#F2608E]"
-            style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
+            className="text-[13px] font-semibold text-[#F2608E]"
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
           >
             {t("community.explorerProfile.routeCardLabel")}
           </Text>
           <Text
-            className="text-[13px] font-medium text-[#4B414C]"
+            className="text-[15px] font-medium text-[#4B414C]"
             numberOfLines={2}
-            style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(15) }}
           >
             {label}
           </Text>
@@ -2520,15 +2552,15 @@ function ExplorerPostHotspotCard({
         </View>
         <View className="flex-1 pr-2">
           <Text
-            className="text-[12px] font-semibold text-[#18A7B4]"
-            style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
+            className="text-[13px] font-semibold text-[#18A7B4]"
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
           >
             {t("community.explorerProfile.hotspotCountLabel", { count })}
           </Text>
           <Text
-            className="text-[13px] text-[#6D6671]"
+            className="text-[15px] text-[#6D6671]"
             numberOfLines={2}
-            style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(15) }}
           >
             {subtitle}
           </Text>
@@ -2610,8 +2642,8 @@ function ExplorerPostAction({
         tintColor={active ? tintColor : "#7A7380"}
       />
       <Text
-        className="ml-1.5 text-[13px] text-[#706775]"
-        style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
+        className="ml-1.5 text-[15px] text-[#706775]"
+        style={{ includeFontPadding: false, lineHeight: lineHeightFor(15) }}
       >
         {label}
       </Text>
@@ -2916,6 +2948,7 @@ function ExplorerProfilePostCard({
   onOpenHotspot,
   onOpenRoute,
   onSharePost,
+  pageGutter,
   post,
   profile,
   resolvedHotspots,
@@ -2930,6 +2963,7 @@ function ExplorerProfilePostCard({
   onOpenHotspot: (hotspotId: number) => void;
   onOpenRoute: (routeId: number) => void;
   onSharePost: (post: CommunityFeedPost) => void;
+  pageGutter: number;
   post: CommunityFeedPost;
   profile: CommunityExplorerProfile;
   resolvedHotspots: Record<number, ResolvedExplorerHotspotPreview>;
@@ -2988,241 +3022,255 @@ function ExplorerProfilePostCard({
       : statusLabel;
 
   return (
-    <View
-      className={isLast ? "" : "mb-3"}
-      style={{
-        backgroundColor: "#FFFFFF",
-        borderColor: "#F0E7ED",
-        borderRadius: 24,
-        borderWidth: 0.8,
-        paddingBottom: 10,
-        paddingHorizontal: 16,
-        paddingTop: 12,
-        shadowColor: "rgba(64, 34, 58, 0.08)",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 1,
-        shadowRadius: 20,
-        elevation: 4,
-      }}
-    >
-      <View className="flex-row items-start">
-        <View className="min-w-0 flex-1 flex-row items-start">
-          <ExplorerPostAuthorAvatar
-            avatar={profile.avatar ?? null}
-            name={authorName}
-          />
+    <>
+      <View className="pb-3 pt-3.5">
+        <View className="flex-row items-start">
+          <View className="min-w-0 flex-1 flex-row items-start">
+            <ExplorerPostAuthorAvatar
+              avatar={profile.avatar ?? null}
+              name={authorName}
+            />
 
-          <View className="ml-3 flex-1 pr-2">
-            <View className="flex-row items-center gap-2">
-              <Text
-                className="min-w-0 flex-1 text-[15px] font-bold text-[#2F2432]"
-                numberOfLines={1}
-                style={{ includeFontPadding: false, lineHeight: lineHeightFor(15) }}
-              >
-                {authorName}
-              </Text>
-              {isPendingPost ? (
-                <View
-                  className="rounded-full border px-2 py-[2px]"
+            <View className="ml-3 flex-1 pr-2">
+              <View className="flex-row items-center gap-2">
+                <Text
+                  className="min-w-0 flex-1 text-[17px] font-semibold text-[#2F2432]"
+                  maxFontSizeMultiplier={explorerPostAuthorMaxFontSizeMultiplier}
+                  numberOfLines={1}
                   style={{
-                    backgroundColor: statusTone.backgroundColor,
-                    borderColor: statusTone.borderColor,
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(17),
                   }}
                 >
-                  <Text
-                    className="text-[10px] font-semibold"
+                  {authorName}
+                </Text>
+                {isPendingPost ? (
+                  <View
+                    className="rounded-full border px-2 py-[2px]"
                     style={{
-                      color: statusTone.textColor,
-                      includeFontPadding: false,
-                      lineHeight: lineHeightFor(10),
+                      backgroundColor: statusTone.backgroundColor,
+                      borderColor: statusTone.borderColor,
                     }}
                   >
-                    {statusBadgeLabel}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
+                    <Text
+                      className="text-[10px] font-semibold"
+                      style={{
+                        color: statusTone.textColor,
+                        includeFontPadding: false,
+                        lineHeight: lineHeightFor(10),
+                      }}
+                    >
+                      {statusBadgeLabel}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
 
-            <View className="-mt-0.5 flex-row flex-wrap items-center gap-1">
-              <Text
-                className="text-[12px] text-[#8A7D86]"
-                style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
-              >
-                {getExplorerPostTimestamp(post)}
-              </Text>
-              <Text
-                className="text-[12px] text-[#8A7D86]"
-                style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
-              >
-                •
-              </Text>
-              <SymbolView name={visibilityIcon} size={10} tintColor="#8A7D86" />
-              <Text
-                className="text-[12px] text-[#8A7D86]"
-                style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
-              >
-                {visibilityLabel}
-              </Text>
-              {normalizedStatus !== "APPROVED" && !isPendingPost ? (
-                <View
-                  className="rounded-full border px-2 py-[2px]"
+              <View className="-mt-0.5 flex-row flex-wrap items-center gap-1">
+                <Text
+                  className="text-[14px] text-[#8A7D86]"
                   style={{
-                    backgroundColor: statusTone.backgroundColor,
-                    borderColor: statusTone.borderColor,
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(14),
                   }}
                 >
-                  <Text
-                    className="text-[10px] font-semibold"
+                  {getExplorerPostTimestamp(post)}
+                </Text>
+                <Text
+                  className="text-[14px] text-[#8A7D86]"
+                  style={{
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(14),
+                  }}
+                >
+                  •
+                </Text>
+                <SymbolView
+                  name={visibilityIcon}
+                  size={12}
+                  tintColor="#8A7D86"
+                />
+                <Text
+                  className="text-[14px] text-[#8A7D86]"
+                  style={{
+                    includeFontPadding: false,
+                    lineHeight: lineHeightFor(14),
+                  }}
+                >
+                  {visibilityLabel}
+                </Text>
+                {normalizedStatus !== "APPROVED" && !isPendingPost ? (
+                  <View
+                    className="rounded-full border px-2 py-[2px]"
                     style={{
-                      color: statusTone.textColor,
-                      includeFontPadding: false,
-                      lineHeight: lineHeightFor(10),
+                      backgroundColor: statusTone.backgroundColor,
+                      borderColor: statusTone.borderColor,
                     }}
                   >
-                    {statusBadgeLabel}
-                  </Text>
-                </View>
-              ) : null}
+                    <Text
+                      className="text-[10px] font-semibold"
+                      style={{
+                        color: statusTone.textColor,
+                        includeFontPadding: false,
+                        lineHeight: lineHeightFor(10),
+                      }}
+                    >
+                      {statusBadgeLabel}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
           </View>
         </View>
-      </View>
 
-      <View className="pt-1.5">
-        {postContent ? (
-          <ExplorerExpandablePostCaption text={postContent} />
-        ) : null}
+        <View className="pt-1.5">
+          {postContent ? (
+            <ExplorerExpandablePostCaption text={postContent} />
+          ) : null}
 
-        {sharedPost ? (
-          <ExplorerSharedPostCard
-            sharedPost={sharedPost}
-            withTopSpacing={Boolean(postContent)}
-          />
-        ) : null}
+          {sharedPost ? (
+            <ExplorerSharedPostCard
+              sharedPost={sharedPost}
+              withTopSpacing={Boolean(postContent)}
+            />
+          ) : null}
 
-        {tagLabels.length > 0 ? (
-          <View className="mt-1 flex-row flex-wrap items-center">
-            {tagLabels.map((tagLabel) => (
-              <ExplorerPostTagChip
-                key={`${post.id}-${tagLabel}`}
-                label={tagLabel}
+          {tagLabels.length > 0 ? (
+            <View className="mt-1 flex-row flex-wrap items-center">
+              {tagLabels.map((tagLabel) => (
+                <ExplorerPostTagChip
+                  key={`${post.id}-${tagLabel}`}
+                  label={tagLabel}
+                />
+              ))}
+            </View>
+          ) : null}
+
+          {routeLabel ? (
+            <View className="mt-1.5">
+              <ExplorerPostRouteCard
+                label={routeLabel}
+                onPress={
+                  routeIds.length > 0
+                    ? () => {
+                        onOpenRoute(routeIds[0] ?? 0);
+                      }
+                    : undefined
+                }
               />
-            ))}
+            </View>
+          ) : null}
+
+          {hotspotSubtitle ? (
+            <View className="mt-1.5">
+              <ExplorerPostHotspotCard
+                count={hotspotIds.length}
+                imageUris={hotspotImageUris}
+                onPress={
+                  hotspotIds.length > 0
+                    ? () => {
+                        onOpenHotspot(hotspotIds[0] ?? 0);
+                      }
+                    : undefined
+                }
+                subtitle={hotspotSubtitle}
+              />
+            </View>
+          ) : null}
+        </View>
+
+        {mediaItems.length > 0 ? (
+          <View className="mt-2">
+            <ExplorerPostMediaGallery items={mediaItems} />
           </View>
         ) : null}
 
-        {routeLabel ? (
-          <View className="mt-1.5">
-            <ExplorerPostRouteCard
-              label={routeLabel}
+        <View className="mt-1.5 flex-row items-center">
+          <ExplorerPostAction
+            active={canInteractWithPost && isLiked}
+            disabled={!canInteractWithPost || isLiking}
+            icon={
+              canInteractWithPost && isLiked
+                ? {
+                    ios: "heart.fill",
+                    android: "favorite",
+                    web: "favorite",
+                  }
+                : {
+                    ios: "heart",
+                    android: "favorite_border",
+                    web: "favorite_border",
+                  }
+            }
+            label={likeCount}
+            onPress={
+              canInteractWithPost
+                ? () => {
+                    onLikePost(post);
+                  }
+                : undefined
+            }
+          />
+          <View className="ml-4">
+            <ExplorerPostAction
+              disabled={!canInteractWithPost}
+              icon={{
+                ios: "bubble.left",
+                android: "chat_bubble_outline",
+                web: "chat_bubble_outline",
+              }}
+              label={commentCount}
               onPress={
-                routeIds.length > 0
+                canInteractWithPost
                   ? () => {
-                      onOpenRoute(routeIds[0] ?? 0);
+                      onCommentPost(post);
                     }
                   : undefined
               }
             />
           </View>
-        ) : null}
-
-        {hotspotSubtitle ? (
-          <View className="mt-1.5">
-            <ExplorerPostHotspotCard
-              count={hotspotIds.length}
-              imageUris={hotspotImageUris}
+          <View className="ml-4">
+            <ExplorerPostAction
+              disabled={!canInteractWithPost || isSharing}
+              icon={{
+                ios: "arrowshape.turn.up.right",
+                android: "share",
+                web: "share",
+              }}
+              label={shareCount > 0 ? shareCount : t("community.posts.share")}
               onPress={
-                hotspotIds.length > 0
+                canInteractWithPost
                   ? () => {
-                      onOpenHotspot(hotspotIds[0] ?? 0);
+                      onSharePost(post);
                     }
                   : undefined
               }
-              subtitle={hotspotSubtitle}
             />
           </View>
+          <View className="flex-1" />
+        </View>
+
+        {readMeaningfulText(post.mood) ? (
+          <Text
+            className="mt-2 text-[12px] font-semibold text-[#C24F3B]"
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
+          >
+            {readMeaningfulText(post.mood)}
+          </Text>
         ) : null}
       </View>
 
-      {mediaItems.length > 0 ? (
-        <View className="mt-2">
-          <ExplorerPostMediaGallery items={mediaItems} />
-        </View>
-      ) : null}
-
-      <View className="mt-2.5 flex-row items-center">
-        <ExplorerPostAction
-          active={canInteractWithPost && isLiked}
-          disabled={!canInteractWithPost || isLiking}
-          icon={
-            canInteractWithPost && isLiked
-              ? {
-                  ios: "heart.fill",
-                  android: "favorite",
-                  web: "favorite",
-                }
-              : {
-                  ios: "heart",
-                  android: "favorite_border",
-                  web: "favorite_border",
-                }
-          }
-          label={likeCount}
-          onPress={
-            canInteractWithPost
-              ? () => {
-                  onLikePost(post);
-                }
-              : undefined
-          }
+      {isLast ? null : (
+        <View
+          style={{
+            backgroundColor: "#ECE6EA",
+            height: StyleSheet.hairlineWidth,
+            marginHorizontal: -pageGutter,
+          }}
         />
-        <View className="ml-4">
-          <ExplorerPostAction
-            disabled={!canInteractWithPost}
-            icon={{
-              ios: "bubble.left",
-              android: "chat_bubble_outline",
-              web: "chat_bubble_outline",
-            }}
-            label={commentCount}
-            onPress={
-              canInteractWithPost
-                ? () => {
-                    onCommentPost(post);
-                  }
-                : undefined
-            }
-          />
-        </View>
-        <View className="ml-4">
-          <ExplorerPostAction
-            disabled={!canInteractWithPost || isSharing}
-            icon={{
-              ios: "arrowshape.turn.up.right",
-              android: "share",
-              web: "share",
-            }}
-            label={shareCount > 0 ? shareCount : t("community.posts.share")}
-            onPress={
-              canInteractWithPost
-                ? () => {
-                    onSharePost(post);
-                  }
-                : undefined
-            }
-          />
-        </View>
-      </View>
-
-      {readMeaningfulText(post.mood) ? (
-        <Text
-          className="mt-2 text-[12px] font-semibold text-[#C24F3B]"
-          style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
-        >
-          {readMeaningfulText(post.mood)}
-        </Text>
-      ) : null}
-    </View>
+      )}
+    </>
   );
 }
 
