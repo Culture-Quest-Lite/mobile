@@ -58,9 +58,9 @@ export function NearbyVoucherSection({
       : null);
 
   return (
-    <View className="mt-6 gap-3">
-      <View className="flex-row items-end justify-between">
-        <View className="flex-1 pr-3">
+    <View className="mt-6 gap-3.5">
+      <View className="flex-row items-end justify-between gap-3">
+        <View className="min-w-0 flex-1 pr-3">
           <Text
             className="text-[12px] font-black uppercase tracking-wider text-[#EB489B]"
             style={textStyle(12)}
@@ -69,7 +69,7 @@ export function NearbyVoucherSection({
           </Text>
           <Text
             className="mt-0.5 text-[19px] font-black text-[#2B2233]"
-            style={{ lineHeight: lineHeightFor(19) }}
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(19) }}
           >
             {title}
           </Text>
@@ -81,9 +81,10 @@ export function NearbyVoucherSection({
           </Text>
         </View>
         {seeAllHref ? (
-          <Pressable onPress={() => router.push(seeAllHref)}>
+          <Pressable hitSlop={8} onPress={() => router.push(seeAllHref)}>
             <Text
               className="text-[13px] font-black text-[#EB489B]"
+              numberOfLines={1}
               style={textStyle(13)}
             >
               Xem tất cả
@@ -164,18 +165,24 @@ export function NearbyVoucherSection({
           nestedScrollEnabled
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{
-            gap: 12,
             paddingHorizontal: horizontalInset,
+            paddingVertical: 6,
           }}
-          style={{ marginHorizontal: -horizontalInset }}
+          style={{ marginHorizontal: -horizontalInset, marginVertical: -6 }}
         >
-          {vouchers.map((voucher) => (
-            <VoucherMiniCard
+          {vouchers.map((voucher, index) => (
+            <View
               key={voucher.voucherId}
-              voucher={voucher}
-              width={cardWidth}
-              contextLabel={resolvedContextLabel}
-            />
+              style={{
+                marginRight: index === vouchers.length - 1 ? 0 : 14,
+              }}
+            >
+              <VoucherMiniCard
+                voucher={voucher}
+                width={cardWidth}
+                contextLabel={resolvedContextLabel}
+              />
+            </View>
           ))}
         </ScrollView>
       ) : null}

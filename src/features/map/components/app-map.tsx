@@ -43,6 +43,9 @@ export type AppMapProps = {
   highlightedPointId?: string | number | null;
   points: AppMapPoint[];
   routeCoordinates?: { latitude: number; longitude: number }[];
+  /** Màu đường chỉ dẫn nối các điểm. Mặc định là dải mờ cho bản đồ nền nhạt. */
+  routeStrokeColor?: string;
+  routeStrokeWidth?: number;
   height?: number;
   borderRadius?: number;
   mapType?: "hybrid" | "standard";
@@ -105,6 +108,8 @@ export function AppMap({
   highlightedPointId,
   points,
   routeCoordinates,
+  routeStrokeColor = "rgba(127, 154, 189, 0.38)",
+  routeStrokeWidth = 3,
   height = 260,
   mapType = "standard",
   showsMyLocationButton = true,
@@ -259,8 +264,8 @@ export function AppMap({
         {polylineCoordinates.length > 1 ? (
           <Polyline
             coordinates={polylineCoordinates}
-            strokeWidth={3}
-            strokeColor="rgba(127, 154, 189, 0.38)"
+            strokeWidth={routeStrokeWidth}
+            strokeColor={routeStrokeColor}
           />
         ) : null}
 
