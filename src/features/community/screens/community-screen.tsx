@@ -19,6 +19,7 @@ import {
   Animated,
   Image,
   KeyboardAvoidingView,
+  type LayoutChangeEvent,
   Modal,
   Platform,
   Pressable,
@@ -205,6 +206,7 @@ function Text({
 
 const meaninglessTextValues = new Set(["", "string", "null", "undefined"]);
 const communityFeedPageSize = 20;
+const communityFeedAutoLoadViewportGap = 24;
 const communityPostCommentsPageSize = 10;
 const communityCommentMaxLength = 320;
 const communitySharePostMaxLength = 500;
@@ -1154,6 +1156,10 @@ export default function CommunityScreen() {
     useState<CommunityFeedStatus>("loading");
   const [communityFeedPage, setCommunityFeedPage] = useState(0);
   const [communityFeedHasMore, setCommunityFeedHasMore] = useState(true);
+  const [communityFeedViewportHeight, setCommunityFeedViewportHeight] =
+    useState(0);
+  const [communityFeedContentHeight, setCommunityFeedContentHeight] =
+    useState(0);
   const [isLoadingMoreCommunityFeed, setIsLoadingMoreCommunityFeed] =
     useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1163,6 +1169,7 @@ export default function CommunityScreen() {
   const [currentProfileId, setCurrentProfileId] = useState<string | null>(null);
   const communitySessionKeyRef = useRef(communitySessionKey);
   const communityFeedPostsRef = useRef<CommunityFeedPost[]>([]);
+  const communityFeedAutoLoadPageRef = useRef<number | null>(null);
   const shareBarTextOpacity = useMemo(() => new Animated.Value(1), []);
   const fadeShareBarText = useCallback(
     (toValue: number) => {
@@ -1239,12 +1246,16 @@ export default function CommunityScreen() {
     },
     [],
   );
+  const resetCommunityFeedAutoLoad = useCallback(() => {
+    communityFeedAutoLoadPageRef.current = null;
+  }, []);
 
   useEffect(() => {
     clearCommunityPostCache();
     communityFeedPostsRef.current = [];
     hasSkippedInitialFeedFocusRef.current = false;
-  }, [communitySessionKey]);
+    resetCommunityFeedAutoLoad();
+  }, [communitySessionKey, resetCommunityFeedAutoLoad]);
 
   const fetchCommunityNewsfeedPage = useCallback(
     async (page: number) => {
@@ -1296,6 +1307,7 @@ export default function CommunityScreen() {
         }
 
         setCommunityFeedPosts(mappedPosts);
+        resetCommunityFeedAutoLoad();
         setCommunityFeedPage(0);
         setCommunityFeedHasMore(!isLast);
         setCommunityFeedStatus("ready");
@@ -1312,6 +1324,7 @@ export default function CommunityScreen() {
         }
 
         setCommunityFeedPosts([]);
+        resetCommunityFeedAutoLoad();
         setCommunityFeedPage(0);
         setCommunityFeedHasMore(true);
         setCommunityFeedError(
@@ -1328,7 +1341,7 @@ export default function CommunityScreen() {
     return () => {
       isActive = false;
     };
-  }, [communitySessionKey, fetchCommunityNewsfeed, t]);
+  }, [communitySessionKey, fetchCommunityNewsfeed, resetCommunityFeedAutoLoad, t]);
 
   useEffect(() => {
     communityFeedPosts.forEach(cacheCommunityExplorerProfile);
@@ -1631,6 +1644,7 @@ export default function CommunityScreen() {
       ]);
 
       setCommunityFeedPosts(mappedPosts);
+      resetCommunityFeedAutoLoad();
       setCommunityFeedPage(0);
       setCommunityFeedHasMore(!isLast);
       setCommunityFeedStatus("ready");
@@ -1641,6 +1655,7 @@ export default function CommunityScreen() {
 
       if (communityFeedPostsRef.current.length === 0) {
         setCommunityFeedPosts([]);
+        resetCommunityFeedAutoLoad();
         setCommunityFeedPage(0);
         setCommunityFeedHasMore(true);
         setCommunityFeedError(
@@ -1660,7 +1675,13 @@ export default function CommunityScreen() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [fetchCommunityNewsfeed, isRefreshing, reloadCommunityGroups, t]);
+  }, [
+    fetchCommunityNewsfeed,
+    isRefreshing,
+    reloadCommunityGroups,
+    resetCommunityFeedAutoLoad,
+    t,
+  ]);
 
   const handleLoadMoreCommunityFeed = useCallback(async () => {
     if (
@@ -1714,6 +1735,61 @@ export default function CommunityScreen() {
     },
     [handleLoadMoreCommunityFeed],
   );
+  const handleCommunityFeedLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const nextHeight = event.nativeEvent.layout.height;
+
+      setCommunityFeedViewportHeight((current) =>
+        Math.abs(current - nextHeight) < 1 ? current : nextHeight,
+      );
+    },
+    [],
+  );
+  const handleCommunityFeedContentSizeChange = useCallback(
+    (_contentWidth: number, contentHeight: number) => {
+      setCommunityFeedContentHeight((current) =>
+        Math.abs(current - contentHeight) < 1 ? current : contentHeight,
+      );
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const hasMeasuredFeed =
+      communityFeedViewportHeight > 0 && communityFeedContentHeight > 0;
+    const isFeedTooShortToScroll =
+      communityFeedContentHeight <=
+      communityFeedViewportHeight + communityFeedAutoLoadViewportGap;
+
+    if (
+      !hasMeasuredFeed ||
+      !isFeedTooShortToScroll ||
+      communityFeedStatus !== "ready" ||
+      !communityFeedHasMore ||
+      isLoadingMoreCommunityFeed ||
+      isRefreshing
+    ) {
+      return;
+    }
+
+    const nextPage = communityFeedPage + 1;
+
+    if (communityFeedAutoLoadPageRef.current === nextPage) {
+      return;
+    }
+
+    communityFeedAutoLoadPageRef.current = nextPage;
+    void handleLoadMoreCommunityFeed();
+  }, [
+    communityFeedContentHeight,
+    communityFeedHasMore,
+    communityFeedPage,
+    communityFeedStatus,
+    communityFeedViewportHeight,
+    handleLoadMoreCommunityFeed,
+    isLoadingMoreCommunityFeed,
+    isRefreshing,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1742,6 +1818,7 @@ export default function CommunityScreen() {
           }
 
           setCommunityFeedPosts(mappedPosts);
+          resetCommunityFeedAutoLoad();
           setCommunityFeedPage(0);
           setCommunityFeedHasMore(!isLast);
           setCommunityFeedStatus("ready");
@@ -1756,6 +1833,7 @@ export default function CommunityScreen() {
 
           if (communityFeedPostsRef.current.length === 0) {
             setCommunityFeedPosts([]);
+            resetCommunityFeedAutoLoad();
             setCommunityFeedPage(0);
             setCommunityFeedHasMore(true);
             setCommunityFeedError(
@@ -1781,7 +1859,7 @@ export default function CommunityScreen() {
       return () => {
         isActive = false;
       };
-    }, [fetchCommunityNewsfeed, t]),
+    }, [fetchCommunityNewsfeed, resetCommunityFeedAutoLoad, t]),
   );
 
   useFocusEffect(
@@ -2670,6 +2748,8 @@ export default function CommunityScreen() {
       <View className="flex-1 bg-white">
         <ScrollView
           contentContainerStyle={{ paddingBottom: 20 }}
+          onContentSizeChange={handleCommunityFeedContentSizeChange}
+          onLayout={handleCommunityFeedLayout}
           refreshControl={
             <RefreshControl
               colors={["#EB489B"]}
@@ -4301,7 +4381,7 @@ function CommunityPostMenuRow({
 
 function ExpandablePostCaption({ text }: { text: string }) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const normalizedText = text.trim();
   const maxLength = 150;
   const shouldTruncate = normalizedText.length > maxLength;

@@ -26,7 +26,11 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 import { updateMyProfile } from "../api/update-me";
-import { resetPremiumStatus } from "../hooks/use-premium-status";
+import { setCurrentProfile } from "../data/current-profile-store";
+import {
+  resetPremiumStatus,
+  setPremiumStatusFromProfile,
+} from "../hooks/use-premium-status";
 import { useProfile } from "../hooks/use-profile";
 
 function getUpdateProfileErrorMessage(error: unknown) {
@@ -151,7 +155,7 @@ export default function ProfileMenuScreen() {
         );
       }
 
-      await updateMyProfile({
+      const updatedProfile = await updateMyProfile({
         accessToken,
         autoPlayAudio: profile.autoPlayAudio ?? false,
         avatarFile: {
@@ -163,7 +167,11 @@ export default function ProfileMenuScreen() {
         tokenType: authSession.tokenType,
       });
 
-      await reloadProfile();
+      if (updatedProfile) {
+        setCurrentProfile(updatedProfile);
+        setPremiumStatusFromProfile(updatedProfile.isPremium);
+      }
+      void reloadProfile();
     } catch (error) {
       appAlert.alert("Không thể đổi ảnh đại diện", getUpdateProfileErrorMessage(error));
     } finally {
@@ -215,7 +223,7 @@ export default function ProfileMenuScreen() {
         );
       }
 
-      await updateMyProfile({
+      const updatedProfile = await updateMyProfile({
         accessToken,
         autoPlayAudio: profile.autoPlayAudio ?? false,
         backgroundFile: {
@@ -227,7 +235,11 @@ export default function ProfileMenuScreen() {
         tokenType: authSession.tokenType,
       });
 
-      await reloadProfile();
+      if (updatedProfile) {
+        setCurrentProfile(updatedProfile);
+        setPremiumStatusFromProfile(updatedProfile.isPremium);
+      }
+      void reloadProfile();
     } catch (error) {
       appAlert.alert("Không thể đổi ảnh bìa", getUpdateCoverErrorMessage(error));
     } finally {

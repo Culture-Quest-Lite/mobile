@@ -8,6 +8,7 @@ import {
   type SocialProvider,
 } from "@/features/auth/api/social-login";
 import { syncSocialAccount } from "@/features/auth/api/social-sync";
+import { resetCurrentProfile } from "@/features/profile/data/current-profile-store";
 import { resetCheckins } from "@/lib/checkin-store";
 import { readStoredJson, writeStoredJson } from "@/lib/persistent-json-storage";
 
@@ -98,6 +99,7 @@ function setAuthSession(nextSession: AuthSession) {
 
   if (didIdentityChange) {
     resetCheckins();
+    resetCurrentProfile();
   }
 
   emitChange();

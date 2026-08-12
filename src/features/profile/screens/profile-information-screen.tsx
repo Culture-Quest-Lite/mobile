@@ -26,6 +26,8 @@ import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 import { getMyProfile } from "../api/get-me";
 import { updateMyProfile } from "../api/update-me";
+import { setCurrentProfile } from "../data/current-profile-store";
+import { setPremiumStatusFromProfile } from "../hooks/use-premium-status";
 import type { Profile } from "../types";
 
 const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
@@ -277,6 +279,8 @@ export default function ProfileInformationScreen() {
       if (updatedProfile) {
         setProfile(updatedProfile);
         syncDraftFields(updatedProfile);
+        setCurrentProfile(updatedProfile);
+        setPremiumStatusFromProfile(updatedProfile.isPremium);
       } else {
         const nextProfile = {
           ...profile,
@@ -285,6 +289,8 @@ export default function ProfileInformationScreen() {
         };
         setProfile(nextProfile);
         syncDraftFields(nextProfile);
+        setCurrentProfile(nextProfile);
+        setPremiumStatusFromProfile(nextProfile.isPremium);
       }
 
       setIsEditing(false);
@@ -542,12 +548,25 @@ function StateCard({
   );
 }
 
-function InlineNotice({ message }: { message: string }) {
-  const palette = {
-    backgroundColor: "#FFF4F1",
-    borderColor: "#F6C9C0",
-    textColor: "#B54D3A",
-  };
+function InlineNotice({
+  message,
+  tone = "error",
+}: {
+  message: string;
+  tone?: "error";
+}) {
+  const palette =
+    tone === "error"
+      ? {
+          backgroundColor: "#FFF4F1",
+          borderColor: "#F6C9C0",
+          textColor: "#B54D3A",
+        }
+      : {
+          backgroundColor: "#FFF4F1",
+          borderColor: "#F6C9C0",
+          textColor: "#B54D3A",
+        };
 
   return (
     <View

@@ -51,7 +51,12 @@ export type ProfilePostMedia = {
   updatedAt: string | null;
 };
 
-export type ProfilePostStatus = "APPROVED" | "PENDING" | "REJECTED" | "DELETED";
+export type ProfilePostStatus =
+  | "APPROVED"
+  | "PENDING"
+  | "REPORTED"
+  | "REJECTED"
+  | "DELETED";
 export type ProfilePostStatusFilter = ProfilePostStatus | "ALL";
 
 export type ProfilePost = {

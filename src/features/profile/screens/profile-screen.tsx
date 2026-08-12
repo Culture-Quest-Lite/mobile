@@ -8,6 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import {
   type ComponentProps,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -16,8 +17,10 @@ import {
 } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -34,9 +37,9 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 import {
   cacheCommunityPost,
-  removeCachedCommunityPost,
   type CommunityFeedMediaItem,
   type CommunityFeedPost,
+  removeCachedCommunityPost,
   updateCachedCommunityPost,
 } from "@/features/community/data/community-post-cache";
 import { deletePost } from "@/features/home/api/delete-post";
@@ -74,6 +77,7 @@ import type { ProfilePost, ProfilePostStatus } from "../types";
 
 type Tab = "posts" | "pending-posts" | "routes";
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
+type ProfileHiddenPostsFilter = "PRIVATE" | "PENDING" | "REPORTED" | "REJECTED";
 type ResolvedProfileHotspotPreview = {
   hotspotId: number;
   hotspotName: string;
@@ -91,6 +95,9 @@ type ProfileMenuRowItem = {
 };
 type ProfilePostMenuItem = ProfileMenuRowItem & {
   key: "edit-post" | "edit-visibility" | "move-to-trash";
+};
+type ProfileHiddenPostsFilterMenuItem = ProfileMenuRowItem & {
+  key: ProfileHiddenPostsFilter;
 };
 
 const cardShadow = {
@@ -146,7 +153,7 @@ const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
   },
   {
     key: "pending-posts",
-    label: "Riêng tư & chờ duyệt",
+    label: "Riêng tư & kiểm duyệt",
     icon: {
       ios: "lock",
       android: "lock",
@@ -422,9 +429,194 @@ function shouldShowPostInPrimaryProfileTab(post: ProfilePost) {
 
   return (
     normalizedStatus === "APPROVED" &&
-    (normalizedVisibility === "PUBLIC" ||
-      normalizedVisibility === "FRIENDS")
+    (normalizedVisibility === "PUBLIC" || normalizedVisibility === "FRIENDS")
   );
+}
+
+function isProfilePrivatePost(post: ProfilePost) {
+  return normalizePostVisibilityValue(post.visibility) === "PRIVATE";
+}
+
+function isProfilePendingPost(post: ProfilePost) {
+  const normalizedStatus = normalizeProfilePostStatus(post.status);
+  const normalizedVisibility = normalizePostVisibilityValue(post.visibility);
+
+  return (
+    normalizedStatus === "PENDING" &&
+    (normalizedVisibility === "PUBLIC" || normalizedVisibility === "FRIENDS")
+  );
+}
+
+function isProfileReportedPost(post: ProfilePost) {
+  const normalizedStatus = normalizeProfilePostStatus(post.status);
+  const normalizedVisibility = normalizePostVisibilityValue(post.visibility);
+
+  return (
+    normalizedStatus === "REPORTED" &&
+    (normalizedVisibility === "PUBLIC" || normalizedVisibility === "FRIENDS")
+  );
+}
+
+function isProfileRejectedPost(post: ProfilePost) {
+  const normalizedStatus = normalizeProfilePostStatus(post.status);
+  const normalizedVisibility = normalizePostVisibilityValue(post.visibility);
+
+  return (
+    normalizedStatus === "REJECTED" &&
+    (normalizedVisibility === "PUBLIC" || normalizedVisibility === "FRIENDS")
+  );
+}
+
+function shouldShowPostInPrivateProfileTab(post: ProfilePost) {
+  if (normalizeProfilePostStatus(post.status) === "DELETED") {
+    return false;
+  }
+
+  return (
+    isProfilePrivatePost(post) ||
+    isProfilePendingPost(post) ||
+    isProfileReportedPost(post) ||
+    isProfileRejectedPost(post)
+  );
+}
+
+function getProfileHiddenPostsFilterKey(
+  post: ProfilePost,
+): ProfileHiddenPostsFilter | null {
+  if (isProfilePrivatePost(post)) {
+    return "PRIVATE";
+  }
+
+  if (isProfilePendingPost(post)) {
+    return "PENDING";
+  }
+
+  if (isProfileReportedPost(post)) {
+    return "REPORTED";
+  }
+
+  if (isProfileRejectedPost(post)) {
+    return "REJECTED";
+  }
+
+  return null;
+}
+
+function matchesProfileHiddenPostsFilter(
+  post: ProfilePost,
+  filter: ProfileHiddenPostsFilter,
+) {
+  if (!shouldShowPostInPrivateProfileTab(post)) {
+    return false;
+  }
+
+  return getProfileHiddenPostsFilterKey(post) === filter;
+}
+
+function getProfileHiddenPostsFilterLabel(filter: ProfileHiddenPostsFilter) {
+  switch (filter) {
+    case "PRIVATE":
+      return "Riêng tư";
+    case "PENDING":
+      return "Chờ duyệt";
+    case "REPORTED":
+      return "Bị báo cáo";
+    case "REJECTED":
+      return "Bị từ chối";
+    default:
+      return "Riêng tư";
+  }
+}
+
+function getProfileHiddenPostsFilterTitle(filter: ProfileHiddenPostsFilter) {
+  switch (filter) {
+    case "PRIVATE":
+      return "Bài viết riêng tư";
+    case "PENDING":
+      return "Bài viết chờ duyệt";
+    case "REPORTED":
+      return "Bài viết bị báo cáo";
+    case "REJECTED":
+      return "Bài viết bị từ chối";
+    default:
+      return "Bài viết riêng tư";
+  }
+}
+
+function getProfileHiddenPostsFilterEmptyMessage(
+  filter: ProfileHiddenPostsFilter,
+) {
+  switch (filter) {
+    case "PRIVATE":
+      return "Bạn chưa có bài viết riêng tư";
+    case "PENDING":
+      return "Bạn chưa có bài viết chờ duyệt";
+    case "REPORTED":
+      return "Bạn chưa có bài viết bị báo cáo";
+    case "REJECTED":
+      return "Bạn chưa có bài viết bị từ chối";
+    default:
+      return "Bạn chưa có bài viết riêng tư";
+  }
+}
+
+function getProfileHiddenPostsFilterIcon(
+  filter: ProfileHiddenPostsFilter,
+): SymbolName {
+  switch (filter) {
+    case "PRIVATE":
+      return { ios: "lock", android: "lock", web: "lock" };
+    case "PENDING":
+      return {
+        ios: "hourglass",
+        android: "hourglass-empty",
+        web: "hourglass-empty",
+      };
+    case "REPORTED":
+      return "report_problem";
+    case "REJECTED":
+      return { android: "cancel", web: "cancel" };
+    default:
+      return { ios: "lock", android: "lock", web: "lock" };
+  }
+}
+
+function formatProfilePostCountDescription(count: number) {
+  return `${count} bài viết`;
+}
+
+function buildProfileHiddenPostsFilterMenuItems(counts: {
+  pending: number;
+  reported: number;
+  private: number;
+  rejected: number;
+}): readonly ProfileHiddenPostsFilterMenuItem[] {
+  return [
+    {
+      key: "PRIVATE",
+      label: getProfileHiddenPostsFilterLabel("PRIVATE"),
+      description: formatProfilePostCountDescription(counts.private),
+      icon: getProfileHiddenPostsFilterIcon("PRIVATE"),
+    },
+    {
+      key: "PENDING",
+      label: getProfileHiddenPostsFilterLabel("PENDING"),
+      description: formatProfilePostCountDescription(counts.pending),
+      icon: getProfileHiddenPostsFilterIcon("PENDING"),
+    },
+    {
+      key: "REPORTED",
+      label: getProfileHiddenPostsFilterLabel("REPORTED"),
+      description: formatProfilePostCountDescription(counts.reported),
+      icon: getProfileHiddenPostsFilterIcon("REPORTED"),
+    },
+    {
+      key: "REJECTED",
+      label: getProfileHiddenPostsFilterLabel("REJECTED"),
+      description: formatProfilePostCountDescription(counts.rejected),
+      icon: getProfileHiddenPostsFilterIcon("REJECTED"),
+    },
+  ] as const;
 }
 
 function replaceProfilePostLikeState(
@@ -459,7 +651,12 @@ function normalizeProfilePostStatus(
 
   switch (normalizedValue) {
     case "APPROVED":
+      return "APPROVED";
     case "PENDING":
+      return "PENDING";
+    case "REPORT":
+    case "REPORTED":
+      return "REPORTED";
     case "REJECTED":
     case "DELETED":
       return normalizedValue;
@@ -474,6 +671,8 @@ function getProfilePostStatusLabel(value?: string | null) {
       return "Đã duyệt";
     case "PENDING":
       return "Chờ duyệt";
+    case "REPORTED":
+      return "Bị báo cáo";
     case "REJECTED":
       return "Bị từ chối";
     case "DELETED":
@@ -498,6 +697,12 @@ function getProfilePostStatusTone(value?: string | null) {
         backgroundColor: "#FFF4E5",
         borderColor: "#FAD7A0",
         textColor: "#B45309",
+      };
+    case "REPORTED":
+      return {
+        backgroundColor: "#FFF3E8",
+        borderColor: "#F7C59F",
+        textColor: "#C2410C",
       };
     case "REJECTED":
       return {
@@ -700,6 +905,7 @@ function mapProfilePostToCommunityFeedPost(
   const parsedPostId = Number.parseInt(post.id, 10);
   const visibilityLabel = getPostVisibilityLabel(post.visibility);
   const statusLabel = getProfilePostStatusLabel(post.status);
+  const canInteractWithPost = shouldShowPostInPrimaryProfileTab(post);
 
   return {
     id: `profile-post-${post.id}`,
@@ -729,8 +935,8 @@ function mapProfilePostToCommunityFeedPost(
       .slice(0, 4),
     time: formatPostTimestamp(post.createdAt),
     views: formatCompactCount(post.pointRemaining),
-    canComment: true,
-    canLike: true,
+    canComment: canInteractWithPost,
+    canLike: canInteractWithPost,
     canOpenProfile: false,
     commentCountValue: post.commentCount,
     createdAt: post.createdAt,
@@ -762,10 +968,14 @@ export default function ProfileScreen() {
     participants: routeParticipants,
   } = useRouteParticipants();
   const [tab, setTab] = useState<Tab>("posts");
+  const [hiddenPostsFilter, setHiddenPostsFilter] =
+    useState<ProfileHiddenPostsFilter>("PRIVATE");
   const [likingPostIds, setLikingPostIds] = useState<number[]>([]);
   const [deletingPostIds, setDeletingPostIds] = useState<number[]>([]);
   const [postPendingDeletion, setPostPendingDeletion] =
     useState<ProfilePost | null>(null);
+  const [isHiddenPostsFilterVisible, setIsHiddenPostsFilterVisible] =
+    useState(false);
   const [profileToastMessage, setProfileToastMessage] = useState<string | null>(
     null,
   );
@@ -781,17 +991,46 @@ export default function ProfileScreen() {
   const heroHeight = Math.max(Math.min(safeWidth * 0.88, 320), 280);
   const avatarSize = 112;
   const profileOverlap = avatarSize * 0.52;
-  const primaryTabPosts = posts.filter((post) =>
-    shouldShowPostInPrimaryProfileTab(post),
+  const primaryTabPosts = useMemo(
+    () => posts.filter((post) => shouldShowPostInPrimaryProfileTab(post)),
+    [posts],
   );
-  // Tab ổ khóa gom toàn bộ phần còn lại: riêng tư, chờ duyệt, bị từ chối
-  // và các trạng thái chưa sẵn sàng hiển thị công khai/bạn bè.
-  const privateTabPosts = posts.filter(
-    (post) =>
-      normalizeProfilePostStatus(post.status) !== "DELETED" &&
-      !shouldShowPostInPrimaryProfileTab(post),
+  // Tab ổ khóa gom toàn bộ phần còn lại: riêng tư, chờ duyệt, bị báo cáo,
+  // bị từ chối và các trạng thái chưa sẵn sàng hiển thị công khai/bạn bè.
+  const privateTabPosts = useMemo(
+    () => posts.filter((post) => shouldShowPostInPrivateProfileTab(post)),
+    [posts],
   );
-  const visiblePosts = tab === "pending-posts" ? privateTabPosts : primaryTabPosts;
+  const hiddenPostsFilterCounts = useMemo(
+    () => ({
+      private: privateTabPosts.filter(
+        (post) => getProfileHiddenPostsFilterKey(post) === "PRIVATE",
+      ).length,
+      pending: privateTabPosts.filter(
+        (post) => getProfileHiddenPostsFilterKey(post) === "PENDING",
+      ).length,
+      reported: privateTabPosts.filter(
+        (post) => getProfileHiddenPostsFilterKey(post) === "REPORTED",
+      ).length,
+      rejected: privateTabPosts.filter(
+        (post) => getProfileHiddenPostsFilterKey(post) === "REJECTED",
+      ).length,
+    }),
+    [privateTabPosts],
+  );
+  const hiddenPostsFilterItems = useMemo(
+    () => buildProfileHiddenPostsFilterMenuItems(hiddenPostsFilterCounts),
+    [hiddenPostsFilterCounts],
+  );
+  const filteredPrivateTabPosts = useMemo(
+    () =>
+      privateTabPosts.filter((post) =>
+        matchesProfileHiddenPostsFilter(post, hiddenPostsFilter),
+      ),
+    [hiddenPostsFilter, privateTabPosts],
+  );
+  const visiblePosts =
+    tab === "pending-posts" ? filteredPrivateTabPosts : primaryTabPosts;
   const visibleHotspotIdsToResolve = useMemo(() => {
     const hotspotIds = new Set<number>();
 
@@ -858,14 +1097,11 @@ export default function ProfileScreen() {
   const handleLikePost = useCallback(
     async (post: ProfilePost) => {
       const postNumericId = Number.parseInt(post.id, 10);
-      const normalizedStatus = normalizeProfilePostStatus(post.status);
-      const normalizedVisibility = post.visibility.trim().toUpperCase();
 
       if (
         !Number.isInteger(postNumericId) ||
         postNumericId <= 0 ||
-        normalizedStatus !== "APPROVED" ||
-        normalizedVisibility !== "PUBLIC"
+        !shouldShowPostInPrimaryProfileTab(post)
       ) {
         return;
       }
@@ -1168,6 +1404,10 @@ export default function ProfileScreen() {
     authSession.tokenType,
     visibleRouteIdsToResolve,
   ]);
+  const isReloadingProfile = isLoading && Boolean(profile);
+  const handleRefreshProfile = useCallback(() => {
+    void reloadProfile();
+  }, [reloadProfile]);
 
   if (!authSession.isAuthenticated) {
     return (
@@ -1187,13 +1427,32 @@ export default function ProfileScreen() {
 
   if (error && !profile) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-[#F7F8FC] px-6">
-        <Text className="text-center text-[17px] font-extrabold text-[#2B2233]">
-          Không thể tải hồ sơ
-        </Text>
-        <Text className="mt-2 text-center text-[14px] leading-5 text-[#8E869A]">
-          {error.message}
-        </Text>
+      <SafeAreaView className="flex-1 bg-[#F7F8FC]" edges={["left", "right"]}>
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            paddingHorizontal: 24,
+          }}
+          refreshControl={
+            <RefreshControl
+              colors={["#EB489B", "#F58752"]}
+              onRefresh={handleRefreshProfile}
+              progressBackgroundColor="#FFFFFF"
+              refreshing={isLoading}
+              tintColor="#EB489B"
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          <Text className="text-center text-[17px] font-extrabold text-[#2B2233]">
+            Không thể tải hồ sơ
+          </Text>
+          <Text className="mt-2 text-center text-[14px] leading-5 text-[#8E869A]">
+            {error.message}
+          </Text>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -1240,9 +1499,18 @@ export default function ProfileScreen() {
         : null;
   const postSectionTitle =
     tab === "pending-posts"
-      ? "Bài viết riêng tư, chờ duyệt & bị từ chối"
+      ? getProfileHiddenPostsFilterTitle(hiddenPostsFilter)
       : "Tất cả bài viết của bạn";
   const isLoadingVisiblePosts = isLoading && visiblePosts.length === 0;
+  const hiddenPostsFilterAction =
+    tab === "pending-posts" ? (
+      <HiddenPostsFilterButton
+        activeFilter={hiddenPostsFilter}
+        onPress={() => {
+          setIsHiddenPostsFilterVisible(true);
+        }}
+      />
+    ) : null;
   const pendingDeletionPostId = postPendingDeletion
     ? getProfilePostNumericId(postPendingDeletion)
     : null;
@@ -1336,8 +1604,7 @@ export default function ProfileScreen() {
 
   async function confirmMovePostToTrash() {
     const post = postPendingDeletion;
-    const postNumericId =
-      post === null ? null : getProfilePostNumericId(post);
+    const postNumericId = post === null ? null : getProfilePostNumericId(post);
 
     if (post === null || postNumericId === null) {
       setPostPendingDeletion(null);
@@ -1411,6 +1678,16 @@ export default function ProfileScreen() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl
+            colors={["#EB489B", "#F58752"]}
+            onRefresh={handleRefreshProfile}
+            progressBackgroundColor="#FFFFFF"
+            progressViewOffset={insets.top + 12}
+            refreshing={isReloadingProfile}
+            tintColor="#EB489B"
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
         <View className="relative" style={{ height: heroHeight }}>
@@ -1560,22 +1837,30 @@ export default function ProfileScreen() {
             {tab === "posts" || tab === "pending-posts" ? (
               isLoadingVisiblePosts ? (
                 <View>
-                  <ProfilePostsSectionHeader title={postSectionTitle} />
+                  <ProfilePostsSectionHeader
+                    action={hiddenPostsFilterAction}
+                    title={postSectionTitle}
+                  />
                   <ProfileSectionLoading />
                 </View>
               ) : visiblePosts.length === 0 ? (
                 <View>
-                  <ProfilePostsSectionHeader title={postSectionTitle} />
-                  <EmptyPosts tab={tab} />
+                  <ProfilePostsSectionHeader
+                    action={hiddenPostsFilterAction}
+                    title={postSectionTitle}
+                  />
+                  <EmptyPosts hiddenPostsFilter={hiddenPostsFilter} tab={tab} />
                 </View>
               ) : (
                 <View>
-                  <ProfilePostsSectionHeader title={postSectionTitle} />
+                  <ProfilePostsSectionHeader
+                    action={hiddenPostsFilterAction}
+                    title={postSectionTitle}
+                  />
                   {visiblePosts.map((post, index) => {
                     const postNumericId = Number.parseInt(post.id, 10);
                     const isLiked =
-                      normalizeProfilePostStatus(post.status) === "APPROVED" &&
-                      post.visibility.trim().toUpperCase() === "PUBLIC" &&
+                      shouldShowPostInPrimaryProfileTab(post) &&
                       (post.isLiked === true ||
                         (Number.isInteger(postNumericId) &&
                           persistedLikedPostIdsSet.has(postNumericId)));
@@ -1662,6 +1947,19 @@ export default function ProfileScreen() {
         visible={postPendingDeletion !== null}
       />
 
+      <PostOptionsSheet
+        bottomInset={insets.bottom}
+        items={hiddenPostsFilterItems}
+        visible={isHiddenPostsFilterVisible}
+        onClose={() => {
+          setIsHiddenPostsFilterVisible(false);
+        }}
+        onSelectItem={(item) => {
+          setHiddenPostsFilter(item.key);
+          setIsHiddenPostsFilterVisible(false);
+        }}
+      />
+
       {profileToastMessage ? (
         <View
           pointerEvents="box-none"
@@ -1689,7 +1987,10 @@ export default function ProfileScreen() {
             <View className="flex-row items-center">
               <Text
                 className="flex-1 text-[13px] font-medium text-white"
-                style={{ includeFontPadding: false, lineHeight: lineHeightFor(13) }}
+                style={{
+                  includeFontPadding: false,
+                  lineHeight: lineHeightFor(13),
+                }}
               >
                 {profileToastMessage}
               </Text>
@@ -2675,9 +2976,7 @@ function PostCard({
   const statusLabel = getProfilePostStatusLabel(post.status);
   const statusTone = getProfilePostStatusTone(post.status);
   const normalizedStatus = normalizeProfilePostStatus(post.status);
-  const normalizedVisibility = post.visibility.trim().toUpperCase();
-  const canInteractWithPost =
-    normalizedStatus === "APPROVED" && normalizedVisibility === "PUBLIC";
+  const canInteractWithPost = shouldShowPostInPrimaryProfileTab(post);
   const likeCount = post.likeCount ?? 0;
   const commentCount = post.commentCount ?? 0;
   const shareCount = post.shareCount ?? 0;
@@ -3218,10 +3517,55 @@ function RouteParticipantCard({
   );
 }
 
-function ProfilePostsSectionHeader({ title }: { title: string }) {
+function HiddenPostsFilterButton({
+  activeFilter,
+  onPress,
+}: {
+  activeFilter: ProfileHiddenPostsFilter;
+  onPress: () => void;
+}) {
   return (
-    <View className="mb-3 px-1">
-      <Text className="text-[14px] font-semibold text-[#2B2233]">{title}</Text>
+    <Pressable
+      accessibilityLabel="Lọc bài viết riêng tư và kiểm duyệt"
+      className="flex-row items-center rounded-full px-3 py-2"
+      onPress={onPress}
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.82 : 1,
+        backgroundColor: "#FFF5FA",
+      })}
+    >
+      <SymbolView
+        name={{
+          ios: "slider.horizontal.3",
+          android: "tune",
+          web: "tune",
+        }}
+        size={14}
+        tintColor="#EB489B"
+      />
+      <Text
+        className="ml-1.5 text-[12px] font-semibold text-[#7B4D69]"
+        style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
+      >
+        {getProfileHiddenPostsFilterLabel(activeFilter)}
+      </Text>
+    </Pressable>
+  );
+}
+
+function ProfilePostsSectionHeader({
+  action,
+  title,
+}: {
+  action?: ReactNode;
+  title: string;
+}) {
+  return (
+    <View className="mb-3 flex-row items-center justify-between gap-3 px-1">
+      <Text className="flex-1 text-[14px] font-semibold text-[#2B2233]">
+        {title}
+      </Text>
+      {action ?? null}
     </View>
   );
 }
@@ -3234,13 +3578,19 @@ function ProfileSectionLoading() {
   );
 }
 
-function EmptyPosts({ tab }: { tab: Extract<Tab, "posts" | "pending-posts"> }) {
+function EmptyPosts({
+  hiddenPostsFilter = "PRIVATE",
+  tab,
+}: {
+  hiddenPostsFilter?: ProfileHiddenPostsFilter;
+  tab: Extract<Tab, "posts" | "pending-posts">;
+}) {
   return (
     <View className="items-center py-12">
       <SymbolView
         name={
           tab === "pending-posts"
-            ? ({ ios: "lock", android: "lock", web: "lock" } as SymbolName)
+            ? getProfileHiddenPostsFilterIcon(hiddenPostsFilter)
             : ({ ios: "photo", android: "image", web: "image" } as SymbolName)
         }
         size={30}
@@ -3248,8 +3598,8 @@ function EmptyPosts({ tab }: { tab: Extract<Tab, "posts" | "pending-posts"> }) {
       />
       <Text className="mt-2 text-[13px] text-[#8E869A]">
         {tab === "pending-posts"
-          ? "Bạn chưa có bài viết riêng tư, chờ duyệt hoặc bị từ chối"
-          : "Bạn chưa có bài viết công khai hoặc bạn bè nào đã được duyệt"}
+          ? getProfileHiddenPostsFilterEmptyMessage(hiddenPostsFilter)
+          : "Bạn chưa có bài viết nào đã được duyệt"}
       </Text>
     </View>
   );
