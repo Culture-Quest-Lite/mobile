@@ -2216,6 +2216,16 @@ export default function RouteDetailScreen() {
               radiusMeters={1000}
               title="Ăn uống & ưu đãi dọc tuyến"
               eyebrow="ĐỐI TÁC TRÊN ĐƯỜNG ĐI"
+              eyebrowColor="#7A6F67"
+              showRadiusDescription={false}
+              titleFontWeight="font-semibold"
+              cardContentTextWeight="regular"
+              headerTextSizes={{
+                eyebrow: 14,
+                title: 15,
+                description: 14,
+                action: 13,
+              }}
               contextLabel={`Dọc tuyến ${route.routeName}`}
               emptyDescription="Chưa có đối tác nào có ưu đãi trong bán kính 1km dọc tuyến này."
               seeAllHref={
