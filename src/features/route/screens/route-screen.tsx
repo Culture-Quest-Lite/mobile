@@ -1,13 +1,15 @@
 import {
-  activeRouteState,
   currentUser,
   leaderboard,
   type RouteItem,
   routes
 } from "@/lib/demo-data";
+import { ScreenHorizontalPadding } from "@/constants/theme";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { SymbolView } from "expo-symbols";
 import {
   type ComponentProps,
@@ -18,13 +20,15 @@ import {
 } from "react";
 import {
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 
 import {
@@ -123,37 +127,133 @@ function mapSavedRoutesToItems(
   });
 }
 
-const sunsetColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
+const heroBannerImage = require("../../../../assets/images/hero-v2.png");
+const routeScreenBackground = "#FDF7F8";
 
 const cardShadowStyle = {
-  shadowColor: "rgba(28, 45, 80, 0.12)",
+  shadowColor: "rgba(235, 72, 155, 0.10)",
   shadowOpacity: 1,
-  shadowRadius: 14,
-  shadowOffset: { width: 0, height: 8 },
-  elevation: 6,
+  shadowRadius: 18,
+  shadowOffset: { width: 0, height: 10 },
+  elevation: Platform.OS === "android" ? 6 : 5,
 } as const;
 
-const TAB_ITEMS: { key: Tab; label: string }[] = [
-  { key: "official", label: "Chính thức" },
-  { key: "active", label: "Đang đi" },
-  { key: "groups", label: "Nhóm của tôi" },
-  { key: "completed", label: "Đã xong" },
-  { key: "bookmarked", label: "Đã lưu" },
-  { key: "plans", label: "Kế hoạch" },
-  { key: "journeys", label: "Hành trình của tôi" },
-  { key: "community", label: "Cộng đồng" },
+const TAB_ITEMS: { key: Tab; label: string; icon: SymbolName }[] = [
+  {
+    key: "official",
+    label: "Chính thức",
+    icon: { ios: "map.fill", android: "map", web: "map" },
+  },
+  {
+    key: "active",
+    label: "Đang đi",
+    icon: {
+      ios: "figure.walk",
+      android: "directions_walk",
+      web: "directions_walk",
+    },
+  },
+  {
+    key: "groups",
+    label: "Nhóm của tôi",
+    icon: { ios: "person.3.fill", android: "groups", web: "groups" },
+  },
+  {
+    key: "completed",
+    label: "Đã xong",
+    icon: {
+      ios: "checkmark.circle.fill",
+      android: "task_alt",
+      web: "task_alt",
+    },
+  },
+  {
+    key: "bookmarked",
+    label: "Đã lưu",
+    icon: { ios: "bookmark.fill", android: "bookmark", web: "bookmark" },
+  },
+  {
+    key: "plans",
+    label: "Kế hoạch",
+    icon: {
+      ios: "calendar.badge.clock",
+      android: "event_note",
+      web: "event_note",
+    },
+  },
+  {
+    key: "journeys",
+    label: "Hành trình của tôi",
+    icon: {
+      ios: "record.circle.fill",
+      android: "radio_button_checked",
+      web: "radio_button_checked",
+    },
+  },
+  {
+    key: "community",
+    label: "Cộng đồng",
+    icon: {
+      ios: "globe.asia.australia.fill",
+      android: "public",
+      web: "public",
+    },
+  },
 ];
+
+const TAB_SECTION_META: Record<
+  Tab,
+  {
+    eyebrow: string;
+    title: string;
+  }
+> = {
+  official: {
+    eyebrow: "KHÁM PHÁ",
+    title: "Tuyến đường đề xuất",
+  },
+  active: {
+    eyebrow: "TIẾN ĐỘ",
+    title: "Hành trình bạn đang theo đuổi",
+  },
+  groups: {
+    eyebrow: "KẾT NỐI",
+    title: "Nhóm đồng hành của bạn",
+  },
+  completed: {
+    eyebrow: "THÀNH TỰU",
+    title: "Các tuyến đã hoàn thành",
+  },
+  bookmarked: {
+    eyebrow: "LƯU LẠI",
+    title: "Danh sách bạn muốn quay lại",
+  },
+  plans: {
+    eyebrow: "CÁ NHÂN HÓA",
+    title: "Kế hoạch riêng cho chuyến đi",
+  },
+  journeys: {
+    eyebrow: "TỰ GHI",
+    title: "Những hành trình của riêng bạn",
+  },
+  community: {
+    eyebrow: "CỘNG ĐỒNG",
+    title: "Hành trình được chia sẻ nhiều",
+  },
+};
 
 function XPBar({
   value,
   max,
   trackColor = "rgba(255,255,255,0.2)",
   height = 8,
+  fillColors = ["#FFE566", "#FFB400"] as const,
 }: {
   value: number;
   max: number;
   trackColor?: string;
   height?: number;
+  fillColors?: readonly [string, string, ...string[]];
 }) {
   const percent = Math.min(Math.max((value / max) * 100, 0), 100);
 
@@ -167,7 +267,7 @@ function XPBar({
       }}
     >
       <LinearGradient
-        colors={["#FFE566", "#FFB400"]}
+        colors={fillColors}
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
         style={{ borderRadius: 999, height: "100%", width: `${percent}%` }}
@@ -230,6 +330,8 @@ export default function RouteScreen() {
   const [tab, setTab] = useState<Tab>("official");
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const session = useAuthSession();
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const [officialRoutes, setOfficialRoutes] = useState<RouteItem[]>([]);
   const [isLoadingRoutes, setIsLoadingRoutes] = useState(true);
   const [routeError, setRouteError] = useState<string | null>(null);
@@ -607,182 +709,334 @@ export default function RouteScreen() {
     [completedRoutesFromApi],
   );
   const savedList = useMemo(() => savedRoutesFromApi, [savedRoutesFromApi]);
+  const displayedOfficialRoutes = useMemo(
+    () => (officialRoutes.length ? officialRoutes : routes),
+    [officialRoutes],
+  );
+  const activeTabMeta = TAB_SECTION_META[tab];
+  const contentWidth = Math.min(screenWidth - ScreenHorizontalPadding * 2, 520);
+  const tabButtonWidth = Math.max(Math.floor((contentWidth - 18) / 4), 76);
+  const heroImageHeight = Math.min(Math.max(screenWidth * 0.5, 172), 198);
+  const heroHeight = heroImageHeight;
+  const levelCardHeroOverlap = 34;
+  const featuredActiveProgress = activeRouteProgresses[0] ?? null;
+  const featuredActiveRouteId = featuredActiveProgress
+    ? String(featuredActiveProgress.routeId)
+    : null;
+  const remainingActiveRoutes = useMemo(
+    () =>
+      featuredActiveRouteId
+        ? activeList.filter((route) => route.id !== featuredActiveRouteId)
+        : activeList,
+    [activeList, featuredActiveRouteId],
+  );
+  const currentTabCount = (() => {
+    switch (tab) {
+      case "official":
+        return displayedOfficialRoutes.length;
+      case "active":
+        return activeList.length;
+      case "groups":
+        return myRouteGroupsDemo.length;
+      case "completed":
+        return completedList.length;
+      case "bookmarked":
+        return savedList.length;
+      case "plans":
+        return myPlans.length;
+      case "journeys":
+        return myRecordJourneys.length;
+      case "community":
+        return communityRoutesFromApi.length;
+      default:
+        return 0;
+    }
+  })();
+  const sectionActionLabel =
+    tab === "official"
+      ? "Xem tất cả"
+      : currentTabCount
+        ? `${currentTabCount} mục`
+        : isLoadingRoutes && tab === "community"
+          ? "Đang tải"
+          : "Trống";
 
   return (
-    <SafeAreaView
-      className="flex-1 bg-[#F7F8FC]"
-      edges={["top", "left", "right"]}
-    >
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingBottom: 24 }}
-        nestedScrollEnabled
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <LinearGradient
-          colors={sunsetColors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          className="rounded-b-[40px] px-4 pb-4 pt-3"
-          style={cardShadowStyle}
+    <View className="flex-1" style={{ backgroundColor: routeScreenBackground }}>
+      <StatusBar style="dark" />
+
+      <SafeAreaView className="flex-1" edges={["left", "right"]}>
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingBottom: 28 }}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={false}
         >
-          <View className="flex-row items-center justify-between">
-            <View>
-              <Text className="text-[11px] font-bold uppercase tracking-wider text-white/80">
-                Hành trình
-              </Text>
-              <Text className="text-[24px] font-extrabold text-white">
-                Khám phá kế tiếp
-              </Text>
-            </View>
-
-            <Pressable
-              onPress={() => setShowLeaderboard(true)}
-              className="flex-row items-center gap-2 rounded-2xl bg-black/20 px-3 py-2"
-            >
-              <SymbolView
-                name={{
-                  ios: "trophy.fill",
-                  android: "emoji_events",
-                  web: "emoji_events",
-                }}
-                size={14}
-                tintColor="#FFE566"
-              />
-              <Text className="text-[14px] font-bold text-white">BXH</Text>
-            </Pressable>
-          </View>
-
-          <View className="mt-3 rounded-2xl bg-black/20 p-3">
-            <View className="mb-1.5 flex-row items-center justify-between">
-              <Text className="text-[12px] font-bold text-white">
-                Cấp {currentUser.level} · {currentUser.title}
-              </Text>
-              <Text className="text-[12px] text-white/80">
-                {currentUser.xp} / {currentUser.xpToNext}
-              </Text>
-            </View>
-            <XPBar value={currentUser.xp} max={currentUser.xpToNext} />
-            <Text className="mt-1.5 text-[10px] text-white/75">
-              Còn {currentUser.xpToNext - currentUser.xp} XP để lên cấp{" "}
-              {currentUser.level + 1}
-            </Text>
-          </View>
-        </LinearGradient>
-
-        {activeRouteProgresses.length > 0 ? (
-          <View className="px-4 pt-4">
-            <ActiveProgressSummary
-              progress={activeRouteProgresses[0]}
-              onAbandonRoute={handleAbandonRoute}
-              abandoningProgressId={abandoningProgressId}
-            />
-          </View>
-        ) : null}
-
-        <View className="px-4 pt-4">
-          <ScrollView
-            horizontal
-            nestedScrollEnabled
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.tabRow}
+          <View
+            style={[styles.heroShell, { height: heroHeight + levelCardHeroOverlap + 8 }]}
           >
-            {TAB_ITEMS.map((item) => {
-              const selected = tab === item.key;
-              return (
-                <Pressable
-                  key={item.key}
-                  onPress={() => setTab(item.key)}
-                  style={[
-                    styles.tabButton,
-                    selected && styles.tabButtonSelected,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.tabLabel,
-                      selected && styles.tabLabelSelected,
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
+            <Image
+              source={heroBannerImage}
+              contentFit="cover"
+              contentPosition="center"
+              style={styles.heroBannerImage}
+            />
 
-        <View key={tab} className="gap-3 px-4 pt-4">
-          {tab === "official" &&
-            (isLoadingRoutes ? (
-              <EmptyState text="Đang tải tuyến từ API..." />
-            ) : (
-              <>
-                {routeError ? (
-                  <View className="rounded-2xl border border-[#FFE1E8] bg-[#FFF5F8] px-3 py-2">
-                    <Text className="text-[11px] font-semibold text-[#B42345]">
-                      {routeError} Đang hiển thị dữ liệu demo tạm thời.
+            <View className="px-4" style={{ paddingTop: insets.top + 8 }}>
+              <View style={styles.contentFrame}>
+                <View className="flex-row items-start justify-between gap-4">
+                  <View className="flex-1">
+                    <Text style={styles.heroEyebrow}>HÀNH TRÌNH</Text>
+                    <Text style={styles.heroTitle}>Khám phá kế tiếp</Text>
+                  </View>
+
+                  <Pressable
+                    className="h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/72"
+                    onPress={() => setShowLeaderboard(true)}
+                    style={cardShadowStyle}
+                  >
+                    <SymbolView
+                      name={{
+                        ios: "trophy.fill",
+                        android: "emoji_events",
+                        web: "emoji_events",
+                      }}
+                      size={15}
+                      tintColor="#FF4F86"
+                    />
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <View
+            className="px-4"
+            style={{ marginTop: -levelCardHeroOverlap, zIndex: 4 }}
+          >
+            <View style={styles.contentFrame}>
+              <View
+                className="overflow-hidden rounded-[24px] border border-[#F9E1E8] bg-white px-4 py-4"
+                style={cardShadowStyle}
+              >
+                <View className="flex-row items-center gap-3">
+                  <View style={styles.levelIconOuter}>
+                    <LinearGradient
+                      colors={["#FF8EB0", "#FF5E87"]}
+                      end={{ x: 1, y: 1 }}
+                      start={{ x: 0, y: 0 }}
+                      style={styles.levelIconInner}
+                    >
+                      <SymbolView
+                        name={{
+                          ios: "location.north.circle.fill",
+                          android: "explore",
+                          web: "explore",
+                        }}
+                        size={24}
+                        tintColor="#FFFFFF"
+                      />
+                    </LinearGradient>
+                  </View>
+                  <View className="min-w-0 flex-1">
+                    <View className="flex-row items-center justify-between gap-3">
+                      <Text
+                        className="flex-1 font-extrabold text-[#2B2233]"
+                        style={styles.levelTitleText}
+                        numberOfLines={1}
+                      >
+                        Cấp {currentUser.level} · {currentUser.title}
+                      </Text>
+                      <Text
+                        className="font-bold text-[#FF4F86]"
+                        style={styles.levelValueText}
+                      >
+                        {currentUser.xp} / {currentUser.xpToNext}
+                      </Text>
+                    </View>
+                    <View className="mt-2">
+                      <XPBar
+                        value={currentUser.xp}
+                        max={currentUser.xpToNext}
+                        trackColor="#F6E8EE"
+                        height={9}
+                        fillColors={["#FF7AA8", "#FF4F86"]}
+                      />
+                    </View>
+                    <Text className="mt-2 text-[#867A86]" style={styles.levelCaptionText}>
+                      Còn {currentUser.xpToNext - currentUser.xp} XP để lên cấp{" "}
+                      {currentUser.level + 1}
                     </Text>
                   </View>
-                ) : null}
-                <RouteList
-                  list={officialRoutes.length ? officialRoutes : routes}
-                  variant="official"
-                />
-              </>
-            ))}
-          {tab === "active" &&
-            (activeList.length ? (
-              <RouteList
-                list={activeList}
-                variant="active"
-                progress={activeRouteState.progress}
-                progressMap={activeProgressMap}
-                progressByRouteId={activeProgressByRouteId}
-                onAbandonRoute={handleAbandonRoute}
-                abandoningProgressId={abandoningProgressId}
-              />
-            ) : (
-              <EmptyState text="Bạn chưa tham gia tuyến nào" />
-            ))}
-          {tab === "groups" && <MyGroupsTab groups={myRouteGroupsDemo} />}
-          {tab === "completed" &&
-            (completedList.length ? (
-              <RouteList list={completedList} variant="completed" />
-            ) : (
-              <EmptyState text="Chưa hoàn thành tuyến nào" />
-            ))}
-          {tab === "bookmarked" &&
-            (savedList.length ? (
-              <RouteList
-                list={savedList}
-                variant="bookmarked"
-                onUnsaveRoute={handleUnsaveRoute}
-                removingSavedRouteId={removingSavedRouteId}
-              />
-            ) : (
-              <EmptyState text="Bạn chưa lưu tuyến nào" />
-            ))}
-          {tab === "plans" && (
-            <UserPlanTab plans={myPlans} error={planError} />
-          )}
-          {tab === "journeys" && (
-            <MyJourneyTab journeys={myRecordJourneys} />
-          )}
-          {tab === "community" && (
-            <CommunityTab
-              routes={communityRoutesFromApi}
-              isLoading={isLoadingRoutes}
-            />
-          )}
-        </View>
-      </ScrollView>
+                </View>
+              </View>
+            </View>
+          </View>
 
-      {showLeaderboard && (
-        <LeaderboardSheet onClose={() => setShowLeaderboard(false)} />
-      )}
-    </SafeAreaView>
+          <View
+            className="px-4"
+            style={{ paddingBottom: 28, paddingTop: 14 }}
+          >
+            <View style={styles.contentFrame}>
+              <View
+                className="overflow-hidden rounded-[24px] border border-[#F7E6EC] bg-white p-1.5"
+                style={cardShadowStyle}
+              >
+                <ScrollView
+                  horizontal
+                  contentContainerStyle={styles.tabRow}
+                  nestedScrollEnabled
+                  showsHorizontalScrollIndicator={false}
+                >
+                  {TAB_ITEMS.map((item) => {
+                    const selected = tab === item.key;
+
+                    return (
+                      <Pressable
+                        key={item.key}
+                        onPress={() => setTab(item.key)}
+                        style={[
+                          styles.tabButton,
+                          { width: tabButtonWidth },
+                          selected && styles.tabButtonSelected,
+                        ]}
+                      >
+                        {selected ? (
+                          <LinearGradient
+                            colors={["#FFF5F9", "#FFFDFE"]}
+                            end={{ x: 1, y: 1 }}
+                            pointerEvents="none"
+                            start={{ x: 0, y: 0 }}
+                            style={StyleSheet.absoluteFill}
+                          />
+                        ) : null}
+                        <View
+                          style={[
+                            styles.tabIconWrap,
+                            selected && styles.tabIconWrapSelected,
+                          ]}
+                        >
+                          <SymbolView
+                            name={item.icon}
+                            size={13}
+                            tintColor={selected ? "#FF4F86" : "#857A86"}
+                          />
+                        </View>
+                        <Text
+                          style={[
+                            styles.tabLabel,
+                            selected && styles.tabLabelSelected,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {item.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              <View className="mt-5 flex-row items-center justify-between gap-3">
+                <View className="min-w-0 flex-1 flex-row items-center gap-2">
+                  <SymbolView
+                    name={{
+                      ios: "sparkles",
+                      android: "auto_awesome",
+                      web: "auto_awesome",
+                    }}
+                    size={14}
+                    tintColor="#FF4F86"
+                  />
+                  <Text style={styles.sectionTitle}>{activeTabMeta.title}</Text>
+                </View>
+                <Text style={styles.sectionActionLabel}>
+                  {sectionActionLabel}
+                </Text>
+              </View>
+
+              <View key={tab} className="mt-3 gap-3">
+                {tab === "official" &&
+                  (isLoadingRoutes ? (
+                    <EmptyState text="Đang tải tuyến từ API..." />
+                  ) : (
+                    <>
+                      {routeError ? (
+                        <View className="rounded-[20px] border border-[#FFE1E8] bg-[#FFF5F8] px-4 py-3">
+                          <Text className="text-[12px] font-semibold text-[#B42345]">
+                            {routeError} Đang hiển thị dữ liệu demo tạm thời.
+                          </Text>
+                        </View>
+                      ) : null}
+                      <RouteList
+                        list={displayedOfficialRoutes}
+                        variant="official"
+                      />
+                    </>
+                  ))}
+                {tab === "active" &&
+                  (featuredActiveProgress ? (
+                    <View className="gap-3">
+                      <ActiveProgressSummary
+                        progress={featuredActiveProgress}
+                        onAbandonRoute={handleAbandonRoute}
+                        abandoningProgressId={abandoningProgressId}
+                      />
+                      {remainingActiveRoutes.length ? (
+                        <RouteList
+                          list={remainingActiveRoutes}
+                          variant="active"
+                          progressMap={activeProgressMap}
+                          progressByRouteId={activeProgressByRouteId}
+                          onAbandonRoute={handleAbandonRoute}
+                          abandoningProgressId={abandoningProgressId}
+                        />
+                      ) : null}
+                    </View>
+                  ) : (
+                    <EmptyState text="Bạn chưa tham gia tuyến nào" />
+                  ))}
+                {tab === "groups" && <MyGroupsTab groups={myRouteGroupsDemo} />}
+                {tab === "completed" &&
+                  (completedList.length ? (
+                    <RouteList list={completedList} variant="completed" />
+                  ) : (
+                    <EmptyState text="Chưa hoàn thành tuyến nào" />
+                  ))}
+                {tab === "bookmarked" &&
+                  (savedList.length ? (
+                    <RouteList
+                      list={savedList}
+                      variant="bookmarked"
+                      onUnsaveRoute={handleUnsaveRoute}
+                      removingSavedRouteId={removingSavedRouteId}
+                    />
+                  ) : (
+                    <EmptyState text="Bạn chưa lưu tuyến nào" />
+                  ))}
+                {tab === "plans" && (
+                  <UserPlanTab plans={myPlans} error={planError} />
+                )}
+                {tab === "journeys" && (
+                  <MyJourneyTab journeys={myRecordJourneys} />
+                )}
+                {tab === "community" && (
+                  <CommunityTab
+                    routes={communityRoutesFromApi}
+                    isLoading={isLoadingRoutes}
+                  />
+                )}
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+
+        {showLeaderboard && (
+          <LeaderboardSheet onClose={() => setShowLeaderboard(false)} />
+        )}
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -802,34 +1056,46 @@ function ActiveProgressSummary({
 
   return (
     <View
-      className="overflow-hidden rounded-3xl border border-[#F7C7D1] bg-white"
+      className="overflow-hidden rounded-[26px] border border-[#F9E1E8] bg-white"
       style={cardShadowStyle}
     >
       <LinearGradient
-        colors={["#FFF5F8", "#FFFFFF"]}
+        colors={["#FFF6F9", "#FFFDFC"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         className="p-4"
       >
-        <View className="flex-row items-start justify-between gap-3">
+        <View className="flex-row items-start gap-3">
+          <View className="h-11 w-11 items-center justify-center rounded-[16px] bg-[#FFF0F4]">
+            <SymbolView
+              name={{
+                ios: "figure.walk.circle.fill",
+                android: "directions_walk",
+                web: "directions_walk",
+              }}
+              size={20}
+              tintColor="#FF4F86"
+            />
+          </View>
+
           <View className="flex-1">
-            <Text className="text-[11px] font-extrabold uppercase tracking-wider text-[#EB489B]">
+            <Text className="text-[11px] font-extrabold uppercase tracking-[1.2px] text-[#EB489B]">
               Đang thực hiện
             </Text>
             <Text
-              className="mt-1 text-[18px] font-extrabold text-[#2B2233]"
+              className="mt-1 text-[17px] font-extrabold text-[#2B2233]"
               numberOfLines={2}
             >
               {routeName}
             </Text>
-            <Text className="mt-1 text-[12px] text-[#8E869A]">
+            <Text className="mt-1 text-[12px] leading-5 text-[#7A6F67]">
               {progress.completedStops}/{progress.totalStops} điểm ·{" "}
               {progressValue}% hoàn thành
             </Text>
           </View>
 
-          <View className="rounded-2xl bg-[#FFF4EF] px-3 py-2">
-            <Text className="text-[12px] font-extrabold text-[#F58752]">
+          <View className="rounded-full bg-[#FFF1F5] px-3 py-2">
+            <Text className="text-[12px] font-extrabold text-[#FF4F86]">
               {progressValue}%
             </Text>
           </View>
@@ -839,14 +1105,15 @@ function ActiveProgressSummary({
           <XPBar
             value={progressValue}
             max={100}
-            trackColor="#ECEEF4"
+            trackColor="#F6E5EB"
             height={8}
+            fillColors={["#FF7AA8", "#FF4F86"]}
           />
         </View>
 
         <View className="mt-3 flex-row gap-2">
           <Pressable
-            className="flex-1 rounded-2xl bg-[#F58752] py-3"
+            className="flex-1 rounded-[18px] bg-[#FF4F86] py-3"
             onPress={() => router.push(`/route/${progress.routeId}` as Href)}
           >
             <Text className="text-center text-[13px] font-extrabold text-white">
@@ -855,7 +1122,7 @@ function ActiveProgressSummary({
           </Pressable>
 
           <Pressable
-            className={`rounded-2xl border border-[#F7C7D1] bg-white px-4 py-3 ${isAbandoning ? "opacity-70" : ""}`}
+            className={`rounded-[18px] border border-[#F7C7D1] bg-white px-4 py-3 ${isAbandoning ? "opacity-70" : ""}`}
             onPress={() => onAbandonRoute(progress.userRouteProgressId)}
             disabled={isAbandoning}
           >
@@ -1454,40 +1721,6 @@ function CommunityTab({
   );
 }
 
-function GuideSection({
-  step,
-  title,
-  description,
-  bullets,
-}: {
-  step: string;
-  title: string;
-  description: string;
-  bullets: string[];
-}) {
-  return (
-    <View className="mb-3 rounded-3xl border border-[#E8EDF4] bg-[#FAFBFD] p-4">
-      <View className="flex-row items-start gap-3">
-        <View className="h-8 w-8 items-center justify-center rounded-xl bg-[#2B2233]">
-          <Text className="text-[12px] font-extrabold text-white">{step}</Text>
-        </View>
-        <View className="flex-1">
-          <Text className="text-[15px] font-extrabold text-[#2B2233]">{title}</Text>
-          <Text className="mt-1 text-[11px] leading-5 text-[#777181]">{description}</Text>
-          <View className="mt-2 gap-1.5">
-            {bullets.map((bullet) => (
-              <View key={bullet} className="flex-row items-start gap-2">
-                <View className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[#EB489B]" />
-                <Text className="flex-1 text-[11px] leading-4 text-[#5F5965]">{bullet}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-}
-
 function CommunityRankCard({
   route,
   rank,
@@ -1679,75 +1912,161 @@ function RouteCard({
   const isRemovingSavedRoute =
     savedRouteId !== undefined && removingSavedRouteId === savedRouteId;
 
+  if (variant === "official") {
+    return (
+      <View
+        className="overflow-hidden rounded-[24px] border border-[#F5E7EC] bg-white"
+        style={cardShadowStyle}
+      >
+        <Pressable onPress={() => router.push(`/route/${route.id}` as Href)}>
+          <View style={styles.officialRouteMedia}>
+            <Image
+              source={route.cover}
+              contentFit="cover"
+              style={styles.cardImage}
+            />
+
+            <View style={styles.officialRouteTopRow}>
+              <Badge text={route.era} />
+              <View style={styles.officialRouteHeart}>
+                <SymbolView
+                  name={{ ios: "heart", android: "favorite_border", web: "favorite_border" }}
+                  size={15}
+                  tintColor="#FFFFFF"
+                />
+              </View>
+            </View>
+          </View>
+
+          <View className="px-4 pb-4 pt-2.5">
+            <Text
+              className="text-[15px] text-[#2B2233]"
+              style={styles.officialRouteTitle}
+              numberOfLines={1}
+            >
+              {route.title}
+            </Text>
+
+            <View className="mt-0.5 flex-row items-end justify-between gap-3">
+              <View className="flex-1 flex-row flex-wrap items-center gap-x-4 gap-y-2">
+                <RouteMetaInline
+                  icon={{
+                    ios: "mappin.and.ellipse",
+                    android: "location_on",
+                    web: "location_on",
+                  }}
+                  label={route.distance}
+                />
+                <RouteMetaInline
+                  icon={{ ios: "clock", android: "schedule", web: "schedule" }}
+                  label={route.duration}
+                />
+                <RouteMetaInline
+                  icon={{ ios: "star", android: "star_outline", web: "star_outline" }}
+                  label={`${route.hotspotIds.length} điểm`}
+                />
+              </View>
+
+              <View style={styles.officialRouteXpPill}>
+                <Text className="text-[11px] font-extrabold text-[#FF4F86]">
+                  +{route.xp} XP
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const quickActionIcon: SymbolName =
+    variant === "bookmarked"
+      ? { ios: "bookmark.fill", android: "bookmark", web: "bookmark" }
+      : variant === "completed"
+        ? {
+            ios: "checkmark.circle.fill",
+            android: "check_circle",
+            web: "check_circle",
+          }
+        : { ios: "heart", android: "favorite_border", web: "favorite_border" };
+
   return (
     <View
-      className="overflow-hidden rounded-3xl border border-[#E8EDF4] bg-white"
+      className="overflow-hidden rounded-[26px] border border-[#F7E5EB] bg-white"
       style={cardShadowStyle}
     >
       <Pressable onPress={() => router.push(`/route/${route.id}` as Href)}>
-        <View style={styles.cardImageWrapLarge}>
+        <View style={styles.routeFeatureMedia}>
           <Image
             source={route.cover}
             contentFit="cover"
             style={styles.cardImage}
           />
           <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.8)"]}
+            colors={[
+              "rgba(43,34,51,0.06)",
+              "rgba(43,34,51,0.24)",
+              "rgba(25,19,29,0.84)",
+            ]}
+            locations={[0, 0.42, 1]}
             pointerEvents="none"
             style={StyleSheet.absoluteFill}
           />
 
-          <View style={styles.cardBadgeRow}>
+          <View style={styles.routeFeatureTopRow}>
             <Badge text={route.era} />
-            <Badge text={route.difficulty} />
-            {variant === "completed" && (
-              <View style={styles.completedBadge}>
-                <SymbolView
-                  name={{ ios: "checkmark", android: "check", web: "check" }}
-                  size={10}
-                  tintColor="#FFFFFF"
-                />
-                <Text style={styles.completedBadgeText}>Hoàn thành</Text>
-              </View>
-            )}
+            <View style={styles.routeActionBubble}>
+              <SymbolView
+                name={quickActionIcon}
+                size={13}
+                tintColor="#FFFFFF"
+              />
+            </View>
           </View>
 
-          <View style={styles.cardTitleWrap}>
-            <Text className="text-[16px] font-extrabold leading-tight text-white">
+          <View style={styles.routeFeatureBottom}>
+            <Text
+              className="text-[15px] font-extrabold text-white"
+              style={styles.routeFeatureTitle}
+              numberOfLines={1}
+            >
               {route.title}
             </Text>
-            <View className="mt-0.5 flex-row items-center gap-1">
-              <SymbolView
-                name={{ ios: "star.fill", android: "star", web: "star" }}
-                size={10}
-                tintColor="#FFE566"
+            <View className="mt-2 flex-row flex-wrap items-center gap-x-3 gap-y-1">
+              <RouteStat
+                icon={{
+                  ios: "point.bottomleft.forward.to.point.topright.scurvepath.fill",
+                  android: "route",
+                  web: "route",
+                }}
+                label={route.distance}
               />
-              <Text className="text-[11px] text-white">{route.rating}</Text>
+              <RouteStat
+                icon={{ ios: "clock.fill", android: "schedule", web: "schedule" }}
+                label={route.duration}
+              />
+              <RouteStat
+                icon={{
+                  ios: "mappin.and.ellipse",
+                  android: "location_on",
+                  web: "location_on",
+                }}
+                label={`${route.hotspotIds.length} điểm`}
+              />
             </View>
           </View>
-        </View>
 
-        <View className="p-3">
-          <View className="flex-row items-center gap-2">
-            <Text className="text-[12px] text-[#8E869A]">{route.distance}</Text>
-            <Text className="text-[12px] text-[#8E869A]">·</Text>
-            <Text className="text-[12px] text-[#8E869A]">{route.duration}</Text>
-            <Text className="text-[12px] text-[#8E869A]">·</Text>
-            <Text className="text-[12px] text-[#8E869A]">
-              {route.hotspotIds.length} điểm
+          <View style={styles.routeXpPill}>
+            <Text className="text-[11px] font-extrabold text-[#FF4F86]">
+              +{route.xp} XP
             </Text>
-            <View className="ml-auto rounded-full bg-[#FFF4EF] px-2 py-0.5">
-              <Text className="text-[11px] font-bold text-[#F58752]">
-                +{route.xp} XP
-              </Text>
-            </View>
           </View>
         </View>
       </Pressable>
 
       {variant === "active" && progress !== undefined && (
-        <View className="px-3 pb-3">
-          <View className="mb-1 flex-row items-center justify-between">
+        <View className="border-t border-[#F6E8EE] px-4 pb-4">
+          <View className="mb-2 mt-3 flex-row items-center justify-between">
             <Text className="text-[11px] font-bold text-[#2B2233]">
               Tiến độ {Math.round(progress)}%
             </Text>
@@ -1757,24 +2076,30 @@ function RouteCard({
               </Text>
             ) : null}
           </View>
-          <XPBar value={progress} max={100} trackColor="#ECEEF4" height={6} />
+          <XPBar
+            value={progress}
+            max={100}
+            trackColor="#F6E5EB"
+            height={6}
+            fillColors={["#FF7AA8", "#FF4F86"]}
+          />
 
-          <View className="mt-2 flex-row gap-2">
+          <View className="mt-3 flex-row gap-2">
             <Pressable
-              className="flex-1 rounded-xl bg-[#F58752] py-2"
+              className="flex-1 rounded-[16px] bg-[#FF4F86] py-2.5"
               onPress={() => router.push(`/route/${route.id}` as Href)}
             >
-              <Text className="text-center text-[12px] font-bold text-white">
+              <Text className="text-center text-[12px] font-extrabold text-white">
                 Tiếp tục
               </Text>
             </Pressable>
             {progressId !== undefined && onAbandonRoute ? (
               <Pressable
-                className={`flex-1 rounded-xl border border-[#F7C7D1] bg-[#FFF5F8] py-2 ${abandoningProgressId === progressId ? "opacity-70" : ""}`}
+                className={`flex-1 rounded-[16px] border border-[#F7C7D1] bg-[#FFF5F8] py-2.5 ${abandoningProgressId === progressId ? "opacity-70" : ""}`}
                 onPress={() => onAbandonRoute(progressId)}
                 disabled={abandoningProgressId === progressId}
               >
-                <Text className="text-center text-[12px] font-bold text-[#B42345]">
+                <Text className="text-center text-[12px] font-extrabold text-[#B42345]">
                   {abandoningProgressId === progressId
                     ? "Đang bỏ..."
                     : "Bỏ tuyến"}
@@ -1788,11 +2113,11 @@ function RouteCard({
       {variant === "bookmarked" &&
       savedRouteId !== undefined &&
       onUnsaveRoute ? (
-        <View className="border-t border-[#ECEEF4] px-3 pb-3 pt-3">
+        <View className="border-t border-[#F6E8EE] px-4 pb-4 pt-4">
           <Pressable
             disabled={isRemovingSavedRoute}
             onPress={() => onUnsaveRoute(savedRouteId, route.title)}
-            className={`flex-row items-center justify-center gap-2 rounded-xl border border-[#F7C7D1] bg-[#FFF5F8] py-2.5 ${
+            className={`flex-row items-center justify-center gap-2 rounded-[16px] border border-[#F7C7D1] bg-[#FFF5F8] py-2.5 ${
               isRemovingSavedRoute ? "opacity-60" : ""
             }`}
           >
@@ -1815,23 +2140,57 @@ function RouteCard({
   );
 }
 
+function RouteStat({
+  icon,
+  label,
+}: {
+  icon: SymbolName;
+  label: string;
+}) {
+  return (
+    <View className="flex-row items-center gap-1.5">
+      <SymbolView name={icon} size={11} tintColor="rgba(255,255,255,0.94)" />
+      <Text className="text-[11px] font-medium text-white/92">{label}</Text>
+    </View>
+  );
+}
+
+function RouteMetaInline({
+  icon,
+  label,
+}: {
+  icon: SymbolName;
+  label: string;
+}) {
+  return (
+    <View className="flex-row items-center gap-1.5">
+      <SymbolView name={icon} size={12} tintColor="#8E869A" />
+      <Text className="text-[11px] font-medium text-[#6F657A]">{label}</Text>
+    </View>
+  );
+}
+
 function Badge({ text }: { text: string }) {
   return (
-    <View className="rounded-full bg-black/35 px-2 py-0.5">
-      <Text className="text-[11px] font-bold text-white">{text}</Text>
+    <View className="rounded-full bg-[#FF5F8D] px-3 py-1">
+      <Text className="text-[10px] font-extrabold text-white">{text}</Text>
     </View>
   );
 }
 
 function EmptyState({ text }: { text: string }) {
   return (
-    <View className="items-center py-16">
-      <SymbolView
-        name={{ ios: "sparkles", android: "auto_awesome", web: "auto_awesome" }}
-        size={32}
-        tintColor="#C9C3CF"
-      />
-      <Text className="mt-2 text-[13px] text-[#8E869A]">{text}</Text>
+    <View className="items-center rounded-[24px] border border-[#F4E2E8] bg-[#FFF9FB] px-6 py-10">
+      <View className="h-14 w-14 items-center justify-center rounded-full bg-[#FFF0F4]">
+        <SymbolView
+          name={{ ios: "sparkles", android: "auto_awesome", web: "auto_awesome" }}
+          size={28}
+          tintColor="#FF4F86"
+        />
+      </View>
+      <Text className="mt-3 text-center text-[13px] leading-5 text-[#8E869A]">
+        {text}
+      </Text>
     </View>
   );
 }
@@ -2005,36 +2364,140 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
 }
 
 const styles = StyleSheet.create({
+  heroShell: {
+    backgroundColor: "#FDF7F8",
+    overflow: "hidden",
+    position: "relative",
+    width: "100%",
+    zIndex: 1,
+  },
+  heroBannerImage: {
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
+  },
+  contentFrame: {
+    alignSelf: "center",
+    maxWidth: 520,
+    width: "100%",
+  },
+  heroEyebrow: {
+    color: "#FF6E98",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1.1,
+    lineHeight: lineHeightFor(12),
+  },
+  heroTitle: {
+    color: "#2B2233",
+    fontSize: 20,
+    fontWeight: "900",
+    lineHeight: lineHeightFor(20),
+    marginTop: 3,
+  },
   tabRow: {
-    backgroundColor: "#ECEEF4",
-    borderRadius: 16,
-    flexDirection: "row",
-    gap: 4,
-    padding: 4,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    gap: 3,
+    paddingHorizontal: 2,
+    paddingVertical: 2,
   },
   tabButton: {
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    alignItems: "center",
+    borderColor: "transparent",
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 4,
+    justifyContent: "center",
+    minHeight: 56,
+    minWidth: 76,
+    overflow: "hidden",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    position: "relative",
   },
   tabButtonSelected: {
-    backgroundColor: "#FFFFFF",
+    borderColor: "#FFDCE7",
   },
   tabLabel: {
     color: "#8E869A",
-    fontSize: 12,
+    flexShrink: 1,
+    fontSize: 9.5,
     fontWeight: "700",
+    lineHeight: lineHeightFor(10),
+    textAlign: "center",
   },
   tabLabelSelected: {
+    color: "#FF4F86",
+  },
+  tabIconWrap: {
+    alignItems: "center",
+    backgroundColor: "#F8F5F6",
+    borderRadius: 14,
+    height: 26,
+    justifyContent: "center",
+    width: 26,
+  },
+  tabIconWrapSelected: {
+    backgroundColor: "#FFF0F4",
+  },
+  sectionTitle: {
     color: "#2B2233",
+    fontSize: 17,
+    fontWeight: "800",
+    lineHeight: 22,
+  },
+  sectionActionLabel: {
+    color: "#FF4F86",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  officialRouteMedia: {
+    height: 132,
+    overflow: "hidden",
+    position: "relative",
+  },
+  officialRouteTopRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    left: 12,
+    position: "absolute",
+    right: 12,
+    top: 12,
+  },
+  officialRouteHeart: {
+    alignItems: "center",
+    backgroundColor: "rgba(43,34,51,0.18)",
+    borderColor: "rgba(255,255,255,0.28)",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 28,
+    justifyContent: "center",
+    width: 28,
+  },
+  officialRouteTitle: {
+    includeFontPadding: false,
+    fontWeight: "500",
+    lineHeight: 15,
+  },
+  officialRouteXpPill: {
+    alignItems: "center",
+    backgroundColor: "#FFF1F5",
+    borderRadius: 999,
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
   cardImageWrap: {
     height: 112,
     overflow: "hidden",
     position: "relative",
   },
-  cardImageWrapLarge: {
-    height: 128,
+  routeFeatureMedia: {
+    height: 176,
     overflow: "hidden",
     position: "relative",
   },
@@ -2042,33 +2505,76 @@ const styles = StyleSheet.create({
     height: "100%",
     width: "100%",
   },
-  cardBadgeRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 4,
-    left: 8,
-    position: "absolute",
-    top: 8,
-  },
-  cardTitleWrap: {
-    bottom: 8,
-    left: 8,
-    position: "absolute",
-    right: 8,
-  },
-  completedBadge: {
+  levelIconOuter: {
     alignItems: "center",
-    backgroundColor: "#34C759",
-    borderRadius: 999,
-    flexDirection: "row",
-    gap: 2,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    backgroundColor: "#FFF2F6",
+    borderRadius: 18,
+    height: 52,
+    justifyContent: "center",
+    width: 52,
   },
-  completedBadgeText: {
-    color: "#FFFFFF",
+  levelIconInner: {
+    alignItems: "center",
+    borderRadius: 16,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  levelTitleText: {
+    includeFontPadding: false,
+    fontSize: 14,
+    lineHeight: lineHeightFor(14),
+  },
+  levelValueText: {
+    includeFontPadding: false,
+    fontSize: 12,
+    lineHeight: lineHeightFor(12),
+  },
+  levelCaptionText: {
+    includeFontPadding: false,
     fontSize: 10,
-    fontWeight: "700",
+    lineHeight: bodyLineHeightFor(10),
+  },
+  routeFeatureTopRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    left: 12,
+    position: "absolute",
+    right: 12,
+    top: 12,
+  },
+  routeActionBubble: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderColor: "rgba(255,255,255,0.26)",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 32,
+    justifyContent: "center",
+    width: 32,
+  },
+  routeFeatureBottom: {
+    bottom: 14,
+    left: 12,
+    paddingRight: 88,
+    position: "absolute",
+    right: 12,
+  },
+  routeFeatureTitle: {
+    includeFontPadding: false,
+    lineHeight: lineHeightFor(15),
+  },
+  routeXpPill: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 999,
+    bottom: 14,
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    position: "absolute",
+    right: 12,
   },
 });
 

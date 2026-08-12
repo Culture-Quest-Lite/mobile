@@ -56,7 +56,7 @@ import {
 } from "../data/community-group-session-store";
 import { buildCommunityInviteWebUrl } from "../lib/community-group-invite-links";
 
-const HERO_IMAGE = require("../../../../assets/images/hero.jpg");
+const HERO_IMAGE = require("../../../../assets/images/hero-v2.png");
 const GROUP_JOURNEY_EMPTY_IMAGE = require("../../../../assets/images/continnueroute.png");
 const detailTextMaxFontSizeMultiplier = 1.05;
 

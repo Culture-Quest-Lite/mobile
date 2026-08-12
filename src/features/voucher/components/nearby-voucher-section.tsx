@@ -4,7 +4,7 @@ import type { Href } from "expo-router";
 
 import { SymbolView } from "@/components/ui/symbol-view";
 import { formatDistance } from "@/lib/location";
-import { bodyTextStyle, textStyle } from "@/lib/text-scale";
+import { bodyTextStyle, lineHeightFor, textStyle } from "@/lib/text-scale";
 import {
   useNearbyVouchers,
   type NearbyVoucherAnchor,
@@ -60,7 +60,7 @@ export function NearbyVoucherSection({
   return (
     <View className="mt-6 gap-3.5">
       <View className="flex-row items-end justify-between gap-3">
-        <View className="min-w-0 flex-1">
+        <View className="min-w-0 flex-1 pr-3">
           <Text
             className="text-[12px] font-black uppercase tracking-wider text-[#EB489B]"
             style={textStyle(12)}
@@ -68,13 +68,13 @@ export function NearbyVoucherSection({
             {eyebrow}
           </Text>
           <Text
-            className="mt-1 text-[19px] font-black text-[#2B2233]"
-            style={textStyle(19)}
+            className="mt-0.5 text-[19px] font-black text-[#2B2233]"
+            style={{ includeFontPadding: false, lineHeight: lineHeightFor(19) }}
           >
             {title}
           </Text>
           <Text
-            className="mt-1 text-[13px] text-[#8E869A]"
+            className="mt-0.5 text-[13px] text-[#8E869A]"
             style={bodyTextStyle(13)}
           >
             Bán kính {formatDistance(radiusMeters)} quanh điểm đến
@@ -106,7 +106,7 @@ export function NearbyVoucherSection({
         >
           <Text
             className="text-[14px] font-bold text-[#C2416C]"
-            style={bodyTextStyle(14)}
+            style={textStyle(14)}
           >
             {error}
           </Text>
@@ -166,7 +166,6 @@ export function NearbyVoucherSection({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{
             paddingHorizontal: horizontalInset,
-            // Chừa chỗ cho bóng đổ của thẻ, tránh bị ScrollView cắt mất.
             paddingVertical: 6,
           }}
           style={{ marginHorizontal: -horizontalInset, marginVertical: -6 }}
@@ -174,8 +173,6 @@ export function NearbyVoucherSection({
           {vouchers.map((voucher, index) => (
             <View
               key={voucher.voucherId}
-              // Khoảng cách đặt bằng margin thay vì `gap` để thẻ không dính vào
-              // nhau khi contentContainer bị ép co lại.
               style={{
                 marginRight: index === vouchers.length - 1 ? 0 : 14,
               }}

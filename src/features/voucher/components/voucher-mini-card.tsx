@@ -65,9 +65,9 @@ export function VoucherMiniCard({
               />
             </View>
           )}
-          <View className="absolute left-2 top-2 rounded-full bg-[#F15B64] px-2.5 py-1">
+          <View className="absolute left-2 top-2 rounded-full bg-[#F2EFF3] px-2.5 py-1">
             <Text
-              className="text-[11px] font-black text-white"
+              className="text-[11px] font-black text-[#5F5568]"
               style={textStyle(11)}
             >
               {formatVoucherDiscount(voucher)}
@@ -84,7 +84,7 @@ export function VoucherMiniCard({
             {voucher.voucherName}
           </Text>
           <Text
-            className="mt-1.5 text-[12px] font-semibold text-[#8E869A]"
+            className="mt-1 text-[12px] font-semibold text-[#8E869A]"
             numberOfLines={1}
             style={textStyle(12)}
           >
@@ -110,14 +110,16 @@ export function VoucherMiniCard({
               </Text>
             </View>
           ) : null}
-          <View className="mt-2.5 flex-row items-center justify-between gap-2">
-            <Text
-              className="text-[12px] font-black text-[#C98A10]"
-              numberOfLines={1}
-              style={textStyle(12)}
-            >
-              {voucher.pointsRequired.toLocaleString("vi-VN")} điểm
-            </Text>
+          <View className="mt-2 flex-row items-center justify-between gap-2">
+            <View className="rounded-full bg-[#F2EFF3] px-2.5 py-1">
+              <Text
+                className="text-[12px] font-black text-[#5F5568]"
+                numberOfLines={1}
+                style={textStyle(12)}
+              >
+                {voucher.pointsRequired.toLocaleString("vi-VN")} điểm
+              </Text>
+            </View>
             <Text
               className="text-[11px] text-[#8E869A]"
               numberOfLines={1}

@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ComponentProps } from "react";
 import {
   Pressable,
   RefreshControl,
   ScrollView,
-  Text,
+  Text as RNText,
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,6 +14,7 @@ import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
 import { ScreenHorizontalPadding } from "@/constants/theme";
 import { SymbolView } from "@/components/ui/symbol-view";
 import { formatDistance } from "@/lib/location";
+import { bodyLineHeightFor, lineHeightFor, textStyle } from "@/lib/text-scale";
 import { getVoucherImage, type Voucher } from "../api/voucher-api";
 import { formatVoucherDiscount } from "../components/voucher-mini-card";
 import {
@@ -22,6 +23,35 @@ import {
 } from "../hooks/use-nearby-vouchers";
 
 const radiusOptions = [500, 1000, 3000, 5000];
+const detailTextMaxFontSizeMultiplier = 1.05;
+const sectionTitleTextStyle = (fontSize: number) => ({
+  color: "#2B2233",
+  lineHeight: lineHeightFor(fontSize),
+});
+const sectionBodyTextStyle = (fontSize: number) => ({
+  color: "#6F657A",
+  lineHeight: bodyLineHeightFor(fontSize),
+});
+const sectionCaptionTextStyle = (fontSize: number) => ({
+  color: "#7A6F67",
+  lineHeight: lineHeightFor(fontSize),
+});
+
+type TextProps = ComponentProps<typeof RNText>;
+
+function Text({
+  maxFontSizeMultiplier = detailTextMaxFontSizeMultiplier,
+  style,
+  ...props
+}: TextProps) {
+  return (
+    <RNText
+      maxFontSizeMultiplier={maxFontSizeMultiplier}
+      style={[{ includeFontPadding: false }, style]}
+      {...props}
+    />
+  );
+}
 
 function parseId(value: string | undefined) {
   const parsed = Number(value);
@@ -92,10 +122,17 @@ export default function NearbyVoucherScreen() {
             />
           </Pressable>
           <View className="flex-1">
-            <Text className="text-[22px] font-black text-[#2B2233]">
+            <Text
+              className="text-[19px] font-medium text-[#2B2233]"
+              style={sectionTitleTextStyle(19)}
+            >
               Ưu đãi quanh đây
             </Text>
-            <Text className="text-[12px] text-[#8E869A]" numberOfLines={1}>
+            <Text
+              className="text-[13px] font-normal text-[#7A6F67]"
+              numberOfLines={1}
+              style={sectionCaptionTextStyle(13)}
+            >
               Quán đối tác gần {anchorName}
             </Text>
           </View>
@@ -118,9 +155,10 @@ export default function NearbyVoucherScreen() {
                 onPress={() => setRadiusMeters(option)}
               >
                 <Text
-                  className={`text-[13px] font-bold ${
+                  className={`text-[13px] font-normal ${
                     active ? "text-white" : "text-[#6F6877]"
                   }`}
+                  style={textStyle(13)}
                 >
                   {formatDistance(option)}
                 </Text>
@@ -140,7 +178,11 @@ export default function NearbyVoucherScreen() {
               size={14}
               tintColor="#1677C8"
             />
-            <Text className="flex-1 text-[12px] text-[#1677C8]" numberOfLines={1}>
+            <Text
+              className="flex-1 text-[12px] font-normal text-[#1677C8]"
+              numberOfLines={1}
+              style={textStyle(12)}
+            >
               Gần nhất: {nearestHotspot.hotspotName}
               {nearestHotspot.distanceMeters === null
                 ? ""
@@ -171,8 +213,18 @@ export default function NearbyVoucherScreen() {
               className="rounded-2xl bg-[#FFF0F0] p-4"
               onPress={() => void reload()}
             >
-              <Text className="font-bold text-[#C0392B]">{error}</Text>
-              <Text className="mt-1 text-[#8E5960]">Chạm để thử lại</Text>
+              <Text
+                className="text-[14px] font-normal text-[#C0392B]"
+                style={textStyle(14)}
+              >
+                {error}
+              </Text>
+              <Text
+                className="mt-1 text-[13px] font-normal text-[#8E5960]"
+                style={textStyle(13)}
+              >
+                Chạm để thử lại
+              </Text>
             </Pressable>
           ) : null}
 
@@ -181,17 +233,33 @@ export default function NearbyVoucherScreen() {
               className="rounded-2xl bg-[#FFF8FB] p-4"
               onPress={() => void reload()}
             >
-              <Text className="font-bold text-[#C2416C]">{locationNotice}</Text>
-              <Text className="mt-1 text-[#8E5960]">Chạm để thử lại</Text>
+              <Text
+                className="text-[14px] font-normal text-[#C2416C]"
+                style={sectionBodyTextStyle(14)}
+              >
+                {locationNotice}
+              </Text>
+              <Text
+                className="mt-1 text-[13px] font-normal text-[#8E5960]"
+                style={textStyle(13)}
+              >
+                Chạm để thử lại
+              </Text>
             </Pressable>
           ) : null}
 
           {!error && !locationNotice && vouchers.length === 0 ? (
             <View className="items-center py-20">
-              <Text className="text-[18px] font-black text-[#2B2233]">
+              <Text
+                className="text-[17px] font-medium text-[#2B2233]"
+                style={sectionTitleTextStyle(17)}
+              >
                 Chưa có ưu đãi trong bán kính này
               </Text>
-              <Text className="mt-2 text-center text-[#8E869A]">
+              <Text
+                className="mt-2 text-center text-[14px] font-normal text-[#6F657A]"
+                style={sectionBodyTextStyle(14)}
+              >
                 Thử nới bán kính lên {formatDistance(radiusOptions.at(-1) ?? 5000)}.
               </Text>
             </View>
@@ -207,8 +275,8 @@ export default function NearbyVoucherScreen() {
                   style={{ elevation: 2 }}
                   onPress={() => router.push(`/vouchers/${voucher.voucherId}`)}
                 >
-                  <View className="flex-row p-3">
-                    <View className="h-24 w-24 overflow-hidden rounded-2xl bg-[#FFF0F7]">
+                  <View className="flex-row p-2.5">
+                    <View className="h-20 w-20 overflow-hidden rounded-[18px] bg-[#FFF0F7]">
                       {image ? (
                         <Image
                           source={{ uri: image }}
@@ -229,27 +297,38 @@ export default function NearbyVoucherScreen() {
                         </View>
                       )}
                     </View>
-                    <View className="ml-3 flex-1">
+                    <View className="ml-2.5 flex-1 justify-center">
                       <Text
-                        className="text-[16px] font-black text-[#2B2233]"
+                        className="text-[15px] font-medium text-[#2B2233]"
                         numberOfLines={2}
+                        style={sectionTitleTextStyle(15)}
                       >
                         {voucher.voucherName}
                       </Text>
                       <Text
-                        className="mt-1 text-[12px] font-semibold text-[#8E869A]"
+                        className="mt-1 text-[13px] font-normal text-[#7A6F67]"
                         numberOfLines={1}
+                        style={textStyle(13)}
                       >
                         {voucher.partnerName}
                       </Text>
-                      <Text className="mt-2 text-[15px] font-black text-[#F15B64]">
+                      <Text
+                        className="mt-1.5 text-[14px] font-medium text-[#F15B64]"
+                        style={textStyle(14)}
+                      >
                         {formatVoucherDiscount(voucher)}
                       </Text>
-                      <View className="mt-2 flex-row items-center justify-between">
-                        <Text className="text-[12px] font-bold text-[#C98A10]">
+                      <View className="mt-1.5 flex-row items-center justify-between">
+                        <Text
+                          className="text-[12px] font-normal text-[#C98A10]"
+                          style={textStyle(12)}
+                        >
                           {voucher.pointsRequired.toLocaleString("vi-VN")} điểm
                         </Text>
-                        <Text className="text-[11px] text-[#8E869A]">
+                        <Text
+                          className="text-[12px] font-normal text-[#7A6F67]"
+                          style={textStyle(12)}
+                        >
                           Còn {voucher.quantityRemaining}
                         </Text>
                       </View>
