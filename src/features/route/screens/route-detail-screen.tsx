@@ -109,6 +109,11 @@ const glowShadow = {
   elevation: 10,
 } as const;
 
+// Tạm ẩn khối "AI Gợi ý" và khối "Tải về để dùng offline" (nội dung còn là dữ
+// liệu giả). Đổi cờ thành `true` khi có API thật là hiện lại được.
+const isAiSuggestionSectionVisible: boolean = false;
+const isOfflineDownloadSectionVisible: boolean = false;
+
 const reviewMediaGridGap = 6;
 const reviewMediaBorderRadius = 10;
 const singleMediaAspectRatio = 16 / 9;
@@ -495,6 +500,8 @@ function RouteMapHero({
       <AppMap
         points={points}
         routeCoordinates={routeCoordinates}
+        routeStrokeColor="#EB489B"
+        routeStrokeWidth={4}
         height={height}
         showsUserLocation
       />
@@ -2218,79 +2225,85 @@ export default function RouteDetailScreen() {
             />
           ) : null}
 
-          <View className="mt-4.5 rounded-[28px] border border-[#F0DEE7] bg-[#FFF8FB] px-4 py-3.5">
-            <View className="flex-row items-center gap-2">
-              <View className="h-8 w-8 items-center justify-center rounded-xl bg-[#241C2C]">
+          {isAiSuggestionSectionVisible ? (
+            <View className="mt-4.5 rounded-[28px] border border-[#F0DEE7] bg-[#FFF8FB] px-4 py-3.5">
+              <View className="flex-row items-center gap-2">
+                <View className="h-8 w-8 items-center justify-center rounded-xl bg-[#241C2C]">
+                  <SymbolView
+                    name={{
+                      ios: "sparkles",
+                      android: "auto_awesome",
+                      web: "auto_awesome",
+                    }}
+                    size={14}
+                    tintColor="#FFC93C"
+                  />
+                </View>
+                <View>
+                  <Text
+                    className="text-[12px] font-bold uppercase tracking-wider text-[#D97A55]"
+                    style={textStyle(12)}
+                  >
+                    AI Gợi ý
+                  </Text>
+                  <Text
+                    className="text-[16px] font-semibold text-[#2B2233]"
+                    style={sectionTitleTextStyle(16)}
+                  >
+                    Tuyến này hợp với bạn 94%
+                  </Text>
+                </View>
+              </View>
+              <Text
+                className="mt-1 text-[15px]"
+                style={sectionBodyTextStyle(15)}
+              >
+                Dựa trên 7 tuyến bạn đã hoàn thành, bạn yêu kiến trúc Pháp
+                thuộc. Tuyến này có 3/4 điểm khớp sở thích — và thời tiết sáng
+                mai lý tưởng để đi bộ ☀️ 26°C.
+              </Text>
+            </View>
+          ) : null}
+
+          {isAiSuggestionSectionVisible || isOfflineDownloadSectionVisible ? (
+            <View className="mt-3.5 h-px bg-[#F0DEE7]" />
+          ) : null}
+
+          {isOfflineDownloadSectionVisible ? (
+            <Pressable className="mt-2.5 flex-row items-center justify-between rounded-[20px] border border-[#F3E6D8] bg-[#FFF8F0] px-4 py-3.5">
+              <View className="flex-row items-center gap-2.5">
                 <SymbolView
                   name={{
-                    ios: "sparkles",
-                    android: "auto_awesome",
-                    web: "auto_awesome",
+                    ios: "arrow.down.circle",
+                    android: "download",
+                    web: "download",
                   }}
-                  size={14}
-                  tintColor="#FFC93C"
+                  size={18}
+                  tintColor="#F58752"
                 />
+                <View>
+                  <Text
+                    className="text-[15px] font-semibold text-[#2B2233]"
+                    style={textStyle(15)}
+                  >
+                    Tải về để dùng offline
+                  </Text>
+                  <Text
+                    className="text-[13px] text-[#8E869A]"
+                    style={bodyTextStyle(13)}
+                  >
+                    Bản đồ + câu chuyện · 12.4 MB
+                  </Text>
+                </View>
               </View>
-              <View>
-                <Text
-                  className="text-[12px] font-bold uppercase tracking-wider text-[#D97A55]"
-                  style={textStyle(12)}
-                >
-                  AI Gợi ý
-                </Text>
-                <Text
-                  className="text-[16px] font-semibold text-[#2B2233]"
-                  style={sectionTitleTextStyle(16)}
-                >
-                  Tuyến này hợp với bạn 94%
-                </Text>
-              </View>
-            </View>
-            <Text
-              className="mt-1 text-[15px]"
-              style={sectionBodyTextStyle(15)}
-            >
-              Dựa trên 7 tuyến bạn đã hoàn thành, bạn yêu kiến trúc Pháp thuộc.
-              Tuyến này có 3/4 điểm khớp sở thích — và thời tiết sáng mai lý
-              tưởng để đi bộ ☀️ 26°C.
-            </Text>
-          </View>
-
-          <View className="mt-3.5 h-px bg-[#F0DEE7]" />
-
-          <Pressable className="mt-2.5 flex-row items-center justify-between rounded-[20px] border border-[#F3E6D8] bg-[#FFF8F0] px-4 py-3.5">
-            <View className="flex-row items-center gap-2.5">
-              <SymbolView
-                name={{
-                  ios: "arrow.down.circle",
-                  android: "download",
-                  web: "download",
-                }}
-                size={18}
-                tintColor="#F58752"
-              />
-              <View>
-                <Text
-                  className="text-[15px] font-semibold text-[#2B2233]"
-                  style={textStyle(15)}
-                >
-                  Tải về để dùng offline
-                </Text>
-                <Text
-                  className="text-[13px] text-[#8E869A]"
-                  style={bodyTextStyle(13)}
-                >
-                  Bản đồ + câu chuyện · 12.4 MB
-                </Text>
-              </View>
-            </View>
-            <Text
-              className="text-[13px] font-bold text-[#D97A55]"
-              style={textStyle(13)}
-            >
-              Tải xuống
-            </Text>
-          </Pressable>
+              <Text
+                className="text-[13px] font-bold text-[#D97A55]"
+                style={textStyle(13)}
+              >
+                Tải xuống
+              </Text>
+            </Pressable>
+          ) : null}
 
           <View className="mt-5 px-0.5 py-1">
             <View className="mb-1.5">
