@@ -24,6 +24,11 @@ import {
   groupVouchersByPartner,
   type Voucher,
 } from "../api/voucher-api";
+import { NearbyVoucherSection } from "../components/nearby-voucher-section";
+import type { NearbyVoucherAnchor } from "../hooks/use-nearby-vouchers";
+
+/** Hằng ngoài component để `useNearbyVouchers` không phải chạy lại mỗi render. */
+const currentLocationAnchor: NearbyVoucherAnchor = { kind: "current-location" };
 
 function discountLabel(voucher: Voucher) {
   return voucher.discountType === "PERCENTAGE"
@@ -128,6 +133,20 @@ export default function VoucherListScreen() {
               Đổi điểm khám phá lấy ưu đãi từ đối tác
             </Text>
           </View>
+          <Pressable
+            className="h-10 w-10 items-center justify-center rounded-full bg-[#F2F8FF]"
+            onPress={() => router.push("/vouchers/nearby")}
+          >
+            <SymbolView
+              name={{
+                ios: "location.fill",
+                android: "location_on",
+                web: "location_on",
+              }}
+              size={19}
+              tintColor="#1677C8"
+            />
+          </Pressable>
           {authSession.isAuthenticated ? (
             <Pressable
               className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF0F7]"
@@ -251,6 +270,20 @@ export default function VoucherListScreen() {
               <Text className="font-bold text-[#EB489B]">Đăng nhập</Text>
             </Pressable>
           ) : null}
+
+          {/* Neo theo vị trí hiện tại — xem `use-nearby-vouchers.ts` để biết vì
+              sao "gần tôi" phải đi vòng qua danh sách hotspot gần đó. */}
+          <NearbyVoucherSection
+            anchor={currentLocationAnchor}
+            radiusMeters={1000}
+            title="Ưu đãi quanh bạn"
+            eyebrow="GẦN VỊ TRÍ HIỆN TẠI"
+            emptyDescription="Chưa có đối tác nào có ưu đãi trong bán kính 1km quanh bạn."
+            seeAllHref="/vouchers/nearby"
+            horizontalInset={16}
+          />
+
+          <View className="mt-6" />
 
           {!error && visibleItems.length === 0 ? (
             <View className="items-center py-20">

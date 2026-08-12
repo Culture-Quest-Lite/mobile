@@ -1,6 +1,5 @@
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,7 +9,8 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 
 import {
@@ -40,6 +40,9 @@ import {
   getDeviceCoordinate,
 } from "@/lib/location";
 import { appAlert } from "@/components/ui/app-dialog";
+import { appToast } from "@/components/ui/app-toast";
+import { DraggableList } from "@/components/ui/draggable-list";
+import { SymbolView } from "@/components/ui/symbol-view";
 
 type PlannedStop = AppMapPoint & {
   hotspotId?: number;
@@ -60,12 +63,55 @@ const defaultUserPoint: AppMapPoint = {
   longitude: 106.7009,
 };
 
+/** Giờ khởi hành gợi sẵn - thay cho time picker để không thêm phụ thuộc mới. */
+const START_TIME_OPTIONS = ["07:00", "08:00", "09:00", "13:00"] as const;
+
+/**
+ * Kéo-thả tính vị trí bằng phép chia cho chiều cao ô, nên mọi ô phải cao bằng
+ * nhau. Địa chỉ và giờ mở cửa vì thế gộp chung một dòng `numberOfLines={1}`.
+ */
+const STOP_ROW_GAP = 8;
+const STOP_ROW_HEIGHT = 80 + STOP_ROW_GAP;
+
+/** Trạng thái kế hoạch chỉ hiển thị bằng tiếng Việt, không lộ enum của backend. */
+const PLAN_STATUS_LABEL: Record<string, string> = {
+  COMPLETED: "Đã hoàn thành",
+  DRAFT: "Bản nháp",
+  READY: "Sẵn sàng khởi hành",
+  STARTED: "Đang đi",
+};
+
 function normalizeText(value: string) {
   return value
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function distanceMeters(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+) {
+  const radius = 6371000;
+  const lat1 = (a.latitude * Math.PI) / 180;
+  const lat2 = (b.latitude * Math.PI) / 180;
+  const deltaLat = ((b.latitude - a.latitude) * Math.PI) / 180;
+  const deltaLng = ((b.longitude - a.longitude) * Math.PI) / 180;
+  const value =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+  return radius * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
+
+function formatDistance(meters: number) {
+  return meters >= 1000
+    ? `${(Math.round(meters / 100) / 10).toLocaleString("vi-VN")} km`
+    : `${Math.round(meters)} m`;
+}
+
+function defaultPlanName() {
+  return `Hành trình ngày ${new Date().toLocaleDateString("vi-VN")}`;
 }
 
 function toApiStop(hotspot: PlannerHotspot, reason?: string): PlannedStop {
@@ -106,8 +152,43 @@ function toBrowseStop(
   };
 }
 
+function StepProgress({ current }: { current: number }) {
+  const steps = ["Chọn địa điểm", "Sắp xếp", "Tạo hành trình"];
+
+  return (
+    <View className="flex-row items-center gap-2 px-4 pb-3">
+      {steps.map((label, index) => {
+        const isDone = index < current;
+        const isActive = index === current;
+        return (
+          <View className="flex-1 gap-1.5" key={label}>
+            <View
+              className={`h-1 rounded-full ${
+                isDone || isActive ? "bg-[#EB489B]" : "bg-[#E4E0EA]"
+              }`}
+            />
+            <Text
+              className={`text-[12px] ${
+                isActive
+                  ? "font-extrabold text-[#EB489B]"
+                  : isDone
+                    ? "font-bold text-[#8E869A]"
+                    : "font-medium text-[#A9A2B2]"
+              }`}
+              numberOfLines={1}
+            >
+              {label}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function UserPlanScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const session = useAuthSession();
   const { canUsePremiumFeatures, isLoaded: isPremiumLoaded, requirePremium } = usePremiumStatus();
   const [systemQuery, setSystemQuery] = useState("");
@@ -130,6 +211,7 @@ export default function UserPlanScreen() {
   const [aiCandidates, setAiCandidates] = useState<PlannedStop[]>([]);
   const [isLocating, setIsLocating] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
   const [isAiConfirmed, setIsAiConfirmed] = useState(false);
   const [userAvatarUri, setUserAvatarUri] = useState<string | null>(null);
   const [userPoint, setUserPoint] = useState<AppMapPoint>({
@@ -138,11 +220,14 @@ export default function UserPlanScreen() {
     avatarUri: null,
   });
   const [stops, setStops] = useState<PlannedStop[]>([]);
+  const [planName, setPlanName] = useState(defaultPlanName);
   const [optimizeMode, setOptimizeMode] = useState<OptimizeMode>("DISTANCE");
+  const [startTime, setStartTime] = useState<string>("08:00");
   const [aiOptimizeExplanation, setAiOptimizeExplanation] = useState("");
   const [isReviewed, setIsReviewed] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<UserPlan | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
 
   const mapPoints = useMemo(() => {
     const selectedIds = new Set(stops.map((item) => item.hotspotId));
@@ -173,21 +258,46 @@ export default function UserPlanScreen() {
     );
   }, [browseHotspots, browseMode, systemQuery]);
 
+  /** Tổng quãng đường ước tính theo đường chim bay, đủ để user áng chừng độ dài. */
+  const totalDistance = useMemo(() => {
+    const path = [userPoint, ...stops];
+    return path.reduce(
+      (sum, point, index) =>
+        index === 0 ? sum : sum + distanceMeters(path[index - 1], point),
+      0,
+    );
+  }, [stops, userPoint]);
+
+  const currentStep = currentPlan ? 2 : stops.length >= 2 ? 1 : 0;
+  const canBuildPlan = stops.length >= 2;
+  const isBusy = isSaving || isStarting;
+
   async function getAuth() {
     const accessToken = await getValidAccessToken();
     if (!accessToken)
-      throw new Error("Bạn cần đăng nhập để sử dụng kế hoạch cá nhân.");
+      throw new Error("Bạn cần đăng nhập để tạo hành trình riêng.");
     return { accessToken, tokenType: session.tokenType };
   }
 
-  function addStop(stop: PlannedStop) {
-    if (stops.some((item) => String(item.id) === String(stop.id))) {
-      appAlert.alert("Địa điểm đã có", "Điểm này đã nằm trong kế hoạch.");
-      return;
-    }
-    setStops((current) => [...current, stop]);
+  function resetPlanDraft() {
     setIsReviewed(false);
     setCurrentPlan(null);
+  }
+
+  /**
+   * Bấm vào một địa điểm là bật/tắt lựa chọn. Bản trước bắn popup "Địa điểm đã
+   * có" khi bấm lại, trong khi thẻ đã hiện sẵn "Đã chọn #2" - user không có
+   * cách nào bỏ chọn ngay tại danh sách mà phải cuộn xuống mục sắp xếp để xóa.
+   */
+  function toggleStop(stop: PlannedStop) {
+    setStops((current) => {
+      const exists = current.some((item) => String(item.id) === String(stop.id));
+      if (exists) {
+        return current.filter((item) => String(item.id) !== String(stop.id));
+      }
+      return [...current, stop];
+    });
+    resetPlanDraft();
     setAiOptimizeExplanation("");
   }
 
@@ -216,7 +326,7 @@ export default function UserPlanScreen() {
         setBrowseError(
           error instanceof Error
             ? error.message
-            : "Không thể tải hotspot gần bạn.",
+            : "Không thể tải địa điểm gần bạn.",
         );
       } finally {
         setIsBrowseLoading(false);
@@ -295,7 +405,7 @@ export default function UserPlanScreen() {
         setNearFirstSearchError(
           error instanceof Error
             ? error.message
-            : "Không thể tải hotspot gần kết quả tìm kiếm.",
+            : "Không thể tải địa điểm lân cận.",
         );
       } finally {
         setIsNearFirstSearchLoading(false);
@@ -353,7 +463,7 @@ export default function UserPlanScreen() {
         setBrowseError(
           error instanceof Error
             ? error.message
-            : "Không thể tìm kiếm hotspot.",
+            : "Không thể tìm kiếm địa điểm.",
         );
       } finally {
         setIsBrowseLoading(false);
@@ -406,14 +516,14 @@ export default function UserPlanScreen() {
   }, [session.isAuthenticated, session.tokenType]);
 
   /**
-   * Defense-in-depth: "Tạo kế hoạch hành trình" (User Plan, có AI gợi ý/tối
-   * ưu lộ trình) là tính năng Premium. Các entry point (route-screen,
-   * explore-screen) đã chặn trước khi điều hướng vào đây, nhưng nếu user vào
-   * thẳng màn này bằng deep link/back thì vẫn cần chặn lại ở chính màn này.
+   * Defense-in-depth: tạo hành trình riêng (có AI gợi ý/tối ưu lộ trình) là
+   * tính năng Premium. Các entry point (route-screen, explore-screen) đã chặn
+   * trước khi điều hướng vào đây, nhưng nếu user vào thẳng màn này bằng deep
+   * link/back thì vẫn cần chặn lại ở chính màn này.
    */
   useEffect(() => {
     if (!isPremiumLoaded || canUsePremiumFeatures) return;
-    requirePremium("Tạo kế hoạch hành trình (User Plan)");
+    requirePremium("Tạo hành trình riêng");
   }, [canUsePremiumFeatures, isPremiumLoaded, requirePremium]);
 
   useEffect(() => {
@@ -443,7 +553,7 @@ export default function UserPlanScreen() {
     const prompt = aiPrompt.trim();
     if (!prompt) {
       appAlert.alert(
-        "Nhập mô tả chuyến đi",
+        "Hãy mô tả chuyến đi",
         "Ví dụ: Tôi muốn tham quan các địa điểm lịch sử trong một buổi sáng.",
       );
       return;
@@ -468,12 +578,12 @@ export default function UserPlanScreen() {
       setAiCandidates(candidates);
       setAiText(
         candidates.length
-          ? `Hệ thống đã tìm thấy ${candidates.length} hotspot phù hợp. Hãy xác nhận để xem và chọn các địa điểm được đề xuất.`
-          : "Không tìm thấy hotspot phù hợp với mô tả hiện tại. Hãy thử mô tả rộng hơn.",
+          ? `Tìm được ${candidates.length} địa điểm phù hợp với mô tả của bạn. Xem danh sách để chọn những nơi bạn muốn ghé.`
+          : "Chưa tìm được địa điểm nào khớp với mô tả này. Hãy thử mô tả rộng hơn.",
       );
     } catch (error) {
       appAlert.alert(
-        "Không thể nhận gợi ý",
+        "Không thể lấy gợi ý",
         error instanceof Error ? error.message : "Vui lòng thử lại.",
       );
     } finally {
@@ -485,16 +595,17 @@ export default function UserPlanScreen() {
     if (aiCandidates.length) setIsAiConfirmed(true);
   }
 
-  function moveStop(index: number, direction: -1 | 1) {
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= stops.length) return;
-    setStops((current) => {
-      const next = [...current];
-      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
-      return next;
-    });
+  const reorderStops = useCallback((next: PlannedStop[]) => {
+    setStops(next);
     setIsReviewed(false);
     setCurrentPlan(null);
+  }, []);
+
+  function removeStop(index: number) {
+    setStops((current) =>
+      current.filter((_, currentIndex) => currentIndex !== index),
+    );
+    resetPlanDraft();
   }
 
   async function optimizeRoute() {
@@ -504,18 +615,19 @@ export default function UserPlanScreen() {
     if (stops.length < 2) return;
     if (hotspotIds.length !== stops.length) {
       appAlert.alert(
-        "Chưa thể tối ưu",
+        "Chưa thể sắp xếp tự động",
+        "Một vài địa điểm trong hành trình chưa có dữ liệu đầy đủ. Hãy xóa và chọn lại từ danh sách gợi ý.",
       );
       return;
     }
-    setIsAiLoading(true);
+    setIsOptimizing(true);
     try {
       const result = await optimizeUserPlan(await getAuth(), {
         hotspotIds,
         startLatitude: userPoint.latitude,
         startLongitude: userPoint.longitude,
         criterion: optimizeMode === "DISTANCE" ? "DISTANCE" : "TIME",
-        startTime: "08:00:00",
+        startTime: `${startTime}:00`,
       });
       const byId = new Map(stops.map((stop) => [stop.hotspotId, stop]));
       setStops(
@@ -524,17 +636,18 @@ export default function UserPlanScreen() {
           .filter(Boolean) as PlannedStop[],
       );
       setAiOptimizeExplanation(
-        `${result.totalEstimatedTimeText || "Đã tối ưu"} • ${Math.round(result.totalDistance || 0)} m${result.usedFallback ? " " : ""}`,
+        optimizeMode === "DISTANCE"
+          ? `Đã sắp xếp để đường đi ngắn nhất: khoảng ${formatDistance(result.totalDistance || 0)}${result.totalEstimatedTimeText ? `, đi hết ${result.totalEstimatedTimeText}` : ""}.`
+          : `Đã sắp xếp theo giờ mở cửa, khởi hành lúc ${startTime}${result.totalEstimatedTimeText ? `, đi hết ${result.totalEstimatedTimeText}` : ""}.`,
       );
-      setIsReviewed(false);
-      setCurrentPlan(null);
+      resetPlanDraft();
     } catch (error) {
       appAlert.alert(
-        "Không thể tối ưu",
+        "Không thể sắp xếp",
         error instanceof Error ? error.message : "Vui lòng thử lại.",
       );
     } finally {
-      setIsAiLoading(false);
+      setIsOptimizing(false);
     }
   }
 
@@ -559,16 +672,17 @@ export default function UserPlanScreen() {
     );
     if (hotspotIds.length !== stops.length) {
       appAlert.alert(
-        "Không thể lưu kế hoạch",
-        
+        "Không thể tạo hành trình",
+        "Một vài địa điểm trong danh sách chưa có dữ liệu đầy đủ. Hãy xóa và chọn lại từ danh sách gợi ý.",
       );
       return;
     }
     setIsSaving(true);
     try {
+      const name = planName.trim() || defaultPlanName();
       const plan = await createUserPlan(await getAuth(), {
-        name: `Hành trình cá nhân ${new Date().toLocaleDateString("vi-VN")}`,
-        description: aiPrompt.trim() || "Hành trình được tạo từ User Plan",
+        name,
+        description: aiPrompt.trim() || "Hành trình do bạn tự tạo",
         stops: hotspotIds.map((hotspotId) => ({ hotspotId })),
         startLatitude: userPoint.latitude,
         startLongitude: userPoint.longitude,
@@ -577,12 +691,19 @@ export default function UserPlanScreen() {
       setCurrentPlan(plan);
       setIsReviewed(true);
       appAlert.alert(
-        "Đã tạo kế hoạch",
-        `Kế hoạch #${plan.userPlanId} đã được lưu ở trạng thái ${plan.status}.`,
+        "Đã tạo hành trình",
+        `"${name}" đã được lưu với ${stops.length} điểm dừng.`,
+        [
+          { style: "cancel", text: "Ở lại đây" },
+          {
+            onPress: () => router.push(`/route/custom/plan/${plan.userPlanId}`),
+            text: "Xem hành trình",
+          },
+        ],
       );
     } catch (error) {
       appAlert.alert(
-        "Không thể tạo kế hoạch",
+        "Không thể tạo hành trình",
         error instanceof Error ? error.message : "Vui lòng thử lại.",
       );
     } finally {
@@ -592,33 +713,107 @@ export default function UserPlanScreen() {
 
   async function beginPlan() {
     if (!currentPlan) return;
-    setIsSaving(true);
+    setIsStarting(true);
     try {
       const started = await startUserPlan(
         await getAuth(),
         currentPlan.userPlanId,
       );
       setCurrentPlan(started);
-      appAlert.alert(
-        "Đã bắt đầu hành trình",
-        "Kế hoạch đã chuyển sang trạng thái STARTED.",
-      );
+      appToast.success("Đã bắt đầu hành trình. Chúc bạn đi vui!");
     } catch (error) {
       appAlert.alert(
         "Không thể bắt đầu",
         error instanceof Error ? error.message : "Vui lòng thử lại.",
       );
     } finally {
-      setIsSaving(false);
+      setIsStarting(false);
     }
   }
+
+  function renderStopCard(hotspot: PlannedStop, options: { accent: "pink" | "blue" }) {
+    const selectedIndex = stops.findIndex(
+      (item) => String(item.id) === String(hotspot.id),
+    );
+    const isSelected = selectedIndex >= 0;
+    const accentColor = options.accent === "pink" ? "#EB489B" : "#1677C8";
+
+    return (
+      <Pressable
+        accessibilityLabel={
+          isSelected
+            ? `Bỏ ${hotspot.title} khỏi hành trình`
+            : `Thêm ${hotspot.title} vào hành trình`
+        }
+        accessibilityRole="button"
+        key={String(hotspot.id)}
+        onPress={() => toggleStop(hotspot)}
+        className={`flex-row items-center gap-3 rounded-2xl border p-3.5 ${
+          isSelected ? "border-[#EB489B] bg-[#FFF6FA]" : "border-[#E8EDF4] bg-white"
+        }`}
+      >
+        <View
+          className="h-11 w-11 items-center justify-center rounded-2xl"
+          style={{ backgroundColor: isSelected ? "#EB489B" : "#FFF1F6" }}
+        >
+          {isSelected ? (
+            <Text className="text-[15px] font-extrabold text-white">
+              {selectedIndex + 1}
+            </Text>
+          ) : (
+            <SymbolView
+              name={{ ios: "mappin.circle.fill", android: "place", web: "place" }}
+              size={20}
+              tintColor={accentColor}
+            />
+          )}
+        </View>
+
+        <View className="min-w-0 flex-1">
+          <Text
+            className="text-[14px] font-extrabold text-[#2B2233]"
+            numberOfLines={1}
+          >
+            {hotspot.title}
+          </Text>
+          <Text className="mt-0.5 text-[12px] text-[#8E869A]" numberOfLines={1}>
+            {hotspot.address}
+          </Text>
+          {hotspot.scheduleLabel ? (
+            <Text className="mt-1 text-[12px] font-bold text-[#C4703A]">
+              Mở cửa {hotspot.scheduleLabel}
+            </Text>
+          ) : null}
+        </View>
+
+        <View
+          className="h-9 w-9 items-center justify-center rounded-full"
+          style={{ backgroundColor: isSelected ? "#FFE3EF" : "#F1F3F7" }}
+        >
+          <SymbolView
+            name={
+              isSelected
+                ? { ios: "checkmark", android: "check", web: "check" }
+                : { ios: "plus", android: "add", web: "add" }
+            }
+            size={17}
+            tintColor={isSelected ? "#D93679" : "#5F5866"}
+          />
+        </View>
+      </Pressable>
+    );
+  }
+
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaView
       className="flex-1 bg-[#F7F8FC]"
       edges={["top", "left", "right"]}
     >
       <View className="flex-row items-center gap-3 px-4 py-3">
         <Pressable
+          accessibilityLabel="Quay lại"
+          accessibilityRole="button"
           onPress={() => router.back()}
           className="h-10 w-10 items-center justify-center rounded-full bg-white"
         >
@@ -634,20 +829,25 @@ export default function UserPlanScreen() {
         </Pressable>
         <View className="flex-1">
           <Text className="text-[20px] font-extrabold text-[#2B2233]">
-            Tạo tuyến đường cá nhân
+            Tạo hành trình riêng
           </Text>
-          <Text className="text-[11px] text-[#777181]">
-            Chọn hotspot theo thứ tự, nhờ AI hỗ trợ và duyệt hành trình
+          <Text className="text-[13px] text-[#777181]">
+            Chọn những nơi bạn muốn ghé, rồi sắp xếp theo thứ tự
           </Text>
         </View>
       </View>
 
+      <StepProgress current={currentStep} />
+
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: 132 + insets.bottom,
+        }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View className="mt-4 overflow-hidden rounded-[30px] bg-white">
+        <View className="overflow-hidden rounded-[30px] bg-white">
           <AppMap
             points={mapPoints}
             routeCoordinates={routeCoordinates}
@@ -655,6 +855,8 @@ export default function UserPlanScreen() {
             showsUserLocation={false}
           />
           <Pressable
+            accessibilityLabel="Cập nhật vị trí của tôi"
+            accessibilityRole="button"
             onPress={() => locateUser()}
             className="absolute bottom-4 right-4 flex-row items-center gap-2 rounded-full bg-white px-4 py-3"
           >
@@ -671,19 +873,19 @@ export default function UserPlanScreen() {
                 tintColor="#EB489B"
               />
             )}
-            <Text className="text-[11px] font-extrabold text-[#2B2233]">
+            <Text className="text-[13px] font-extrabold text-[#2B2233]">
               Vị trí của tôi
             </Text>
           </Pressable>
         </View>
 
-        <View className="rounded-3xl bg-white p-4">
-          <Text className="text-[14px] font-extrabold text-[#2B2233]">
-            1. Hotspot gần bạn hoặc tìm kiếm
+        <View className="mt-4 rounded-3xl bg-white p-4">
+          <Text className="text-[16px] font-extrabold text-[#2B2233]">
+            Chọn địa điểm
           </Text>
-          <Text className="mt-1 text-[10px] leading-4 text-[#8E869A]">
-            Ứng dụng ưu tiên quét hotspot trong bán kính 10 km từ vị trí hiện
-            tại. Nhập ít nhất 2 ký tự để tìm bằng API search.
+          <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+            Mặc định hiển thị những nơi trong bán kính 10 km quanh bạn. Nhập tên
+            để tìm trên toàn hệ thống.
           </Text>
 
           <View className="mt-3 flex-row items-center rounded-2xl bg-[#F1F3F7] px-3">
@@ -693,20 +895,35 @@ export default function UserPlanScreen() {
                 android: "search",
                 web: "search",
               }}
-              size={17}
+              size={18}
               tintColor="#8E869A"
             />
             <TextInput
               value={systemQuery}
               onChangeText={setSystemQuery}
-              placeholder="Tìm theo tên hotspot hoặc địa chỉ..."
+              placeholder="Tìm theo tên hoặc địa chỉ..."
               placeholderTextColor="#A09AA8"
-              className="flex-1 px-3 py-3.5 text-[13px] text-[#2B2233]"
+              className="flex-1 px-3 py-3.5 text-[15px] text-[#2B2233]"
             />
+            {systemQuery ? (
+              <Pressable
+                accessibilityLabel="Xóa từ khóa"
+                accessibilityRole="button"
+                hitSlop={10}
+                onPress={() => setSystemQuery("")}
+              >
+                <SymbolView
+                  name={{ ios: "xmark", android: "close", web: "close" }}
+                  size={17}
+                  tintColor="#8E869A"
+                />
+              </Pressable>
+            ) : null}
           </View>
 
           <View className="mt-3 flex-row gap-2">
             <Pressable
+              accessibilityRole="button"
               onPress={() => {
                 setSystemQuery("");
                 setFirstSearchHotspot(null);
@@ -717,22 +934,23 @@ export default function UserPlanScreen() {
                   userPoint.longitude,
                 );
               }}
-              className={`flex-1 rounded-xl py-2.5 ${browseMode === "NEARBY" ? "bg-[#2B2233]" : "bg-[#F1F3F7]"}`}
+              className={`flex-1 rounded-xl py-3 ${browseMode === "NEARBY" ? "bg-[#2B2233]" : "bg-[#F1F3F7]"}`}
             >
               <Text
-                className={`text-center text-[10px] font-extrabold ${browseMode === "NEARBY" ? "text-white" : "text-[#777181]"}`}
+                className={`text-center text-[13px] font-extrabold ${browseMode === "NEARBY" ? "text-white" : "text-[#777181]"}`}
               >
                 Gần tôi
               </Text>
             </Pressable>
             <Pressable
+              accessibilityRole="button"
               onPress={() =>
                 systemQuery.trim() && void runHotspotSearch(systemQuery)
               }
-              className={`flex-1 rounded-xl py-2.5 ${browseMode === "SEARCH" ? "bg-[#2B2233]" : "bg-[#F1F3F7]"}`}
+              className={`flex-1 rounded-xl py-3 ${browseMode === "SEARCH" ? "bg-[#2B2233]" : "bg-[#F1F3F7]"}`}
             >
               <Text
-                className={`text-center text-[10px] font-extrabold ${browseMode === "SEARCH" ? "text-white" : "text-[#777181]"}`}
+                className={`text-center text-[13px] font-extrabold ${browseMode === "SEARCH" ? "text-white" : "text-[#777181]"}`}
               >
                 Kết quả tìm kiếm
               </Text>
@@ -742,15 +960,15 @@ export default function UserPlanScreen() {
           {isBrowseLoading ? (
             <View className="items-center py-5">
               <ActivityIndicator color="#EB489B" />
-              <Text className="mt-2 text-[10px] font-bold text-[#8E869A]">
-                Đang tải hotspot...
+              <Text className="mt-2 text-[13px] font-bold text-[#8E869A]">
+                Đang tải địa điểm...
               </Text>
             </View>
           ) : null}
 
           {browseError ? (
-            <View className="mt-3 rounded-2xl bg-[#FFF0F2] p-3">
-              <Text className="text-[10px] font-bold text-[#C43D52]">
+            <View className="mt-3 rounded-2xl bg-[#FFF0F2] p-3.5">
+              <Text className="text-[13px] font-bold leading-5 text-[#C43D52]">
                 {browseError}
               </Text>
             </View>
@@ -758,55 +976,13 @@ export default function UserPlanScreen() {
 
           <View className="mt-3 gap-2">
             {!isBrowseLoading &&
-              filteredBrowseHotspots.slice(0, 12).map((hotspot) => {
-                const selectedIndex = stops.findIndex(
-                  (item) => item.id === hotspot.id,
-                );
-                const isSelected = selectedIndex >= 0;
-                return (
-                  <Pressable
-                    key={String(hotspot.id)}
-                    onPress={() => addStop(hotspot)}
-                    className={`flex-row items-center gap-3 rounded-2xl border p-3 ${
-                      isSelected
-                        ? "border-[#EB489B] bg-[#FFF6FA]"
-                        : "border-[#E8EDF4]"
-                    }`}
-                  >
-                    <View className="h-10 w-10 items-center justify-center rounded-xl bg-[#FFF1F6]">
-                      <Text>{isSelected ? selectedIndex + 1 : "📍"}</Text>
-                    </View>
-                    <View className="flex-1">
-                      <Text
-                        className="text-[12px] font-extrabold text-[#2B2233]"
-                        numberOfLines={1}
-                      >
-                        {hotspot.title}
-                      </Text>
-                      <Text
-                        className="mt-1 text-[10px] text-[#8E869A]"
-                        numberOfLines={1}
-                      >
-                        {hotspot.address}
-                      </Text>
-                      {hotspot.scheduleLabel ? (
-                        <Text className="mt-1 text-[9px] font-bold text-[#F58752]">
-                          🕒 {hotspot.scheduleLabel}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Text
-                      className={`text-[11px] font-extrabold ${isSelected ? "text-[#EB489B]" : "text-[#777181]"}`}
-                    >
-                      {isSelected ? `Đã chọn #${selectedIndex + 1}` : "+ Thêm"}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              filteredBrowseHotspots
+                .slice(0, 12)
+                .map((hotspot) => renderStopCard(hotspot, { accent: "pink" }))}
             {!isBrowseLoading && !filteredBrowseHotspots.length ? (
               <View className="items-center rounded-2xl border border-dashed border-[#D9DDE7] px-4 py-6">
-                <Text className="text-[11px] font-bold text-[#8E869A]">
-                  Không tìm thấy hotspot phù hợp
+                <Text className="text-[13px] font-bold text-[#8E869A]">
+                  Không tìm thấy địa điểm phù hợp
                 </Text>
               </View>
             ) : null}
@@ -814,36 +990,25 @@ export default function UserPlanScreen() {
 
           {browseMode === "SEARCH" && firstSearchHotspot ? (
             <View className="mt-5 border-t border-[#EEF0F5] pt-4">
-              <View className="flex-row items-start justify-between gap-3">
-                <View className="flex-1">
-                  <Text className="text-[12px] font-extrabold text-[#2B2233]">
-                    Hotspot gần kết quả đầu tiên
-                  </Text>
-                  <Text className="mt-1 text-[10px] leading-4 text-[#8E869A]">
-                    Các địa điểm trong bán kính 5 km quanh{" "}
-                    {firstSearchHotspot.title}. Bạn có thể thêm trực tiếp vào
-                    User Plan.
-                  </Text>
-                </View>
-                <View className="rounded-full bg-[#FFF1F6] px-3 py-1.5">
-                  <Text className="text-[9px] font-extrabold text-[#D93679]">
-                    NEARBY
-                  </Text>
-                </View>
-              </View>
+              <Text className="text-[14px] font-extrabold text-[#2B2233]">
+                Gần {firstSearchHotspot.title}
+              </Text>
+              <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+                Những nơi khác trong bán kính 5 km, có thể ghé cùng chuyến.
+              </Text>
 
               {isNearFirstSearchLoading ? (
                 <View className="items-center py-5">
                   <ActivityIndicator color="#EB489B" />
-                  <Text className="mt-2 text-[10px] font-bold text-[#8E869A]">
-                    Đang quét hotspot lân cận...
+                  <Text className="mt-2 text-[13px] font-bold text-[#8E869A]">
+                    Đang tìm địa điểm lân cận...
                   </Text>
                 </View>
               ) : null}
 
               {nearFirstSearchError ? (
-                <View className="mt-3 rounded-2xl bg-[#FFF0F2] p-3">
-                  <Text className="text-[10px] font-bold text-[#C43D52]">
+                <View className="mt-3 rounded-2xl bg-[#FFF0F2] p-3.5">
+                  <Text className="text-[13px] font-bold leading-5 text-[#C43D52]">
                     {nearFirstSearchError}
                   </Text>
                 </View>
@@ -851,54 +1016,13 @@ export default function UserPlanScreen() {
 
               {!isNearFirstSearchLoading ? (
                 <View className="mt-3 gap-2">
-                  {nearFirstSearchHotspots.slice(0, 10).map((hotspot) => {
-                    const selectedIndex = stops.findIndex(
-                      (item) => item.hotspotId === hotspot.hotspotId,
-                    );
-                    const isSelected = selectedIndex >= 0;
-                    return (
-                      <Pressable
-                        key={`near-search-${hotspot.hotspotId}`}
-                        onPress={() => addStop(hotspot)}
-                        className={`flex-row items-center gap-3 rounded-2xl border p-3 ${
-                          isSelected
-                            ? "border-[#EB489B] bg-[#FFF6FA]"
-                            : "border-[#E8EDF4] bg-[#FBFCFE]"
-                        }`}
-                      >
-                        <View className="h-10 w-10 items-center justify-center rounded-xl bg-[#EEF7FF]">
-                          <Text>{isSelected ? selectedIndex + 1 : "🧭"}</Text>
-                        </View>
-                        <View className="flex-1">
-                          <Text
-                            className="text-[12px] font-extrabold text-[#2B2233]"
-                            numberOfLines={1}
-                          >
-                            {hotspot.title}
-                          </Text>
-                          <Text
-                            className="mt-1 text-[10px] text-[#8E869A]"
-                            numberOfLines={1}
-                          >
-                            {hotspot.address}
-                          </Text>
-                        </View>
-                        <Text
-                          className={`text-[11px] font-extrabold ${
-                            isSelected ? "text-[#EB489B]" : "text-[#1677C8]"
-                          }`}
-                        >
-                          {isSelected
-                            ? `Đã chọn #${selectedIndex + 1}`
-                            : "+ Thêm"}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                  {nearFirstSearchHotspots
+                    .slice(0, 10)
+                    .map((hotspot) => renderStopCard(hotspot, { accent: "blue" }))}
                   {!nearFirstSearchHotspots.length && !nearFirstSearchError ? (
                     <View className="items-center rounded-2xl border border-dashed border-[#D9DDE7] px-4 py-5">
-                      <Text className="text-[10px] font-bold text-[#8E869A]">
-                        Không có hotspot nào gần kết quả đầu tiên
+                      <Text className="text-[13px] font-bold text-[#8E869A]">
+                        Không có địa điểm nào ở gần
                       </Text>
                     </View>
                   ) : null}
@@ -909,54 +1033,72 @@ export default function UserPlanScreen() {
         </View>
 
         <View className="mt-4 rounded-3xl bg-white p-4">
-          <Text className="text-[14px] font-extrabold text-[#2B2233]">
-            2. Mô tả chuyến đi để AI gợi ý
-          </Text>
-          <Text className="mt-1 text-[10px] leading-4 text-[#8E869A]">
-            AI trả lời bằng nội dung mô tả trước. Sau khi Explorer xác nhận, đề
-            xuất mới được chuyển thành hotspot để lựa chọn.
+          <View className="flex-row items-center gap-2">
+            <Text className="flex-1 text-[16px] font-extrabold text-[#2B2233]">
+              Mô tả chuyến đi để được gợi ý
+            </Text>
+            <View className="rounded-full bg-[#F1F3F7] px-2.5 py-1">
+              <Text className="text-[12px] font-bold text-[#777181]">
+                Tùy chọn
+              </Text>
+            </View>
+          </View>
+          <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+            Kể về chuyến đi bạn muốn, hệ thống sẽ đề xuất những nơi phù hợp để
+            bạn chọn thêm.
           </Text>
           <TextInput
             value={aiPrompt}
             onChangeText={setAiPrompt}
             multiline
-            placeholder="Ví dụ: Tôi muốn đi các địa điểm lịch sử, kiến trúc đẹp, gần nhau và hoàn thành trong một buổi sáng..."
+            placeholder="Ví dụ: Tôi muốn đi các nơi lịch sử, kiến trúc đẹp, gần nhau và xong trong một buổi sáng..."
             placeholderTextColor="#A09AA8"
-            className="mt-3 min-h-24 rounded-2xl bg-[#F1F3F7] px-4 py-3 text-[13px] leading-5 text-[#2B2233]"
+            className="mt-3 min-h-24 rounded-2xl bg-[#F1F3F7] px-4 py-3 text-[15px] leading-6 text-[#2B2233]"
             textAlignVertical="top"
           />
           <Pressable
+            accessibilityRole="button"
+            disabled={isAiLoading}
             onPress={generateAiTextSuggestion}
-            className="mt-3 flex-row items-center justify-center gap-2 rounded-2xl bg-[#2B2233] py-3.5"
+            className={`mt-3 flex-row items-center justify-center gap-2 rounded-2xl py-4 ${isAiLoading ? "bg-[#8F8797]" : "bg-[#2B2233]"}`}
           >
             {isAiLoading ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Text>✨</Text>
+              <SymbolView
+                name={{ ios: "sparkles", android: "auto_awesome", web: "auto_awesome" }}
+                size={17}
+                tintColor="#fff"
+              />
             )}
-            <Text className="text-[12px] font-extrabold text-white">
-              Nhận gợi ý dạng text
+            <Text className="text-[14px] font-extrabold text-white">
+              {isAiLoading ? "Đang tìm gợi ý..." : "Gợi ý địa điểm cho tôi"}
             </Text>
           </Pressable>
 
           {aiText ? (
             <View className="mt-3 rounded-2xl bg-[#F7F3FA] p-4">
               <View className="flex-row items-center gap-2">
-                <Text>✨</Text>
-                <Text className="text-[12px] font-extrabold text-[#2B2233]">
-                  Đề xuất của AI
+                <SymbolView
+                  name={{ ios: "sparkles", android: "auto_awesome", web: "auto_awesome" }}
+                  size={16}
+                  tintColor="#7A5AA8"
+                />
+                <Text className="text-[14px] font-extrabold text-[#2B2233]">
+                  Gợi ý cho bạn
                 </Text>
               </View>
-              <Text className="mt-2 text-[11px] leading-5 text-[#5E5868]">
+              <Text className="mt-2 text-[13px] leading-6 text-[#5E5868]">
                 {aiText}
               </Text>
-              {!isAiConfirmed ? (
+              {!isAiConfirmed && aiCandidates.length ? (
                 <Pressable
+                  accessibilityRole="button"
                   onPress={confirmAiSuggestion}
-                  className="mt-3 rounded-xl bg-[#EB489B] py-3"
+                  className="mt-3 rounded-xl bg-[#EB489B] py-3.5"
                 >
-                  <Text className="text-center text-[11px] font-extrabold text-white">
-                    Xác nhận và chuyển thành hotspot
+                  <Text className="text-center text-[14px] font-extrabold text-white">
+                    Xem {aiCandidates.length} địa điểm được gợi ý
                   </Text>
                 </Pressable>
               ) : null}
@@ -965,232 +1107,363 @@ export default function UserPlanScreen() {
 
           {isAiConfirmed ? (
             <View className="mt-3 gap-2">
-              <Text className="text-[11px] font-extrabold text-[#2B2233]">
-                Chọn các địa điểm AI đã gợi ý
-              </Text>
               {aiCandidates.map((stop) => {
-                const isSelected = stops.some((item) => item.id === stop.id);
+                const isSelected = stops.some(
+                  (item) => String(item.id) === String(stop.id),
+                );
                 return (
                   <Pressable
+                    accessibilityRole="button"
                     key={String(stop.id)}
-                    onPress={() => addStop(stop)}
-                    className={`flex-row items-center gap-3 rounded-2xl border p-3 ${
+                    onPress={() => toggleStop(stop)}
+                    className={`gap-2 rounded-2xl border p-3.5 ${
                       isSelected
                         ? "border-[#EB489B] bg-[#FFF6FA]"
-                        : "border-[#E8EDF4]"
+                        : "border-[#E8EDF4] bg-white"
                     }`}
                   >
-                    <View className="h-9 w-9 items-center justify-center rounded-xl bg-[#F4EFF8]">
-                      <Text>AI</Text>
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-[12px] font-extrabold text-[#2B2233]">
-                        {stop.title}
-                      </Text>
-                      <Text
-                        className="text-[10px] text-[#8E869A]"
-                        numberOfLines={1}
+                    <View className="flex-row items-center gap-3">
+                      <View className="min-w-0 flex-1">
+                        <Text
+                          className="text-[14px] font-extrabold text-[#2B2233]"
+                          numberOfLines={1}
+                        >
+                          {stop.title}
+                        </Text>
+                        <Text
+                          className="mt-0.5 text-[12px] text-[#8E869A]"
+                          numberOfLines={1}
+                        >
+                          {stop.address}
+                        </Text>
+                      </View>
+                      <View
+                        className="h-9 w-9 items-center justify-center rounded-full"
+                        style={{ backgroundColor: isSelected ? "#FFE3EF" : "#F1F3F7" }}
                       >
-                        {stop.address}
-                      </Text>
+                        <SymbolView
+                          name={
+                            isSelected
+                              ? { ios: "checkmark", android: "check", web: "check" }
+                              : { ios: "plus", android: "add", web: "add" }
+                          }
+                          size={17}
+                          tintColor={isSelected ? "#D93679" : "#5F5866"}
+                        />
+                      </View>
                     </View>
-                    <Text className="text-[11px] font-extrabold text-[#EB489B]">
-                      {isSelected ? "Đã chọn" : "+ Chọn"}
-                    </Text>
+                    {stop.reason ? (
+                      <Text className="text-[12px] leading-5 text-[#7A5AA8]">
+                        {stop.reason}
+                      </Text>
+                    ) : null}
                   </Pressable>
                 );
               })}
             </View>
           ) : null}
-
-          {currentPlan?.status === "STARTED" ? (
-            <View className="mt-3 rounded-2xl bg-[#EEF9F1] p-3">
-              <Text className="text-center text-[11px] font-extrabold text-[#28844A]">
-                Kế hoạch đang được thực hiện • {currentPlan.completedStops}/
-                {currentPlan.totalStops} điểm
-              </Text>
-            </View>
-          ) : null}
         </View>
 
         <View className="mt-4 rounded-3xl bg-white p-4">
-          <View className="flex-row items-center justify-between gap-3">
-            <View className="flex-1">
-              <Text className="text-[14px] font-extrabold text-[#2B2233]">
-                3. Thứ tự và tối ưu lộ trình
-              </Text>
-              <Text className="text-[10px] text-[#8E869A]">
-                {stops.length} địa điểm đã chọn theo đúng thứ tự Explorer bấm
-              </Text>
-            </View>
-          </View>
-
-          <View className="mt-3 flex-row gap-2">
-            {(["OPENING_HOURS", "DISTANCE"] as const).map((mode) => (
-              <Pressable
-                key={mode}
-                onPress={() => setOptimizeMode(mode)}
-                className={`flex-1 rounded-xl py-3 ${
-                  optimizeMode === mode ? "bg-[#2B2233]" : "bg-[#F1F3F7]"
-                }`}
-              >
-                <Text
-                  className={`text-center text-[10px] font-bold ${
-                    optimizeMode === mode ? "text-white" : "text-[#777181]"
-                  }`}
-                >
-                  {mode === "OPENING_HOURS"
-                    ? "Thời gian mở cửa"
-                    : "Tổng quãng đường"}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <Pressable
-            onPress={optimizeRoute}
-            disabled={stops.length < 2}
-            className={`mt-3 rounded-xl py-3 ${stops.length >= 2 ? "bg-[#FFF1F6]" : "bg-[#F1F3F7]"}`}
-          >
-            <Text
-              className={`text-center text-[11px] font-extrabold ${
-                stops.length >= 2 ? "text-[#D93679]" : "text-[#A3A7B0]"
-              }`}
-            >
-              ✨ AI sắp xếp và giải thích
+          <Text className="text-[16px] font-extrabold text-[#2B2233]">
+            Sắp xếp thứ tự
+          </Text>
+          <Text className="mt-1 text-[13px] text-[#8E869A]">
+            {stops.length
+              ? `${stops.length} địa điểm · khoảng ${formatDistance(totalDistance)}`
+              : "Chọn ít nhất 2 địa điểm ở phần trên"}
+          </Text>
+          {stops.length > 1 ? (
+            <Text className="mt-1 text-[13px] text-[#A9A2B2]">
+              Nhấn giữ một địa điểm rồi kéo để đổi thứ tự.
             </Text>
-          </Pressable>
-
-          {aiOptimizeExplanation ? (
-            <View className="mt-3 rounded-2xl bg-[#FFF8EC] p-3">
-              <Text className="text-[10px] font-extrabold text-[#9B641F]">
-                AI giải thích
-              </Text>
-              <Text className="mt-1 text-[10px] leading-4 text-[#735A3D]">
-                {aiOptimizeExplanation}
-              </Text>
-            </View>
           ) : null}
 
-          <View className="mt-3 gap-2">
-            {stops.map((stop, index) => (
-              <View
-                key={String(stop.id)}
-                className="flex-row items-center gap-3 rounded-2xl border border-[#E8EDF4] p-3"
-              >
-                <View className="h-9 w-9 items-center justify-center rounded-full bg-[#EB489B]">
-                  <Text className="text-[12px] font-extrabold text-white">
-                    {index + 1}
-                  </Text>
-                </View>
-                <View className="flex-1">
-                  <Text
-                    className="text-[12px] font-extrabold text-[#2B2233]"
-                    numberOfLines={1}
-                  >
-                    {stop.title}
-                  </Text>
-                  <Text
-                    className="text-[10px] text-[#8E869A]"
-                    numberOfLines={1}
-                  >
-                    {stop.address}
-                  </Text>
-                  {stop.scheduleLabel ? (
-                    <Text className="mt-1 text-[9px] font-bold text-[#F58752]">
-                      🕒 {stop.scheduleLabel}
-                    </Text>
-                  ) : null}
-                </View>
-                <View className="gap-1">
-                  <View className="flex-row gap-1">
-                    <Pressable
-                      onPress={() => moveStop(index, -1)}
-                      disabled={index === 0}
-                      className="h-7 w-7 items-center justify-center rounded-lg bg-[#F1F3F7]"
-                    >
-                      <Text>↑</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => moveStop(index, 1)}
-                      disabled={index === stops.length - 1}
-                      className="h-7 w-7 items-center justify-center rounded-lg bg-[#F1F3F7]"
-                    >
-                      <Text>↓</Text>
-                    </Pressable>
+          <View className="mt-3">
+            <DraggableList
+              data={stops}
+              keyExtractor={(stop) => String(stop.id)}
+              onReorder={reorderStops}
+              rowHeight={STOP_ROW_HEIGHT}
+              renderItem={({ index, isDragging, isReordering, item: stop }) => (
+                <View
+                  className={`flex-row items-center gap-3 rounded-2xl border bg-white p-3.5 ${
+                    isDragging ? "border-[#EB489B]" : "border-[#E8EDF4]"
+                  }`}
+                  style={{
+                    elevation: isDragging ? 6 : 0,
+                    height: STOP_ROW_HEIGHT - STOP_ROW_GAP,
+                    shadowColor: "#2B2233",
+                    shadowOffset: { height: 6, width: 0 },
+                    shadowOpacity: isDragging ? 0.16 : 0,
+                    shadowRadius: 12,
+                  }}
+                >
+                  <View className="h-10 w-10 items-center justify-center rounded-full bg-[#EB489B]">
+                    {isReordering ? (
+                      <SymbolView
+                        name={{ ios: "line.3.horizontal", android: "drag_handle", web: "drag_handle" }}
+                        size={18}
+                        tintColor="#fff"
+                      />
+                    ) : (
+                      <Text className="text-[15px] font-extrabold text-white">
+                        {index + 1}
+                      </Text>
+                    )}
                   </View>
-                  <Pressable
-                    onPress={() => {
-                      setStops((current) =>
-                        current.filter(
-                          (_, currentIndex) => currentIndex !== index,
-                        ),
-                      );
-                      setIsReviewed(false);
-                    }}
-                    className="h-7 items-center justify-center rounded-lg bg-[#FFF0F2]"
-                  >
-                    <Text className="text-[9px] font-bold text-[#D13C54]">
-                      Xóa
+                  <View className="min-w-0 flex-1">
+                    <Text
+                      className="text-[14px] font-extrabold text-[#2B2233]"
+                      numberOfLines={1}
+                    >
+                      {stop.title}
                     </Text>
+                    <Text
+                      className="mt-0.5 text-[12px] text-[#8E869A]"
+                      numberOfLines={1}
+                    >
+                      {stop.address}
+                      {stop.scheduleLabel ? ` · mở ${stop.scheduleLabel}` : ""}
+                    </Text>
+                  </View>
+
+                  <Pressable
+                    accessibilityLabel={`Xóa ${stop.title} khỏi hành trình`}
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    onPress={() => removeStop(index)}
+                    className="h-9 w-9 items-center justify-center rounded-lg bg-[#FFF0F2]"
+                  >
+                    <SymbolView
+                      name={{ ios: "trash", android: "delete_outline", web: "delete_outline" }}
+                      size={17}
+                      tintColor="#D13C54"
+                    />
                   </Pressable>
+                  <SymbolView
+                    name={{ ios: "line.3.horizontal", android: "drag_handle", web: "drag_handle" }}
+                    size={20}
+                    tintColor="#C4BFCB"
+                  />
                 </View>
-              </View>
-            ))}
+              )}
+            />
+
             {!stops.length ? (
               <View className="items-center rounded-2xl border border-dashed border-[#D9DDE7] px-4 py-7">
-                <Text className="text-[12px] font-bold text-[#8E869A]">
-                  Chưa có địa điểm nào trong hành trình
+                <Text className="text-[14px] font-bold text-[#8E869A]">
+                  Chưa có địa điểm nào
+                </Text>
+                <Text className="mt-1 text-center text-[13px] leading-5 text-[#A9A2B2]">
+                  Bấm dấu cộng ở danh sách phía trên để thêm
                 </Text>
               </View>
             ) : null}
           </View>
+
+          {stops.length >= 2 ? (
+            <View className="mt-4 rounded-2xl bg-[#FBF9FD] p-3.5">
+              <Text className="text-[14px] font-extrabold text-[#2B2233]">
+                Để hệ thống sắp xếp giúp
+              </Text>
+              <View className="mt-2.5 flex-row gap-2">
+                {(["DISTANCE", "OPENING_HOURS"] as const).map((mode) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={mode}
+                    onPress={() => setOptimizeMode(mode)}
+                    className={`flex-1 rounded-xl py-3 ${
+                      optimizeMode === mode ? "bg-[#2B2233]" : "bg-white"
+                    }`}
+                  >
+                    <Text
+                      className={`text-center text-[13px] font-bold ${
+                        optimizeMode === mode ? "text-white" : "text-[#777181]"
+                      }`}
+                    >
+                      {mode === "DISTANCE" ? "Đường ngắn nhất" : "Theo giờ mở cửa"}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {optimizeMode === "OPENING_HOURS" ? (
+                <View className="mt-3">
+                  <Text className="text-[13px] font-bold text-[#5E5868]">
+                    Bạn khởi hành lúc mấy giờ?
+                  </Text>
+                  <View className="mt-2 flex-row gap-2">
+                    {START_TIME_OPTIONS.map((time) => (
+                      <Pressable
+                        accessibilityRole="button"
+                        key={time}
+                        onPress={() => setStartTime(time)}
+                        className={`flex-1 rounded-xl py-2.5 ${
+                          startTime === time ? "bg-[#EB489B]" : "bg-white"
+                        }`}
+                      >
+                        <Text
+                          className={`text-center text-[13px] font-bold ${
+                            startTime === time ? "text-white" : "text-[#777181]"
+                          }`}
+                        >
+                          {time}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={optimizeRoute}
+                disabled={isOptimizing}
+                className="mt-3 flex-row items-center justify-center gap-2 rounded-xl bg-[#FFF1F6] py-3.5"
+              >
+                {isOptimizing ? (
+                  <ActivityIndicator size="small" color="#D93679" />
+                ) : (
+                  <SymbolView
+                    name={{ ios: "sparkles", android: "auto_awesome", web: "auto_awesome" }}
+                    size={16}
+                    tintColor="#D93679"
+                  />
+                )}
+                <Text className="text-[14px] font-extrabold text-[#D93679]">
+                  {isOptimizing ? "Đang sắp xếp..." : "Sắp xếp tự động"}
+                </Text>
+              </Pressable>
+
+              {aiOptimizeExplanation ? (
+                <View className="mt-3 rounded-xl bg-[#FFF8EC] p-3.5">
+                  <Text className="text-[13px] leading-6 text-[#735A3D]">
+                    {aiOptimizeExplanation}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         <View className="mt-4 rounded-3xl bg-white p-4">
-          <Text className="text-[14px] font-extrabold text-[#2B2233]">
-            4. Explorer duyệt và bắt đầu hành trình
+          <Text className="text-[16px] font-extrabold text-[#2B2233]">
+            Đặt tên hành trình
           </Text>
-          <Text className="mt-1 text-[10px] leading-4 text-[#8E869A]">
-            Sau khi duyệt, Custom Route sẽ hoạt động giống một hành trình bình
-            thường: hiển thị Route Detail, thứ tự hotspot, đường đi, check-in và
-            tiến độ hoàn thành.
+          <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+            Tên này giúp bạn nhận ra hành trình trong danh sách của mình.
+          </Text>
+          <TextInput
+            value={planName}
+            onChangeText={setPlanName}
+            maxLength={60}
+            placeholder="Ví dụ: Sài Gòn xưa một buổi sáng"
+            placeholderTextColor="#A09AA8"
+            className="mt-3 rounded-2xl bg-[#F1F3F7] px-4 py-3.5 text-[15px] text-[#2B2233]"
+          />
+          <Text className="mt-1.5 text-right text-[12px] text-[#A9A2B2]">
+            {planName.length}/60
           </Text>
 
           <Pressable
-            disabled={stops.length < 2}
+            accessibilityRole="button"
+            disabled={!canBuildPlan}
             onPress={() => void openInGoogleMaps()}
-            className={`mt-3 rounded-2xl py-4 ${stops.length >= 2 ? "bg-[#1677C8]" : "bg-[#D9DDE7]"}`}
+            className={`mt-2 flex-row items-center justify-center gap-2 rounded-2xl py-4 ${canBuildPlan ? "bg-[#EEF6FF]" : "bg-[#F4F5F8]"}`}
           >
-            <Text className="text-center text-[13px] font-extrabold text-white">
-              Xem trước {stops.length} điểm trên Google Maps
-            </Text>
-          </Pressable>
-
-          <Pressable
-            disabled={stops.length < 2}
-            onPress={() => void reviewPlan()}
-            className={`mt-3 rounded-2xl py-4 ${stops.length >= 2 ? "bg-[#EB489B]" : "bg-[#D9DDE7]"}`}
-          >
-            <Text className="text-center text-[13px] font-extrabold text-white">
-              {isSaving ? "Đang tạo kế hoạch..." : "Duyệt và tạo kế hoạch"}
-            </Text>
-          </Pressable>
-
-          {isReviewed && currentPlan?.status !== "STARTED" ? (
-            <Pressable
-              onPress={() => void beginPlan()}
-              className="mt-3 rounded-2xl bg-[#2B2233] py-4"
+            <SymbolView
+              name={{ ios: "map.fill", android: "map", web: "map" }}
+              size={17}
+              tintColor={canBuildPlan ? "#1677C8" : "#B4B0BB"}
+            />
+            <Text
+              className={`text-[14px] font-extrabold ${canBuildPlan ? "text-[#1677C8]" : "text-[#B4B0BB]"}`}
             >
-              <Text className="text-center text-[13px] font-extrabold text-white">
-                {isSaving
-                  ? "Đang bắt đầu..."
-                  : `Bắt đầu kế hoạch #${currentPlan?.userPlanId ?? ""}`}
+              Xem trước trên Google Maps
+            </Text>
+          </Pressable>
+
+          {currentPlan ? (
+            <View className="mt-3 rounded-2xl bg-[#EEF9F1] p-3.5">
+              <Text className="text-[14px] font-extrabold text-[#28844A]">
+                {currentPlan.name}
               </Text>
-            </Pressable>
+              <Text className="mt-1 text-[13px] leading-5 text-[#3C7A55]">
+                {PLAN_STATUS_LABEL[currentPlan.status] ?? "Đã lưu"} ·{" "}
+                {currentPlan.completedStops}/{currentPlan.totalStops} điểm đã đi
+              </Text>
+              <View className="mt-3 flex-row gap-2">
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() =>
+                    router.push(`/route/custom/plan/${currentPlan.userPlanId}`)
+                  }
+                  className="flex-1 rounded-xl bg-white py-3"
+                >
+                  <Text className="text-center text-[13px] font-extrabold text-[#28844A]">
+                    Xem chi tiết
+                  </Text>
+                </Pressable>
+                {currentPlan.status !== "STARTED" ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isBusy}
+                    onPress={() => void beginPlan()}
+                    className={`flex-1 rounded-xl py-3 ${isBusy ? "bg-[#9BB8A7]" : "bg-[#28844A]"}`}
+                  >
+                    {isStarting ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text className="text-center text-[13px] font-extrabold text-white">
+                        Bắt đầu đi
+                      </Text>
+                    )}
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
           ) : null}
         </View>
       </ScrollView>
+
+      <View
+        className="absolute inset-x-0 bottom-0 border-t border-[#ECE8F2] bg-white px-4 pt-3"
+        style={{ paddingBottom: Math.max(insets.bottom, 12) }}
+      >
+        <View className="flex-row items-center gap-3">
+          <View className="min-w-0 flex-1">
+            <Text className="text-[15px] font-extrabold text-[#2B2233]">
+              {stops.length} địa điểm
+              {stops.length ? ` · khoảng ${formatDistance(totalDistance)}` : ""}
+            </Text>
+            <Text className="text-[13px] text-[#8E869A]" numberOfLines={1}>
+              {canBuildPlan
+                ? planName.trim() || defaultPlanName()
+                : `Cần thêm ${Math.max(2 - stops.length, 0)} địa điểm nữa`}
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            disabled={!canBuildPlan || isBusy}
+            onPress={() => void reviewPlan()}
+            className={`min-w-[140px] items-center justify-center rounded-2xl px-5 py-4 ${
+              canBuildPlan && !isBusy ? "bg-[#EB489B]" : "bg-[#D9DDE7]"
+            }`}
+          >
+            {isSaving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text
+                className={`text-[15px] font-extrabold ${canBuildPlan && !isBusy ? "text-white" : "text-[#8E869A]"}`}
+              >
+                {isReviewed ? "Tạo lại" : "Tạo hành trình"}
+              </Text>
+            )}
+          </Pressable>
+        </View>
+      </View>
     </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }

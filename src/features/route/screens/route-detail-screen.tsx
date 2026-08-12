@@ -38,6 +38,8 @@ import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
+import { NearbyVoucherSection } from "@/features/voucher/components/nearby-voucher-section";
+import type { NearbyVoucherAnchor } from "@/features/voucher/hooks/use-nearby-vouchers";
 import {
   findMatchingHotspotByNameOrCoordinate,
   getApiHotspotRouteSlug,
@@ -1513,6 +1515,15 @@ export default function RouteDetailScreen() {
   );
   const filteredReviews = routeReviews;
 
+  // Mốc để hỏi voucher của các quán nằm dọc tuyến. Backend tự lấy toạ độ của
+  // mọi hotspot thuộc tuyến từ `routeId`, client không cần gửi danh sách điểm.
+  const nearbyVoucherAnchor = useMemo<NearbyVoucherAnchor | null>(() => {
+    const numericRouteId = Number(routeId);
+    return Number.isFinite(numericRouteId) && numericRouteId > 0
+      ? { kind: "route", routeId: numericRouteId }
+      : null;
+  }, [routeId]);
+
   if (isLoading) {
     return <AppLoadingScreen message="Đang tải chi tiết tuyến..." />;
   }
@@ -2191,6 +2202,21 @@ export default function RouteDetailScreen() {
               })}
             </View>
           </View>
+
+          {nearbyVoucherAnchor ? (
+            <NearbyVoucherSection
+              anchor={nearbyVoucherAnchor}
+              radiusMeters={1000}
+              title="Ăn uống & ưu đãi dọc tuyến"
+              eyebrow="ĐỐI TÁC TRÊN ĐƯỜNG ĐI"
+              contextLabel={`Dọc tuyến ${route.routeName}`}
+              emptyDescription="Chưa có đối tác nào có ưu đãi trong bán kính 1km dọc tuyến này."
+              seeAllHref={
+                `/vouchers/nearby?routeId=${route.routeId}&routeName=${encodeURIComponent(route.routeName)}` as Href
+              }
+              horizontalInset={gutter}
+            />
+          ) : null}
 
           <View className="mt-4.5 rounded-[28px] border border-[#F0DEE7] bg-[#FFF8FB] px-4 py-3.5">
             <View className="flex-row items-center gap-2">
