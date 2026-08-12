@@ -1,7 +1,6 @@
 import * as Location from "expo-location";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -40,12 +39,39 @@ import {
   getDeviceCoordinate,
 } from "@/lib/location";
 import { appAlert } from "@/components/ui/app-dialog";
+import { appToast } from "@/components/ui/app-toast";
+import { SymbolView } from "@/components/ui/symbol-view";
 
 type RecordStatus = "READY" | "RECORDING" | "DRAFT" | "PUBLISHED";
 type Coordinate = { latitude: number; longitude: number };
 
 const DEFAULT_COORDINATE: Coordinate = { latitude: 10.7769, longitude: 106.7009 };
 const NEARBY_DISTANCE_METERS = 5000;
+const DESCRIPTION_MAX_LENGTH = 300;
+
+/**
+ * Người dùng không cần biết tên trạng thái trong hệ thống (RECORDING, DRAFT...).
+ * Mọi chỗ hiển thị đều đi qua bảng này.
+ */
+const STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Bản nháp",
+  PUBLISHED: "Đã đăng",
+  READY: "Chưa bắt đầu",
+  RECORDING: "Đang ghi",
+  TRIAL: "Đang thử",
+};
+
+const STATUS_DOT_COLOR: Record<string, string> = {
+  DRAFT: "#F5A623",
+  PUBLISHED: "#36A269",
+  READY: "#9AA0AA",
+  RECORDING: "#F15B45",
+  TRIAL: "#9AA0AA",
+};
+
+function statusLabel(value: string | undefined) {
+  return (value && STATUS_LABEL[value]) || "Chưa bắt đầu";
+}
 
 function hotspotToMapPoint(hotspot: NearbyHotspotDto): AppMapPoint {
   return {
@@ -80,6 +106,7 @@ export default function RecordJourneyScreen() {
   const [routeRecord, setRouteRecord] = useState<RecordRouteDto | null>(null);
   const [myJourneys, setMyJourneys] = useState<RecordRouteDto[]>([]);
   const [isLoadingJourneys, setIsLoadingJourneys] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentCoordinate, setCurrentCoordinate] = useState<Coordinate>(DEFAULT_COORDINATE);
   const [userAvatarUri, setUserAvatarUri] = useState<string | null>(null);
   const [finalizeDescription, setFinalizeDescription] = useState("");
@@ -100,7 +127,7 @@ export default function RecordJourneyScreen() {
   const [checkingInId, setCheckingInId] = useState<number | null>(null);
   const [nearbyError, setNearbyError] = useState<string | null>(null);
   const [journeysError, setJourneysError] = useState<string | null>(null);
-  /** Route đang được hiển thị, dùng để biết lần apply sau có cùng route không. */
+  /** Hành trình đang được hiển thị, dùng để biết lần apply sau có cùng hành trình không. */
   const appliedRouteIdRef = useRef<number | null>(null);
 
   const getAuth = useCallback(async () => {
@@ -128,7 +155,7 @@ export default function RecordJourneyScreen() {
 
     const serverHotspots: NearbyHotspotDto[] = (route.hotspots ?? []).map((hotspot) => ({
       hotspotId: hotspot.hotspotId,
-      hotspotName: hotspot.hotspotName ?? `Hotspot #${hotspot.hotspotId}`,
+      hotspotName: hotspot.hotspotName ?? "Địa điểm chưa có tên",
       address: hotspot.address ?? "",
       latitude: hotspot.latitude ?? DEFAULT_COORDINATE.latitude,
       longitude: hotspot.longitude ?? DEFAULT_COORDINATE.longitude,
@@ -144,12 +171,12 @@ export default function RecordJourneyScreen() {
     }));
 
     /**
-     * Backend thêm hotspot vào route qua `CustomRouteEventListener` —
+     * Backend thêm địa điểm vào hành trình qua `CustomRouteEventListener` —
      * `@Async` + `AFTER_COMMIT`, tức là chạy SAU khi API check-in đã trả 201.
-     * Refetch ngay sau check-in vì thế rất hay đọc trúng lúc route chưa kịp có
-     * hotspot vừa thêm; nếu ghi đè thẳng thì hotspot user vừa check-in sẽ biến
+     * Refetch ngay sau check-in vì thế rất hay đọc trúng lúc hành trình chưa kịp
+     * có địa điểm vừa thêm; nếu ghi đè thẳng thì nơi user vừa check-in sẽ biến
      * mất khỏi UI rồi vài giây sau mới hiện lại. Giữ lại các mục local chưa
-     * thấy trên server (chỉ trong cùng một route) để danh sách không nhấp nháy.
+     * thấy trên server (chỉ trong cùng một hành trình) để danh sách không nhấp nháy.
      */
     const isSameRoute = appliedRouteIdRef.current === route.routeId;
     appliedRouteIdRef.current = route.routeId;
@@ -182,7 +209,7 @@ export default function RecordJourneyScreen() {
     } catch (error) {
       // Đây là lần load lúc mở màn hình, không phải hành động user chủ động bấm.
       // Bắn modal ở đây khiến mỗi lần vào màn record đều bị chặn bởi popup lỗi,
-      // nên hiển thị inline kèm nút thử lại giống khối hotspot gần bạn.
+      // nên hiển thị inline kèm nút thử lại giống khối địa điểm gần bạn.
       console.warn("[record-journey] load my journeys failed", error);
       setJourneysError(error instanceof Error ? error.message : "Không thể tải hành trình của bạn.");
       return [];
@@ -199,7 +226,13 @@ export default function RecordJourneyScreen() {
     }
 
     const permission = await ensureForegroundLocationPermission();
-    if (!permission.granted) throw new Error("");
+    if (!permission.granted) {
+      throw new Error(
+        permission.canAskAgain
+          ? "Hãy cấp quyền vị trí để tìm địa điểm quanh bạn."
+          : "Quyền vị trí đang tắt. Hãy mở Cài đặt ứng dụng và bật lại Vị trí.",
+      );
+    }
 
     const coordinate = await getDeviceCoordinate({
       accuracy: Location.Accuracy.High,
@@ -226,11 +259,24 @@ export default function RecordJourneyScreen() {
       });
       setNearbyHotspots(hotspots);
     } catch (error) {
-      setNearbyError(error instanceof Error ? error.message : "Không thể tải hotspot gần bạn.");
+      setNearbyError(error instanceof Error ? error.message : "Không thể tải địa điểm gần bạn.");
     } finally {
       setIsLoadingNearby(false);
     }
   }, [getAuth, resolveCurrentCoordinate, session.isAuthenticated]);
+
+  /**
+   * Kéo-để-làm-mới có state riêng, không dùng chung với cờ loading lúc mở màn.
+   * Dùng chung khiến vòng xoay refresh hiện ngay khi vừa vào màn dù user chưa kéo.
+   */
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([loadNearby(), loadMyJourneys()]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [loadMyJourneys, loadNearby]);
 
 
   useEffect(() => {
@@ -268,12 +314,12 @@ export default function RecordJourneyScreen() {
   }, [session.isAuthenticated, session.tokenType]);
 
   /**
-   * Chức năng "Ghi hành trình" (record) là tính năng Premium. Nếu user chưa
-   * nâng cấp, chặn hành động và đưa họ sang trang gói đăng ký thay vì gọi
-   * thẳng API (BE cũng cần tự chặn ở phía server, đây chỉ là lớp UX ở FE).
+   * Ghi hành trình là tính năng Premium. Nếu user chưa nâng cấp, chặn hành động
+   * và đưa họ sang trang gói đăng ký thay vì gọi thẳng API (BE cũng cần tự chặn
+   * ở phía server, đây chỉ là lớp UX ở FE).
    */
   const requirePremium = useCallback(
-    () => requirePremiumStatus("Ghi hành trình cá nhân (Record Journey)"),
+    () => requirePremiumStatus("Ghi hành trình riêng"),
     [requirePremiumStatus],
   );
 
@@ -313,7 +359,7 @@ export default function RecordJourneyScreen() {
         setSearchResults(result.content);
       } catch (error) {
         if (!controller.signal.aborted) {
-          appAlert.alert("Không thể tìm hotspot", error instanceof Error ? error.message : "Vui lòng thử lại.");
+          appToast.error(error instanceof Error ? error.message : "Không tìm được địa điểm.");
         }
       } finally {
         if (!controller.signal.aborted) setIsSearching(false);
@@ -345,6 +391,10 @@ export default function RecordJourneyScreen() {
     [checkedInHotspots],
   );
 
+  const checkedInCount = checkedInHotspots.length;
+  const remainingStops = Math.max(MIN_RECORD_HOTSPOTS - checkedInCount, 0);
+  const progressRatio = Math.min(checkedInCount / MIN_RECORD_HOTSPOTS, 1);
+
   async function handleStart() {
     if (!requirePremium()) return;
     setIsStarting(true);
@@ -353,7 +403,7 @@ export default function RecordJourneyScreen() {
       const route = await startRecordRoute(auth);
       applyRouteRecord(route);
       setMyJourneys((current) => [route, ...current.filter((item) => item.routeId !== route.routeId)]);
-      appAlert.alert("Đã bắt đầu ghi", `Route #${route.routeId} đang ở trạng thái RECORDING.`);
+      appToast.success("Đã bắt đầu ghi. Hãy check-in nơi đầu tiên bạn ghé!");
     } catch (error) {
       appAlert.alert("Không thể bắt đầu", error instanceof Error ? error.message : "Vui lòng thử lại.");
     } finally {
@@ -363,12 +413,17 @@ export default function RecordJourneyScreen() {
 
   async function handleCheckIn(hotspot: NearbyHotspotDto) {
     if (!requirePremium()) return;
+    // Nút này KHÔNG được để `disabled` khi chưa ghi: bản trước làm vậy nên
+    // `onPress` không chạy, user bấm hoài mà màn hình im lặng hoàn toàn.
     if (status !== "RECORDING") {
-      appAlert.alert("Chưa ghi hành trình", "Hãy bấm Bắt đầu ghi hành trình trước khi check-in.");
+      appAlert.alert(
+        "Chưa bắt đầu ghi",
+        "Bấm \"Bắt đầu ghi hành trình\" ở đầu màn hình, sau đó bạn mới check-in được các nơi mình ghé qua.",
+      );
       return;
     }
     if (checkedInHotspots.some((item) => item.hotspotId === hotspot.hotspotId)) {
-      appAlert.alert("Đã check-in", "Hotspot này đã nằm trong hành trình đang ghi.");
+      appToast.info("Bạn đã check-in nơi này rồi.");
       return;
     }
 
@@ -384,13 +439,10 @@ export default function RecordJourneyScreen() {
       });
       setCheckedInHotspots((current) => [...current, hotspot]);
       await loadMyJourneys();
-      appAlert.alert(
-        "Check-in thành công",
-        `${hotspot.hotspotName} đã được thêm vào route record.`,
-      );
+      appToast.success(`Đã check-in ${hotspot.hotspotName}`);
       void loadNearby();
     } catch (error) {
-      appAlert.alert("Check-in thất bại", error instanceof Error ? error.message : "Vui lòng thử lại.");
+      appAlert.alert("Check-in không thành công", error instanceof Error ? error.message : "Vui lòng thử lại.");
     } finally {
       setCheckingInId(null);
     }
@@ -410,13 +462,12 @@ export default function RecordJourneyScreen() {
 
   async function handleFinish() {
     if (!requirePremium()) return;
-    // Backend (`finishRecordJourney`) từ chối route có dưới 4 story, nên chặn
-    // trước ở client với thông báo rõ số điểm còn thiếu thay vì để user bấm
-    // xong mới ăn lỗi 400.
-    if (checkedInHotspots.length < MIN_RECORD_HOTSPOTS) {
+    // Backend từ chối hành trình có dưới 4 điểm dừng, nên chặn trước ở client
+    // với thông báo rõ số điểm còn thiếu thay vì để user bấm xong mới ăn lỗi 400.
+    if (checkedInCount < MIN_RECORD_HOTSPOTS) {
       appAlert.alert(
         "Chưa đủ điểm dừng",
-        `Hành trình cá nhân phải có ít nhất ${MIN_RECORD_HOTSPOTS} điểm dừng. Bạn đã check-in ${checkedInHotspots.length}, cần thêm ${MIN_RECORD_HOTSPOTS - checkedInHotspots.length} địa điểm nữa.`,
+        `Hành trình cần ít nhất ${MIN_RECORD_HOTSPOTS} nơi. Bạn đã check-in ${checkedInCount}, còn thiếu ${remainingStops}.`,
       );
       return;
     }
@@ -427,7 +478,7 @@ export default function RecordJourneyScreen() {
       setRouteRecord(route);
       setStatus("DRAFT");
       setMyJourneys((current) => [route, ...current.filter((item) => item.routeId !== route.routeId)]);
-      appAlert.alert("Đã tạo bản nháp", "Route đã chuyển từ RECORDING sang DRAFT. Bạn có thể chỉnh sửa route và các story trước khi submit.");
+      appToast.success("Đã lưu thành bản nháp. Thêm mô tả rồi đăng nhé!");
     } catch (error) {
       appAlert.alert("Không thể kết thúc", error instanceof Error ? error.message : "Vui lòng thử lại.");
     } finally {
@@ -438,6 +489,17 @@ export default function RecordJourneyScreen() {
   async function handleFinalize() {
     if (!requirePremium()) return;
     if (!routeRecord?.routeId) return;
+
+    // Đăng là hành động không hoàn tác được: hành trình sẽ hiển thị công khai.
+    const confirmed = await appAlert.confirm({
+      cancelLabel: "Để sau",
+      confirmLabel: "Đăng ngay",
+      message: `Hành trình với ${checkedInCount} điểm dừng sẽ hiển thị công khai cho mọi người. Bạn không thể chuyển ngược về bản nháp.`,
+      title: "Đăng hành trình này?",
+      tone: "warning",
+    });
+    if (!confirmed) return;
+
     setIsFinalizing(true);
     try {
       const auth = await getAuth();
@@ -449,9 +511,9 @@ export default function RecordJourneyScreen() {
       setRouteRecord(route);
       setStatus(route.status === "PUBLISHED" ? "PUBLISHED" : "DRAFT");
       setMyJourneys((current) => [route, ...current.filter((item) => item.routeId !== route.routeId)]);
-      appAlert.alert("Đã submit hành trình", "Custom Route đã chuyển sang trạng thái PUBLISHED.");
+      appToast.success("Hành trình của bạn đã được đăng.");
     } catch (error) {
-      appAlert.alert("Không thể submit", error instanceof Error ? error.message : "Vui lòng thử lại.");
+      appAlert.alert("Không thể đăng", error instanceof Error ? error.message : "Vui lòng thử lại.");
     } finally {
       setIsFinalizing(false);
     }
@@ -460,25 +522,41 @@ export default function RecordJourneyScreen() {
   return (
     <SafeAreaView className="flex-1 bg-[#F7F8FC]" edges={["top", "left", "right"]}>
       <View className="flex-row items-center gap-3 px-4 py-3">
-        <Pressable onPress={() => router.back()} className="h-10 w-10 items-center justify-center rounded-full bg-white">
+        <Pressable
+          accessibilityLabel="Quay lại"
+          accessibilityRole="button"
+          onPress={() => router.back()}
+          className="h-10 w-10 items-center justify-center rounded-full bg-white"
+        >
           <SymbolView name={{ ios: "chevron.left", android: "arrow_back", web: "arrow_back" }} size={19} tintColor="#2B2233" />
         </Pressable>
         <View className="flex-1">
           <Text className="text-[20px] font-extrabold text-[#2B2233]">Ghi hành trình</Text>
-          <Text className="text-[11px] text-[#777181]">Khám phá, check-in và lưu lại tuyến đường thực tế</Text>
+          <Text className="text-[13px] text-[#777181]">Đi tới đâu check-in tới đó, xong thì lưu lại</Text>
         </View>
         <Pressable
+          accessibilityLabel="Hướng dẫn"
+          accessibilityRole="button"
           className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
-          onPress={() => appAlert.alert("Luồng sử dụng", `B1 bắt đầu record (yêu cầu Premium) → B2 tìm hotspot gần bạn hoặc search toàn hệ thống và check-in (cần tối thiểu ${MIN_RECORD_HOTSPOTS} điểm dừng) → B3 finish thành DRAFT → chỉnh sửa route/story → B4 finalize routeId thành PUBLISHED.`)}
+          onPress={() =>
+            appAlert.alert(
+              "Cách ghi một hành trình",
+              `1. Bấm Bắt đầu ghi.\n2. Đi và check-in ít nhất ${MIN_RECORD_HOTSPOTS} nơi.\n3. Bấm Kết thúc để lưu thành bản nháp.\n4. Thêm mô tả rồi đăng để mọi người cùng xem.`,
+            )
+          }
         >
-          <Text className="text-[16px] font-extrabold text-[#F15B45]">?</Text>
+          <SymbolView
+            name={{ ios: "questionmark.circle", android: "help_outline", web: "help_outline" }}
+            size={20}
+            tintColor="#F15B45"
+          />
         </Pressable>
       </View>
 
       <ScrollView
         contentContainerStyle={{ paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={isLoadingNearby || isLoadingJourneys} onRefresh={() => { void loadNearby(); void loadMyJourneys(); }} />}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void handleRefresh()} />}
         showsVerticalScrollIndicator={false}
       >
         <View className="px-4">
@@ -489,48 +567,72 @@ export default function RecordJourneyScreen() {
               height={330}
               showsUserLocation={false}
             />
-            <View className="absolute left-4 top-4 flex-row items-center gap-2 rounded-full bg-white/95 px-3 py-2">
-              <View className={`h-2.5 w-2.5 rounded-full ${status === "RECORDING" ? "bg-[#F15B45]" : status === "DRAFT" ? "bg-[#F5A623]" : status === "PUBLISHED" ? "bg-[#36A269]" : "bg-[#9AA0AA]"}`} />
-              <Text className="text-[10px] font-extrabold text-[#2B2233]">{status === "READY" ? "CHƯA BẮT ĐẦU" : status}</Text>
+            <View className="absolute left-4 top-4 flex-row items-center gap-2 rounded-full bg-white/95 px-3.5 py-2">
+              <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: STATUS_DOT_COLOR[status] ?? "#9AA0AA" }} />
+              <Text className="text-[13px] font-extrabold text-[#2B2233]">{statusLabel(status)}</Text>
             </View>
-            <Pressable onPress={() => void loadNearby()} className="absolute bottom-4 right-4 rounded-full bg-white px-4 py-3">
-              <Text className="text-[10px] font-extrabold text-[#F15B45]">⌖ Cập nhật vị trí</Text>
+            <Pressable
+              accessibilityLabel="Cập nhật vị trí"
+              accessibilityRole="button"
+              onPress={() => void loadNearby()}
+              className="absolute bottom-4 right-4 flex-row items-center gap-2 rounded-full bg-white px-4 py-3"
+            >
+              {isLoadingNearby ? (
+                <ActivityIndicator size="small" color="#F15B45" />
+              ) : (
+                <SymbolView name={{ ios: "location.fill", android: "my_location", web: "my_location" }} size={16} tintColor="#F15B45" />
+              )}
+              <Text className="text-[13px] font-extrabold text-[#2B2233]">Cập nhật vị trí</Text>
             </Pressable>
           </View>
         </View>
 
         <View className="mt-4 px-4">
           <LinearGradient colors={["#E84D6A", "#F58752"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} className="rounded-3xl p-4">
-            <Text className="text-[11px] font-bold uppercase tracking-wider text-white/80">Route Record</Text>
-            <Text className="mt-1 text-[18px] font-extrabold text-white">
-              {routeRecord?.routeName ?? (status === "READY" ? "Sẵn sàng ghi chuyến đi mới" : "Hành trình cá nhân")}
+            <Text className="text-[12px] font-bold uppercase tracking-wider text-white/80">Hành trình của bạn</Text>
+            <Text className="mt-1 text-[19px] font-extrabold text-white">
+              {routeRecord?.routeName ?? (status === "READY" ? "Sẵn sàng cho chuyến mới" : "Hành trình chưa đặt tên")}
             </Text>
-            <Text className="mt-1 text-[11px] leading-5 text-white/85">
+            <Text className="mt-1.5 text-[13px] leading-6 text-white/90">
               {status === "READY"
-                ? "Mỗi Explorer chỉ có thể ghi một hành trình tại một thời điểm."
+                ? "Mỗi lúc bạn chỉ ghi được một hành trình. Bấm bắt đầu khi đã sẵn sàng."
                 : status === "RECORDING"
-                  ? `${checkedInHotspots.length}/${MIN_RECORD_HOTSPOTS} điểm dừng tối thiểu · Route ID ${routeRecord?.routeId ?? "-"}`
+                  ? remainingStops
+                    ? `Đã check-in ${checkedInCount} nơi, còn ${remainingStops} nơi nữa là kết thúc được.`
+                    : `Đã check-in ${checkedInCount} nơi. Bạn có thể kết thúc bất cứ lúc nào.`
                   : status === "DRAFT"
-                    ? "Bản nháp đã sẵn sàng để cập nhật route và các story mặc định."
-                    : "Route đã được gửi lên hệ thống với trạng thái PUBLISHED."}
+                    ? "Bản nháp đã lưu. Thêm mô tả rồi đăng để mọi người cùng xem."
+                    : "Hành trình đã được đăng công khai."}
             </Text>
+
+            {status === "RECORDING" ? (
+              <View className="mt-3">
+                <View className="h-2 overflow-hidden rounded-full bg-white/30">
+                  <View className="h-full rounded-full bg-white" style={{ width: `${Math.round(progressRatio * 100)}%` }} />
+                </View>
+                <Text className="mt-1.5 text-[12px] font-bold text-white/90">
+                  {checkedInCount}/{MIN_RECORD_HOTSPOTS} điểm dừng tối thiểu
+                </Text>
+              </View>
+            ) : null}
           </LinearGradient>
         </View>
 
         {isPremiumLoaded && !canUsePremiumFeatures ? (
           <View className="mt-4 px-4">
             <Pressable
+              accessibilityRole="button"
               onPress={() => router.push("/subscription/premium" as any)}
               className="flex-row items-center gap-3 rounded-3xl bg-[#2B2233] p-4"
             >
-              <View className="h-9 w-9 items-center justify-center rounded-full bg-[#EB489B]">
-                <SymbolView name={{ ios: "crown.fill", android: "workspace_premium", web: "workspace_premium" }} size={16} tintColor="#fff" />
+              <View className="h-10 w-10 items-center justify-center rounded-full bg-[#EB489B]">
+                <SymbolView name={{ ios: "crown.fill", android: "workspace_premium", web: "workspace_premium" }} size={17} tintColor="#fff" />
               </View>
               <View className="flex-1">
-                <Text className="text-[12px] font-extrabold text-white">Ghi hành trình là tính năng Premium</Text>
-                <Text className="mt-0.5 text-[10px] text-white/70">Nâng cấp để tự tạo hành trình cá nhân từ các hotspot bạn ghé qua</Text>
+                <Text className="text-[14px] font-extrabold text-white">Ghi hành trình là tính năng Premium</Text>
+                <Text className="mt-0.5 text-[12px] leading-5 text-white/70">Nâng cấp để tự tạo hành trình từ những nơi bạn ghé qua</Text>
               </View>
-              <Text className="text-[11px] font-extrabold text-[#EB489B]">Nâng cấp</Text>
+              <Text className="text-[13px] font-extrabold text-[#EB489B]">Nâng cấp</Text>
             </Pressable>
           </View>
         ) : null}
@@ -538,6 +640,7 @@ export default function RecordJourneyScreen() {
         {status === "READY" ? (
           <View className="mt-4 px-4">
             <Pressable
+              accessibilityRole="button"
               disabled={isStarting || !canUsePremiumFeatures}
               onPress={() => void handleStart()}
               className={`flex-row items-center justify-center gap-2 rounded-2xl py-4 ${canUsePremiumFeatures ? "bg-[#F15B45]" : "bg-[#D9DDE7]"}`}
@@ -546,8 +649,18 @@ export default function RecordJourneyScreen() {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <>
-                  {!canUsePremiumFeatures ? <SymbolView name={{ ios: "lock.fill", android: "lock", web: "lock" }} size={13} tintColor="#8E869A" /> : null}
-                  <Text className={`text-center text-[13px] font-extrabold ${canUsePremiumFeatures ? "text-white" : "text-[#8E869A]"}`}>Bắt đầu ghi hành trình</Text>
+                  <SymbolView
+                    name={
+                      canUsePremiumFeatures
+                        ? { ios: "record.circle", android: "fiber_manual_record", web: "fiber_manual_record" }
+                        : { ios: "lock.fill", android: "lock", web: "lock" }
+                    }
+                    size={17}
+                    tintColor={canUsePremiumFeatures ? "#fff" : "#8E869A"}
+                  />
+                  <Text className={`text-center text-[15px] font-extrabold ${canUsePremiumFeatures ? "text-white" : "text-[#8E869A]"}`}>
+                    Bắt đầu ghi hành trình
+                  </Text>
                 </>
               )}
             </Pressable>
@@ -557,39 +670,53 @@ export default function RecordJourneyScreen() {
         <View className="mt-4 px-4">
           <View className="rounded-3xl bg-white p-4">
             <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-3">
-                <Text className="text-[14px] font-extrabold text-[#2B2233]">Hành trình của tôi</Text>
-              </View>
-              <Pressable onPress={() => void loadMyJourneys()} className="rounded-full bg-[#F1F3F7] px-3 py-2">
-                {isLoadingJourneys ? <ActivityIndicator size="small" color="#EB489B" /> : <Text className="text-[10px] font-extrabold text-[#2B2233]">Làm mới</Text>}
+              <Text className="flex-1 pr-3 text-[16px] font-extrabold text-[#2B2233]">Hành trình của tôi</Text>
+              <Pressable
+                accessibilityLabel="Làm mới danh sách"
+                accessibilityRole="button"
+                onPress={() => void loadMyJourneys()}
+                className="rounded-full bg-[#F1F3F7] px-3.5 py-2.5"
+              >
+                {isLoadingJourneys ? <ActivityIndicator size="small" color="#EB489B" /> : <Text className="text-[13px] font-extrabold text-[#2B2233]">Làm mới</Text>}
               </Pressable>
             </View>
             {journeysError ? (
-              <Pressable onPress={() => void loadMyJourneys()} className="mt-3 rounded-2xl bg-[#FFF3F3] p-3">
-                <Text className="text-[10px] font-bold leading-4 text-[#C74655]">{journeysError} · Bấm để thử lại</Text>
+              <Pressable accessibilityRole="button" onPress={() => void loadMyJourneys()} className="mt-3 rounded-2xl bg-[#FFF3F3] p-3.5">
+                <Text className="text-[13px] font-bold leading-5 text-[#C74655]">{journeysError} · Bấm để thử lại</Text>
               </Pressable>
             ) : null}
             <View className="mt-3 gap-2">
-              {myJourneys.map((journey) => (
-                <Pressable
-                  key={journey.routeId}
-                  onPress={() => { if (journey.status === "DRAFT" || journey.status === "PUBLISHED") applyRouteRecord(journey); }}
-                  className={`rounded-2xl border p-3 ${journey.routeId === routeRecord?.routeId ? "border-[#EB489B] bg-[#FFF5FA]" : "border-[#E8EDF4] bg-white"}`}
-                >
-                  <View className="flex-row items-center justify-between gap-3">
-                    <View className="flex-1">
-                      <Text className="text-[12px] font-extrabold text-[#2B2233]">{journey.routeName ?? `Hành trình #${journey.routeId}`}</Text>
-                      <Text className="mt-1 text-[10px] text-[#8E869A]">Route ID {journey.routeId} · {(journey.hotspots ?? []).length} hotspot</Text>
+              {myJourneys.map((journey, index) => {
+                const isActive = journey.routeId === routeRecord?.routeId;
+                const canOpen = journey.status === "DRAFT" || journey.status === "PUBLISHED";
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={journey.routeId}
+                    onPress={() => { if (canOpen) applyRouteRecord(journey); }}
+                    className={`rounded-2xl border p-3.5 ${isActive ? "border-[#EB489B] bg-[#FFF5FA]" : "border-[#E8EDF4] bg-white"}`}
+                  >
+                    <View className="flex-row items-center justify-between gap-3">
+                      <View className="min-w-0 flex-1">
+                        <Text className="text-[14px] font-extrabold text-[#2B2233]" numberOfLines={1}>
+                          {journey.routeName ?? `Hành trình ${myJourneys.length - index}`}
+                        </Text>
+                        <Text className="mt-1 text-[12px] text-[#8E869A]">
+                          {(journey.hotspots ?? []).length} điểm dừng
+                        </Text>
+                      </View>
+                      <View className="flex-row items-center gap-1.5 rounded-full bg-[#F1F3F7] px-3 py-1.5">
+                        <View className="h-2 w-2 rounded-full" style={{ backgroundColor: STATUS_DOT_COLOR[journey.status] ?? "#9AA0AA" }} />
+                        <Text className="text-[12px] font-extrabold text-[#5C5663]">{statusLabel(journey.status)}</Text>
+                      </View>
                     </View>
-                    <View className="rounded-full bg-[#F1F3F7] px-3 py-1.5">
-                      <Text className="text-[9px] font-extrabold text-[#5C5663]">{journey.status}</Text>
-                    </View>
-                  </View>
-                </Pressable>
-              ))}
+                  </Pressable>
+                );
+              })}
               {!myJourneys.length && !isLoadingJourneys && !journeysError ? (
                 <View className="items-center rounded-2xl border border-dashed border-[#D9DDE7] px-4 py-6">
-                  <Text className="text-[11px] font-bold text-[#8E869A]">Bạn chưa có hành trình record nào</Text>
+                  <Text className="text-[14px] font-bold text-[#8E869A]">Bạn chưa ghi hành trình nào</Text>
+                  <Text className="mt-1 text-center text-[13px] leading-5 text-[#A9A2B2]">Bắt đầu ghi để lưu lại chuyến đi đầu tiên</Text>
                 </View>
               ) : null}
             </View>
@@ -598,25 +725,34 @@ export default function RecordJourneyScreen() {
 
         <View className="mt-4 px-4">
           <View className="rounded-3xl bg-white p-4">
-            <Text className="text-[14px] font-extrabold text-[#2B2233]">Tìm hotspot để đi tiếp</Text>
-            <Text className="mt-1 text-[10px] leading-4 text-[#8E869A]">
-              Để trống để xem hotspot trong bán kính {formatDistanceMeters(NEARBY_DISTANCE_METERS)}. Nhập từ khóa để search toàn bộ content hotspot.
+            <Text className="text-[16px] font-extrabold text-[#2B2233]">Tìm nơi để ghé tiếp</Text>
+            <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+              Để trống để xem những nơi trong bán kính {formatDistanceMeters(NEARBY_DISTANCE_METERS)}. Nhập từ khóa để tìm trên toàn hệ thống.
             </Text>
             <View className="mt-3 flex-row items-center rounded-2xl bg-[#F1F3F7] px-3">
-              <SymbolView name={{ ios: "magnifyingglass", android: "search", web: "search" }} size={17} tintColor="#8E869A" />
+              <SymbolView name={{ ios: "magnifyingglass", android: "search", web: "search" }} size={18} tintColor="#8E869A" />
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Tìm tên hotspot..."
+                placeholder="Tìm theo tên địa điểm..."
                 placeholderTextColor="#A09AA8"
-                className="flex-1 px-3 py-3.5 text-[13px] text-[#2B2233]"
+                className="flex-1 px-3 py-3.5 text-[15px] text-[#2B2233]"
               />
               {isSearching || isLoadingNearby ? <ActivityIndicator size="small" color="#EB489B" /> : null}
             </View>
 
+            {status !== "RECORDING" ? (
+              <View className="mt-3 flex-row items-center gap-2.5 rounded-2xl bg-[#FFF8EC] p-3.5">
+                <SymbolView name={{ ios: "info.circle", android: "info", web: "info" }} size={17} tintColor="#B9791C" />
+                <Text className="flex-1 text-[13px] leading-5 text-[#8A5F16]">
+                  Bắt đầu ghi hành trình trước, sau đó bạn mới check-in được.
+                </Text>
+              </View>
+            ) : null}
+
             {nearbyError && query.trim().length < 2 ? (
-              <Pressable onPress={() => void loadNearby()} className="mt-3 rounded-2xl bg-[#FFF3F3] p-3">
-                <Text className="text-[10px] font-bold text-[#C74655]">{nearbyError} · Bấm để thử lại</Text>
+              <Pressable accessibilityRole="button" onPress={() => void loadNearby()} className="mt-3 rounded-2xl bg-[#FFF3F3] p-3.5">
+                <Text className="text-[13px] font-bold leading-5 text-[#C74655]">{nearbyError} · Bấm để thử lại</Text>
               </Pressable>
             ) : null}
 
@@ -624,27 +760,44 @@ export default function RecordJourneyScreen() {
               {displayedHotspots.slice(0, 15).map((hotspot) => {
                 const checked = checkedInHotspots.some((item) => item.hotspotId === hotspot.hotspotId);
                 const distance = distanceMeters(currentCoordinate, hotspot);
+                const isRecording = status === "RECORDING";
                 return (
-                  <View key={hotspot.hotspotId} className="rounded-2xl border border-[#E8EDF4] p-3">
+                  <View key={hotspot.hotspotId} className="rounded-2xl border border-[#E8EDF4] p-3.5">
                     <View className="flex-row items-start gap-3">
-                      <View className="h-10 w-10 items-center justify-center rounded-xl bg-[#FFF1F6]"><Text>📍</Text></View>
-                      <View className="flex-1">
-                        <Text className="text-[12px] font-extrabold text-[#2B2233]">{hotspot.hotspotName}</Text>
-                        <Text className="mt-1 text-[10px] text-[#8E869A]" numberOfLines={2}>{hotspot.address}</Text>
-                        <Text className="mt-1 text-[9px] font-bold text-[#F58752]">Cách khoảng {formatDistanceMeters(distance)}{hotspot.openingTime ? ` · Mở ${hotspot.openingTime}${hotspot.closingTime ? `–${hotspot.closingTime}` : ""}` : ""}</Text>
+                      <View className="h-11 w-11 items-center justify-center rounded-2xl bg-[#FFF1F6]">
+                        <SymbolView name={{ ios: "mappin.circle.fill", android: "place", web: "place" }} size={20} tintColor="#EB489B" />
                       </View>
-                      {checked ? <Text className="text-[10px] font-extrabold text-[#36A269]">ĐÃ CHECK-IN</Text> : null}
+                      <View className="min-w-0 flex-1">
+                        <Text className="text-[14px] font-extrabold text-[#2B2233]">{hotspot.hotspotName}</Text>
+                        <Text className="mt-0.5 text-[12px] leading-5 text-[#8E869A]" numberOfLines={2}>{hotspot.address}</Text>
+                        <Text className="mt-1 text-[12px] font-bold text-[#C4703A]">
+                          Cách {formatDistanceMeters(distance)}{hotspot.openingTime ? ` · mở ${hotspot.openingTime}${hotspot.closingTime ? `–${hotspot.closingTime}` : ""}` : ""}
+                        </Text>
+                      </View>
+                      {checked ? (
+                        <View className="flex-row items-center gap-1 rounded-full bg-[#EAF7EF] px-2.5 py-1.5">
+                          <SymbolView name={{ ios: "checkmark", android: "check", web: "check" }} size={13} tintColor="#2A8A52" />
+                          <Text className="text-[12px] font-extrabold text-[#2A8A52]">Đã ghé</Text>
+                        </View>
+                      ) : null}
                     </View>
                     <View className="mt-3 flex-row gap-2">
-                      <Pressable onPress={() => void handleNavigate(hotspot)} className="flex-1 rounded-xl bg-[#EEF6FF] py-3">
-                        <Text className="text-center text-[10px] font-extrabold text-[#1677C8]">Chỉ đường</Text>
+                      <Pressable accessibilityRole="button" onPress={() => void handleNavigate(hotspot)} className="flex-1 rounded-xl bg-[#EEF6FF] py-3.5">
+                        <Text className="text-center text-[13px] font-extrabold text-[#1677C8]">Chỉ đường</Text>
                       </Pressable>
                       <Pressable
-                        disabled={status !== "RECORDING" || checked || checkingInId === hotspot.hotspotId}
+                        accessibilityRole="button"
+                        disabled={checked || checkingInId === hotspot.hotspotId}
                         onPress={() => void handleCheckIn(hotspot)}
-                        className={`flex-1 rounded-xl py-3 ${status === "RECORDING" && !checked ? "bg-[#EB489B]" : "bg-[#D9DDE7]"}`}
+                        className={`flex-1 rounded-xl py-3.5 ${checked ? "bg-[#EDEFF3]" : isRecording ? "bg-[#EB489B]" : "bg-[#F3D9E5]"}`}
                       >
-                        {checkingInId === hotspot.hotspotId ? <ActivityIndicator size="small" color="#fff" /> : <Text className="text-center text-[10px] font-extrabold text-white">Check-in</Text>}
+                        {checkingInId === hotspot.hotspotId ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text className={`text-center text-[13px] font-extrabold ${checked ? "text-[#9C97A3]" : isRecording ? "text-white" : "text-[#A8557B]"}`}>
+                            {checked ? "Đã check-in" : "Check-in"}
+                          </Text>
+                        )}
                       </Pressable>
                     </View>
                   </View>
@@ -652,7 +805,7 @@ export default function RecordJourneyScreen() {
               })}
               {!displayedHotspots.length && !isSearching && !isLoadingNearby ? (
                 <View className="items-center rounded-2xl border border-dashed border-[#D9DDE7] px-4 py-7">
-                  <Text className="text-[11px] font-bold text-[#8E869A]">Không tìm thấy hotspot phù hợp</Text>
+                  <Text className="text-[14px] font-bold text-[#8E869A]">Không tìm thấy địa điểm phù hợp</Text>
                 </View>
               ) : null}
             </View>
@@ -661,22 +814,35 @@ export default function RecordJourneyScreen() {
 
         <View className="mt-4 px-4">
           <View className="rounded-3xl bg-white p-4">
-            <View className="flex-row items-center justify-between">
-              <View>
-                <Text className="text-[14px] font-extrabold text-[#2B2233]">Hotspot đã đi qua</Text>
-                <Text className="mt-0.5 text-[10px] text-[#8E869A]">Mỗi check-in tạo một story mặc định trong route record</Text>
+            <View className="flex-row items-center justify-between gap-3">
+              <View className="min-w-0 flex-1">
+                <Text className="text-[16px] font-extrabold text-[#2B2233]">Những nơi đã ghé</Text>
+                <Text className="mt-0.5 text-[13px] leading-5 text-[#8E869A]">Theo đúng thứ tự bạn check-in</Text>
               </View>
-              <View className="rounded-full bg-[#FFF4EF] px-3 py-1.5"><Text className="text-[10px] font-extrabold text-[#F15B45]">{checkedInHotspots.length} CHECK-IN</Text></View>
+              <View className="rounded-full bg-[#FFF4EF] px-3 py-1.5">
+                <Text className="text-[13px] font-extrabold text-[#F15B45]">{checkedInCount} nơi</Text>
+              </View>
             </View>
             <View className="mt-3 gap-2">
               {checkedInHotspots.map((item, index) => (
-                <View key={item.hotspotId} className="flex-row items-center gap-3 rounded-2xl border border-[#E8EDF4] p-3">
-                  <View className="h-10 w-10 items-center justify-center rounded-full bg-[#F15B45]"><Text className="text-[12px] font-extrabold text-white">{index + 1}</Text></View>
-                  <View className="flex-1"><Text className="text-[12px] font-extrabold text-[#2B2233]">{item.hotspotName}</Text><Text className="mt-0.5 text-[10px] text-[#8E869A]">Story mặc định · chờ cập nhật title/content</Text></View>
-                  <View className="rounded-lg bg-[#FFF8F4] px-2 py-1"><Text className="text-[9px] font-extrabold text-[#A44A35]">DRAFT</Text></View>
+                <View key={item.hotspotId} className="flex-row items-center gap-3 rounded-2xl border border-[#E8EDF4] p-3.5">
+                  <View className="h-10 w-10 items-center justify-center rounded-full bg-[#F15B45]">
+                    <Text className="text-[15px] font-extrabold text-white">{index + 1}</Text>
+                  </View>
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-[14px] font-extrabold text-[#2B2233]" numberOfLines={1}>{item.hotspotName}</Text>
+                    {item.address ? (
+                      <Text className="mt-0.5 text-[12px] text-[#8E869A]" numberOfLines={1}>{item.address}</Text>
+                    ) : null}
+                  </View>
                 </View>
               ))}
-              {!checkedInHotspots.length ? <View className="items-center rounded-2xl border border-dashed border-[#D9DDE7] px-4 py-8"><Text className="text-[12px] font-bold text-[#8E869A]">Chưa có hotspot nào được check-in</Text></View> : null}
+              {!checkedInCount ? (
+                <View className="items-center rounded-2xl border border-dashed border-[#D9DDE7] px-4 py-8">
+                  <Text className="text-[14px] font-bold text-[#8E869A]">Chưa check-in nơi nào</Text>
+                  <Text className="mt-1 text-center text-[13px] leading-5 text-[#A9A2B2]">Những nơi bạn ghé sẽ lần lượt hiện ở đây</Text>
+                </View>
+              ) : null}
             </View>
           </View>
         </View>
@@ -684,12 +850,23 @@ export default function RecordJourneyScreen() {
         <View className="mt-4 gap-2 px-4">
           {status === "RECORDING" ? (
             <>
-              <Pressable disabled={isFinishing} onPress={() => void handleFinish()} className={`rounded-2xl py-4 ${checkedInHotspots.length >= MIN_RECORD_HOTSPOTS ? "bg-[#2B2233]" : "bg-[#D9DDE7]"}`}>
-                {isFinishing ? <ActivityIndicator color="#fff" /> : <Text className={`text-center text-[13px] font-extrabold ${checkedInHotspots.length >= MIN_RECORD_HOTSPOTS ? "text-white" : "text-[#8E869A]"}`}>Kết thúc và tạo bản nháp</Text>}
+              <Pressable
+                accessibilityRole="button"
+                disabled={isFinishing}
+                onPress={() => void handleFinish()}
+                className={`rounded-2xl py-4 ${checkedInCount >= MIN_RECORD_HOTSPOTS && !isFinishing ? "bg-[#2B2233]" : "bg-[#D9DDE7]"}`}
+              >
+                {isFinishing ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text className={`text-center text-[15px] font-extrabold ${checkedInCount >= MIN_RECORD_HOTSPOTS ? "text-white" : "text-[#8E869A]"}`}>
+                    Kết thúc và lưu bản nháp
+                  </Text>
+                )}
               </Pressable>
-              {checkedInHotspots.length < MIN_RECORD_HOTSPOTS ? (
-                <Text className="text-center text-[10px] font-bold text-[#8E869A]">
-                  Cần thêm {MIN_RECORD_HOTSPOTS - checkedInHotspots.length} điểm dừng nữa mới kết thúc được hành trình
+              {remainingStops ? (
+                <Text className="text-center text-[13px] font-bold text-[#8E869A]">
+                  Còn {remainingStops} nơi nữa là kết thúc được
                 </Text>
               ) : null}
             </>
@@ -697,20 +874,30 @@ export default function RecordJourneyScreen() {
 
           {status === "DRAFT" ? (
             <>
-              <Pressable onPress={() => appAlert.alert("Chỉnh sửa bản nháp", "Kết nối tiếp API update route và update story tại đây. Route ID hiện tại: " + routeRecord?.routeId)} className="rounded-2xl border border-[#E8EDF4] bg-white py-4"><Text className="text-center text-[13px] font-extrabold text-[#2B2233]">Xem và chỉnh sửa route/story</Text></Pressable>
-              <View className="rounded-2xl border border-[#E8EDF4] bg-white p-3">
-                <Text className="text-[10px] font-extrabold text-[#8E869A]">Mô tả hành trình (gửi kèm khi submit)</Text>
+              <View className="rounded-2xl border border-[#E8EDF4] bg-white p-4">
+                <Text className="text-[14px] font-extrabold text-[#2B2233]">Mô tả hành trình</Text>
+                <Text className="mt-0.5 text-[13px] leading-5 text-[#8E869A]">Mô tả này hiển thị công khai cùng hành trình của bạn.</Text>
                 <TextInput
                   value={finalizeDescription}
                   onChangeText={setFinalizeDescription}
-                  placeholder="Mô tả ngắn về hành trình của bạn..."
+                  maxLength={DESCRIPTION_MAX_LENGTH}
+                  placeholder="Kể ngắn gọn về chuyến đi này..."
                   placeholderTextColor="#A09AA8"
                   multiline
-                  className="mt-1 min-h-[44px] text-[12px] text-[#2B2233]"
+                  className="mt-3 min-h-[72px] rounded-2xl bg-[#F1F3F7] px-4 py-3 text-[15px] leading-6 text-[#2B2233]"
+                  textAlignVertical="top"
                 />
+                <Text className="mt-1.5 text-right text-[12px] text-[#A9A2B2]">
+                  {finalizeDescription.length}/{DESCRIPTION_MAX_LENGTH}
+                </Text>
               </View>
-              <Pressable disabled={isFinalizing} onPress={() => void handleFinalize()} className="rounded-2xl bg-[#EB489B] py-4">
-                {isFinalizing ? <ActivityIndicator color="#fff" /> : <Text className="text-center text-[13px] font-extrabold text-white">Submit route lên hệ thống</Text>}
+              <Pressable
+                accessibilityRole="button"
+                disabled={isFinalizing}
+                onPress={() => void handleFinalize()}
+                className={`rounded-2xl py-4 ${isFinalizing ? "bg-[#EFA8C8]" : "bg-[#EB489B]"}`}
+              >
+                {isFinalizing ? <ActivityIndicator color="#fff" /> : <Text className="text-center text-[15px] font-extrabold text-white">Đăng hành trình</Text>}
               </Pressable>
             </>
           ) : null}

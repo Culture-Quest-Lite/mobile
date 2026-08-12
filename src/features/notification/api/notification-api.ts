@@ -15,7 +15,7 @@ export type AppNotification = {
   message: string;
   isRead: boolean;
   createdAt: string;
-  notificationType: NotificationType;
+  notificationType?: NotificationType | null;
   referenceId?: number | null;
 };
 
@@ -89,6 +89,23 @@ function getAuthHeaders(accessToken: string) {
   };
 }
 
+/**
+ * Backend trả cờ đã đọc dưới key `read` (Lombok sinh getter `isRead()`, Jackson
+ * bỏ tiền tố `is`), nên đọc cả `isRead` lẫn `read` để không phụ thuộc vào server.
+ */
+function normalizeNotification(value: unknown): AppNotification | null {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  const readFlag = value.isRead ?? value.read;
+
+  return {
+    ...(value as AppNotification),
+    isRead: readFlag === true || readFlag === "true",
+  };
+}
+
 export async function getMyNotifications(
   accessToken: string,
   page = 0,
@@ -99,7 +116,19 @@ export async function getMyNotifications(
     { headers: getAuthHeaders(accessToken) },
   );
 
-  return ensureOk<NotificationPage>(response, "Không lấy được danh sách thông báo");
+  const body = await ensureOk<NotificationPage>(
+    response,
+    "Không lấy được danh sách thông báo",
+  );
+
+  return {
+    ...body,
+    content: Array.isArray(body?.content)
+      ? body.content
+          .map(normalizeNotification)
+          .filter((item): item is AppNotification => item !== null)
+      : [],
+  };
 }
 
 export async function getUnreadNotificationCount(accessToken: string) {

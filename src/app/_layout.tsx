@@ -189,6 +189,7 @@ export default function RootLayout() {
             <Stack.Screen name="notifications" />
             <Stack.Screen name="vouchers/index" />
             <Stack.Screen name="vouchers/my" />
+            <Stack.Screen name="vouchers/nearby" />
             <Stack.Screen name="vouchers/[id]" />
             <Stack.Screen name="subscription" />
             <Stack.Screen name="route/[id]" />

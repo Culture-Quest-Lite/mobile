@@ -59,6 +59,8 @@ import {
   mapRouteToRouteItem,
 } from "@/features/route/api/route-api";
 import { type RouteItem } from "@/lib/demo-data";
+import { NearbyVoucherSection } from "@/features/voucher/components/nearby-voucher-section";
+import type { NearbyVoucherAnchor } from "@/features/voucher/hooks/use-nearby-vouchers";
 import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
 import {
   getHotspotReviews,
@@ -3122,6 +3124,14 @@ export default function HotspotDetailScreen() {
     routeId: resolvedRouteId,
     slug: resolvedSlug,
   });
+  // Mốc để hỏi voucher của các quán quanh chính địa điểm này.
+  const nearbyVoucherAnchor = useMemo<NearbyVoucherAnchor | null>(
+    () =>
+      resolvedHotspotId === null
+        ? null
+        : { kind: "hotspots", hotspotIds: [resolvedHotspotId] },
+    [resolvedHotspotId],
+  );
   const [isMapInteracting, setIsMapInteracting] = useState(false);
   const [gallerySelection, setGallerySelection] = useState(() => ({
     index: 0,
@@ -4070,6 +4080,21 @@ export default function HotspotDetailScreen() {
                 />
               ) : null}
             </View>
+
+            {nearbyVoucherAnchor ? (
+              <NearbyVoucherSection
+                anchor={nearbyVoucherAnchor}
+                radiusMeters={1000}
+                title="Quán ngon quanh đây"
+                eyebrow="ƯU ĐÃI TỪ ĐỐI TÁC"
+                contextLabel={`Quanh ${hotspot.title}`}
+                emptyDescription={`Chưa có đối tác nào có ưu đãi trong bán kính 1km quanh ${hotspot.title}.`}
+                seeAllHref={
+                  `/vouchers/nearby?hotspotId=${resolvedHotspotId}&hotspotName=${encodeURIComponent(hotspot.title)}` as Href
+                }
+                horizontalInset={relatedRouteScrollInset}
+              />
+            ) : null}
 
             <PersonalExperienceSection
               composer={
