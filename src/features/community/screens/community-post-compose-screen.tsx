@@ -29,6 +29,7 @@ import {
   isCreatedPostPending,
 } from "@/features/home/lib/created-post-feedback";
 import { getMyProfile } from "@/features/profile/api/get-me";
+import { adjustCurrentProfileCount } from "@/features/profile/data/current-profile-store";
 import { cacheProfilePost } from "@/features/profile/data/profile-post-cache";
 import { mapCreatedPostToProfilePost } from "@/features/profile/lib/map-created-post-to-profile-post";
 import {
@@ -2672,6 +2673,7 @@ export default function CommunityPostComposeScreen() {
       const isPendingApproval = isPublicPost && isCreatedPostPending(createdPost);
 
       cacheProfilePost(mapCreatedPostToProfilePost(createdPost));
+      adjustCurrentProfileCount("totalPosts", 1);
 
       if (shouldAppearInCommunityFeed) {
         const communityFeedPost = mapCreatedPostToCommunityFeedPost(

@@ -23,6 +23,7 @@ import {
   useLikedPostIds,
 } from "@/features/home/data/liked-post-store";
 import { getUserProfileById } from "@/features/profile/api/get-user-by-id";
+import { adjustCurrentProfileCount } from "@/features/profile/data/current-profile-store";
 import { cacheProfilePost } from "@/features/profile/data/profile-post-cache";
 import { mapCreatedPostToProfilePost } from "@/features/profile/lib/map-created-post-to-profile-post";
 import type { Profile, ProfilePost } from "@/features/profile/types";
@@ -124,11 +125,6 @@ function buildProfileTabs(
         android: "view_agenda",
         web: "view_agenda",
       },
-    },
-    {
-      key: "routes",
-      label: t("community.explorerProfile.tabs.routes"),
-      icon: { ios: "map", android: "route", web: "route" },
     },
   ] as const;
 }
@@ -1282,6 +1278,7 @@ export default function CommunityExplorerProfileScreen() {
       }));
       setCommunityPostCacheVersion((current) => current + 1);
       cacheProfilePost(mapCreatedPostToProfilePost(sharedPost));
+      adjustCurrentProfileCount("totalPosts", 1);
 
       setSharePostTarget(null);
       setShareDraft("");
@@ -1571,6 +1568,14 @@ export default function CommunityExplorerProfileScreen() {
         ...current,
         [explorerId]: followResponse.totalFollowers,
       }));
+      adjustCurrentProfileCount(
+        "following",
+        followResponse.isFollowing === isFollowingProfile
+          ? 0
+          : followResponse.isFollowing
+            ? 1
+            : -1,
+      );
     } catch (error) {
       appAlert.alert(
         t("community.explorerProfile.followErrorTitle"),
@@ -1688,7 +1693,7 @@ export default function CommunityExplorerProfileScreen() {
               {profile.username}
             </Text>
 
-            <View className="mt-2.5 w-full max-w-[320px] flex-row items-start justify-center">
+            <View className="mt-2.5 w-full max-w-[344px] flex-row items-start justify-center">
               {socialStats.map((item, index) => (
                 <ProfileCountMetric
                   key={item.label}
@@ -1699,7 +1704,7 @@ export default function CommunityExplorerProfileScreen() {
               ))}
             </View>
 
-            <View className="mt-2.5 flex-row items-center justify-center gap-2">
+            <View className="mt-4 pt-1 flex-row items-center justify-center gap-2">
               <Pressable
                 accessibilityLabel={t("community.explorerProfile.followA11y")}
                 className={`min-w-[128px] rounded-full px-5 py-2.5 ${
@@ -1729,29 +1734,19 @@ export default function CommunityExplorerProfileScreen() {
                 </Text>
               </Pressable>
 
-              <Pressable
-                accessibilityLabel={t("community.explorerProfile.unfollowA11y")}
-                className={`rounded-full border px-4 py-2.5 ${
-                  isFollowingProfile
-                    ? "border-[#E6E8EE] bg-white"
-                    : "border-[#E6E8EE] bg-white"
-                }`}
-                disabled={isFollowRequestPending || !isFollowingProfile}
-                onPress={handleUnfollowPress}
-                style={
-                  isFollowRequestPending || !isFollowingProfile
-                    ? { opacity: 0.6 }
-                    : undefined
-                }
-              >
-                <Text
-                  className={`text-[14px] font-bold ${
-                    isFollowingProfile ? "text-[#2B2233]" : "text-[#2B2233]"
-                  }`}
+              {isFollowingProfile ? (
+                <Pressable
+                  accessibilityLabel={t("community.explorerProfile.unfollowA11y")}
+                  className="rounded-full border border-[#E6E8EE] bg-white px-4 py-2.5"
+                  disabled={isFollowRequestPending}
+                  onPress={handleUnfollowPress}
+                  style={isFollowRequestPending ? { opacity: 0.6 } : undefined}
                 >
-                  {t("community.explorerProfile.unfollowLabel")}
-                </Text>
-              </Pressable>
+                  <Text className="text-[14px] font-bold text-[#2B2233]">
+                    {t("community.explorerProfile.unfollowLabel")}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
 
@@ -1769,10 +1764,6 @@ export default function CommunityExplorerProfileScreen() {
                   onPress={() => setActiveTab(tab.key)}
                   accessibilityLabel={tab.label}
                   className="flex-1 items-center justify-center gap-1 py-2.5"
-                  style={{
-                    borderBottomColor: selected ? "#EB489B" : "transparent",
-                    borderBottomWidth: 2,
-                  }}
                 >
                   <SymbolView
                     name={tab.icon}
@@ -1904,10 +1895,15 @@ function ProfileCountMetric({
 }) {
   return (
     <View className="relative flex-1 items-center px-1">
-      <Text className="text-center text-[16px] font-extrabold text-[#2B2233]">
+      <Text className="text-center text-[20px] font-extrabold text-[#2B2233]">
         {formatCompactValue(value)}
       </Text>
-      <Text className="mt-0.5 text-center text-[10px] leading-3 text-[#8E869A]">
+      <Text
+        adjustsFontSizeToFit
+        className="mt-0.5 w-full text-center text-[13px] leading-4 text-[#8E869A]"
+        minimumFontScale={0.82}
+        numberOfLines={1}
+      >
         {label}
       </Text>
       {hasDivider ? (
@@ -2245,7 +2241,7 @@ function ExplorerExpandablePostCaption({ text }: { text: string }) {
       {expanded || !shouldTruncate ? normalizedText : collapsedText}
       {shouldTruncate ? (
         <Text
-          className="font-medium text-[#D4578F]"
+          className="font-medium text-[#8E869A]"
           onPress={() => setExpanded((current) => !current)}
         >
           {" "}

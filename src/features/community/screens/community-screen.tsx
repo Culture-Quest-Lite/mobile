@@ -65,6 +65,7 @@ import {
   useLikedPostIds,
 } from "@/features/home/data/liked-post-store";
 import { getMyProfile } from "@/features/profile/api/get-me";
+import { adjustCurrentProfileCount } from "@/features/profile/data/current-profile-store";
 import {
   cacheProfilePost,
   updateCachedProfilePost,
@@ -2440,6 +2441,7 @@ export default function CommunityScreen() {
       // Bài chia sẻ luôn nằm trong hồ sơ của mình: công khai ở tab bài viết,
       // riêng tư ở tab ổ khóa.
       cacheProfilePost(mapCreatedPostToProfilePost(sharedPost));
+      adjustCurrentProfileCount("totalPosts", 1);
 
       if (sharedVisibility === "PRIVATE") {
         removeCachedCommunityPost(sharedPost.postId);
@@ -2721,6 +2723,7 @@ export default function CommunityScreen() {
         removeLikedPostId(likedPostsAccountKey, postNumericId);
       }
 
+      adjustCurrentProfileCount("totalPosts", -1);
       setPostPendingDeletion(null);
       setCommunityToastMessage(t("community.feed.trashSuccessToast"));
     } catch (error) {
@@ -4393,7 +4396,7 @@ function CommunityPostMenuRow({
 
 function ExpandablePostCaption({ text }: { text: string }) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const normalizedText = text.trim();
   const maxLength = 150;
   const shouldTruncate = normalizedText.length > maxLength;
@@ -4406,7 +4409,7 @@ function ExpandablePostCaption({ text }: { text: string }) {
       {expanded || !shouldTruncate ? normalizedText : collapsedText}
       {shouldTruncate ? (
         <Text
-          className="font-medium text-[#D4578F]"
+          className="font-medium text-[#8E869A]"
           onPress={() => {
             setExpanded((current) => !current);
           }}

@@ -68,6 +68,7 @@ import {
   cacheProfilePost,
   updateCachedProfilePost,
 } from "../data/profile-post-cache";
+import { adjustCurrentProfileCount } from "../data/current-profile-store";
 import { useProfile } from "../hooks/use-profile";
 import {
   type ProfileRouteParticipant,
@@ -1697,6 +1698,7 @@ export default function ProfileScreen() {
         removeLikedPostId(likedPostsAccountKey, postNumericId);
       }
 
+      adjustCurrentProfileCount("totalPosts", -1);
       setPostPendingDeletion(null);
       setProfileToastMessage("Đã chuyển bài viết vào thùng rác.");
       void reloadProfile();
@@ -2625,7 +2627,7 @@ function ExpandablePostCaption({ text }: { text: string }) {
       {expanded || !shouldTruncate ? normalizedText : collapsedText}
       {shouldTruncate ? (
         <Text
-          className="font-medium text-[#D4578F]"
+          className="font-medium text-[#8E869A]"
           onPress={() => {
             setExpanded((current) => !current);
           }}
