@@ -30,13 +30,21 @@ export function VoucherMiniCard({
   width = 220,
   /** Nhãn phụ dưới tên quán, ví dụ "Quanh Chợ Bến Thành". */
   contextLabel,
+  contentTextWeight = "emphasized",
 }: {
   voucher: Voucher;
   width?: number;
   contextLabel?: string | null;
+  contentTextWeight?: "regular" | "emphasized";
 }) {
   const router = useRouter();
   const image = getVoucherImage(voucher);
+  const titleFontWeight =
+    contentTextWeight === "regular" ? "font-normal" : "font-black";
+  const partnerFontWeight =
+    contentTextWeight === "regular" ? "font-normal" : "font-semibold";
+  const pointsFontWeight =
+    contentTextWeight === "regular" ? "font-normal" : "font-black";
 
   return (
     <Pressable
@@ -77,14 +85,14 @@ export function VoucherMiniCard({
 
         <View className="px-3 pb-3 pt-2.5">
           <Text
-            className="text-[14px] font-black text-[#2B2233]"
+            className={`text-[14px] ${titleFontWeight} text-[#2B2233]`}
             numberOfLines={2}
             style={textStyle(14)}
           >
             {voucher.voucherName}
           </Text>
           <Text
-            className="mt-1 text-[12px] font-semibold text-[#8E869A]"
+            className={`mt-1 text-[12px] ${partnerFontWeight} text-[#8E869A]`}
             numberOfLines={1}
             style={textStyle(12)}
           >
@@ -113,7 +121,7 @@ export function VoucherMiniCard({
           <View className="mt-2 flex-row items-center justify-between gap-2">
             <View className="rounded-full bg-[#F2EFF3] px-2.5 py-1">
               <Text
-                className="text-[12px] font-black text-[#5F5568]"
+                className={`text-[12px] ${pointsFontWeight} text-[#5F5568]`}
                 numberOfLines={1}
                 style={textStyle(12)}
               >

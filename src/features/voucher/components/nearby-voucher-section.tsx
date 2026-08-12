@@ -16,6 +16,16 @@ type NearbyVoucherSectionProps = {
   radiusMeters?: number;
   title?: string;
   eyebrow?: string;
+  eyebrowColor?: string;
+  showRadiusDescription?: boolean;
+  titleFontWeight?: "font-semibold" | "font-bold" | "font-black";
+  cardContentTextWeight?: "regular" | "emphasized";
+  headerTextSizes?: {
+    eyebrow?: number;
+    title?: number;
+    description?: number;
+    action?: number;
+  };
   /** Nhãn phụ trên mỗi thẻ, ví dụ "Quanh Chợ Bến Thành". */
   contextLabel?: string | null;
   emptyDescription?: string;
@@ -35,6 +45,11 @@ export function NearbyVoucherSection({
   radiusMeters = 1000,
   title = "Ưu đãi quanh đây",
   eyebrow = "ĐỔI ĐIỂM LẤY ƯU ĐÃI",
+  eyebrowColor = "#EB489B",
+  showRadiusDescription = true,
+  titleFontWeight = "font-black",
+  cardContentTextWeight = "emphasized",
+  headerTextSizes,
   contextLabel,
   emptyDescription = "Chưa có đối tác nào có ưu đãi trong bán kính này.",
   seeAllHref,
@@ -56,36 +71,54 @@ export function NearbyVoucherSection({
             : ` · ${formatDistance(nearestHotspot.distanceMeters)}`
         }`
       : null);
+  const eyebrowFontSize = headerTextSizes?.eyebrow ?? 12;
+  const titleFontSize = headerTextSizes?.title ?? 19;
+  const descriptionFontSize = headerTextSizes?.description ?? 13;
+  const actionFontSize = headerTextSizes?.action ?? 13;
 
   return (
     <View className="mt-6 gap-3.5">
       <View className="flex-row items-end justify-between gap-3">
         <View className="min-w-0 flex-1 pr-3">
           <Text
-            className="text-[12px] font-black uppercase tracking-wider text-[#EB489B]"
-            style={textStyle(12)}
+            className="font-black uppercase tracking-wider"
+            style={[
+              textStyle(eyebrowFontSize),
+              { color: eyebrowColor, fontSize: eyebrowFontSize },
+            ]}
           >
             {eyebrow}
           </Text>
           <Text
-            className="mt-0.5 text-[19px] font-black text-[#2B2233]"
-            style={{ includeFontPadding: false, lineHeight: lineHeightFor(19) }}
+            className={`mt-0.5 ${titleFontWeight} text-[#2B2233]`}
+            style={[
+              textStyle(titleFontSize),
+              {
+                fontSize: titleFontSize,
+                lineHeight: lineHeightFor(titleFontSize),
+              },
+            ]}
           >
             {title}
           </Text>
-          <Text
-            className="mt-0.5 text-[13px] text-[#8E869A]"
-            style={bodyTextStyle(13)}
-          >
-            Bán kính {formatDistance(radiusMeters)} quanh điểm đến
-          </Text>
+          {showRadiusDescription ? (
+            <Text
+              className="mt-0.5 text-[#8E869A]"
+              style={[
+                bodyTextStyle(descriptionFontSize),
+                { fontSize: descriptionFontSize },
+              ]}
+            >
+              Bán kính {formatDistance(radiusMeters)} quanh điểm đến
+            </Text>
+          ) : null}
         </View>
         {seeAllHref ? (
           <Pressable hitSlop={8} onPress={() => router.push(seeAllHref)}>
             <Text
-              className="text-[13px] font-black text-[#EB489B]"
+              className="font-black text-[#EB489B]"
               numberOfLines={1}
-              style={textStyle(13)}
+              style={[textStyle(actionFontSize), { fontSize: actionFontSize }]}
             >
               Xem tất cả
             </Text>
@@ -180,6 +213,7 @@ export function NearbyVoucherSection({
               <VoucherMiniCard
                 voucher={voucher}
                 width={cardWidth}
+                contentTextWeight={cardContentTextWeight}
                 contextLabel={resolvedContextLabel}
               />
             </View>
