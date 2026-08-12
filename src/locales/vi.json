@@ -714,7 +714,7 @@
       "notFoundMessage": "Hồ sơ cộng đồng này không còn khả dụng hoặc dữ liệu demo chưa được tạo.",
       "backToCommunity": "Quay lại cộng đồng",
       "followingStat": "Đang theo dõi",
-      "followerStat": "Follower",
+      "followerStat": "Người theo dõi",
       "loginToFollowMessage": "Vui lòng đăng nhập để theo dõi explorer.",
       "sessionExpiredFollowMessage": "Vui lòng đăng nhập lại để tiếp tục.",
       "followErrorTitle": "Không thể cập nhật theo dõi",
