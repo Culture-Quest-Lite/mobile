@@ -6,12 +6,14 @@ import { routes, type RouteItem } from "@/lib/demo-data";
 
 import { getGamificationLevels } from "../api/get-levels";
 import { getMyProfile } from "../api/get-me";
+import { setCurrentProfile, useCurrentProfile } from "../data/current-profile-store";
 import {
   getMyProfilePosts,
   getUserProfilePosts,
 } from "../api/get-profile-posts";
 import { useCachedProfilePosts } from "../data/profile-post-cache";
 import { CURRENT_USER_ID, getProfileById, getProfilePosts } from "../data/profile-demo";
+import { setPremiumStatusFromProfile } from "./use-premium-status";
 import { applyLevelProgressToProfile } from "../lib/level-progress";
 import type { Profile, ProfilePost, ProfilePostStatus } from "../types";
 
@@ -79,13 +81,16 @@ function mergeProfilePosts(remotePosts: ProfilePost[], cachedPosts: ProfilePost[
 export function useProfile(userId?: string, options?: UseProfileOptions): UseProfileResult {
   const authSession = useAuthSession();
   const postStatus = options?.postStatus ?? null;
+  const currentProfile = useCurrentProfile();
   const isMountedRef = useRef(true);
   const loadRequestIdRef = useRef(0);
   const fallbackProfile = useMemo(
     () => getProfileById(userId ?? CURRENT_USER_ID),
     [userId],
   );
-  const [profile, setProfile] = useState<Profile | undefined>();
+  const [profile, setProfile] = useState<Profile | undefined>(
+    userId ? undefined : (currentProfile ?? undefined),
+  );
   const [posts, setPosts] = useState<ProfilePost[]>([]);
   const [isLoading, setIsLoading] = useState(authSession.isAuthenticated);
   const [error, setError] = useState<Error | null>(null);
@@ -157,6 +162,10 @@ export function useProfile(userId?: string, options?: UseProfileOptions): UsePro
 
       const mergedProfile = mergeProfileWithFallback(resolvedProfile, fallbackProfile);
       setProfile(mergedProfile);
+      if (!userId) {
+        setCurrentProfile(mergedProfile);
+        setPremiumStatusFromProfile(mergedProfile.isPremium);
+      }
 
       const profileNumericId = Number.parseInt(resolvedProfile.id, 10);
       const postsRequest = userId
@@ -213,7 +222,7 @@ export function useProfile(userId?: string, options?: UseProfileOptions): UsePro
           ? nextError
           : new Error("Không thể tải hồ sơ."),
       );
-      setProfile(fallbackProfile);
+      setProfile((currentValue) => currentValue ?? fallbackProfile);
       setPosts([]);
     } finally {
       if (isMountedRef.current && requestId === loadRequestIdRef.current) {
@@ -230,12 +239,8 @@ export function useProfile(userId?: string, options?: UseProfileOptions): UsePro
 
   useEffect(() => {
     if (!authSession.isAuthenticated) {
-      setIsLoading(false);
       return;
     }
-
-    setIsLoading(true);
-    setError(null);
 
     const loadTimer = setTimeout(() => {
       void loadProfile();
@@ -246,7 +251,9 @@ export function useProfile(userId?: string, options?: UseProfileOptions): UsePro
     };
   }, [authSession.isAuthenticated, loadProfile]);
 
-  const resolvedProfile = authSession.isAuthenticated ? profile : fallbackProfile;
+  const resolvedProfile = authSession.isAuthenticated
+    ? (userId ? profile : (currentProfile ?? profile))
+    : fallbackProfile;
   const resolvedError = authSession.isAuthenticated ? error : null;
   const resolvedIsLoading = authSession.isAuthenticated ? isLoading : false;
 

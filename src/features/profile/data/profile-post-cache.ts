@@ -35,7 +35,12 @@ function normalizeProfilePostStatus(value?: string | null): ProfilePostStatus | 
 
   switch (normalizedValue) {
     case "APPROVED":
+      return "APPROVED";
     case "PENDING":
+      return "PENDING";
+    case "REPORT":
+    case "REPORTED":
+      return "REPORTED";
     case "REJECTED":
     case "DELETED":
       return normalizedValue;

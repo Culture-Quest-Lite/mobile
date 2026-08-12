@@ -153,6 +153,11 @@ const premiumBannerCtaShadowStyle = {
   elevation: 6,
 } as const;
 
+const premiumBannerTitleTextClassName = "text-[14px] font-black text-[#2B2233]";
+const premiumBannerSubtitleTextClassName = "mt-1 text-[11px] text-[#7F738C]";
+const premiumBannerActiveSubtitleTextClassName =
+  "mt-1 text-[11px] font-medium text-[#6F657A]";
+
 const premiumCrownSymbolName = {
   ios: "crown.fill",
   android: "workspace_premium",
@@ -579,7 +584,7 @@ function PremiumBannerIllustration() {
         style={{
           height: 220,
           marginRight: -60,
-          marginTop: -42,
+          marginTop: -28,
           width: 252,
         }}
       />
@@ -1642,10 +1647,10 @@ export default function HomeScreen() {
   const router = useRouter();
   const authSession = useAuthSession();
   const { t } = useTranslation();
-  const { contentWidth, gutter, insets, safeWidth } = useScreenLayout({
+  const { contentWidth, gutter, safeWidth } = useScreenLayout({
     maxContentWidth: 640,
   });
-  const homeContentBottomPadding = Math.max(insets.bottom + 72, 96);
+  const homeContentBottomPadding = 24;
   const activeRouteIndexRef = useRef(0);
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
   const [explorerSummary, setExplorerSummary] =
@@ -2543,8 +2548,11 @@ export default function HomeScreen() {
         translucent={Platform.OS === "android"}
       />
       <ScrollView
+        alwaysBounceVertical={false}
+        bounces={false}
         className="flex-1"
         contentContainerStyle={{ paddingBottom: homeContentBottomPadding }}
+        overScrollMode="never"
         refreshControl={
           <RefreshControl
             colors={["#EB489B", "#F58752", "#FFC93C"]}
@@ -2610,15 +2618,15 @@ export default function HomeScreen() {
           {/* Premium status / upsell banner (driven by real subscription data) */}
           {isPremiumExplorer ? (
             <LinearGradient
-              colors={["#FFFDFE", "#FBF5FF", "#FFF8F2"]}
+              colors={["#FFFDFF", "#F8F2FF", "#FFF7EE"]}
               end={{ x: 1, y: 1 }}
               start={{ x: 0, y: 0 }}
               className="overflow-hidden rounded-[26px]"
               style={[
                 premiumBannerShadowStyle,
                 {
-                  backgroundColor: "#FFFDFE",
-                  borderColor: "#EEE7F2",
+                  backgroundColor: "#FFFDFF",
+                  borderColor: "#E7DCF3",
                   borderWidth: 1,
                 },
               ]}
@@ -2636,40 +2644,64 @@ export default function HomeScreen() {
                   width: 180,
                 }}
               />
+              <LinearGradient
+                colors={["rgba(255, 208, 148, 0.22)", "rgba(255, 208, 148, 0)"]}
+                end={{ x: 1, y: 1 }}
+                start={{ x: 0, y: 0 }}
+                style={{
+                  borderRadius: 96,
+                  bottom: -84,
+                  height: 192,
+                  left: -52,
+                  position: "absolute",
+                  width: 192,
+                }}
+              />
 
-              <View className="flex-row items-start gap-2 px-4 py-2.5">
-                <View className="flex-1 pr-1">
-                  <View className="mb-1.5 flex-row items-center gap-1.5 self-start rounded-full bg-[#7C3AED] px-2.5 py-1">
-                    <SymbolView
-                      name={premiumCrownSymbolName}
-                      size={9}
-                      tintColor="#FFFFFF"
-                    />
-                    <Text
-                      className="text-[8px] font-extrabold uppercase tracking-[0.6px] text-white"
-                      style={{ lineHeight: lineHeightFor(8) }}
-                    >
-                      {t("home.premium.activeBadge")}
-                    </Text>
-                  </View>
+              <View className="flex-row items-start gap-2.5 px-4 py-3">
+                <View className="flex-1 pr-0.5">
+                  <LinearGradient
+                    colors={["#A855F7", "#7C3AED", "#EC4899"]}
+                    end={{ x: 1, y: 0.5 }}
+                    start={{ x: 0, y: 0.5 }}
+                    className="mb-2 self-start rounded-full"
+                    style={{
+                      borderColor: "rgba(255, 255, 255, 0.4)",
+                      borderWidth: 1,
+                    }}
+                  >
+                    <View className="flex-row items-center gap-1.5 px-3 py-1">
+                      <SymbolView
+                        name={premiumCrownSymbolName}
+                        size={9}
+                        tintColor="#FFFFFF"
+                      />
+                      <Text
+                        className="text-[8px] font-extrabold uppercase tracking-[0.6px] text-white"
+                        style={{ lineHeight: lineHeightFor(8) }}
+                      >
+                        {t("home.premium.activeBadge")}
+                      </Text>
+                    </View>
+                  </LinearGradient>
 
                   <Text
-                    className="text-[13px] font-black text-[#2B2233]"
-                    style={{ lineHeight: lineHeightFor(13) }}
+                    className={premiumBannerTitleTextClassName}
+                    style={{ lineHeight: lineHeightFor(14) }}
                   >
                     {t("home.premium.activeTitle")}
                   </Text>
 
                   <Text
-                    className="mt-1 text-[10px] text-[#7F738C]"
-                    style={{ lineHeight: bodyLineHeightFor(10) }}
+                    className={premiumBannerActiveSubtitleTextClassName}
+                    style={{ lineHeight: bodyLineHeightFor(11) }}
                   >
                     {t("home.premium.activeSubtitle")}
                   </Text>
                 </View>
 
                 <View
-                  className="w-[128px] shrink-0 items-end justify-start"
+                  className="w-[116px] shrink-0 items-end justify-start"
                   style={{ marginRight: -1, marginTop: -6 }}
                 >
                   <PremiumBannerIllustration />
@@ -2710,8 +2742,8 @@ export default function HomeScreen() {
                 />
 
                 <View className="px-4 py-2.5">
-                  <View className="flex-row items-start gap-2">
-                    <View className="flex-1 pr-1">
+                  <View className="flex-row items-start gap-1.5">
+                    <View className="flex-1 pr-0.5">
                       <View className="mb-1.5 flex-row items-center gap-1.5 self-start rounded-full bg-[#EC4D94] px-2.5 py-1">
                         <SymbolView
                           name={premiumCrownSymbolName}
@@ -2727,14 +2759,14 @@ export default function HomeScreen() {
                       </View>
 
                       <Text
-                        className="text-[14px] font-black text-[#2B2233]"
+                        className={premiumBannerTitleTextClassName}
                         style={{ lineHeight: lineHeightFor(14) }}
                       >
                         {t("home.premium.upsellTitle")}
                       </Text>
 
                       <Text
-                        className="mt-1 text-[11px] text-[#7F738C]"
+                        className={premiumBannerSubtitleTextClassName}
                         style={{ lineHeight: bodyLineHeightFor(11) }}
                       >
                         {t("home.premium.upsellSubtitle")}
@@ -2742,7 +2774,7 @@ export default function HomeScreen() {
                     </View>
 
                     <View
-                      className="w-[128px] shrink-0 items-center justify-start"
+                      className="w-[116px] shrink-0 items-center justify-start"
                       style={{ marginRight: -1, marginTop: -6 }}
                     >
                       <PremiumBannerIllustration />
@@ -3755,20 +3787,30 @@ export default function HomeScreen() {
               </View>
 
               <View
-                className="gap-5 rounded-[28px] bg-white p-4"
-                style={cardShadowStyle}
+                className="gap-5 rounded-[28px] bg-white py-4"
+                style={[
+                  cardShadowStyle,
+                  {
+                    marginHorizontal: -gutter,
+                    width: safeWidth,
+                  },
+                ]}
               >
                 {homeVouchersStatus === "ready" ? (
                   <ScrollView
                     horizontal
-                    contentContainerStyle={{ paddingRight: 10 }}
+                    contentContainerStyle={{
+                      alignItems: "stretch",
+                      paddingLeft: gutter,
+                      paddingRight: gutter,
+                    }}
                     showsHorizontalScrollIndicator={false}
                   >
                     {homeVouchers.map((voucher, index) => (
                       <Pressable
                         key={voucher.voucherId}
                         className={
-                          index === homeVouchers.length - 1 ? "" : "mr-3.5"
+                          index === homeVouchers.length - 1 ? "" : "mr-4"
                         }
                         style={{ width: homeVoucherCardWidth }}
                         onPress={() =>
@@ -3838,7 +3880,7 @@ export default function HomeScreen() {
                   </ScrollView>
                 ) : (
                   <Pressable
-                    className="items-center py-6"
+                    className="items-center px-4 py-6"
                     disabled={homeVouchersStatus === "loading"}
                     onPress={() => {
                       void loadHomeVouchers();
