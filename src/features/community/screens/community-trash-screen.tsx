@@ -7,6 +7,7 @@ import { deletePostPermanent } from "@/features/home/api/delete-post-permanent";
 import { restorePost } from "@/features/home/api/restore-post";
 import { ReviewDeleteDialog } from "@/features/home/components/review-delete-dialog";
 import { getMyProfile } from "@/features/profile/api/get-me";
+import { adjustCurrentProfileCount } from "@/features/profile/data/current-profile-store";
 import { getMyProfilePostsPage } from "@/features/profile/api/get-profile-posts";
 import type { ProfilePost } from "@/features/profile/types";
 import { bodyTextStyle, textStyle } from "@/lib/text-scale";
@@ -235,6 +236,7 @@ export default function CommunityTrashScreen() {
           postId,
           tokenType: authSession.tokenType,
         });
+        adjustCurrentProfileCount("totalPosts", 1);
         setPostPendingRestore(null);
         await loadDeletedPosts({ isRefreshing: true });
       } catch (error) {
