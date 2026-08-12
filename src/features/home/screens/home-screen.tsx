@@ -16,10 +16,15 @@ import {
   View,
 } from "react-native";
 import Animated, {
+  Extrapolation,
   Easing,
   ReduceMotion,
   cancelAnimation,
+  interpolate,
+  interpolateColor,
+  type SharedValue,
   useAnimatedStyle,
+  useAnimatedScrollHandler,
   useSharedValue,
   withRepeat,
   withTiming,
@@ -668,6 +673,30 @@ const communityRowShadowStyle = {
   elevation: 2,
 } as const;
 
+const homeVoucherCardShadowStyle = {
+  shadowColor: "rgba(15, 23, 42, 0.08)",
+  shadowOpacity: 1,
+  shadowRadius: 12,
+  shadowOffset: {
+    width: 0,
+    height: 6,
+  },
+  elevation: 3,
+} as const;
+
+const homeVoucherArtworkShadowStyle = {
+  shadowColor: "rgba(246, 91, 146, 0.22)",
+  shadowOpacity: 1,
+  shadowRadius: 18,
+  shadowOffset: {
+    width: 0,
+    height: 10,
+  },
+  elevation: 5,
+} as const;
+
+const homeVoucherBorderColor = "#F1F5F9";
+
 const homeSectionTitleClassName =
   "text-[17px] font-extrabold leading-[22px] text-[#2B2233]";
 const homeSectionActionTextClassName = "text-[12px] font-bold text-[#D85B86]";
@@ -703,6 +732,47 @@ type HomeVouchersSectionStatus = "empty" | "error" | "loading" | "ready";
 /** Số voucher hiển thị ở carousel Home; xem đủ thì bấm "Xem tất cả". */
 const homeVouchersPreviewSize = 8;
 
+const homeVoucherCardPalettes = [
+  {
+    accent: "#F65B92",
+    accentSoft: "#FFD6E7",
+    badgeBackground: "#FFE3EE",
+    badgeText: "#FF4F83",
+    coinBackground: "#FFF4D5",
+    coinText: "#D89208",
+    detailText: "#978D9F",
+    surface: "#FFF8FB",
+    topGradient: ["#FFF4F7", "#FFE9F1"] as const,
+  },
+  {
+    accent: "#FF7B6B",
+    accentSoft: "#FFE2D8",
+    badgeBackground: "#FFE8E1",
+    badgeText: "#FF6A56",
+    coinBackground: "#FFF0CC",
+    coinText: "#C98507",
+    detailText: "#978893",
+    surface: "#FFF9F7",
+    topGradient: ["#FFF5F0", "#FFEADD"] as const,
+  },
+  {
+    accent: "#F16A9A",
+    accentSoft: "#FFE0EC",
+    badgeBackground: "#FFE4EF",
+    badgeText: "#F54E87",
+    coinBackground: "#FFF2CF",
+    coinText: "#CC8A08",
+    detailText: "#9A8A98",
+    surface: "#FFF9FC",
+    topGradient: ["#FFF5F8", "#FFEAF2"] as const,
+  },
+] as const;
+
+const homeVoucherCardGap = 10;
+const homeVoucherInactiveScale = 0.82;
+const homeVoucherInactiveTranslateY = 18;
+const homeVoucherArtworkInactiveScale = 0.92;
+
 function getHomeVoucherDiscountLabel(voucher: Voucher) {
   if (voucher.discountType === "PERCENTAGE") {
     return `-${voucher.discountValue}%`;
@@ -710,6 +780,375 @@ function getHomeVoucherDiscountLabel(voucher: Voucher) {
 
   return `-${Number(voucher.discountValue).toLocaleString("vi-VN")}đ`;
 }
+
+function getHomeVoucherCardPalette(index: number) {
+  return homeVoucherCardPalettes[index % homeVoucherCardPalettes.length];
+}
+
+function getHomeVoucherFallbackSymbol(index: number) {
+  switch (index % 3) {
+    case 0:
+      return {
+        ios: "ticket.fill",
+        android: "confirmation_number",
+        web: "confirmation_number",
+      } as const;
+    case 1:
+      return {
+        ios: "gift.fill",
+        android: "redeem",
+        web: "redeem",
+      } as const;
+    default:
+      return {
+        ios: "megaphone.fill",
+        android: "campaign",
+        web: "campaign",
+      } as const;
+  }
+}
+
+function HomeVoucherCard({
+  imageHeight,
+  index,
+  isLast,
+  onPress,
+  scrollX,
+  snapInterval,
+  t,
+  voucher,
+  width,
+}: {
+  imageHeight: number;
+  index: number;
+  isLast: boolean;
+  onPress: () => void;
+  scrollX: SharedValue<number>;
+  snapInterval: number;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  voucher: Voucher;
+  width: number;
+}) {
+  const palette = getHomeVoucherCardPalette(index);
+  const imageUri = getVoucherImage(voucher);
+  const inputRange = [
+    (index - 1) * snapInterval,
+    index * snapInterval,
+    (index + 1) * snapInterval,
+  ];
+
+  const animatedCardStyle = useAnimatedStyle(() => {
+    const scale = interpolate(
+      scrollX.value,
+      inputRange,
+      [homeVoucherInactiveScale, 1, homeVoucherInactiveScale],
+      Extrapolation.CLAMP,
+    );
+    const translateY = interpolate(
+      scrollX.value,
+      inputRange,
+      [homeVoucherInactiveTranslateY, 0, homeVoucherInactiveTranslateY],
+      Extrapolation.CLAMP,
+    );
+    const opacity = interpolate(
+      scrollX.value,
+      inputRange,
+      [0.9, 1, 0.9],
+      Extrapolation.CLAMP,
+    );
+
+    return {
+      opacity,
+      transform: [{ scale }, { translateY }],
+    };
+  });
+
+  const animatedArtworkStyle = useAnimatedStyle(() => {
+    const scale = interpolate(
+      scrollX.value,
+      inputRange,
+      [homeVoucherArtworkInactiveScale, 1, homeVoucherArtworkInactiveScale],
+      Extrapolation.CLAMP,
+    );
+    const opacity = interpolate(
+      scrollX.value,
+      inputRange,
+      [0.88, 1, 0.88],
+      Extrapolation.CLAMP,
+    );
+
+    return {
+      opacity,
+      transform: [{ scale }],
+    };
+  });
+
+  return (
+    <Pressable
+      style={{
+        marginRight: isLast ? 0 : snapInterval - width,
+        paddingBottom: 16,
+        paddingTop: 6,
+        width,
+      }}
+      onPress={onPress}
+    >
+      <Animated.View
+        style={[homeVoucherCardShadowStyle, animatedCardStyle]}
+      >
+        <Animated.View
+          className="overflow-hidden rounded-[24px] border"
+          style={{
+            backgroundColor: "#FFFFFF",
+            borderColor: homeVoucherBorderColor,
+          }}
+        >
+          <LinearGradient
+            colors={palette.topGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              height: imageHeight,
+              overflow: "hidden",
+              paddingHorizontal: 14,
+              paddingVertical: 14,
+            }}
+          >
+            <View
+              pointerEvents="none"
+              style={{
+                backgroundColor: palette.accentSoft,
+                borderRadius: 999,
+                height: 54,
+                left: -12,
+                opacity: 0.72,
+                position: "absolute",
+                top: 18,
+                width: 54,
+              }}
+            />
+            <View
+              pointerEvents="none"
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: 999,
+                height: 10,
+                left: 28,
+                opacity: 0.48,
+                position: "absolute",
+                top: 22,
+                width: 10,
+              }}
+            />
+            <View
+              pointerEvents="none"
+              style={{
+                backgroundColor: palette.accentSoft,
+                borderRadius: 18,
+                height: 34,
+                opacity: 0.74,
+                position: "absolute",
+                right: -8,
+                top: 14,
+                transform: [{ rotate: "18deg" }],
+                width: 34,
+              }}
+            />
+            <View
+              pointerEvents="none"
+              style={{
+                alignItems: "center",
+                backgroundColor: "#FFFFFF",
+                borderRadius: 14,
+                height: 24,
+                justifyContent: "center",
+                opacity: 0.88,
+                position: "absolute",
+                right: 14,
+                top: 12,
+                width: 24,
+              }}
+            >
+              <SymbolView
+                name={{
+                  ios: "sparkles",
+                  android: "auto_awesome",
+                  web: "auto_awesome",
+                }}
+                size={11}
+                tintColor={palette.accent}
+              />
+            </View>
+
+            <Animated.View
+              className="flex-1 items-center justify-center"
+              style={animatedArtworkStyle}
+            >
+              {imageUri ? (
+                <Animated.View style={homeVoucherArtworkShadowStyle}>
+                  <Image
+                    source={{ uri: imageUri }}
+                    contentFit="contain"
+                    transition={180}
+                    cachePolicy="memory-disk"
+                    style={{
+                      height: imageHeight - 16,
+                      width: "80%",
+                    }}
+                  />
+                </Animated.View>
+              ) : (
+                <View
+                  className="items-center justify-center rounded-full bg-white/90"
+                  style={{
+                    height: 68,
+                    width: 68,
+                  }}
+                >
+                  <SymbolView
+                    name={getHomeVoucherFallbackSymbol(index)}
+                    size={34}
+                    tintColor={palette.accent}
+                  />
+                </View>
+              )}
+            </Animated.View>
+          </LinearGradient>
+
+          <View
+            className="rounded-t-[18px] bg-white px-3.5 pb-3.5 pt-4"
+            style={{
+              marginTop: -2,
+            }}
+          >
+            <View
+              className="self-start rounded-full px-2.5 py-1"
+              style={{
+                backgroundColor: palette.badgeBackground,
+                marginTop: -10,
+              }}
+            >
+              <Text
+                className="text-[11px] font-black"
+                numberOfLines={1}
+                style={{ color: palette.badgeText }}
+              >
+                {getHomeVoucherDiscountLabel(voucher)}
+              </Text>
+            </View>
+
+            <Text
+              className="mt-2 text-[13px] font-extrabold text-[#2B2233]"
+              numberOfLines={2}
+              style={{ lineHeight: lineHeightFor(13) }}
+            >
+              {voucher.voucherName}
+            </Text>
+
+            <Text
+              className="mt-1 text-[11px] font-semibold"
+              numberOfLines={1}
+              style={{
+                color: palette.detailText,
+                lineHeight: bodyLineHeightFor(11),
+              }}
+            >
+              {voucher.partnerName}
+            </Text>
+
+            <View className="mt-3 flex-row items-center">
+              <View
+                className="h-5 w-5 items-center justify-center rounded-full"
+                style={{ backgroundColor: palette.coinBackground }}
+              >
+                <SymbolView
+                  name={{
+                    ios: "star.fill",
+                    android: "stars",
+                    web: "stars",
+                  }}
+                  size={10}
+                  tintColor={palette.coinText}
+                />
+              </View>
+              <Text
+                className="ml-1.5 text-[12px] font-extrabold"
+                numberOfLines={1}
+                style={{ color: palette.coinText }}
+              >
+                {t("home.vouchers.points", {
+                  points: voucher.pointsRequired.toLocaleString("vi-VN"),
+                })}
+              </Text>
+            </View>
+          </View>
+        </Animated.View>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+function HomeVoucherCarouselDot({
+  index,
+  scrollX,
+  snapInterval,
+}: {
+  index: number;
+  scrollX: SharedValue<number>;
+  snapInterval: number;
+}) {
+  const inputRange = [
+    (index - 1) * snapInterval,
+    index * snapInterval,
+    (index + 1) * snapInterval,
+  ];
+  const animatedDotStyle = useAnimatedStyle(() => {
+    return {
+      backgroundColor: interpolateColor(
+        scrollX.value,
+        inputRange,
+        ["#E4DDE4", "#FF5F95", "#E4DDE4"],
+      ),
+      opacity: interpolate(
+        scrollX.value,
+        inputRange,
+        [0.92, 1, 0.92],
+        Extrapolation.CLAMP,
+      ),
+      width: interpolate(scrollX.value, inputRange, [8, 18, 8], Extrapolation.CLAMP),
+    };
+  });
+
+  return <Animated.View className="h-2 rounded-full" style={animatedDotStyle} />;
+}
+
+function HomeVoucherCarouselDots({
+  count,
+  scrollX,
+  snapInterval,
+}: {
+  count: number;
+  scrollX: SharedValue<number>;
+  snapInterval: number;
+}) {
+  if (count <= 1) {
+    return null;
+  }
+
+  return (
+    <View className="mt-3 flex-row items-center justify-center gap-2">
+      {Array.from({ length: count }).map((_, index) => (
+        <HomeVoucherCarouselDot
+          key={`voucher-dot-${index}`}
+          index={index}
+          scrollX={scrollX}
+          snapInterval={snapInterval}
+        />
+      ))}
+    </View>
+  );
+}
+
 type FeaturedRoutesSectionStatus = "empty" | "loading" | "ready";
 type ActiveJourneySectionStatus = "empty" | "loading" | "ready";
 type NearbyPlacesSectionStatus = "empty" | "loading" | "ready";
@@ -1763,8 +2202,20 @@ export default function HomeScreen() {
   const themeCategoryCircleSize = Math.min(Math.max(safeWidth * 0.2, 74), 84);
   const themeCategoryItemWidth = themeCategoryCircleSize + 14;
   const themeCategoryImageSize = Math.round(themeCategoryCircleSize * 0.74);
-  const homeVoucherCardWidth = Math.min(Math.max(contentWidth * 0.42, 138), 164);
-  const homeVoucherImageHeight = Math.round(homeVoucherCardWidth * 0.62);
+  const homeVoucherCardWidth = Math.min(Math.max(safeWidth * 0.48, 166), 190);
+  const homeVoucherImageHeight = Math.round(homeVoucherCardWidth * 0.65);
+  const homeVoucherCarouselSideInset = Math.max(
+    Math.round((safeWidth - homeVoucherCardWidth) / 2),
+    gutter,
+  );
+  const homeVoucherSnapInterval = homeVoucherCardWidth + homeVoucherCardGap;
+  const homeVoucherInitialIndex = homeVouchers.length === 3 ? 1 : 0;
+  const homeVoucherInitialOffset =
+    homeVoucherInitialIndex * homeVoucherSnapInterval;
+  const homeVoucherScrollX = useSharedValue(homeVoucherInitialOffset);
+  const homeVoucherScrollHandler = useAnimatedScrollHandler((event) => {
+    homeVoucherScrollX.value = event.contentOffset.x;
+  });
   const activeJourneyEmptyIllustrationWidth = Math.min(
     Math.max(contentWidth * 0.38, 134),
     152,
@@ -1799,6 +2250,20 @@ export default function HomeScreen() {
     explorerSummary?.username.trim() ||
     authSession.username?.trim() ||
     explorerName;
+
+  useEffect(() => {
+    if (homeVouchersStatus !== "ready" || homeVouchers.length === 0) {
+      return;
+    }
+
+    homeVoucherScrollX.set(homeVoucherInitialOffset);
+  }, [
+    homeVoucherInitialOffset,
+    homeVoucherScrollX,
+    homeVouchers.length,
+    homeVouchersStatus,
+  ]);
+
   const handleOpenAllThemes = () => {
     router.push("/theme" as Href);
   };
@@ -3758,10 +4223,19 @@ export default function HomeScreen() {
 
             <View className="gap-4">
               <View className="flex-row items-start justify-between gap-3">
-                <View className="flex-1">
+                <View className="flex-1 flex-row items-center gap-2">
                   <Text className={homeSectionTitleClassName}>
                     {t("home.vouchers.title")}
                   </Text>
+                  <SymbolView
+                    name={{
+                      ios: "sparkles",
+                      android: "auto_awesome",
+                      web: "auto_awesome",
+                    }}
+                    size={15}
+                    tintColor="#FF7DA8"
+                  />
                 </View>
 
                 <Pressable
@@ -3787,111 +4261,87 @@ export default function HomeScreen() {
               </View>
 
               <View
-                className="gap-5 rounded-[28px] bg-white py-4"
-                style={[
-                  cardShadowStyle,
-                  {
-                    marginHorizontal: -gutter,
-                    width: safeWidth,
-                  },
-                ]}
+                style={{
+                  marginHorizontal: -gutter,
+                  width: safeWidth,
+                }}
               >
                 {homeVouchersStatus === "ready" ? (
-                  <ScrollView
-                    horizontal
-                    contentContainerStyle={{
-                      alignItems: "stretch",
-                      paddingLeft: gutter,
-                      paddingRight: gutter,
-                    }}
-                    showsHorizontalScrollIndicator={false}
+                  <View>
+                    <Animated.ScrollView
+                      key={`home-voucher-carousel-${homeVouchers.length}-${homeVoucherCardWidth}-${homeVoucherInitialIndex}`}
+                      contentOffset={{
+                        x: homeVoucherInitialOffset,
+                        y: 0,
+                      }}
+                      horizontal
+                      contentContainerStyle={{
+                        alignItems: "stretch",
+                        paddingBottom: 6,
+                        paddingLeft: homeVoucherCarouselSideInset,
+                        paddingRight: homeVoucherCarouselSideInset,
+                        paddingTop: 2,
+                      }}
+                      decelerationRate="fast"
+                      disableIntervalMomentum
+                      onScroll={homeVoucherScrollHandler}
+                      scrollEventThrottle={16}
+                      showsHorizontalScrollIndicator={false}
+                      snapToAlignment="start"
+                      snapToInterval={homeVoucherSnapInterval}
+                    >
+                      {homeVouchers.map((voucher, index) => (
+                        <HomeVoucherCard
+                          key={voucher.voucherId}
+                          imageHeight={homeVoucherImageHeight}
+                          index={index}
+                          isLast={index === homeVouchers.length - 1}
+                          onPress={() =>
+                            router.push(`/vouchers/${voucher.voucherId}` as Href)
+                          }
+                          scrollX={homeVoucherScrollX}
+                          snapInterval={homeVoucherSnapInterval}
+                          t={t}
+                          voucher={voucher}
+                          width={homeVoucherCardWidth}
+                        />
+                      ))}
+                    </Animated.ScrollView>
+
+                    <HomeVoucherCarouselDots
+                      count={homeVouchers.length}
+                      scrollX={homeVoucherScrollX}
+                      snapInterval={homeVoucherSnapInterval}
+                    />
+                  </View>
+                ) : homeVouchersStatus === "loading" ? (
+                  <View
+                    className="mx-4 overflow-hidden rounded-[24px] border bg-white"
+                    style={[
+                      homeVoucherCardShadowStyle,
+                      { borderColor: homeVoucherBorderColor },
+                    ]}
                   >
-                    {homeVouchers.map((voucher, index) => (
-                      <Pressable
-                        key={voucher.voucherId}
-                        className={
-                          index === homeVouchers.length - 1 ? "" : "mr-4"
-                        }
-                        style={{ width: homeVoucherCardWidth }}
-                        onPress={() =>
-                          router.push(`/vouchers/${voucher.voucherId}` as Href)
-                        }
-                      >
-                        <View
-                          className="overflow-hidden rounded-[18px] bg-[#FFF0F7]"
-                          style={{ height: homeVoucherImageHeight }}
-                        >
-                          {getVoucherImage(voucher) ? (
-                            <Image
-                              source={{ uri: getVoucherImage(voucher) ?? "" }}
-                              contentFit="cover"
-                              transition={180}
-                              cachePolicy="memory-disk"
-                              style={{ height: "100%", width: "100%" }}
-                            />
-                          ) : (
-                            <View className="flex-1 items-center justify-center">
-                              <SymbolView
-                                name={{
-                                  ios: "ticket.fill",
-                                  android: "confirmation_number",
-                                  web: "confirmation_number",
-                                }}
-                                size={30}
-                                tintColor="#EB489B"
-                              />
-                            </View>
-                          )}
-                        </View>
-
-                        <Text
-                          className="mt-2 text-[13px] font-extrabold leading-4 text-[#2B2233]"
-                          numberOfLines={2}
-                        >
-                          {voucher.voucherName}
-                        </Text>
-
-                        <Text
-                          className="mt-0.5 text-[11px] font-semibold text-[#8E869A]"
-                          numberOfLines={1}
-                        >
-                          {voucher.partnerName}
-                        </Text>
-
-                        <View className="mt-1.5 flex-row items-center justify-between gap-1">
-                          <Text
-                            className="text-[12px] font-extrabold text-[#F15B64]"
-                            numberOfLines={1}
-                          >
-                            {getHomeVoucherDiscountLabel(voucher)}
-                          </Text>
-                          <Text
-                            className="shrink-0 text-[11px] font-bold text-[#C98A10]"
-                            numberOfLines={1}
-                          >
-                            {t("home.vouchers.points", {
-                              points:
-                                voucher.pointsRequired.toLocaleString("vi-VN"),
-                            })}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
+                    <AppLoadingScreen
+                      mode="embedded"
+                      style={{ minHeight: 116 }}
+                    />
+                  </View>
                 ) : (
                   <Pressable
-                    className="items-center px-4 py-6"
-                    disabled={homeVouchersStatus === "loading"}
+                    className="mx-4 items-center rounded-[24px] border bg-[#FFF9FC] px-4 py-6"
+                    style={[
+                      homeVoucherCardShadowStyle,
+                      { borderColor: homeVoucherBorderColor },
+                    ]}
                     onPress={() => {
                       void loadHomeVouchers();
                     }}
                   >
                     <Text className="text-center text-[13px] font-semibold text-[#8E869A]">
-                      {homeVouchersStatus === "loading"
-                        ? t("home.vouchers.loading")
-                        : homeVouchersStatus === "empty"
-                          ? t("home.vouchers.empty")
-                          : t("home.vouchers.error")}
+                      {homeVouchersStatus === "empty"
+                        ? t("home.vouchers.empty")
+                        : t("home.vouchers.error")}
                     </Text>
                   </Pressable>
                 )}

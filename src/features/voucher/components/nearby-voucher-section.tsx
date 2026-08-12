@@ -4,6 +4,7 @@ import type { Href } from "expo-router";
 
 import { SymbolView } from "@/components/ui/symbol-view";
 import { formatDistance } from "@/lib/location";
+import { bodyTextStyle, lineHeightFor, textStyle } from "@/lib/text-scale";
 import {
   useNearbyVouchers,
   type NearbyVoucherAnchor,
@@ -60,19 +61,31 @@ export function NearbyVoucherSection({
     <View className="mt-6 gap-3">
       <View className="flex-row items-end justify-between">
         <View className="flex-1 pr-3">
-          <Text className="text-[12px] font-black uppercase tracking-wider text-[#EB489B]">
+          <Text
+            className="text-[12px] font-black uppercase tracking-wider text-[#EB489B]"
+            style={textStyle(12)}
+          >
             {eyebrow}
           </Text>
-          <Text className="mt-0.5 text-[19px] font-black text-[#2B2233]">
+          <Text
+            className="mt-0.5 text-[19px] font-black text-[#2B2233]"
+            style={{ lineHeight: lineHeightFor(19) }}
+          >
             {title}
           </Text>
-          <Text className="mt-0.5 text-[13px] text-[#8E869A]">
+          <Text
+            className="mt-0.5 text-[13px] text-[#8E869A]"
+            style={bodyTextStyle(13)}
+          >
             Bán kính {formatDistance(radiusMeters)} quanh điểm đến
           </Text>
         </View>
         {seeAllHref ? (
           <Pressable onPress={() => router.push(seeAllHref)}>
-            <Text className="text-[13px] font-black text-[#EB489B]">
+            <Text
+              className="text-[13px] font-black text-[#EB489B]"
+              style={textStyle(13)}
+            >
               Xem tất cả
             </Text>
           </Pressable>
@@ -90,8 +103,18 @@ export function NearbyVoucherSection({
           className="rounded-[18px] border border-[#F9E2EA] bg-[#FFF8FC] px-4 py-4"
           onPress={() => void reload()}
         >
-          <Text className="text-[14px] font-bold text-[#C2416C]">{error}</Text>
-          <Text className="mt-1 text-[12px] text-[#8E5960]">Chạm để thử lại</Text>
+          <Text
+            className="text-[14px] font-bold text-[#C2416C]"
+            style={textStyle(14)}
+          >
+            {error}
+          </Text>
+          <Text
+            className="mt-1 text-[12px] text-[#8E5960]"
+            style={textStyle(12)}
+          >
+            Chạm để thử lại
+          </Text>
         </Pressable>
       ) : null}
 
@@ -109,7 +132,10 @@ export function NearbyVoucherSection({
             size={20}
             tintColor="#C2416C"
           />
-          <Text className="flex-1 text-[13px] text-[#6F657A]">
+          <Text
+            className="flex-1 text-[13px] text-[#6F657A]"
+            style={bodyTextStyle(13)}
+          >
             {locationNotice}
           </Text>
         </Pressable>
@@ -117,10 +143,16 @@ export function NearbyVoucherSection({
 
       {!isLoading && !error && !locationNotice && vouchers.length === 0 ? (
         <View className="rounded-[18px] border border-[#F0DEE7] bg-[#FFF8FB] px-4 py-5">
-          <Text className="text-[14px] font-black text-[#2B2233]">
+          <Text
+            className="text-[14px] font-black text-[#2B2233]"
+            style={textStyle(14)}
+          >
             Chưa có ưu đãi nào
           </Text>
-          <Text className="mt-1 text-[13px] text-[#8E869A]">
+          <Text
+            className="mt-1 text-[13px] text-[#8E869A]"
+            style={bodyTextStyle(13)}
+          >
             {emptyDescription}
           </Text>
         </View>

@@ -51,8 +51,8 @@ export function VoucherMiniCard({
             />
           </View>
         )}
-        <View className="absolute left-2 top-2 rounded-full bg-[#F15B64] px-2.5 py-1">
-          <Text className="text-[11px] font-black text-white">
+        <View className="absolute left-2 top-2 rounded-full bg-[#F2EFF3] px-2.5 py-1">
+          <Text className="text-[11px] font-black text-[#5F5568]">
             {formatVoucherDiscount(voucher)}
           </Text>
         </View>
@@ -88,9 +88,11 @@ export function VoucherMiniCard({
           </View>
         ) : null}
         <View className="mt-2 flex-row items-center justify-between">
-          <Text className="text-[12px] font-black text-[#C98A10]">
-            {voucher.pointsRequired.toLocaleString("vi-VN")} điểm
-          </Text>
+          <View className="rounded-full bg-[#F2EFF3] px-2.5 py-1">
+            <Text className="text-[12px] font-black text-[#5F5568]">
+              {voucher.pointsRequired.toLocaleString("vi-VN")} điểm
+            </Text>
+          </View>
           <Text className="text-[11px] text-[#8E869A]">
             Còn {voucher.quantityRemaining}
           </Text>
