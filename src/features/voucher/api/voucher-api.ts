@@ -84,6 +84,34 @@ export type AvailableVoucherParams = {
   sortDir?: "asc" | "desc";
 };
 
+/**
+ * Khớp `AdvanceVoucherFilter.java` — dùng cho `GET /api/vouchers/filter`.
+ *
+ * Backend gom toạ độ của các hotspot (từ `routeId` và/hoặc `hotspotIds`) rồi
+ * tìm `partner_info` nằm trong bán kính `distanceMeters` quanh BẤT KỲ điểm nào,
+ * sau đó trả voucher của các đối tác đó.
+ *
+ * Ba điều kiện bắt buộc phải biết khi gọi:
+ *
+ * 1. `distanceMeters` và `status` có `@NotNull` — thiếu là 400.
+ * 2. `latitude`/`longitude` HIỆN KHÔNG có tác dụng. `VoucherServiceImpl#getByFilter`
+ *    viết `if (longitude == null && latitude == null)` (đúng ra phải là `!=`), nên
+ *    toạ độ người dùng bị bỏ qua, còn khi không gửi toạ độ thì backend lại nhét
+ *    một `Point` null vào danh sách → `cb.literal(null)` → 500.
+ *    ⇒ Client BẮT BUỘC phải gửi `routeId` hoặc `hotspotIds`, và tự quy đổi
+ *    "gần tôi" thành danh sách hotspot gần tôi (xem `use-nearby-vouchers.ts`).
+ * 3. Endpoint này KHÔNG lọc số lượng còn lại và hạn dùng như `/available`,
+ *    nên phải lọc lại bằng `filterRedeemableVouchers`.
+ */
+export type NearbyVoucherParams = {
+  routeId?: number | null;
+  hotspotIds?: number[];
+  distanceMeters: number;
+  status?: VoucherStatus;
+  page?: number;
+  size?: number;
+};
+
 function resolveApiUrl(path: string) {
   if (PublicEnv.apiBaseUrl.trim()) return buildApiUrl(path);
   return `http://13.158.40.56:8080${path.startsWith("/") ? path : `/${path}`}`;
@@ -183,6 +211,66 @@ export async function getMyRedeemedVouchers(
     response,
     "Không lấy được voucher của bạn",
   );
+}
+
+/**
+ * Voucher của các đối tác nằm gần một tuyến / một nhóm hotspot.
+ * Đọc kỹ ghi chú ở `NearbyVoucherParams` trước khi đổi tham số.
+ */
+export async function getNearbyVouchers(
+  params: NearbyVoucherParams,
+  accessToken?: string | null,
+) {
+  const hotspotIds = params.hotspotIds?.filter((id) => Number.isFinite(id)) ?? [];
+
+  if (params.routeId == null && hotspotIds.length === 0) {
+    // Gọi mà không có mốc nào thì backend ném 500 (xem ghi chú (2) ở trên),
+    // nên chặn ngay tại client cho thông báo dễ hiểu.
+    throw new Error("Cần ít nhất một tuyến hoặc một địa điểm để tìm ưu đãi.");
+  }
+
+  const query = new URLSearchParams();
+  if (params.routeId != null) query.set("routeId", String(params.routeId));
+  for (const hotspotId of hotspotIds) {
+    query.append("hotspotIds", String(hotspotId));
+  }
+  query.set("distanceMeters", String(params.distanceMeters));
+  query.set("status", params.status ?? "ACTIVE");
+  query.set("page", String(params.page ?? 0));
+  query.set("size", String(params.size ?? 20));
+
+  const response = await fetch(
+    resolveApiUrl(`/api/vouchers/filter?${query.toString()}`),
+    {
+      headers: accessToken
+        ? { Authorization: `Bearer ${accessToken}` }
+        : undefined,
+    },
+  );
+  return ensureOk<VoucherPage>(response, "Không lấy được ưu đãi gần đây");
+}
+
+/**
+ * `/api/vouchers/filter` chỉ lọc theo `status`, không kiểm tra số lượng còn lại
+ * và khoảng thời gian hiệu lực như `/api/vouchers/available`. Lọc lại ở client
+ * để không hiển thị voucher đã hết hoặc chưa/hết hạn.
+ */
+export function filterRedeemableVouchers(vouchers: Voucher[]) {
+  const now = Date.now();
+
+  return vouchers.filter((voucher) => {
+    if (voucher.status !== "ACTIVE" || voucher.quantityRemaining <= 0) {
+      return false;
+    }
+
+    const startAt = new Date(voucher.startDate).getTime();
+    const endAt = new Date(voucher.endDate).getTime();
+
+    if (Number.isFinite(startAt) && startAt > now) return false;
+    if (Number.isFinite(endAt) && endAt < now) return false;
+
+    return true;
+  });
 }
 
 export function getVoucherImage(voucher: Voucher) {
