@@ -1,21 +1,27 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ScreenHorizontalPadding } from "@/constants/theme";
 import { SymbolView } from "@/components/ui/symbol-view";
 
+/** Cùng hệ màu hồng/cam của app (không dùng tông tím). */
+const brandPink = "#EB489B";
+const brandOrange = "#F58752";
+const premiumCardGradient = ["#FF6A8E", "#EB489B", "#F58752"] as const;
+
 const PREMIUM_FEATURES = [
   "Lập kế hoạch lịch trình bằng AI",
   "Ghi hành trình real-time",
   "Audio Guide thuyết minh di sản",
-  "Voucher ưu đãi từ Partner",
+  "Voucher ưu đãi từ đối tác",
 ];
 
 const PARTNER_FEATURES = [
   "Hiển thị shop lên bản đồ du lịch",
   "Tạo & quản lý voucher ưu đãi",
-  "Tích xanh Xác minh Partner",
+  "Tích xanh Xác minh đối tác",
 ];
 
 export default function SubscriptionScreen() {
@@ -42,10 +48,10 @@ export default function SubscriptionScreen() {
         {/* Header */}
         <View className="mb-6 flex-row items-center justify-between">
           <View className="flex-1 pr-3">
-            <Text className="text-[24px] font-extrabold text-[#2B2233]">
+            <Text className="text-[24px] font-semibold text-[#2B2233]">
               Gói Đăng ký
             </Text>
-            <Text className="mt-1 text-[13px] text-[#8E869A]">
+            <Text className="mt-1 text-[13px] text-[#6F657A]">
               Chọn gói phù hợp với bạn để bắt đầu
             </Text>
           </View>
@@ -62,14 +68,14 @@ export default function SubscriptionScreen() {
         </View>
 
         {/* Guidance Card */}
-        <View className="mb-6 rounded-2xl border border-[#EBE6F0] bg-white p-4">
-          <Text className="text-[14px] font-extrabold text-[#2B2233]">
-            💡 Chọn gói phù hợp với bạn
+        <View className="mb-6 rounded-2xl border border-[#F7E5EB] bg-white p-4">
+          <Text className="text-[14px] font-semibold text-[#2B2233]">
+            Chọn gói phù hợp với bạn
           </Text>
           <View className="mt-2 gap-1.5">
             <Text className="text-[12px] leading-5 text-[#6F657A]">
               •{" "}
-              <Text className="font-extrabold text-[#7C3AED]">
+              <Text className="font-semibold" style={{ color: brandPink }}>
                 Gói Premium (Explorer)
               </Text>
               : Dành cho du khách muốn nâng cấp trải nghiệm khám phá di sản
@@ -77,8 +83,8 @@ export default function SubscriptionScreen() {
             </Text>
             <Text className="text-[12px] leading-5 text-[#6F657A]">
               •{" "}
-              <Text className="font-extrabold text-[#EB489B]">
-                Gói Partner (Shop)
+              <Text className="font-semibold" style={{ color: brandOrange }}>
+                Gói Đối tác (Shop)
               </Text>
               : Dành cho chủ cửa hàng muốn đưa shop lên bản đồ CultureQuest &
               phát hành voucher ưu đãi.
@@ -89,9 +95,15 @@ export default function SubscriptionScreen() {
         {/* Premium Card */}
         <Pressable
           onPress={() => router.push("/subscription/premium" as any)}
-          className="mb-4 overflow-hidden rounded-3xl bg-[#7C3AED]"
+          className="mb-4 overflow-hidden rounded-3xl"
           style={{ elevation: 4 }}
         >
+          <LinearGradient
+            colors={premiumCardGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
           {/* Decorative top accent */}
           <View className="absolute right-0 top-0 h-32 w-32 rounded-bl-full bg-white/10" />
           <View className="absolute right-8 top-4 h-16 w-16 rounded-full bg-white/10" />
@@ -110,12 +122,12 @@ export default function SubscriptionScreen() {
                 />
               </View>
               <View>
-                <View className="self-start rounded-full bg-yellow-400 px-2 py-0.5 mb-1">
-                  <Text className="text-[9px] font-extrabold text-[#7C3AED]">
-                    DÀNH CHO EXPLORER
+                <View className="mb-1 self-start rounded-full bg-white/85 px-2 py-0.5">
+                  <Text className="text-[9px]" style={{ color: brandPink }}>
+                    Dành cho Explorer
                   </Text>
                 </View>
-                <Text className="text-[20px] font-extrabold text-white">
+                <Text className="text-[20px] font-semibold text-white">
                   Gói Premium
                 </Text>
               </View>
@@ -135,22 +147,23 @@ export default function SubscriptionScreen() {
                       tintColor="white"
                     />
                   </View>
-                  <Text className="text-[12px] font-bold text-white/90">
-                    {feature}
-                  </Text>
+                  <Text className="text-[12px] text-white/90">{feature}</Text>
                 </View>
               ))}
             </View>
 
             <View className="flex-row items-center justify-between">
               <View>
-                <Text className="text-[12px] text-white/60">Nhiều lựa chọn</Text>
-                <Text className="text-[22px] font-extrabold text-white">
+                <Text className="text-[12px] text-white/70">Nhiều lựa chọn</Text>
+                <Text className="text-[20px] font-semibold text-white">
                   Giá gói linh hoạt
                 </Text>
               </View>
               <View className="flex-row items-center gap-2 rounded-2xl bg-white px-4 py-3">
-                <Text className="text-[13px] font-extrabold text-[#7C3AED]">
+                <Text
+                  className="text-[13px] font-semibold"
+                  style={{ color: brandPink }}
+                >
                   Xem gói
                 </Text>
                 <SymbolView
@@ -160,7 +173,7 @@ export default function SubscriptionScreen() {
                     web: "chevron_right",
                   }}
                   size={14}
-                  tintColor="#7C3AED"
+                  tintColor={brandPink}
                 />
               </View>
             </View>
@@ -170,8 +183,8 @@ export default function SubscriptionScreen() {
         {/* Partner Card */}
         <Pressable
           onPress={() => router.push("/subscription/partner" as any)}
-          className="overflow-hidden rounded-3xl bg-[#EB489B]"
-          style={{ elevation: 4 }}
+          className="overflow-hidden rounded-3xl"
+          style={{ backgroundColor: brandOrange, elevation: 4 }}
         >
           {/* Decorative */}
           <View className="absolute right-0 top-0 h-32 w-32 rounded-bl-full bg-white/10" />
@@ -191,13 +204,13 @@ export default function SubscriptionScreen() {
                 />
               </View>
               <View>
-                <View className="self-start rounded-full bg-white/30 px-2 py-0.5 mb-1">
-                  <Text className="text-[9px] font-extrabold text-white">
-                    DÀNH CHO CHỦ SHOP
+                <View className="mb-1 self-start rounded-full bg-white/30 px-2 py-0.5">
+                  <Text className="text-[9px] text-white">
+                    Dành cho chủ shop
                   </Text>
                 </View>
-                <Text className="text-[20px] font-extrabold text-white">
-                  Gói Partner
+                <Text className="text-[20px] font-semibold text-white">
+                  Gói Đối tác
                 </Text>
               </View>
             </View>
@@ -216,22 +229,23 @@ export default function SubscriptionScreen() {
                       tintColor="white"
                     />
                   </View>
-                  <Text className="text-[12px] font-bold text-white/90">
-                    {feature}
-                  </Text>
+                  <Text className="text-[12px] text-white/90">{feature}</Text>
                 </View>
               ))}
             </View>
 
             <View className="flex-row items-center justify-between">
               <View>
-                <Text className="text-[12px] text-white/60">Nhiều lựa chọn</Text>
-                <Text className="text-[22px] font-extrabold text-white">
+                <Text className="text-[12px] text-white/70">Nhiều lựa chọn</Text>
+                <Text className="text-[20px] font-semibold text-white">
                   Giá gói linh hoạt
                 </Text>
               </View>
               <View className="flex-row items-center gap-2 rounded-2xl bg-white px-4 py-3">
-                <Text className="text-[13px] font-extrabold text-[#EB489B]">
+                <Text
+                  className="text-[13px] font-semibold"
+                  style={{ color: brandOrange }}
+                >
                   Đăng ký ngay
                 </Text>
                 <SymbolView
@@ -241,7 +255,7 @@ export default function SubscriptionScreen() {
                     web: "chevron_right",
                   }}
                   size={14}
-                  tintColor="#EB489B"
+                  tintColor={brandOrange}
                 />
               </View>
             </View>

@@ -1,4 +1,4 @@
-import { type RouteItem, routes } from "@/lib/demo-data";
+import { type RouteItem } from "@/lib/demo-data";
 import { ScreenHorizontalPadding } from "@/constants/theme";
 import { lineHeightFor } from "@/lib/text-scale";
 import { Image } from "expo-image";
@@ -650,7 +650,7 @@ export default function RouteScreen() {
           console.warn("[route-screen] load routes failed", error);
 
           if (!cancelled) {
-            setOfficialRoutes(routes);
+            setOfficialRoutes([]);
             setActiveRouteProgresses([]);
             setActiveRoutesFromApi([]);
             setSavedRoutesFromApi([]);
@@ -802,10 +802,10 @@ export default function RouteScreen() {
     [completedRoutesFromApi],
   );
   const savedList = useMemo(() => savedRoutesFromApi, [savedRoutesFromApi]);
-  const displayedOfficialRoutes = useMemo(
-    () => (officialRoutes.length ? officialRoutes : routes),
-    [officialRoutes],
-  );
+  // Tab "Chính thức" chỉ hiển thị đúng dữ liệu từ API. Trước đây khi API rỗng
+  // hoặc lỗi thì màn này rơi về `routes` trong demo-data, khiến user thấy các
+  // tuyến không có thật và bấm vào là vỡ điều hướng.
+  const displayedOfficialRoutes = officialRoutes;
   const activeTabMeta = TAB_SECTION_META[tab];
   const contentWidth = Math.min(screenWidth - ScreenHorizontalPadding * 2, 520);
   const tabButtonWidth = Math.max(Math.floor((contentWidth - 18) / 4), 76);
@@ -1054,14 +1054,18 @@ export default function RouteScreen() {
                       {routeError ? (
                         <View className="rounded-[20px] border border-[#FFE1E8] bg-[#FFF5F8] px-4 py-3">
                           <Text className="text-[12px] font-semibold text-[#B42345]">
-                            {routeError} Đang hiển thị dữ liệu demo tạm thời.
+                            {routeError}
                           </Text>
                         </View>
                       ) : null}
-                      <RouteList
-                        list={displayedOfficialRoutes}
-                        variant="official"
-                      />
+                      {displayedOfficialRoutes.length ? (
+                        <RouteList
+                          list={displayedOfficialRoutes}
+                          variant="official"
+                        />
+                      ) : (
+                        <EmptyState text="Chưa có tuyến chính thức nào" />
+                      )}
                     </>
                   ))}
                 {tab === "active" &&
@@ -1244,19 +1248,16 @@ function UserPlanTab({ plans, error }: { plans: UserPlan[]; error: string | null
         }}
       >
         <LinearGradient
-          colors={["#7C5CFC", "#EB489B", "#F58752"]}
+          colors={["#FF6A8E", "#EB489B", "#F58752"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           className="p-4"
         >
-          <Text className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+          <Text className="text-[11px] uppercase tracking-wider text-white/80">
             Custom User Plan
           </Text>
-          <Text className="mt-1 text-[18px] font-black text-white">
+          <Text className="mt-1 text-[18px] font-bold text-white">
             Tạo kế hoạch hành trình mới
-          </Text>
-          <Text className="mt-1 text-[12px] text-white/90">
-            Chọn địa điểm, tối ưu thứ tự và bắt đầu khi bạn sẵn sàng.
           </Text>
         </LinearGradient>
       </Pressable>
@@ -1273,22 +1274,21 @@ function UserPlanTab({ plans, error }: { plans: UserPlan[]; error: string | null
           <View key={plan.userPlanId} className="rounded-3xl border border-[#ECE7F4] bg-white p-4" style={cardShadowStyle}>
             <View className="flex-row items-start justify-between gap-3">
               <View className="flex-1">
-                <Text className="text-[16px] font-black text-[#2B2233]">{plan.name}</Text>
-                <Text className="mt-1 text-[12px] text-[#8E869A]" numberOfLines={2}>
-                  {plan.description || "Kế hoạch hành trình cá nhân"}
+                <Text className="text-[16px] font-bold text-[#2B2233]" numberOfLines={2}>
+                  {plan.name}
                 </Text>
               </View>
-              <View className="rounded-full bg-[#F4EFFF] px-3 py-1.5">
-                <Text className="text-[10px] font-extrabold text-[#7658CF]">{plan.status}</Text>
+              <View className="rounded-full bg-[#FFF0F4] px-3 py-1.5">
+                <Text className="text-[10px] text-[#EB489B]">{plan.status}</Text>
               </View>
             </View>
             <View className="mt-3 flex-row justify-between">
-              <Text className="text-[12px] font-semibold text-[#6E6177]">{plan.completedStops}/{plan.totalStops} điểm</Text>
-              <Text className="text-[12px] font-extrabold text-[#EB489B]">{progress}%</Text>
+              <Text className="text-[12px] text-[#6E6177]">{plan.completedStops}/{plan.totalStops} điểm</Text>
+              <Text className="text-[12px] text-[#EB489B]">{progress}%</Text>
             </View>
             <View className="mt-2"><XPBar value={progress} max={100} trackColor="#ECEEF4" height={7} /></View>
             <Pressable className="mt-3 rounded-2xl bg-[#EB489B] py-3" onPress={() => router.push(`/route/custom/plan/${plan.userPlanId}` as Href)}>
-              <Text className="text-center text-[13px] font-extrabold text-white">
+              <Text className="text-center text-[13px] font-semibold text-white">
                 {plan.status === "STARTED" ? "Tiếp tục kế hoạch" : "Xem chi tiết"}
               </Text>
             </Pressable>
@@ -1332,7 +1332,6 @@ function MyJourneyTab({
     {
       key: "RECORDING",
       title: "Đang ghi",
-      subtitle: "Hành trình đang được ghi nhận theo các lần check-in.",
       icon: { ios: "record.circle.fill", android: "fiber_manual_record", web: "fiber_manual_record" } as const,
       iconColor: "#F15B45",
       badgeClass: "bg-[#FFF0EC]",
@@ -1341,16 +1340,14 @@ function MyJourneyTab({
     {
       key: "DRAFT",
       title: "Bản nháp",
-      subtitle: "Kiểm tra route và story trước khi gửi lên hệ thống.",
       icon: { ios: "doc.text.fill", android: "description", web: "description" } as const,
-      iconColor: "#7C5CFC",
-      badgeClass: "bg-[#F3F0FF]",
-      badgeTextClass: "text-[#684BC7]",
+      iconColor: "#EB489B",
+      badgeClass: "bg-[#FFF0F4]",
+      badgeTextClass: "text-[#EB489B]",
     },
     {
       key: "TRIAL",
       title: "Đang chờ duyệt",
-      subtitle: "Route đã submit và đang ở trạng thái TRIAL.",
       icon: { ios: "clock.fill", android: "schedule", web: "schedule" } as const,
       iconColor: "#F58752",
       badgeClass: "bg-[#FFF4EA]",
@@ -1359,7 +1356,6 @@ function MyJourneyTab({
     {
       key: "PUBLISHED",
       title: "Đã xuất bản",
-      subtitle: "Các hành trình đã được chia sẻ với cộng đồng.",
       icon: { ios: "globe.asia.australia.fill", android: "public", web: "public" } as const,
       iconColor: "#27A56B",
       badgeClass: "bg-[#EAF8F1]",
@@ -1391,14 +1387,11 @@ function MyJourneyTab({
               />
             </View>
             <View className="flex-1">
-              <Text className="text-[11px] font-bold uppercase tracking-wider text-white/85">
+              <Text className="text-[11px] uppercase tracking-wider text-white/85">
                 Record Journey
               </Text>
-              <Text className="mt-0.5 text-[18px] font-black text-white">
+              <Text className="mt-0.5 text-[18px] font-bold text-white">
                 Ghi hành trình mới
-              </Text>
-              <Text className="mt-1 text-[12px] leading-5 text-white/90">
-                Lưu các địa điểm đã check-in và hoàn thiện hành trình của riêng bạn.
               </Text>
             </View>
             <View className="h-9 w-9 items-center justify-center rounded-full bg-white/20">
@@ -1426,12 +1419,11 @@ function MyJourneyTab({
               <View className="flex-1 flex-row items-center gap-2">
                 <SymbolView name={section.icon} size={15} tintColor={section.iconColor} />
                 <View className="flex-1">
-                  <Text className="text-[15px] font-extrabold text-[#2B2233]">{section.title}</Text>
-                  <Text className="mt-0.5 text-[10px] text-[#8E869A]">{section.subtitle}</Text>
+                  <Text className="text-[15px] font-bold text-[#2B2233]">{section.title}</Text>
                 </View>
               </View>
               <View className={`rounded-full px-2.5 py-1 ${section.badgeClass}`}>
-                <Text className={`text-[10px] font-extrabold ${section.badgeTextClass}`}>{items.length}</Text>
+                <Text className={`text-[10px] ${section.badgeTextClass}`}>{items.length}</Text>
               </View>
             </View>
 
@@ -1443,15 +1435,12 @@ function MyJourneyTab({
               >
                 <View className="flex-row items-start justify-between gap-3">
                   <View className="min-w-0 flex-1">
-                    <Text className="text-[16px] font-black text-[#2B2233]" numberOfLines={2}>
+                    <Text className="text-[16px] font-bold text-[#2B2233]" numberOfLines={2}>
                       {journey.routeName || `Hành trình #${journey.routeId}`}
-                    </Text>
-                    <Text className="mt-1 text-[12px] leading-5 text-[#8E869A]" numberOfLines={2}>
-                      {journey.description || "Hành trình cá nhân được tạo từ các lần check-in của bạn."}
                     </Text>
                   </View>
                   <View className={`rounded-full px-3 py-1.5 ${section.badgeClass}`}>
-                    <Text className={`text-[9px] font-extrabold ${section.badgeTextClass}`}>
+                    <Text className={`text-[9px] ${section.badgeTextClass}`}>
                       {String(journey.status).toUpperCase()}
                     </Text>
                   </View>
@@ -1464,12 +1453,12 @@ function MyJourneyTab({
                       size={12}
                       tintColor="#EB489B"
                     />
-                    <Text className="text-[11px] font-bold text-[#625A68]">
+                    <Text className="text-[11px] text-[#625A68]">
                       {(journey.hotspots ?? []).length} địa điểm
                     </Text>
                   </View>
                   <View className="rounded-full bg-[#F7F8FC] px-3 py-2">
-                    <Text className="text-[11px] font-bold text-[#625A68]">Route #{journey.routeId}</Text>
+                    <Text className="text-[11px] text-[#625A68]">Route #{journey.routeId}</Text>
                   </View>
                 </View>
 
@@ -1488,7 +1477,7 @@ function MyJourneyTab({
                     router.push(`/route/${journey.routeId}` as Href);
                   }}
                 >
-                  <Text className="text-center text-[13px] font-extrabold text-white">
+                  <Text className="text-center text-[13px] font-semibold text-white">
                     {section.key === "RECORDING"
                       ? "Tiếp tục ghi"
                       : section.key === "DRAFT"
@@ -1506,11 +1495,10 @@ function MyJourneyTab({
 
       {grouped.OTHER.length > 0 ? (
         <View className="gap-2.5">
-          <Text className="px-1 text-[15px] font-extrabold text-[#2B2233]">Trạng thái khác</Text>
+          <Text className="px-1 text-[15px] font-bold text-[#2B2233]">Trạng thái khác</Text>
           {grouped.OTHER.map((journey) => (
             <View key={journey.routeId} className="rounded-3xl border border-[#ECE7F4] bg-white p-4" style={cardShadowStyle}>
-              <Text className="text-[15px] font-black text-[#2B2233]">{journey.routeName || `Hành trình #${journey.routeId}`}</Text>
-              <Text className="mt-1 text-[11px] text-[#8E869A]">{journey.status} · {(journey.hotspots ?? []).length} địa điểm</Text>
+              <Text className="text-[15px] font-bold text-[#2B2233]">{journey.routeName || `Hành trình #${journey.routeId}`}</Text>
             </View>
           ))}
         </View>
@@ -1621,9 +1609,16 @@ function MyGroupsTab({
   status: CommunityGroupsStatus;
 }) {
   const router = useRouter();
+  const { requirePremium } = usePremiumStatus();
   const isLoading = status === "idle" || status === "loading";
 
+  // Nhóm đồng hành là tính năng Premium, chặn ở mọi lối vào của tab giống
+  // cách tab Kế hoạch (User Plan) và Hành trình của tôi (Record) đang làm.
+  const GROUP_PREMIUM_LABEL = "Nhóm đồng hành (Community Group)";
+
   function openGroupDetail(group: CommunityGroupPayload) {
+    if (!requirePremium(GROUP_PREMIUM_LABEL)) return;
+
     const cachedGroup = cacheCommunityGroupSession({
       ...group,
       source: "listed",
@@ -1642,6 +1637,8 @@ function MyGroupsTab({
     group: CommunityGroupPayload,
     session: CommunityGroupJourneySession,
   ) {
+    if (!requirePremium(GROUP_PREMIUM_LABEL)) return;
+
     const shareToken = readGroupText(group.shareToken);
 
     if (!shareToken) {
@@ -1717,22 +1714,28 @@ function MyGroupsTab({
           <View className="mt-4 flex-row gap-2">
             <Pressable
               className="flex-row items-center gap-1.5 rounded-2xl bg-white px-4 py-2.5"
-              onPress={() => router.push("/community/group-create" as Href)}
+              onPress={() => {
+                if (!requirePremium(GROUP_PREMIUM_LABEL)) return;
+                router.push("/community/group-create" as Href);
+              }}
             >
               <SymbolView
                 name={{ ios: "plus", android: "add", web: "add" }}
                 size={13}
                 tintColor="#EB489B"
               />
-              <Text className="text-[12px] font-extrabold text-[#EB489B]">
+              <Text className="text-[12px] font-semibold text-[#EB489B]">
                 Tạo nhóm mới
               </Text>
             </Pressable>
             <Pressable
               className="rounded-2xl border border-white/50 bg-white/15 px-4 py-2.5"
-              onPress={() => router.push("/community/groups" as Href)}
+              onPress={() => {
+                if (!requirePremium(GROUP_PREMIUM_LABEL)) return;
+                router.push("/community/groups" as Href);
+              }}
             >
-              <Text className="text-[12px] font-extrabold text-white">
+              <Text className="text-[12px] font-semibold text-white">
                 Xem tất cả
               </Text>
             </Pressable>
@@ -1878,11 +1881,8 @@ function CommunityTab({
   return (
     <View className="gap-5">
       <View className="rounded-3xl border border-[#F2DDE9] bg-[#FFF8FC] p-4">
-        <Text className="text-[11px] font-bold uppercase tracking-wider text-[#EB489B]">Cộng đồng</Text>
-        <Text className="mt-1 text-[17px] font-extrabold text-[#2B2233]">Khám phá hành trình đã xuất bản</Text>
-        <Text className="mt-1 text-[12px] leading-5 text-[#777181]">
-          Những route được cộng đồng chia sẻ sau khi hoàn tất quá trình xét duyệt.
-        </Text>
+        <Text className="text-[11px] uppercase tracking-wider text-[#EB489B]">Cộng đồng</Text>
+        <Text className="mt-1 text-[17px] font-bold text-[#2B2233]">Khám phá hành trình đã xuất bản</Text>
       </View>
 
       {isLoading ? (
@@ -1900,7 +1900,7 @@ function CommunityTab({
                     size={14}
                     tintColor="#EB489B"
                   />
-                  <Text className="text-[15px] font-extrabold text-[#2B2233]">
+                  <Text className="text-[15px] font-bold text-[#2B2233]">
                     Tuyến được quan tâm nhiều nhất
                   </Text>
                 </View>
@@ -1921,7 +1921,7 @@ function CommunityTab({
                   size={14}
                   tintColor="#F58752"
                 />
-                <Text className="text-[15px] font-extrabold text-[#2B2233]">
+                <Text className="text-[15px] font-bold text-[#2B2233]">
                   Tuyến từ cộng đồng
                 </Text>
               </View>
@@ -1962,7 +1962,7 @@ function CommunityRankCard({
       <View
         className={`h-8 w-8 items-center justify-center rounded-xl ${rankStyle}`}
       >
-        <Text className="text-[12px] font-extrabold">#{rank}</Text>
+        <Text className="text-[12px] font-semibold">#{rank}</Text>
       </View>
       <Image
         source={route.cover}
@@ -1971,7 +1971,7 @@ function CommunityRankCard({
       />
       <View className="min-w-0 flex-1">
         <Text
-          className="text-[13px] font-extrabold leading-tight text-[#2B2233]"
+          className="text-[13px] font-bold leading-tight text-[#2B2233]"
           numberOfLines={1}
         >
           {route.title}
@@ -2021,7 +2021,7 @@ function CommunityJourneyCard({ route }: { route: RouteItem }) {
         />
         <View className="absolute bottom-2 left-2 right-2">
           <Text
-            className="text-[14px] font-extrabold leading-tight text-white"
+            className="text-[14px] font-bold leading-tight text-white"
             numberOfLines={1}
           >
             {route.title}
@@ -2035,7 +2035,7 @@ function CommunityJourneyCard({ route }: { route: RouteItem }) {
 
       <View className="flex-row items-center gap-2 p-2.5">
         <Text
-          className="flex-1 text-[11px] font-semibold text-[#2B2233]"
+          className="flex-1 text-[11px] text-[#2B2233]"
           numberOfLines={1}
         >
           {route.era}
@@ -2051,7 +2051,7 @@ function CommunityJourneyCard({ route }: { route: RouteItem }) {
           </Text>
         </View>
         <View className="rounded-full bg-[#FFF4EF] px-2 py-0.5">
-          <Text className="text-[11px] font-bold text-[#F58752]">+{route.xp} XP</Text>
+          <Text className="text-[11px] text-[#F58752]">+{route.xp} XP</Text>
         </View>
       </View>
     </Pressable>
@@ -2129,7 +2129,10 @@ function RouteCard({
   const isRemovingSavedRoute =
     savedRouteId !== undefined && removingSavedRouteId === savedRouteId;
 
-  if (variant === "official") {
+  // Tab "Đã lưu" dùng chung đúng khung thẻ của tab "Chính thức" (ảnh gọn +
+  // tiêu đề in đậm + phần meta chữ thường) thay vì thẻ ảnh lớn phủ chữ đậm
+  // trên nền tối — cách cũ khiến danh sách nhìn nặng hơn hẳn phần còn lại.
+  if (variant === "official" || variant === "bookmarked") {
     return (
       <View
         className="overflow-hidden rounded-[24px] border border-[#F5E7EC] bg-white"
@@ -2147,7 +2150,11 @@ function RouteCard({
               <Badge text={route.era} />
               <View style={styles.officialRouteHeart}>
                 <SymbolView
-                  name={{ ios: "heart", android: "favorite_border", web: "favorite_border" }}
+                  name={
+                    variant === "bookmarked"
+                      ? { ios: "bookmark.fill", android: "bookmark", web: "bookmark" }
+                      : { ios: "heart", android: "favorite_border", web: "favorite_border" }
+                  }
                   size={15}
                   tintColor="#FFFFFF"
                 />
@@ -2164,7 +2171,7 @@ function RouteCard({
               {route.title}
             </Text>
 
-            <View className="mt-0.5 flex-row items-end justify-between gap-3">
+            <View className="mt-1 flex-row items-end justify-between gap-3">
               <View className="flex-1 flex-row flex-wrap items-center gap-x-4 gap-y-2">
                 <RouteMetaInline
                   icon={{
@@ -2185,27 +2192,52 @@ function RouteCard({
               </View>
 
               <View style={styles.officialRouteXpPill}>
-                <Text className="text-[11px] font-extrabold text-[#FF4F86]">
+                <Text className="text-[11px] font-semibold text-[#FF4F86]">
                   +{route.xp} XP
                 </Text>
               </View>
             </View>
           </View>
         </Pressable>
+
+        {variant === "bookmarked" &&
+        savedRouteId !== undefined &&
+        onUnsaveRoute ? (
+          <View className="border-t border-[#F6E8EE] px-4 py-3">
+            <Pressable
+              disabled={isRemovingSavedRoute}
+              onPress={() => onUnsaveRoute(savedRouteId, route.title)}
+              className={`flex-row items-center justify-center gap-2 rounded-[16px] border border-[#F7C7D1] bg-[#FFF5F8] py-2.5 ${
+                isRemovingSavedRoute ? "opacity-60" : ""
+              }`}
+            >
+              <SymbolView
+                name={{
+                  ios: "bookmark.slash",
+                  android: "bookmark_remove",
+                  web: "bookmark_remove",
+                }}
+                size={14}
+                tintColor="#B42345"
+              />
+              <Text className="text-[12px] font-semibold text-[#B42345]">
+                {isRemovingSavedRoute ? "Đang bỏ lưu..." : "Bỏ lưu"}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
     );
   }
 
   const quickActionIcon: SymbolName =
-    variant === "bookmarked"
-      ? { ios: "bookmark.fill", android: "bookmark", web: "bookmark" }
-      : variant === "completed"
-        ? {
-            ios: "checkmark.circle.fill",
-            android: "check_circle",
-            web: "check_circle",
-          }
-        : { ios: "heart", android: "favorite_border", web: "favorite_border" };
+    variant === "completed"
+      ? {
+          ios: "checkmark.circle.fill",
+          android: "check_circle",
+          web: "check_circle",
+        }
+      : { ios: "heart", android: "favorite_border", web: "favorite_border" };
 
   return (
     <View
@@ -2327,32 +2359,6 @@ function RouteCard({
         </View>
       )}
 
-      {variant === "bookmarked" &&
-      savedRouteId !== undefined &&
-      onUnsaveRoute ? (
-        <View className="border-t border-[#F6E8EE] px-4 pb-4 pt-4">
-          <Pressable
-            disabled={isRemovingSavedRoute}
-            onPress={() => onUnsaveRoute(savedRouteId, route.title)}
-            className={`flex-row items-center justify-center gap-2 rounded-[16px] border border-[#F7C7D1] bg-[#FFF5F8] py-2.5 ${
-              isRemovingSavedRoute ? "opacity-60" : ""
-            }`}
-          >
-            <SymbolView
-              name={{
-                ios: "bookmark.slash",
-                android: "bookmark_remove",
-                web: "bookmark_remove",
-              }}
-              size={14}
-              tintColor="#B42345"
-            />
-            <Text className="text-[12px] font-extrabold text-[#B42345]">
-              {isRemovingSavedRoute ? "Đang bỏ lưu..." : "Bỏ lưu"}
-            </Text>
-          </Pressable>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -2382,7 +2388,7 @@ function RouteMetaInline({
   return (
     <View className="flex-row items-center gap-1.5">
       <SymbolView name={icon} size={12} tintColor="#8E869A" />
-      <Text className="text-[11px] font-medium text-[#6F657A]">{label}</Text>
+      <Text className="text-[11px] text-[#6F657A]">{label}</Text>
     </View>
   );
 }
@@ -2529,8 +2535,9 @@ const styles = StyleSheet.create({
   },
   officialRouteTitle: {
     includeFontPadding: false,
-    fontWeight: "500",
-    lineHeight: 15,
+    // Chỉ tiêu đề thẻ được in đậm, mọi dòng meta bên dưới để chữ thường.
+    fontWeight: "700",
+    lineHeight: lineHeightFor(15),
   },
   officialRouteXpPill: {
     alignItems: "center",
