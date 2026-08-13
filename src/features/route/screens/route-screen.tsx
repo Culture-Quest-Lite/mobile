@@ -1,11 +1,6 @@
-import {
-  currentUser,
-  leaderboard,
-  type RouteItem,
-  routes
-} from "@/lib/demo-data";
+import { type RouteItem, routes } from "@/lib/demo-data";
 import { ScreenHorizontalPadding } from "@/constants/theme";
-import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
+import { lineHeightFor } from "@/lib/text-scale";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
@@ -19,7 +14,6 @@ import {
   useState
 } from "react";
 import {
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -51,10 +45,20 @@ import {
   type UserRouteProgressDto,
 } from "@/features/route/api/route-api";
 import { getMyUserPlans, type UserPlan } from "@/features/route/api/user-plan-api";
+import type { CommunityGroupPayload } from "@/features/community/api/group-api";
 import {
-  myRouteGroupsDemo,
-  type RouteGroupDemo,
-} from "@/features/route/data/route-group-demo";
+  getCachedCommunityGroupJourneySession,
+  type CommunityGroupJourneySession,
+} from "@/features/community/data/community-group-journey-store";
+import { cacheCommunityGroupSession } from "@/features/community/data/community-group-session-store";
+import {
+  useCommunityGroups,
+  type CommunityGroupsStatus,
+} from "@/features/community/hooks/use-community-groups";
+import { LevelProgressCard } from "@/features/profile/components/level-progress-card";
+import { useMyLevelProgress } from "@/features/profile/hooks/use-my-level-progress";
+import type { Profile } from "@/features/profile/types";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { usePremiumStatus } from "@/features/profile/hooks/use-premium-status";
 import { appAlert } from "@/components/ui/app-dialog";
 
@@ -128,6 +132,8 @@ function mapSavedRoutesToItems(
 }
 
 const heroBannerImage = require("../../../../assets/images/hero-v2.png");
+// Cùng marker với thanh cấp độ ở trang Hồ sơ.
+const levelBadgeLogo = require("../../../../assets/images/logo3.png");
 const routeScreenBackground = "#FDF7F8";
 
 const cardShadowStyle = {
@@ -326,9 +332,89 @@ function mapProgressToRouteItem(
     : makeFallbackRouteItemFromProgress(progress);
 }
 
+/**
+ * Gom dữ liệu cấp độ thật (GET /me + GET /gamification/levels) về đúng các
+ * tham số mà `LevelProgressCard` (dùng chung với trang Hồ sơ) cần. Trả về
+ * `null` khi chưa có dữ liệu để màn hình ẩn hẳn phần cấp thay vì hiện số liệu
+ * demo.
+ */
+function getLevelSummary(profile: Profile | null) {
+  if (!profile) return null;
+
+  const level = typeof profile.level === "number" ? profile.level : null;
+  const levelName = profile.levelName?.trim() ?? "";
+  const totalXp = Math.max(profile.totalXp, 0);
+
+  if (level === null && !levelName && totalXp <= 0) return null;
+
+  const nextLevelRequiredXp =
+    typeof profile.nextLevelRequiredXp === "number"
+      ? profile.nextLevelRequiredXp
+      : null;
+  const hasExactProgress =
+    profile.hasExactLevelProgress === true &&
+    nextLevelRequiredXp !== null &&
+    typeof profile.levelProgressPercent === "number";
+
+  // levelName của backend thường đã chứa số cấp ("Level 3"), tránh lặp "Cấp 3 · Level 3".
+  const title =
+    levelName && level !== null && !levelName.includes(String(level))
+      ? `Cấp ${level} · ${levelName}`
+      : levelName || (level !== null ? `Cấp ${level}` : "Cấp của bạn");
+
+  return {
+    currentXp: totalXp,
+    hasExactProgress,
+    level,
+    nextLevelRequiredXp,
+    progressPercent: profile.levelProgressPercent,
+    title,
+  };
+}
+
+/**
+ * Avatar + huy hiệu cấp, dùng lại đúng cách trang Hồ sơ và Trang chủ đang thể
+ * hiện cấp độ của user.
+ */
+function ExplorerLevelAvatar({
+  avatar,
+  level,
+  name,
+  username,
+}: {
+  avatar: string | null;
+  level: number | null;
+  name: string | null;
+  username: string | null;
+}) {
+  return (
+    <View className="relative">
+      <UserAvatar
+        borderColor="#FFFFFF"
+        borderWidth={3}
+        displayName={name}
+        size={52}
+        uri={avatar}
+        username={username}
+      />
+
+      {level !== null ? (
+        <LinearGradient
+          colors={["#F58752", "#EB489B"]}
+          end={{ x: 1, y: 1 }}
+          start={{ x: 0, y: 0 }}
+          style={styles.levelBadge}
+        >
+          <Text style={styles.levelBadgeText}>{level}</Text>
+        </LinearGradient>
+      ) : null}
+    </View>
+  );
+}
+
 export default function RouteScreen() {
   const [tab, setTab] = useState<Tab>("official");
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const router = useRouter();
   const session = useAuthSession();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -354,6 +440,13 @@ export default function RouteScreen() {
   const [myRecordJourneys, setMyRecordJourneys] = useState<RecordRouteDto[]>([]);
   const [communityRoutesFromApi, setCommunityRoutesFromApi] = useState<RouteItem[]>([]);
   const { ensureLoaded: ensurePremiumLoaded } = usePremiumStatus();
+  const { profile: levelProfile } = useMyLevelProgress();
+  const {
+    errorMessage: communityGroupsError,
+    groups: myCommunityGroups,
+    reload: reloadCommunityGroups,
+    status: communityGroupsStatus,
+  } = useCommunityGroups();
 
   // Màn này có nhiều nút gọi `requirePremium()`. Nếu store isPremium chưa được
   // nạp (VD user mở thẳng tab Tuyến sau khi khởi động, chưa qua Home/Explore)
@@ -718,7 +811,20 @@ export default function RouteScreen() {
   const tabButtonWidth = Math.max(Math.floor((contentWidth - 18) / 4), 76);
   const heroImageHeight = Math.min(Math.max(screenWidth * 0.5, 172), 198);
   const heroHeight = heroImageHeight;
-  const levelCardHeroOverlap = 34;
+  const levelSummary = getLevelSummary(levelProfile);
+  // `session.displayName` mặc định là "bạn" cho khách, nên chỉ đọc tên khi đã
+  // đăng nhập.
+  const explorerName = session.isAuthenticated
+    ? levelProfile?.name.trim() ||
+      session.displayName.trim() ||
+      levelProfile?.username.trim() ||
+      session.username?.trim() ||
+      null
+    : null;
+  // Chưa đăng nhập / API lỗi thì bỏ hẳn thẻ tài khoản thay vì hiển thị số
+  // liệu giả.
+  const showAccountCard = Boolean(explorerName) || Boolean(levelSummary);
+  const levelCardHeroOverlap = showAccountCard ? 34 : 0;
   const featuredActiveProgress = activeRouteProgresses[0] ?? null;
   const featuredActiveRouteId = featuredActiveProgress
     ? String(featuredActiveProgress.routeId)
@@ -737,7 +843,7 @@ export default function RouteScreen() {
       case "active":
         return activeList.length;
       case "groups":
-        return myRouteGroupsDemo.length;
+        return myCommunityGroups.length;
       case "completed":
         return completedList.length;
       case "bookmarked":
@@ -752,12 +858,16 @@ export default function RouteScreen() {
         return 0;
     }
   })();
+  const isCurrentTabLoading =
+    tab === "groups"
+      ? communityGroupsStatus === "idle" || communityGroupsStatus === "loading"
+      : isLoadingRoutes;
   const sectionActionLabel =
     tab === "official"
       ? "Xem tất cả"
       : currentTabCount
         ? `${currentTabCount} mục`
-        : isLoadingRoutes && tab === "community"
+        : isCurrentTabLoading && (tab === "community" || tab === "groups")
           ? "Đang tải"
           : "Trống";
 
@@ -792,8 +902,9 @@ export default function RouteScreen() {
                   </View>
 
                   <Pressable
+                    accessibilityLabel="Mở bảng xếp hạng"
                     className="h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/72"
-                    onPress={() => setShowLeaderboard(true)}
+                    onPress={() => router.push("/community/leaderboard" as Href)}
                     style={cardShadowStyle}
                   >
                     <SymbolView
@@ -811,68 +922,46 @@ export default function RouteScreen() {
             </View>
           </View>
 
-          <View
-            className="px-4"
-            style={{ marginTop: -levelCardHeroOverlap, zIndex: 4 }}
-          >
-            <View style={styles.contentFrame}>
-              <View
-                className="overflow-hidden rounded-[24px] border border-[#F9E1E8] bg-white px-4 py-4"
-                style={cardShadowStyle}
-              >
-                <View className="flex-row items-center gap-3">
-                  <View style={styles.levelIconOuter}>
-                    <LinearGradient
-                      colors={["#FF8EB0", "#FF5E87"]}
-                      end={{ x: 1, y: 1 }}
-                      start={{ x: 0, y: 0 }}
-                      style={styles.levelIconInner}
-                    >
-                      <SymbolView
-                        name={{
-                          ios: "location.north.circle.fill",
-                          android: "explore",
-                          web: "explore",
-                        }}
-                        size={24}
-                        tintColor="#FFFFFF"
-                      />
-                    </LinearGradient>
-                  </View>
-                  <View className="min-w-0 flex-1">
-                    <View className="flex-row items-center justify-between gap-3">
+          {showAccountCard ? (
+            <View
+              className="px-4"
+              style={{ marginTop: -levelCardHeroOverlap, zIndex: 4 }}
+            >
+              <View style={styles.contentFrame}>
+                <View
+                  className="overflow-hidden rounded-[24px] border border-[#F9E1E8] bg-white px-4 py-4"
+                  style={cardShadowStyle}
+                >
+                  <View className="flex-row items-start gap-3">
+                    <ExplorerLevelAvatar
+                      avatar={levelProfile?.avatar ?? null}
+                      level={levelSummary?.level ?? null}
+                      name={explorerName}
+                      username={levelProfile?.username ?? session.username}
+                    />
+                    <View className="min-w-0 flex-1">
                       <Text
-                        className="flex-1 font-extrabold text-[#2B2233]"
+                        className="font-extrabold text-[#2B2233]"
                         style={styles.levelTitleText}
                         numberOfLines={1}
                       >
-                        Cấp {currentUser.level} · {currentUser.title}
+                        {explorerName ?? levelSummary?.title}
                       </Text>
-                      <Text
-                        className="font-bold text-[#FF4F86]"
-                        style={styles.levelValueText}
-                      >
-                        {currentUser.xp} / {currentUser.xpToNext}
-                      </Text>
+                      {levelSummary ? (
+                        <LevelProgressCard
+                          currentXp={levelSummary.currentXp}
+                          hasExactProgress={levelSummary.hasExactProgress}
+                          markerSource={levelBadgeLogo}
+                          nextLevelRequiredXp={levelSummary.nextLevelRequiredXp}
+                          progressPercent={levelSummary.progressPercent}
+                        />
+                      ) : null}
                     </View>
-                    <View className="mt-2">
-                      <XPBar
-                        value={currentUser.xp}
-                        max={currentUser.xpToNext}
-                        trackColor="#F6E8EE"
-                        height={9}
-                        fillColors={["#FF7AA8", "#FF4F86"]}
-                      />
-                    </View>
-                    <Text className="mt-2 text-[#867A86]" style={styles.levelCaptionText}>
-                      Còn {currentUser.xpToNext - currentUser.xp} XP để lên cấp{" "}
-                      {currentUser.level + 1}
-                    </Text>
                   </View>
                 </View>
               </View>
             </View>
-          </View>
+          ) : null}
 
           <View
             className="px-4"
@@ -997,7 +1086,16 @@ export default function RouteScreen() {
                   ) : (
                     <EmptyState text="Bạn chưa tham gia tuyến nào" />
                   ))}
-                {tab === "groups" && <MyGroupsTab groups={myRouteGroupsDemo} />}
+                {tab === "groups" && (
+                  <MyGroupsTab
+                    currentProfileId={levelProfile?.id ?? null}
+                    errorMessage={communityGroupsError}
+                    groups={myCommunityGroups}
+                    isAuthenticated={session.isAuthenticated}
+                    onRetry={reloadCommunityGroups}
+                    status={communityGroupsStatus}
+                  />
+                )}
                 {tab === "completed" &&
                   (completedList.length ? (
                     <RouteList list={completedList} variant="completed" />
@@ -1031,10 +1129,6 @@ export default function RouteScreen() {
             </View>
           </View>
         </ScrollView>
-
-        {showLeaderboard && (
-          <LeaderboardSheet onClose={() => setShowLeaderboard(false)} />
-        )}
       </SafeAreaView>
     </View>
   );
@@ -1425,223 +1519,346 @@ function MyJourneyTab({
   );
 }
 
-function getGroupStatusMeta(status: RouteGroupDemo["status"]) {
-  switch (status) {
-    case "LIVE":
-      return {
-        badgeClass: "bg-[#E9F8EF]",
-        badgeTextClass: "text-[#1E8A55]",
-        ctaLabel: "Xem nhóm",
-        helper: "Nhóm đang đi thực tế trên tuyến này.",
-        label: "Đang diễn ra",
-      };
-    case "SCHEDULED":
-      return {
-        badgeClass: "bg-[#EEF5FF]",
-        badgeTextClass: "text-[#2563EB]",
-        ctaLabel: "Mời thêm bạn",
-        helper: "Đã chốt lịch, có thể mời thêm người đang follow.",
-        label: "Đã lên lịch",
-      };
-    default:
-      return {
-        badgeClass: "bg-[#FFF4EF]",
-        badgeTextClass: "text-[#C65A25]",
-        ctaLabel: "Xác nhận lời mời",
-        helper: "Có lời mời mới từ mạng lưới bạn đang theo dõi.",
-        label: "Chờ phản hồi",
-      };
-  }
+const GROUP_UNNAMED_LABEL = "Nhóm chưa đặt tên";
+
+function readGroupText(value?: string | null) {
+  if (typeof value !== "string") return null;
+
+  const trimmedValue = value.trim();
+  return trimmedValue ? trimmedValue : null;
 }
 
-function GroupMemberAvatars({
-  members,
+function formatGroupMemberCount(value?: number | null) {
+  const resolvedValue =
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.max(0, Math.round(value))
+      : 0;
+
+  if (resolvedValue < 1000) return `${resolvedValue}`;
+
+  const compactValue = resolvedValue / 1000;
+  return `${compactValue >= 10 ? compactValue.toFixed(0) : compactValue.toFixed(1)}k`;
+}
+
+// Dùng lại đúng nhãn/màu của màn "Tất cả nhóm" để hai nơi nói cùng một ngôn ngữ.
+function getGroupAccessMeta(requiredApproval?: boolean | null) {
+  if (requiredApproval === true) {
+    return {
+      backgroundColor: "#FFF4DE",
+      color: "#E39B1A",
+      icon: { ios: "lock.fill", android: "lock", web: "lock" } as SymbolName,
+      label: "Duyệt khi tham gia",
+    };
+  }
+
+  return {
+    backgroundColor: "#EAF8ED",
+    color: "#4CAF6A",
+    icon: { ios: "link", android: "link", web: "link" } as SymbolName,
+    label: "Tham gia tự do",
+  };
+}
+
+function GroupMetaPill({
+  backgroundColor,
+  color,
+  icon,
+  label,
 }: {
-  members: RouteGroupDemo["members"];
+  backgroundColor: string;
+  color: string;
+  icon: SymbolName;
+  label: string;
 }) {
-  const visibleMembers = members.slice(0, 4);
-  const remainingCount = Math.max(members.length - visibleMembers.length, 0);
+  return (
+    <View
+      className="flex-row items-center gap-1.5 rounded-full px-2.5 py-1.5"
+      style={{ backgroundColor }}
+    >
+      <SymbolView name={icon} size={11} tintColor={color} />
+      <Text className="text-[11px] font-bold" style={{ color }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function GroupAvatar({ imageUrl }: { imageUrl?: string | null }) {
+  const resolvedImageUrl = readGroupText(imageUrl);
 
   return (
-    <View className="flex-row items-center">
-      {visibleMembers.map((member, index) => (
-        <View
-          key={member.id}
-          className="rounded-full border-2 border-white bg-white"
-          style={{ marginLeft: index === 0 ? 0 : -10 }}
-        >
-          <Image
-            source={member.avatarUri}
-            contentFit="cover"
-            style={{ height: 30, width: 30, borderRadius: 999 }}
-          />
-        </View>
-      ))}
-      {remainingCount > 0 ? (
-        <View
-          className="ml-2 h-7 min-w-7 items-center justify-center rounded-full bg-[#F4EFF8] px-2"
-        >
-          <Text className="text-[10px] font-extrabold text-[#6B5A76]">
-            +{remainingCount}
-          </Text>
-        </View>
-      ) : null}
+    <View className="h-[52px] w-[52px] items-center justify-center overflow-hidden rounded-full border border-[#FCE0EB] bg-[#FFF0F4]">
+      {resolvedImageUrl ? (
+        <Image
+          source={resolvedImageUrl}
+          contentFit="cover"
+          style={{ height: 52, width: 52 }}
+        />
+      ) : (
+        <SymbolView
+          name={{ ios: "person.3.fill", android: "groups", web: "groups" }}
+          size={22}
+          tintColor="#FF4F86"
+        />
+      )}
     </View>
   );
 }
 
 function MyGroupsTab({
+  currentProfileId,
+  errorMessage,
   groups,
+  isAuthenticated,
+  onRetry,
+  status,
 }: {
-  groups: RouteGroupDemo[];
+  currentProfileId: string | null;
+  errorMessage: string | null;
+  groups: CommunityGroupPayload[];
+  isAuthenticated: boolean;
+  onRetry: () => void;
+  status: CommunityGroupsStatus;
 }) {
-  if (groups.length === 0) {
-    return <EmptyState text="Bạn chưa có group route nào" />;
+  const router = useRouter();
+  const isLoading = status === "idle" || status === "loading";
+
+  function openGroupDetail(group: CommunityGroupPayload) {
+    const cachedGroup = cacheCommunityGroupSession({
+      ...group,
+      source: "listed",
+    });
+
+    if (!cachedGroup) {
+      appAlert.alert("Không mở được nhóm", "Dữ liệu nhóm này chưa hợp lệ.");
+      return;
+    }
+
+    const detailRouteKey = cachedGroup.groupId ?? cachedGroup.shareToken;
+    router.push(`/community/group/${encodeURIComponent(detailRouteKey)}` as Href);
+  }
+
+  function openGroupJourney(
+    group: CommunityGroupPayload,
+    session: CommunityGroupJourneySession,
+  ) {
+    const shareToken = readGroupText(group.shareToken);
+
+    if (!shareToken) {
+      openGroupDetail(group);
+      return;
+    }
+
+    const routeId = readGroupText(session.routeId);
+    const routeName = readGroupText(session.routeName) ?? "Hành trình nhóm";
+    const query = routeId
+      ? `?routeId=${encodeURIComponent(routeId)}&routeName=${encodeURIComponent(routeName)}`
+      : `?routeName=${encodeURIComponent(routeName)}`;
+
+    router.push(
+      `/community/group/${encodeURIComponent(shareToken)}/journey${query}` as Href,
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <View className="gap-3">
+        <View
+          className="items-center rounded-[24px] border border-[#F4E2E8] bg-[#FFF9FB] px-6 py-8"
+          style={cardShadowStyle}
+        >
+          <View className="h-14 w-14 items-center justify-center rounded-full bg-[#FFF0F4]">
+            <SymbolView
+              name={{ ios: "person.3.fill", android: "groups", web: "groups" }}
+              size={26}
+              tintColor="#FF4F86"
+            />
+          </View>
+          <Text className="mt-3 text-center text-[15px] font-extrabold text-[#2B2233]">
+            Đăng nhập để xem nhóm của bạn
+          </Text>
+          <Text className="mt-1 text-center text-[12px] leading-5 text-[#8E869A]">
+            Nhóm giúp bạn rủ bạn bè cùng đi một tuyến và theo dõi nhau trên bản đồ.
+          </Text>
+          <Pressable
+            className="mt-4 rounded-[18px] bg-[#FF4F86] px-6 py-3"
+            onPress={() => router.push("/login?entry=home" as Href)}
+          >
+            <Text className="text-[13px] font-extrabold text-white">
+              Đăng nhập
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
   }
 
   return (
     <View className="gap-3">
-      <LinearGradient
-        colors={["#1F3B5D", "#35648F", "#F58752"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        className="overflow-hidden rounded-3xl p-4"
-      >
-        <Text className="text-[11px] font-bold uppercase tracking-wider text-white/80">
-          Route Group
-        </Text>
-        <Text className="mt-1 text-[18px] font-black text-white">
-          Đi tuyến cùng những người bạn đang follow
-        </Text>
-        <Text className="mt-1 text-[12px] leading-5 text-white/90">
-          Gom lời mời, lịch hẹn và trạng thái nhóm vào một chỗ để bạn quản lý
-          trước khi bắt đầu route.
-        </Text>
-        <View className="mt-4 flex-row gap-2">
-          <View className="rounded-2xl bg-white/15 px-3 py-2">
-            <Text className="text-[10px] font-bold uppercase tracking-wider text-white/75">
-              Nhóm đang có
-            </Text>
-            <Text className="mt-1 text-[18px] font-black text-white">
-              {groups.length}
-            </Text>
+      <View className="overflow-hidden rounded-3xl" style={cardShadowStyle}>
+        <LinearGradient
+          colors={["#FF6A8E", "#EB489B", "#F58752"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          className="p-4"
+        >
+          <Text className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+            Nhóm cộng đồng
+          </Text>
+          <Text className="mt-1 text-[18px] font-black text-white">
+            Đi tuyến cùng nhóm của bạn
+          </Text>
+          <Text className="mt-1 text-[12px] leading-5 text-white/90">
+            {status === "ready"
+              ? `Bạn đang có ${groups.length} nhóm. Mở một tuyến rồi chọn "Đi cùng nhóm" để bắt đầu hành trình chung.`
+              : "Tạo nhóm, mời bạn bè rồi bắt đầu hành trình chung ngay trên tuyến bạn thích."}
+          </Text>
+
+          <View className="mt-4 flex-row gap-2">
+            <Pressable
+              className="flex-row items-center gap-1.5 rounded-2xl bg-white px-4 py-2.5"
+              onPress={() => router.push("/community/group-create" as Href)}
+            >
+              <SymbolView
+                name={{ ios: "plus", android: "add", web: "add" }}
+                size={13}
+                tintColor="#EB489B"
+              />
+              <Text className="text-[12px] font-extrabold text-[#EB489B]">
+                Tạo nhóm mới
+              </Text>
+            </Pressable>
+            <Pressable
+              className="rounded-2xl border border-white/50 bg-white/15 px-4 py-2.5"
+              onPress={() => router.push("/community/groups" as Href)}
+            >
+              <Text className="text-[12px] font-extrabold text-white">
+                Xem tất cả
+              </Text>
+            </Pressable>
           </View>
-          <View className="rounded-2xl bg-white/15 px-3 py-2">
-            <Text className="text-[10px] font-bold uppercase tracking-wider text-white/75">
-              Mời chờ phản hồi
+        </LinearGradient>
+      </View>
+
+      {status === "error" ? (
+        <View className="rounded-[20px] border border-[#FFE1E8] bg-[#FFF5F8] px-4 py-3">
+          <Text className="text-[12px] font-semibold text-[#B42345]">
+            {errorMessage ?? "Không tải được danh sách nhóm cộng đồng."}
+          </Text>
+          <Pressable
+            className="mt-2.5 self-start rounded-[14px] border border-[#F7C7D1] bg-white px-4 py-2"
+            onPress={onRetry}
+          >
+            <Text className="text-[12px] font-extrabold text-[#B42345]">
+              Thử lại
             </Text>
-            <Text className="mt-1 text-[18px] font-black text-white">
-              {
-                groups.filter((group) => group.status === "INVITED").length
-              }
-            </Text>
-          </View>
+          </Pressable>
         </View>
-      </LinearGradient>
+      ) : null}
+
+      {groups.length === 0 && isLoading ? (
+        <EmptyState text="Đang tải nhóm của bạn..." />
+      ) : null}
+
+      {groups.length === 0 && status === "ready" ? (
+        <EmptyState text="Bạn chưa tham gia nhóm nào. Hãy tạo nhóm đầu tiên để rủ bạn bè cùng đi tuyến." />
+      ) : null}
 
       {groups.map((group) => {
-        const meta = getGroupStatusMeta(group.status);
-        const availableSeats = Math.max(group.capacity - group.members.length, 0);
+        const groupName = readGroupText(group.groupName) ?? GROUP_UNNAMED_LABEL;
+        const isLeader =
+          currentProfileId !== null &&
+          readGroupText(group.leaderId) === currentProfileId;
+        const accessMeta = getGroupAccessMeta(group.requiredApproval);
+        const journeySession =
+          getCachedCommunityGroupJourneySession(group.shareToken) ??
+          getCachedCommunityGroupJourneySession(group.groupId);
 
         return (
-          <View
-            key={group.id}
-            className="overflow-hidden rounded-3xl border border-[#E8EDF4] bg-white"
+          <Pressable
+            key={group.shareToken}
+            className="overflow-hidden rounded-[24px] border border-[#F5E7EC] bg-white px-4 py-4"
             style={cardShadowStyle}
+            onPress={() => openGroupDetail(group)}
           >
-            <View className="flex-row items-stretch">
-              <Image
-                source={group.coverUri}
-                contentFit="cover"
-                style={{ height: 168, width: 118 }}
-              />
-              <View className="flex-1 p-4">
-                <View className="flex-row items-start justify-between gap-3">
-                  <View className="flex-1">
-                    <Text className="text-[16px] font-black text-[#2B2233]" numberOfLines={2}>
-                      {group.routeName}
-                    </Text>
-                    <Text className="mt-1 text-[12px] text-[#7A7283]" numberOfLines={2}>
-                      Host: {group.host.name} · {group.host.role}
-                    </Text>
-                  </View>
-                  <View className={`rounded-full px-3 py-1.5 ${meta.badgeClass}`}>
-                    <Text className={`text-[10px] font-extrabold ${meta.badgeTextClass}`}>
-                      {meta.label}
-                    </Text>
-                  </View>
-                </View>
+            <View className="flex-row items-center gap-3">
+              <GroupAvatar imageUrl={group.imageUrl} />
 
-                <View className="mt-3 flex-row flex-wrap gap-2">
-                  <View className="rounded-full bg-[#F7F8FC] px-3 py-1.5">
-                    <Text className="text-[11px] font-semibold text-[#4B4452]">
-                      {group.meetupAtLabel}
-                    </Text>
-                  </View>
-                  <View className="rounded-full bg-[#F7F8FC] px-3 py-1.5">
-                    <Text className="text-[11px] font-semibold text-[#4B4452]">
-                      {group.durationLabel}
-                    </Text>
-                  </View>
-                  <View className="rounded-full bg-[#F7F8FC] px-3 py-1.5">
-                    <Text className="text-[11px] font-semibold text-[#4B4452]">
-                      {group.members.length}/{group.capacity} thành viên
-                    </Text>
-                  </View>
-                </View>
-
-                <Text className="mt-3 text-[12px] font-semibold text-[#2B2233]">
-                  {group.meetingPoint}
-                </Text>
-                <Text className="mt-1 text-[11px] leading-5 text-[#7A7283]">
-                  {group.note}
-                </Text>
-
-                <View className="mt-3 flex-row items-center justify-between gap-3">
-                  <GroupMemberAvatars members={group.members} />
-                  <View className="items-end">
-                    <Text className="text-[11px] font-extrabold text-[#EB489B]">
-                      {group.vibeLabel}
-                    </Text>
-                    <Text className="mt-0.5 text-[10px] text-[#8E869A]">
-                      {availableSeats > 0
-                        ? `Còn ${availableSeats} chỗ để mời thêm`
-                        : "Nhóm hiện đã đủ người"}
-                    </Text>
-                  </View>
-                </View>
-
-                <View className="mt-3 flex-row gap-2">
-                  <Pressable
-                    className="flex-1 rounded-2xl bg-[#EB489B] py-3"
-                    onPress={() =>
-                      appAlert.alert(
-                        meta.label,
-                        `${meta.helper}\n\nĐây là UI demo dùng dữ liệu giả để bạn duyệt flow group route.`,
-                      )
-                    }
+              <View className="min-w-0 flex-1">
+                <View className="flex-row items-center gap-1.5">
+                  <Text
+                    className="text-[15px] font-extrabold text-[#2B2233]"
+                    numberOfLines={1}
+                    style={{ flexShrink: 1 }}
                   >
-                    <Text className="text-center text-[12px] font-extrabold text-white">
-                      {meta.ctaLabel}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    className="rounded-2xl border border-[#E6DFF1] bg-[#FBF9FE] px-4 py-3"
-                    onPress={() =>
-                      appAlert.alert(
-                        "Chia sẻ nhóm",
-                        `UI demo: chia sẻ lời mời ${group.visibility === "LINK" ? "bằng link" : "cho bạn đang follow"}.`,
-                      )
-                    }
-                  >
-                    <Text className="text-[12px] font-extrabold text-[#6B5A76]">
-                      {group.visibility === "LINK" ? "Copy link" : "Mời bạn"}
-                    </Text>
-                  </Pressable>
+                    {groupName}
+                  </Text>
+                  {isLeader ? (
+                    <SymbolView
+                      name={{
+                        ios: "crown.fill",
+                        android: "workspace_premium",
+                        web: "workspace_premium",
+                      }}
+                      size={14}
+                      tintColor="#E39B1A"
+                    />
+                  ) : null}
+                </View>
+
+                <View className="mt-2 flex-row flex-wrap items-center gap-2">
+                  <GroupMetaPill
+                    backgroundColor="#F8F5F6"
+                    color="#6F657A"
+                    icon={{
+                      ios: "person.2.fill",
+                      android: "groups",
+                      web: "groups",
+                    }}
+                    label={`${formatGroupMemberCount(group.totalMembers)} thành viên`}
+                  />
+                  <GroupMetaPill
+                    backgroundColor={accessMeta.backgroundColor}
+                    color={accessMeta.color}
+                    icon={accessMeta.icon}
+                    label={accessMeta.label}
+                  />
                 </View>
               </View>
+
+              <SymbolView
+                name={{
+                  ios: "chevron.right",
+                  android: "chevron_right",
+                  web: "chevron_right",
+                }}
+                size={14}
+                tintColor="#D2C6CE"
+              />
             </View>
-          </View>
+
+            {journeySession ? (
+              <View className="mt-3 rounded-[18px] border border-[#FFE1EA] bg-[#FFF5F8] px-3.5 py-3">
+                <Text className="text-[10px] font-extrabold uppercase tracking-[1.1px] text-[#EB489B]">
+                  Đang đi cùng nhóm
+                </Text>
+                <Text
+                  className="mt-1 text-[13px] font-extrabold text-[#2B2233]"
+                  numberOfLines={1}
+                >
+                  {readGroupText(journeySession.routeName) ?? "Hành trình nhóm"}
+                </Text>
+                <Pressable
+                  className="mt-2.5 rounded-[16px] bg-[#FF4F86] py-2.5"
+                  onPress={() => openGroupJourney(group, journeySession)}
+                >
+                  <Text className="text-center text-[12px] font-extrabold text-white">
+                    Mở hành trình nhóm
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </Pressable>
         );
       })}
     </View>
@@ -2195,174 +2412,6 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-function LeaderboardSheet({ onClose }: { onClose: () => void }) {
-  const [scope, setScope] = useState<"city" | "national">("city");
-  const podium = [
-    { user: leaderboard[1], rank: 2 },
-    { user: leaderboard[0], rank: 1 },
-    { user: leaderboard[2], rank: 3 },
-  ];
-
-  return (
-    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <View className="flex-1 justify-end bg-black/60">
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View className="max-h-[85%] rounded-t-[32px] bg-[#F7F8FC]">
-          <View className="rounded-t-[32px] bg-[#1E2433] p-4">
-            <View className="mb-3 flex-row items-center justify-between">
-              <View className="flex-row items-center gap-1.5">
-                <SymbolView
-                  name={{
-                    ios: "trophy.fill",
-                    android: "emoji_events",
-                    web: "emoji_events",
-                  }}
-                  size={15}
-                  tintColor="#FFE566"
-                />
-                <Text className="text-[16px] font-extrabold text-white">
-                  Bảng xếp hạng
-                </Text>
-              </View>
-              <Pressable
-                onPress={onClose}
-                className="h-8 w-8 items-center justify-center rounded-full bg-white/10"
-              >
-                <SymbolView
-                  name={{ ios: "xmark", android: "close", web: "close" }}
-                  size={14}
-                  tintColor="#FFFFFF"
-                />
-              </Pressable>
-            </View>
-
-            <View className="flex-row rounded-xl bg-white/10 p-1">
-              {[
-                { key: "city" as const, label: "TP.HCM" },
-                { key: "national" as const, label: "Toàn quốc" },
-              ].map((item) => (
-                <Pressable
-                  key={item.key}
-                  onPress={() => setScope(item.key)}
-                  className={`flex-1 rounded-lg py-1.5 ${
-                    scope === item.key ? "bg-white" : ""
-                  }`}
-                >
-                  <Text
-                    className={`text-center text-[11px] font-bold ${
-                      scope === item.key ? "text-[#1E2433]" : "text-white/80"
-                    }`}
-                  >
-                    {item.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <View className="mt-3 flex-row items-end justify-center gap-2">
-              {podium.map(({ user, rank }) => {
-                const isFirst = rank === 1;
-
-                return (
-                  <View key={user.name} className="flex-1 items-center">
-                    {isFirst && (
-                      <SymbolView
-                        name={{
-                          ios: "crown.fill",
-                          android: "workspace_premium",
-                          web: "workspace_premium",
-                        }}
-                        size={18}
-                        tintColor="#FFE566"
-                      />
-                    )}
-                    <Image
-                      source={user.avatar}
-                      contentFit="cover"
-                      style={{
-                        height: isFirst ? 64 : 48,
-                        width: isFirst ? 64 : 48,
-                        borderRadius: 999,
-                        borderWidth: 2,
-                        borderColor: isFirst
-                          ? "#FFE566"
-                          : "rgba(255,255,255,0.3)",
-                        marginTop: isFirst ? 4 : 8,
-                      }}
-                    />
-                    <Text
-                      className="mt-1 text-[10px] font-bold text-white"
-                      numberOfLines={1}
-                    >
-                      {user.name.split(" ").slice(-1)}
-                    </Text>
-                    <View
-                      className={`mt-1 w-full items-center justify-center rounded-t-xl ${
-                        rank === 1
-                          ? "h-16 bg-[#F58752]"
-                          : rank === 2
-                            ? "h-12 bg-[#1F8FFF]"
-                            : "h-10 bg-[#EB489B]"
-                      }`}
-                    >
-                      <Text className="text-[10px] font-bold text-white">
-                        #{rank}
-                      </Text>
-                      <Text className="text-[10px] text-white/90">
-                        {user.xp.toLocaleString()}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-
-          <ScrollView
-            className="mx-4 my-4 max-h-80 rounded-3xl bg-white"
-            style={cardShadowStyle}
-          >
-            {leaderboard.map((user) => (
-              <View
-                key={user.rank}
-                className={`flex-row items-center gap-3 border-b border-[#ECEEF4] p-3 ${
-                  user.name === currentUser.name ? "bg-[#FFF4EF]" : ""
-                }`}
-              >
-                <Text className="w-6 text-center text-[14px] font-bold text-[#8E869A]">
-                  {user.rank}
-                </Text>
-                <Image
-                  source={user.avatar}
-                  contentFit="cover"
-                  style={{ height: 40, width: 40, borderRadius: 999 }}
-                />
-                <View className="min-w-0 flex-1">
-                  <Text
-                    className="text-[13px] font-semibold text-[#2B2233]"
-                    numberOfLines={1}
-                  >
-                    {user.name}
-                  </Text>
-                  <Text className="text-[10px] text-[#8E869A]">
-                    Cấp {user.level}
-                  </Text>
-                </View>
-                <View className="items-end">
-                  <Text className="text-[14px] font-bold text-[#2B2233]">
-                    {user.xp.toLocaleString()}
-                  </Text>
-                  <TrendChange value={user.change} />
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 const styles = StyleSheet.create({
   heroShell: {
     backgroundColor: "#FDF7F8",
@@ -2505,35 +2554,29 @@ const styles = StyleSheet.create({
     height: "100%",
     width: "100%",
   },
-  levelIconOuter: {
+  levelBadge: {
     alignItems: "center",
-    backgroundColor: "#FFF2F6",
-    borderRadius: 18,
-    height: 52,
+    borderColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 2,
+    bottom: -2,
+    height: 28,
     justifyContent: "center",
-    width: 52,
+    position: "absolute",
+    right: -4,
+    width: 28,
   },
-  levelIconInner: {
-    alignItems: "center",
-    borderRadius: 16,
-    height: 44,
-    justifyContent: "center",
-    width: 44,
+  levelBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+    includeFontPadding: false,
+    lineHeight: lineHeightFor(12),
   },
   levelTitleText: {
     includeFontPadding: false,
-    fontSize: 14,
-    lineHeight: lineHeightFor(14),
-  },
-  levelValueText: {
-    includeFontPadding: false,
-    fontSize: 12,
-    lineHeight: lineHeightFor(12),
-  },
-  levelCaptionText: {
-    includeFontPadding: false,
-    fontSize: 10,
-    lineHeight: bodyLineHeightFor(10),
+    fontSize: 15,
+    lineHeight: lineHeightFor(15),
   },
   routeFeatureTopRow: {
     alignItems: "center",
@@ -2577,33 +2620,3 @@ const styles = StyleSheet.create({
     right: 12,
   },
 });
-
-function TrendChange({ value }: { value: number }) {
-  const color =
-    value > 0
-      ? "text-[#34C759]"
-      : value < 0
-        ? "text-[#E84D6A]"
-        : "text-[#8E869A]";
-  const icon: SymbolName =
-    value > 0
-      ? { ios: "arrow.up.right", android: "trending_up", web: "trending_up" }
-      : value < 0
-        ? {
-            ios: "arrow.down.right",
-            android: "trending_down",
-            web: "trending_down",
-          }
-        : { ios: "minus", android: "remove", web: "remove" };
-
-  return (
-    <View className="flex-row items-center gap-0.5">
-      <SymbolView
-        name={icon}
-        size={9}
-        tintColor={value > 0 ? "#34C759" : value < 0 ? "#E84D6A" : "#8E869A"}
-      />
-      <Text className={`text-[10px] ${color}`}>{Math.abs(value) || "-"}</Text>
-    </View>
-  );
-}
