@@ -1,5 +1,7 @@
+import { LinearGradient } from "expo-linear-gradient";
 import * as ExpoLinking from "expo-linking";
 import { useFocusEffect, useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,7 +14,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ScreenHorizontalPadding } from "@/constants/theme";
 import { appAlert } from "@/components/ui/app-dialog";
@@ -156,6 +158,21 @@ const resolveQrImageUri = (qrCode?: string | null) => {
 const getPlanPrice = (plan: PremiumPlan, cycle: BillingCycle) =>
   cycle === "MONTHLY" ? plan.priceMonthly : plan.priceYearly;
 
+/**
+ * Bảng màu của màn Premium lấy thẳng từ hệ màu chung của app (hồng #EB489B +
+ * cam #F58752 như trang hotspot detail), thay cho tông tím #7C3AED cũ vốn không
+ * xuất hiện ở bất kỳ màn nào khác.
+ */
+const premiumBrandPink = "#EB489B";
+const premiumBrandOrange = "#F58752";
+const premiumSoftPink = "#FFF0F6";
+const premiumSoftPinkBorder = "#F7E5EB";
+const premiumDisabledPink = "#F3C6D8";
+const premiumHeaderGradient = ["#FF6A8E", "#EB489B", "#F58752"] as const;
+/** Cùng thang chữ với hotspot detail: tiêu đề #2B2233, nội dung #6F657A. */
+const premiumTitleColor = "#2B2233";
+const premiumBodyColor = "#6F657A";
+
 const PREMIUM_FEATURES = [
   {
     icon: { ios: "sparkles", android: "auto_awesome", web: "auto_awesome" },
@@ -179,7 +196,7 @@ const PREMIUM_FEATURES = [
       android: "confirmation_number",
       web: "confirmation_number",
     },
-    label: "Voucher ưu đãi đặc quyền từ Partner",
+    label: "Voucher ưu đãi đặc quyền từ đối tác",
   },
   {
     icon: {
@@ -193,6 +210,7 @@ const PREMIUM_FEATURES = [
 
 export default function PremiumSubscriptionScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [plans, setPlans] = useState<PremiumPlan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<PremiumPlan | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("MONTHLY");
@@ -545,17 +563,28 @@ export default function PremiumSubscriptionScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={["top", "bottom"]}>
+    // `edges` bỏ "top" để nền header chạy hết lên mép trên máy (dưới thanh
+    // trạng thái), giống hero của trang hotspot detail. Khoảng an toàn được bù
+    // lại bằng `insets.top` ngay trong header.
+    <SafeAreaView className="flex-1 bg-white" edges={["left", "right"]}>
+      <StatusBar style="light" />
+
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 40 + insets.bottom }}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
         }
       >
         {/* Header */}
-        <View
-          className="bg-[#7C3AED] pb-8 pt-5"
-          style={{ paddingHorizontal: ScreenHorizontalPadding }}
+        <LinearGradient
+          colors={premiumHeaderGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            paddingBottom: 32,
+            paddingHorizontal: ScreenHorizontalPadding,
+            paddingTop: insets.top + 12,
+          }}
         >
           <View className="mb-4 flex-row items-center justify-between">
             <Pressable
@@ -580,46 +609,47 @@ export default function PremiumSubscriptionScreen() {
                 size={14}
                 tintColor="#FFD700"
               />
-              <Text className="text-[12px] font-extrabold text-white">
-                PREMIUM EXPLORER
+              <Text className="text-[12px] font-semibold text-white">
+                Premium Explorer
               </Text>
             </View>
             <View className="w-10" />
           </View>
 
-          <Text className="text-[28px] font-extrabold text-white">
+          <Text className="text-[26px] font-semibold text-white">
             Explorer Premium
           </Text>
-          <Text className="mt-1 text-[14px] leading-5 text-white/80">
+          <Text className="mt-1 text-[14px] leading-5 text-white/85">
             Mở khoá toàn bộ trải nghiệm khám phá di sản văn hoá thông minh
           </Text>
 
           {/* Pricing Hero */}
           <View className="mt-5 rounded-2xl bg-white/15 p-4">
-            <Text className="text-[12px] font-bold text-white/70">
-              Biểu phí ưu đãi
-            </Text>
+            <Text className="text-[12px] text-white/80">Biểu phí ưu đãi</Text>
             <View className="mt-1 flex-row items-baseline gap-2">
-              <Text className="text-[32px] font-extrabold text-white">
+              <Text className="text-[30px] font-semibold text-white">
                 {selectedPlan
                   ? formatCurrency(getPlanPrice(selectedPlan, billingCycle))
                   : billingCycle === "MONTHLY"
                     ? "59.000 ₫"
                     : "499.000 ₫"}
               </Text>
-              <Text className="text-[14px] text-white/70">
+              <Text className="text-[14px] text-white/80">
                 /{billingCycle === "MONTHLY" ? "tháng" : "năm"}
               </Text>
             </View>
             {billingCycle === "YEARLY" && (
-              <View className="mt-2 self-start rounded-full bg-yellow-400 px-3 py-1">
-                <Text className="text-[11px] font-extrabold text-[#7C3AED]">
+              <View className="mt-2 self-start rounded-full bg-white/85 px-3 py-1">
+                <Text
+                  className="text-[11px]"
+                  style={{ color: premiumBrandPink }}
+                >
                   Giá được áp dụng theo từng gói
                 </Text>
               </View>
             )}
           </View>
-        </View>
+        </LinearGradient>
 
         <View
           className="pt-5"
@@ -627,8 +657,8 @@ export default function PremiumSubscriptionScreen() {
         >
           {/* Error */}
           {errorMessage ? (
-            <View className="mb-4 rounded-2xl border border-red-100 bg-red-50 p-4">
-              <Text className="text-[13px] font-bold text-red-600">
+            <View className="mb-4 rounded-2xl border border-[#FFE1E8] bg-[#FFF5F8] p-4">
+              <Text className="text-[13px] leading-5 text-[#B42345]">
                 {errorMessage}
               </Text>
             </View>
@@ -638,24 +668,36 @@ export default function PremiumSubscriptionScreen() {
               Render ở ngoài khối `payment` để vẫn hiện sau khi app bị kill và
               mở lại (lúc đó `payment` đã mất, chỉ còn invoice lưu trên đĩa). */}
           {pendingInvoiceId !== null ? (
-            <View className="mb-4 rounded-2xl border border-[#E5D9FF] bg-[#F5F0FF] p-4">
+            <View
+              className="mb-4 rounded-2xl border p-4"
+              style={{
+                backgroundColor: premiumSoftPink,
+                borderColor: premiumSoftPinkBorder,
+              }}
+            >
               <View className="flex-row items-center gap-3">
                 {isConfirmingPayment ? (
-                  <ActivityIndicator color="#7C3AED" />
+                  <ActivityIndicator color={premiumBrandPink} />
                 ) : (
                   <SymbolView
                     name={{ ios: "clock.fill", android: "schedule", web: "schedule" }}
                     size={18}
-                    tintColor="#7C3AED"
+                    tintColor={premiumBrandPink}
                   />
                 )}
-                <Text className="flex-1 text-[13px] font-bold text-[#7C3AED]">
+                <Text
+                  className="flex-1 text-[13px] leading-5"
+                  style={{ color: premiumBrandPink }}
+                >
                   {isConfirmingPayment
                     ? "Đang đối soát giao dịch với PayOS..."
                     : "Đơn hàng chưa được PayOS xác nhận."}
                 </Text>
               </View>
-              <Text className="mt-2 text-[12px] leading-4 text-[#8E869A]">
+              <Text
+                className="mt-2 text-[12px] leading-5"
+                style={{ color: premiumBodyColor }}
+              >
                 Premium sẽ tự bật ngay khi PayOS ghi nhận thanh toán. Bạn có thể
                 để màn hình này mở hoặc bấm kiểm tra lại.
               </Text>
@@ -665,11 +707,14 @@ export default function PremiumSubscriptionScreen() {
                   vẫn chưa thấy tiền về cho đơn này. */}
               {pendingProbe ? (
                 <View className="mt-3 rounded-xl bg-white/70 p-3">
-                  <Text className="text-[11px] font-bold text-[#5B5266]">
+                  <Text className="text-[11px] text-[#5B5266]">
                     Hoá đơn #{pendingInvoiceId} · đã kiểm tra{" "}
                     {pendingProbe.checkedTimes} lần
                   </Text>
-                  <Text className="mt-1 text-[11px] text-[#8E869A]">
+                  <Text
+                    className="mt-1 text-[11px]"
+                    style={{ color: premiumBodyColor }}
+                  >
                     Kích hoạt: {getInvoiceStatusLabel(pendingProbe.status ?? undefined)}
                     {"  ·  "}
                     Thanh toán:{" "}
@@ -680,9 +725,10 @@ export default function PremiumSubscriptionScreen() {
               {!isConfirmingPayment ? (
                 <Pressable
                   onPress={() => void syncPremiumStatus()}
-                  className="mt-3 self-start rounded-xl bg-[#7C3AED] px-4 py-2"
+                  className="mt-3 self-start rounded-xl px-4 py-2"
+                  style={{ backgroundColor: premiumBrandPink }}
                 >
-                  <Text className="text-[12px] font-extrabold text-white">
+                  <Text className="text-[12px] font-semibold text-white">
                     Kiểm tra lại
                   </Text>
                 </Pressable>
@@ -692,9 +738,15 @@ export default function PremiumSubscriptionScreen() {
 
           {/* Loading */}
           {isLoading ? (
-            <View className="mb-4 items-center rounded-2xl bg-[#F5F0FF] p-6">
-              <ActivityIndicator color="#7C3AED" />
-              <Text className="mt-3 text-[13px] text-[#8E869A]">
+            <View
+              className="mb-4 items-center rounded-2xl p-6"
+              style={{ backgroundColor: premiumSoftPink }}
+            >
+              <ActivityIndicator color={premiumBrandPink} />
+              <Text
+                className="mt-3 text-[13px]"
+                style={{ color: premiumBodyColor }}
+              >
                 Đang tải gói Premium...
               </Text>
             </View>
@@ -703,7 +755,10 @@ export default function PremiumSubscriptionScreen() {
           {/* Plan Selector */}
           {!isLoading && plans.length > 0 ? (
             <View className="mb-5">
-              <Text className="mb-3 text-[15px] font-extrabold text-[#2B2233]">
+              <Text
+                className="mb-3 text-[15px] font-semibold"
+                style={{ color: premiumTitleColor }}
+              >
                 Chọn gói đăng ký
               </Text>
               <View className="gap-3">
@@ -714,23 +769,38 @@ export default function PremiumSubscriptionScreen() {
                     <Pressable
                       key={plan.subscriptionPlanId}
                       onPress={() => setSelectedPlan(plan)}
-                      className={`rounded-2xl border p-4 ${isSelected
-                          ? "border-[#7C3AED] bg-[#F5F0FF] shadow-sm"
-                          : "border-[#EDE8F5] bg-[#FAFAFA]"
-                        }`}
+                      className="rounded-2xl border p-4"
+                      style={{
+                        backgroundColor: isSelected ? premiumSoftPink : "#FAFAFA",
+                        borderColor: isSelected
+                          ? premiumBrandPink
+                          : premiumSoftPinkBorder,
+                      }}
                     >
                       <View className="flex-row items-start justify-between gap-3">
                         <View className="flex-1">
-                          <View className="self-start rounded-full bg-[#EDE8F5] px-3 py-1">
-                            <Text className="text-[10px] font-extrabold uppercase text-[#7C3AED]">
+                          <View
+                            className="self-start rounded-full px-3 py-1"
+                            style={{ backgroundColor: "#FFE1EA" }}
+                          >
+                            <Text
+                              className="text-[10px]"
+                              style={{ color: premiumBrandPink }}
+                            >
                               Gói Premium
                             </Text>
                           </View>
-                          <Text className="mt-2 text-[16px] font-extrabold text-[#2B2233]">
+                          <Text
+                            className="mt-2 text-[16px] font-semibold"
+                            style={{ color: premiumTitleColor }}
+                          >
                             {plan.subscriptionPlanName}
                           </Text>
                           {plan.subscriptionPlanDescription ? (
-                            <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+                            <Text
+                              className="mt-1 text-[13px] leading-5"
+                              style={{ color: premiumBodyColor }}
+                            >
                               {plan.subscriptionPlanDescription}
                             </Text>
                           ) : null}
@@ -743,15 +813,21 @@ export default function PremiumSubscriptionScreen() {
                               web: "check_circle",
                             }}
                             size={22}
-                            tintColor="#7C3AED"
+                            tintColor={premiumBrandPink}
                           />
                         ) : null}
                       </View>
                       <View className="mt-3 flex-row items-baseline gap-1">
-                        <Text className="text-[20px] font-extrabold text-[#7C3AED]">
+                        <Text
+                          className="text-[20px] font-semibold"
+                          style={{ color: premiumBrandPink }}
+                        >
                           {formatCurrency(getPlanPrice(plan, billingCycle))}
                         </Text>
-                        <Text className="text-[13px] text-[#8E869A]">
+                        <Text
+                          className="text-[13px]"
+                          style={{ color: premiumBodyColor }}
+                        >
                           /{billingCycle === "MONTHLY" ? "tháng" : "năm"}
                         </Text>
                       </View>
@@ -763,13 +839,18 @@ export default function PremiumSubscriptionScreen() {
           ) : null}
 
           {/* Billing Cycle */}
-          {/* Billing Cycle */}
           <View className="mb-5">
-            <Text className="mb-3 text-[15px] font-extrabold text-[#2B2233]">
+            <Text
+              className="mb-3 text-[15px] font-semibold"
+              style={{ color: premiumTitleColor }}
+            >
               Chu kỳ thanh toán
             </Text>
 
-            <View className="flex-row gap-2 rounded-2xl bg-[#F4EFF8] p-1.5">
+            <View
+              className="flex-row gap-2 rounded-2xl p-1.5"
+              style={{ backgroundColor: premiumSoftPink }}
+            >
               {(["MONTHLY", "YEARLY"] as BillingCycle[]).map((cycle) => {
                 const isActive = billingCycle === cycle;
 
@@ -790,8 +871,8 @@ export default function PremiumSubscriptionScreen() {
                       style={{
                         textAlign: "center",
                         fontSize: 13,
-                        fontWeight: "800",
-                        color: isActive ? "#7C3AED" : "#8E869A",
+                        fontWeight: isActive ? "600" : "400",
+                        color: isActive ? premiumBrandPink : premiumBodyColor,
                       }}
                     >
                       {cycle === "MONTHLY" ? "Theo tháng" : "Theo năm"}
@@ -803,8 +884,7 @@ export default function PremiumSubscriptionScreen() {
                           marginTop: 2,
                           textAlign: "center",
                           fontSize: 10,
-                          fontWeight: "700",
-                          color: "#16A34A",
+                          color: premiumBrandOrange,
                         }}
                       >
                         Giá theo từng gói
@@ -817,21 +897,36 @@ export default function PremiumSubscriptionScreen() {
           </View>
 
           {/* Features */}
-          <View className="mb-5 rounded-2xl border border-[#EDE8F5] bg-[#F5F0FF] p-5">
-            <Text className="mb-4 text-[15px] font-extrabold text-[#2B2233]">
-              👑 Đặc quyền gói Premium
+          <View
+            className="mb-5 rounded-2xl border p-5"
+            style={{
+              backgroundColor: premiumSoftPink,
+              borderColor: premiumSoftPinkBorder,
+            }}
+          >
+            <Text
+              className="mb-4 text-[15px] font-semibold"
+              style={{ color: premiumTitleColor }}
+            >
+              Đặc quyền gói Premium
             </Text>
             <View className="gap-3">
               {PREMIUM_FEATURES.map((feature, index) => (
                 <View key={index} className="flex-row items-center gap-3">
-                  <View className="h-8 w-8 items-center justify-center rounded-full bg-[#7C3AED]">
+                  <View
+                    className="h-8 w-8 items-center justify-center rounded-full"
+                    style={{ backgroundColor: premiumBrandPink }}
+                  >
                     <SymbolView
                       name={feature.icon}
                       size={15}
                       tintColor="white"
                     />
                   </View>
-                  <Text className="flex-1 text-[13px] font-bold text-[#374151]">
+                  <Text
+                    className="flex-1 text-[13px] leading-5"
+                    style={{ color: premiumBodyColor }}
+                  >
                     {feature.label}
                   </Text>
                 </View>
@@ -840,18 +935,33 @@ export default function PremiumSubscriptionScreen() {
           </View>
 
           {/* Summary */}
-          <View className="mb-5 rounded-2xl bg-[#F4EFF8] p-4">
-            <Text className="text-[14px] font-extrabold text-[#2B2233]">
+          <View
+            className="mb-5 rounded-2xl p-4"
+            style={{ backgroundColor: premiumSoftPink }}
+          >
+            <Text
+              className="text-[14px] font-semibold"
+              style={{ color: premiumTitleColor }}
+            >
               Tóm tắt thanh toán
             </Text>
             <View className="mt-2 gap-1">
-              <Text className="text-[13px] text-[#3D3446]">
+              <Text
+                className="text-[13px]"
+                style={{ color: premiumBodyColor }}
+              >
                 Gói: {selectedPlan?.subscriptionPlanName ?? "Chưa chọn"}
               </Text>
-              <Text className="text-[13px] text-[#3D3446]">
+              <Text
+                className="text-[13px]"
+                style={{ color: premiumBodyColor }}
+              >
                 Chu kỳ: {billingCycle === "MONTHLY" ? "Theo tháng" : "Theo năm"}
               </Text>
-              <Text className="text-[13px] font-extrabold text-[#7C3AED]">
+              <Text
+                className="text-[13px] font-semibold"
+                style={{ color: premiumBrandPink }}
+              >
                 Số tiền: {formatCurrency(selectedAmount)}
               </Text>
             </View>
@@ -861,54 +971,79 @@ export default function PremiumSubscriptionScreen() {
           <Pressable
             disabled={isSubmitting || plans.length === 0}
             onPress={handleSubscribe}
-            className={`rounded-2xl px-4 py-4 ${isSubmitting || plans.length === 0
-                ? "bg-[#C4B5D9]"
-                : "bg-[#7C3AED]"
-              }`}
+            className="rounded-2xl px-4 py-4"
+            style={{
+              backgroundColor:
+                isSubmitting || plans.length === 0
+                  ? premiumDisabledPink
+                  : premiumBrandPink,
+            }}
           >
             {isSubmitting ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text className="text-center text-[16px] font-extrabold text-white">
-                👑 Đăng ký Premium & Thanh toán
+              <Text className="text-center text-[16px] font-semibold text-white">
+                Đăng ký Premium & Thanh toán
               </Text>
             )}
           </Pressable>
 
           {/* Payment result */}
           {payment ? (
-            <View className="mt-5 rounded-2xl border border-[#EDE8F5] bg-white p-4">
-              <Text className="text-[15px] font-extrabold text-[#2B2233]">
+            <View
+              className="mt-5 rounded-2xl border bg-white p-4"
+              style={{ borderColor: premiumSoftPinkBorder }}
+            >
+              <Text
+                className="text-[15px] font-semibold"
+                style={{ color: premiumTitleColor }}
+              >
                 Hoàn tất thanh toán
               </Text>
-              <Text className="mt-1 text-[13px] text-[#8E869A]">
+              <Text
+                className="mt-1 text-[13px] leading-5"
+                style={{ color: premiumBodyColor }}
+              >
                 Mở trang thanh toán an toàn để hoàn tất. Nếu trình duyệt không mở
                 được, hãy quét mã QR bên dưới.
               </Text>
               {isConfirmingPayment ? (
-                <View className="mt-3 flex-row items-center gap-3 rounded-xl bg-[#F5F0FF] p-3">
-                  <ActivityIndicator color="#7C3AED" />
-                  <Text className="flex-1 text-[12px] font-bold text-[#7C3AED]">
+                <View
+                  className="mt-3 flex-row items-center gap-3 rounded-xl p-3"
+                  style={{ backgroundColor: premiumSoftPink }}
+                >
+                  <ActivityIndicator color={premiumBrandPink} />
+                  <Text
+                    className="flex-1 text-[12px]"
+                    style={{ color: premiumBrandPink }}
+                  >
                     Đang đối soát giao dịch với PayOS...
                   </Text>
                 </View>
               ) : null}
               <Pressable
                 onPress={() => openPayOs()}
-                className="mt-4 rounded-xl bg-[#7C3AED] px-4 py-3"
+                className="mt-4 rounded-xl px-4 py-3"
+                style={{ backgroundColor: premiumBrandPink }}
               >
-                <Text className="text-center text-[13px] font-extrabold text-white">
+                <Text className="text-center text-[13px] font-semibold text-white">
                   Mở trang thanh toán
                 </Text>
               </Pressable>
               {qrImageUri ? (
-                <View className="mt-4 items-center rounded-2xl bg-[#F5F0FF] p-4">
+                <View
+                  className="mt-4 items-center rounded-2xl p-4"
+                  style={{ backgroundColor: premiumSoftPink }}
+                >
                   <Image
                     source={{ uri: qrImageUri }}
                     className="h-56 w-56 rounded-xl"
                     resizeMode="contain"
                   />
-                  <Text className="mt-3 text-center text-[12px] text-[#8E869A]">
+                  <Text
+                    className="mt-3 text-center text-[12px]"
+                    style={{ color: premiumBodyColor }}
+                  >
                     Quét mã bằng ứng dụng ngân hàng hoặc ví hỗ trợ VietQR.
                   </Text>
                 </View>
@@ -919,43 +1054,65 @@ export default function PremiumSubscriptionScreen() {
           {/* Subscription History */}
           {history.length > 0 ? (
             <View className="mt-6">
-              <Text className="mb-3 text-[15px] font-extrabold text-[#2B2233]">
+              <Text
+                className="mb-3 text-[15px] font-semibold"
+                style={{ color: premiumTitleColor }}
+              >
                 Lịch sử đăng ký Premium
               </Text>
               <View className="gap-3">
                 {history.map((record) => (
                   <View
                     key={record.invoiceId}
-                    className="rounded-2xl border border-[#EDE8F5] bg-[#FAFAFA] p-4"
+                    className="rounded-2xl border bg-[#FAFAFA] p-4"
+                    style={{ borderColor: premiumSoftPinkBorder }}
                   >
                     <View className="flex-row items-center justify-between">
-                      <Text className="text-[14px] font-extrabold text-[#2B2233]">
+                      <Text
+                        className="text-[14px] font-semibold"
+                        style={{ color: premiumTitleColor }}
+                      >
                         {record.planName}
                       </Text>
                       <View
-                        className={`rounded-full px-3 py-1 ${record.status === "ACTIVE"
-                            ? "bg-green-100"
-                            : "bg-[#F4EFF8]"
-                          }`}
+                        className="rounded-full px-3 py-1"
+                        style={{
+                          backgroundColor:
+                            record.status === "ACTIVE"
+                              ? "#EAF8F1"
+                              : premiumSoftPink,
+                        }}
                       >
                         <Text
-                          className={`text-[10px] font-extrabold ${record.status === "ACTIVE"
-                              ? "text-green-700"
-                              : "text-[#8E869A]"
-                            }`}
+                          className="text-[10px]"
+                          style={{
+                            color:
+                              record.status === "ACTIVE"
+                                ? "#168A64"
+                                : premiumBodyColor,
+                          }}
                         >
                           {getInvoiceStatusLabel(record.status)}
                         </Text>
                       </View>
                     </View>
                     <View className="mt-2 gap-1">
-                      <Text className="text-[12px] text-[#8E869A]">
+                      <Text
+                        className="text-[12px]"
+                        style={{ color: premiumBodyColor }}
+                      >
                         Thanh toán: {getPaymentStatusLabel(record.paymentStatus)}
                       </Text>
-                      <Text className="text-[12px] text-[#8E869A]">
+                      <Text
+                        className="text-[12px]"
+                        style={{ color: premiumBodyColor }}
+                      >
                         Số tiền: {formatCurrency(record.paidAmount)}
                       </Text>
-                      <Text className="text-[12px] text-[#8E869A]">
+                      <Text
+                        className="text-[12px]"
+                        style={{ color: premiumBodyColor }}
+                      >
                         Từ {formatDate(record.startDate)} đến{" "}
                         {formatDate(record.endDate)}
                       </Text>

@@ -118,7 +118,7 @@ function CoordinateMapPickerModal({
   return (
     <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
       <SafeAreaView className="flex-1 bg-white" edges={["top", "bottom"]}>
-        <View className="flex-row items-center justify-between border-b border-[#F4EFF8] px-4 py-3">
+        <View className="flex-row items-center justify-between border-b border-[#F6EFE9] px-4 py-3">
           <View className="flex-1 pr-3">
             <Text className="text-[17px] font-extrabold text-[#2B2233]">
               Chọn vị trí shop
@@ -131,7 +131,7 @@ function CoordinateMapPickerModal({
             onPress={onClose}
             style={{
               alignItems: "center",
-              backgroundColor: "#F4EFF8",
+              backgroundColor: "#F6EFE9",
               borderRadius: 999,
               height: 40,
               justifyContent: "center",
@@ -156,8 +156,8 @@ function CoordinateMapPickerModal({
           <Marker coordinate={pickedCoordinate} />
         </MapView>
 
-        <View className="gap-3 border-t border-[#F4EFF8] bg-white px-4 py-4">
-          <View className="rounded-2xl bg-[#FFF8FC] p-3">
+        <View className="gap-3 border-t border-[#F6EFE9] bg-white px-4 py-4">
+          <View className="rounded-2xl bg-[#FFF9F5] p-3">
             <Text className="text-[12px] font-bold text-[#8E869A]">
               Vị trí đã chọn
             </Text>
@@ -170,7 +170,7 @@ function CoordinateMapPickerModal({
           <Pressable
             onPress={() => onApply(pickedCoordinate)}
             style={{
-              backgroundColor: "#EB489B",
+              backgroundColor: "#F58752",
               borderRadius: 12,
               paddingHorizontal: 16,
               paddingVertical: 16,
@@ -365,7 +365,7 @@ export default function PartnerSubscriptionScreen() {
   const loadPlans = useCallback(async () => {
     const accessToken = await getValidAccessToken();
     if (!accessToken) {
-      setErrorMessage("Bạn cần đăng nhập trước khi đăng ký gói Partner.");
+      setErrorMessage("Bạn cần đăng nhập trước khi đăng ký gói Đối tác.");
       setPlans([]);
       return;
     }
@@ -522,7 +522,7 @@ export default function PartnerSubscriptionScreen() {
 
     const accessToken = await getValidAccessToken();
     if (!accessToken || !selectedPlan || !documentFile) {
-      appAlert.alert("Cần đăng nhập", "Vui lòng đăng nhập trước khi đăng ký gói Partner.");
+      appAlert.alert("Cần đăng nhập", "Vui lòng đăng nhập trước khi đăng ký gói Đối tác.");
       return;
     }
 
@@ -554,7 +554,7 @@ export default function PartnerSubscriptionScreen() {
       await openBankPayment(paymentResponse);
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "Đăng ký Partner hoặc khởi tạo thanh toán ngân hàng thất bại.",
+        error instanceof Error ? error.message : "Đăng ký Đối tác hoặc khởi tạo thanh toán ngân hàng thất bại.",
       );
     } finally {
       setIsSubmitting(false);
@@ -600,7 +600,7 @@ export default function PartnerSubscriptionScreen() {
       >
         {/* Header */}
         <View
-          className="bg-[#EB489B] pb-8 pt-5"
+          className="bg-[#F58752] pb-8 pt-5"
           style={{ paddingHorizontal: ScreenHorizontalPadding }}
         >
           <View className="mb-4 flex-row items-center justify-between">
@@ -634,14 +634,14 @@ export default function PartnerSubscriptionScreen() {
                 tintColor="white"
               />
               <Text className="text-[12px] font-extrabold text-white">
-                GÓI PARTNER SHOP
+                GÓI ĐỐI TÁC SHOP
               </Text>
             </View>
             <View className="w-10" />
           </View>
 
           <Text className="text-[28px] font-extrabold text-white">
-            Đăng ký Partner
+            Đăng ký Đối tác
           </Text>
           <Text className="mt-1 text-[14px] leading-5 text-white/80">
             Hiển thị shop lên bản đồ CultureQuest, phát hành voucher & thu hút khách du lịch
@@ -668,12 +668,12 @@ export default function PartnerSubscriptionScreen() {
                       <SymbolView
                         name={{ ios: "checkmark", android: "check", web: "check" }}
                         size={14}
-                        tintColor="#EB489B"
+                        tintColor="#F58752"
                       />
                     ) : (
                       <Text
                         style={{
-                          color: isActive ? "#EB489B" : "rgba(255,255,255,0.85)",
+                          color: isActive ? "#F58752" : "rgba(255,255,255,0.85)",
                           fontSize: 13,
                           fontWeight: "800",
                         }}
@@ -724,8 +724,8 @@ export default function PartnerSubscriptionScreen() {
         >
           {/* Loading / Error */}
           {isLoading ? (
-            <View className="mb-4 items-center rounded-2xl bg-[#FFF8FC] p-6">
-              <ActivityIndicator color="#EB489B" />
+            <View className="mb-4 items-center rounded-2xl bg-[#FFF9F5] p-6">
+              <ActivityIndicator color="#F58752" />
               <Text className="mt-3 text-center text-[13px] text-[#8E869A]">
                 Đang tải gói đăng ký...
               </Text>
@@ -740,25 +740,25 @@ export default function PartnerSubscriptionScreen() {
 
           {/* Partner Benefits Banner */}
           {currentStep === 1 ? (
-          <View className="mb-5 rounded-2xl border border-[#F8D7E3] bg-[#FFF8FC] p-4">
+          <View className="mb-5 rounded-2xl border border-[#F7DFCE] bg-[#FFF9F5] p-4">
             <View className="flex-row items-center gap-2 mb-2">
               <SymbolView
                 name={{ ios: "checkmark.seal.fill", android: "verified", web: "verified" }}
                 size={16}
-                tintColor="#EB489B"
+                tintColor="#F58752"
               />
               <Text className="text-[14px] font-extrabold text-[#2B2233]">
-                Quyền lợi Partner chính thức
+                Quyền lợi Đối tác chính thức
               </Text>
             </View>
-            <View className="gap-2 border-t border-[#F8D7E3] pt-3">
+            <View className="gap-2 border-t border-[#F7DFCE] pt-3">
               {[
                 { icon: { ios: "mappin.and.ellipse", android: "place", web: "place" }, text: "Đưa địa điểm/shop lên bản đồ du lịch" },
                 { icon: { ios: "ticket.fill", android: "confirmation_number", web: "confirmation_number" }, text: "Tạo & quản lý voucher ưu đãi cho du khách" },
-                { icon: { ios: "checkmark.seal.fill", android: "verified", web: "verified" }, text: "Tích xanh Xác minh Partner chính thức" },
+                { icon: { ios: "checkmark.seal.fill", android: "verified", web: "verified" }, text: "Tích xanh Xác minh Đối tác chính thức" },
               ].map((item, i) => (
                 <View key={i} className="flex-row items-center gap-2">
-                  <SymbolView name={item.icon} size={14} tintColor="#EB489B" />
+                  <SymbolView name={item.icon} size={14} tintColor="#F58752" />
                   <Text className="text-[12px] font-bold text-[#374151]">{item.text}</Text>
                 </View>
               ))}
@@ -772,7 +772,7 @@ export default function PartnerSubscriptionScreen() {
           {!isLoading && plans.length > 0 ? (
             <View className="mb-5">
               <Text className="mb-3 text-[15px] font-extrabold text-[#2B2233]">
-                Chọn gói Partner
+                Chọn gói Đối tác
               </Text>
               <View className="gap-3">
                 {plans.map((plan) => {
@@ -783,8 +783,8 @@ export default function PartnerSubscriptionScreen() {
                       key={plan.subscriptionPlanId}
                       onPress={() => handleSelectPlan(plan)}
                       style={{
-                        backgroundColor: isSelected ? "#FFF0F8" : "#FFF8FC",
-                        borderColor: isSelected ? "#EB489B" : "#F4EFF8",
+                        backgroundColor: isSelected ? "#FFF4EF" : "#FFF9F5",
+                        borderColor: isSelected ? "#F58752" : "#F6EFE9",
                         borderRadius: 16,
                         borderWidth: 1,
                         elevation: isSelected ? 2 : 0,
@@ -793,9 +793,9 @@ export default function PartnerSubscriptionScreen() {
                     >
                       <View className="flex-row items-start justify-between gap-3">
                         <View className="flex-1">
-                          <View className="self-start rounded-full bg-[#FFE5F1] px-3 py-1">
-                            <Text className="text-[10px] font-extrabold uppercase text-[#EB489B]">
-                              Gói Partner
+                          <View className="self-start rounded-full bg-[#FFE8D9] px-3 py-1">
+                            <Text className="text-[10px] font-extrabold uppercase text-[#F58752]">
+                              Gói Đối tác
                             </Text>
                           </View>
                           <Text className="mt-3 text-[16px] font-extrabold text-[#2B2233]">
@@ -809,7 +809,7 @@ export default function PartnerSubscriptionScreen() {
                           <SymbolView
                             name={{ ios: "checkmark.circle.fill", android: "check_circle", web: "check_circle" }}
                             size={22}
-                            tintColor="#EB489B"
+                            tintColor="#F58752"
                           />
                         ) : null}
                       </View>
@@ -828,7 +828,7 @@ export default function PartnerSubscriptionScreen() {
             <Text className="mb-3 text-[15px] font-extrabold text-[#2B2233]">
               Chu kỳ thanh toán
             </Text>
-            <View className="flex-row rounded-2xl bg-[#F4EFF8] p-1.5 gap-2">
+            <View className="flex-row rounded-2xl bg-[#F6EFE9] p-1.5 gap-2">
               {(["MONTHLY", "YEARLY"] as BillingCycle[]).map((cycle) => (
                 <Pressable
                   key={cycle}
@@ -843,7 +843,7 @@ export default function PartnerSubscriptionScreen() {
                     paddingVertical: 12,
                   }}
                 >
-                  <Text className={`text-center text-[13px] font-extrabold ${billingCycle === cycle ? "text-[#EB489B]" : "text-[#8E869A]"}`}>
+                  <Text className={`text-center text-[13px] font-extrabold ${billingCycle === cycle ? "text-[#F58752]" : "text-[#8E869A]"}`}>
                     {cycle === "MONTHLY" ? "Theo tháng" : "Theo năm"}
                   </Text>
                   {cycle === "YEARLY" ? (
@@ -860,7 +860,7 @@ export default function PartnerSubscriptionScreen() {
           <Text className="mb-3 text-[15px] font-extrabold text-[#2B2233]">
             Thông tin shop
           </Text>
-          <View className="mb-5 gap-4 rounded-2xl bg-[#FFF8FC] p-4">
+          <View className="mb-5 gap-4 rounded-2xl bg-[#FFF9F5] p-4">
             <View>
               <Text className="mb-1.5 text-[12px] font-extrabold text-[#6F657A]">
                 Tên shop / địa điểm *
@@ -909,13 +909,13 @@ export default function PartnerSubscriptionScreen() {
                   autoCorrect={false}
                   className="flex-1 px-4 py-3 text-[#2B2233]"
                 />
-                {isSearchingAddress ? <ActivityIndicator color="#EB489B" size="small" /> : null}
+                {isSearchingAddress ? <ActivityIndicator color="#F58752" size="small" /> : null}
                 <Pressable
                   accessibilityLabel="Chọn vị trí shop trên bản đồ"
                   onPress={() => setIsCoordinateMapVisible(true)}
                   style={{
                     alignItems: "center",
-                    backgroundColor: "#FFF0F8",
+                    backgroundColor: "#FFF4EF",
                     borderRadius: 999,
                     height: 40,
                     justifyContent: "center",
@@ -926,20 +926,20 @@ export default function PartnerSubscriptionScreen() {
                   <SymbolView
                     name={{ ios: "mappin.and.ellipse", android: "location_on", web: "location_on" }}
                     size={20}
-                    tintColor="#EB489B"
+                    tintColor="#F58752"
                   />
                 </Pressable>
               </View>
 
               {isAddressFocused && addressSuggestions.length > 0 ? (
-                <View className="mt-2 overflow-hidden rounded-xl border border-[#F1E5ED] bg-white">
+                <View className="mt-2 overflow-hidden rounded-xl border border-[#F2E3D6] bg-white">
                   {addressSuggestions.map((suggestion, index) => (
                     <Pressable
                       key={suggestion.placeId}
                       onPress={() => handleSelectAddressSuggestion(suggestion)}
                       style={{
                         alignItems: "flex-start",
-                        borderBottomColor: "#F4EFF8",
+                        borderBottomColor: "#F6EFE9",
                         borderBottomWidth:
                           index < addressSuggestions.length - 1 ? 1 : 0,
                         flexDirection: "row",
@@ -948,11 +948,11 @@ export default function PartnerSubscriptionScreen() {
                         paddingVertical: 12,
                       }}
                     >
-                      <View className="mt-0.5 h-8 w-8 items-center justify-center rounded-full bg-[#FFF0F8]">
+                      <View className="mt-0.5 h-8 w-8 items-center justify-center rounded-full bg-[#FFF4EF]">
                         <SymbolView
                           name={{ ios: "mappin", android: "location_on", web: "location_on" }}
                           size={16}
-                          tintColor="#EB489B"
+                          tintColor="#F58752"
                         />
                       </View>
                       <View className="flex-1">
@@ -972,7 +972,7 @@ export default function PartnerSubscriptionScreen() {
             </View>
 
             {/* Map Preview */}
-            <View className="overflow-hidden rounded-2xl border border-[#F4DDEB] bg-white">
+            <View className="overflow-hidden rounded-2xl border border-[#F5DCC8] bg-white">
               <Pressable
                 onPress={() => setIsCoordinateMapVisible(true)}
                 style={{}}
@@ -998,12 +998,12 @@ export default function PartnerSubscriptionScreen() {
 
               <View className="p-3">
                 <Text className={`text-[13px] font-extrabold ${hasSavedShopCoordinate ? "text-[#15803D]" : "text-[#8E869A]"}`}>
-                  {hasSavedShopCoordinate ? "✅ Đã chọn vị trí shop" : "Chạm vào bản đồ để chọn vị trí shop"}
+                  {hasSavedShopCoordinate ? "Đã chọn vị trí shop" : "Chạm vào bản đồ để chọn vị trí shop"}
                 </Text>
                 <Pressable
                   onPress={() => setIsCoordinateMapVisible(true)}
                   style={{
-                    backgroundColor: "#EB489B",
+                    backgroundColor: "#F58752",
                     borderRadius: 12,
                     marginTop: 12,
                     paddingHorizontal: 12,
@@ -1022,12 +1022,12 @@ export default function PartnerSubscriptionScreen() {
           <Text className="mb-3 text-[15px] font-extrabold text-[#2B2233]">
             Hồ sơ xác minh
           </Text>
-          <View className="mb-5 gap-3 rounded-2xl bg-[#FFF8FC] p-4">
+          <View className="mb-5 gap-3 rounded-2xl bg-[#FFF9F5] p-4">
             <Pressable
               onPress={pickDocumentFile}
               style={{
                 backgroundColor: "#FFFFFF",
-                borderColor: "#EB489B",
+                borderColor: "#F58752",
                 borderRadius: 12,
                 borderStyle: "dashed",
                 borderWidth: 1,
@@ -1035,8 +1035,10 @@ export default function PartnerSubscriptionScreen() {
                 paddingVertical: 16,
               }}
             >
-              <Text className="text-center text-[13px] font-extrabold text-[#EB489B]">
-                {documentFile ? `✅ Đã chọn: ${documentFile.name}` : "📄 Chọn ảnh giấy tờ xác minh *"}
+              <Text className="text-center text-[13px] font-extrabold text-[#F58752]">
+                {documentFile
+                  ? `Đã chọn: ${documentFile.name}`
+                  : "Chọn ảnh giấy tờ xác minh *"}
               </Text>
             </Pressable>
 
@@ -1044,7 +1046,7 @@ export default function PartnerSubscriptionScreen() {
               onPress={pickShopImages}
               style={{
                 backgroundColor: "#FFFFFF",
-                borderColor: "#F0B7D6",
+                borderColor: "#F3C39B",
                 borderRadius: 12,
                 borderStyle: "dashed",
                 borderWidth: 1,
@@ -1052,10 +1054,10 @@ export default function PartnerSubscriptionScreen() {
                 paddingVertical: 16,
               }}
             >
-              <Text className="text-center text-[13px] font-extrabold text-[#EB489B]">
+              <Text className="text-center text-[13px] font-extrabold text-[#F58752]">
                 {shopFiles.length > 0
-                  ? `🖼️ Đã chọn ${shopFiles.length} ảnh shop`
-                  : "🖼️ Chọn thêm ảnh shop (tuỳ chọn)"}
+                  ? `Đã chọn ${shopFiles.length} ảnh shop`
+                  : "Chọn thêm ảnh shop (tuỳ chọn)"}
               </Text>
             </Pressable>
           </View>
@@ -1064,7 +1066,7 @@ export default function PartnerSubscriptionScreen() {
           <Pressable
             onPress={handleContinueToPayment}
             style={{
-              backgroundColor: "#EB489B",
+              backgroundColor: "#F58752",
               borderRadius: 16,
               flexDirection: "row",
               alignItems: "center",
@@ -1101,9 +1103,9 @@ export default function PartnerSubscriptionScreen() {
             <SymbolView
               name={{ ios: "chevron.left", android: "arrow_back", web: "arrow_back" }}
               size={14}
-              tintColor="#EB489B"
+              tintColor="#F58752"
             />
-            <Text className="text-[13px] font-extrabold text-[#EB489B]">
+            <Text className="text-[13px] font-extrabold text-[#F58752]">
               Quay lại thông tin đăng ký
             </Text>
           </Pressable>
@@ -1112,12 +1114,12 @@ export default function PartnerSubscriptionScreen() {
           <Text className="mb-3 text-[15px] font-extrabold text-[#2B2233]">
             Phương thức thanh toán
           </Text>
-          <View className="mb-5 rounded-2xl border border-[#EB489B] bg-[#FFF0F8] p-4">
+          <View className="mb-5 rounded-2xl border border-[#F58752] bg-[#FFF4EF] p-4">
             <View className="flex-row items-center gap-3">
               <View
                 style={{
                   alignItems: "center",
-                  backgroundColor: "#EB489B",
+                  backgroundColor: "#F58752",
                   borderRadius: 999,
                   height: 36,
                   justifyContent: "center",
@@ -1141,13 +1143,13 @@ export default function PartnerSubscriptionScreen() {
               <SymbolView
                 name={{ ios: "checkmark.circle.fill", android: "check_circle", web: "check_circle" }}
                 size={20}
-                tintColor="#EB489B"
+                tintColor="#F58752"
               />
             </View>
           </View>
 
           {/* Summary */}
-          <View className="mb-5 rounded-2xl bg-[#F4EFF8] p-4">
+          <View className="mb-5 rounded-2xl bg-[#F6EFE9] p-4">
             <Text className="text-[14px] font-extrabold text-[#2B2233]">
               Tóm tắt thanh toán
             </Text>
@@ -1158,7 +1160,7 @@ export default function PartnerSubscriptionScreen() {
               <Text className="text-[13px] text-[#3D3446]">
                 Chu kỳ: {billingCycle === "MONTHLY" ? "Theo tháng" : "Theo năm"}
               </Text>
-              <Text className="text-[13px] font-extrabold text-[#EB489B]">
+              <Text className="text-[13px] font-extrabold text-[#F58752]">
                 Số tiền: {formatCurrency(selectedAmount)}
               </Text>
               <Text className="text-[13px] text-[#3D3446]">
@@ -1173,7 +1175,7 @@ export default function PartnerSubscriptionScreen() {
             onPress={handleRegisterAndPay}
             style={{
               backgroundColor:
-                isSubmitting || plans.length === 0 ? "#D8CADF" : "#EB489B",
+                isSubmitting || plans.length === 0 ? "#E8D5C6" : "#F58752",
               borderRadius: 16,
               paddingHorizontal: 16,
               paddingVertical: 16,
@@ -1183,14 +1185,14 @@ export default function PartnerSubscriptionScreen() {
               <ActivityIndicator color="white" />
             ) : (
               <Text className="text-center text-[15px] font-extrabold text-white">
-                🏪 Đăng ký và thanh toán
+                Đăng ký và thanh toán
               </Text>
             )}
           </Pressable>
 
           {/* Payment Result */}
           {payment ? (
-            <View className="mt-5 rounded-2xl border border-[#F4EFF8] bg-white p-4">
+            <View className="mt-5 rounded-2xl border border-[#F6EFE9] bg-white p-4">
               <Text className="text-[15px] font-extrabold text-[#2B2233]">
                 Hoàn tất thanh toán
               </Text>
@@ -1200,7 +1202,7 @@ export default function PartnerSubscriptionScreen() {
               <Pressable
                 onPress={() => openBankPayment()}
                 style={{
-                  backgroundColor: "#A50064",
+                  backgroundColor: "#D9662B",
                   borderRadius: 12,
                   marginTop: 16,
                   paddingHorizontal: 16,
@@ -1212,7 +1214,7 @@ export default function PartnerSubscriptionScreen() {
                 </Text>
               </Pressable>
               {qrImageUri ? (
-                <View className="mt-4 items-center rounded-2xl bg-[#F8F2FA] p-4">
+                <View className="mt-4 items-center rounded-2xl bg-[#FFF6F0] p-4">
                   <Image source={{ uri: qrImageUri }} className="h-56 w-56 rounded-xl" resizeMode="contain" />
                   <Text className="mt-3 text-center text-[12px] text-[#8E869A]">
                     Quét mã bằng ứng dụng ngân hàng hoặc ví hỗ trợ VietQR.
