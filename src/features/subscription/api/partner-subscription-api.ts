@@ -39,6 +39,14 @@ export type SubscriptionPlanPage = {
   totalPages?: number;
 };
 
+/** `PartnerSubscriptionResponse.MediaDto` — ảnh shop đã upload lên S3. */
+export type PartnerSubscriptionMedia = {
+  fileName?: string | null;
+  fileUrl: string;
+  mediaId: number;
+  mediaType?: string | null;
+};
+
 export type PartnerSubscription = {
   address: string;
   billingCycle?: BillingCycle | null;
@@ -48,6 +56,8 @@ export type PartnerSubscription = {
   isVerified?: boolean | null;
   latitude: number;
   longitude: number;
+  /** Chỉ có trong response của bước đăng ký (khi có gửi kèm ảnh shop). */
+  medias?: PartnerSubscriptionMedia[] | null;
   partnerId?: number | null;
   partnerName?: string | null;
   shopName: string;
@@ -182,7 +192,10 @@ export async function registerPartnerSubscription(
   formData.append("billingCycle", request.billingCycle);
 
   appendFile(formData, "documentFile", request.documentFile);
-  request.files?.forEach((file) => appendFile(formData, "shopFiles", file));
+  // Tên field PHẢI là `files`: `PartnerSubscriptionRequest` bên BE khai báo
+  // `MultipartFile[] files` và bind bằng @ModelAttribute, nên mọi tên khác
+  // (trước đây gửi "shopFiles") bị bỏ qua âm thầm -> ảnh shop không được upload.
+  request.files?.forEach((file) => appendFile(formData, "files", file));
 
   try {
     console.log("========== REGISTER PARTNER ==========");
@@ -197,7 +210,7 @@ export async function registerPartnerSubscription(
 
     console.log("documentFile:", request.documentFile);
 
-    console.log("shopFiles:", request.files);
+    console.log("files:", request.files);
 
     const response = await axios.post<PartnerSubscription>(
       resolveApiUrl("/api/partner/subscriptions/register"),
@@ -258,21 +271,75 @@ export async function initiatePayOsPayment({
     searchParams.set("redirectUrl", redirectUrl.trim());
   }
 
-  const response = await fetch(
-    resolveApiUrl(`/api/partner/subscriptions/${subscriptionId}/initiate-payment?${searchParams.toString()}`),
-    {
-      headers: getAuthHeaders(accessToken),
-      method: "POST",
-    },
+  const url = resolveApiUrl(
+    `/api/partner/subscriptions/${subscriptionId}/initiate-payment?${searchParams.toString()}`,
   );
+
+  // Bước này trước đây không log gì cả, nên khi đăng ký xong mà không ra được
+  // link thanh toán thì log chỉ dừng ở "REGISTER SUCCESS" — không biết hỏng ở
+  // đâu. Endpoint yêu cầu role PARTNER nên 403 là lỗi rất dễ gặp.
+  console.log("========== INITIATE PAYOS (PARTNER) ==========");
+  console.log("URL:", url);
+  console.log("subscriptionId:", subscriptionId);
+
+  const response = await fetch(url, {
+    headers: getAuthHeaders(accessToken),
+    method: "POST",
+  });
+
+  console.log("status:", response.status);
 
   return ensureOk<PaymentInitResponse>(response, "Không khởi tạo được thanh toán PayOS");
 }
 
+/**
+ * GET /api/partner/subscriptions/my — `@PreAuthorize("hasRole('PARTNER')")`.
+ *
+ * LƯU Ý: tài khoản Explorer vừa đăng ký gói ở app KHÔNG gọi được API này (403).
+ * Khi admin duyệt hồ sơ, backend tạo một tài khoản Partner RIÊNG theo
+ * `shopEmail` (`PartnerSubscriptionServiceImpl#createPartnerSubAccount`) —
+ * quyền PARTNER nằm ở tài khoản đó, không phải tài khoản đang đăng nhập trên
+ * mobile.
+ */
 export async function getMyPartnerSubscriptions(accessToken: string) {
   const response = await fetch(resolveApiUrl("/api/partner/subscriptions/my"), {
     headers: getAuthHeaders(accessToken),
   });
 
   return ensureOk<PartnerSubscription[]>(response, "Không lấy được trạng thái đăng ký Partner");
+}
+
+/**
+ * POST /api/partner/subscriptions/{id}/cancel — hủy GIA HẠN gói Partner.
+ *
+ * Giống Premium: backend chỉ set `willCancelAtEnd` + `canceledAt` trên invoice,
+ * shop và quyền lợi Partner vẫn chạy tới hết `endDate` rồi
+ * `PartnerExpiryScheduler` mới tắt.
+ *
+ * Cũng yêu cầu role PARTNER nên chỉ dùng được từ tài khoản shop (xem ghi chú ở
+ * `getMyPartnerSubscriptions`), vì vậy chưa có màn hình nào trong app gọi tới.
+ * Giữ ở đây để lớp API khớp với backend khi mobile mở luồng cho tài khoản shop.
+ */
+export async function cancelPartnerSubscription({
+  accessToken,
+  reason,
+  subscriptionId,
+}: {
+  accessToken: string;
+  reason?: string;
+  subscriptionId: number;
+}) {
+  const response = await fetch(
+    resolveApiUrl(`/api/partner/subscriptions/${subscriptionId}/cancel`),
+    {
+      body: JSON.stringify({ reason: reason?.trim() ?? "" }),
+      headers: {
+        ...getAuthHeaders(accessToken),
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    },
+  );
+
+  return ensureOk<PartnerSubscription>(response, "Không hủy được gia hạn gói Đối tác");
 }

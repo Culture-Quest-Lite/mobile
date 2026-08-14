@@ -51,6 +51,14 @@ export type PremiumSubscriptionRecord = {
   startDate?: string | null;
   endDate?: string | null;
   paidAmount?: number | null;
+  /**
+   * Backend chỉ "hủy gia hạn", KHÔNG thu hồi quyền lợi ngay: invoice vẫn
+   * `ACTIVE` tới hết `endDate`, chỉ đánh dấu `willCancelAtEnd = true` để
+   * `PremiumExpiryScheduler` không renew nữa. Vì vậy không được suy ra trạng
+   * thái hủy từ `status`.
+   */
+  willCancelAtEnd?: boolean | null;
+  canceledAt?: string | null;
 };
 
 const PREMIUM_LOG_PREFIX = "[PREMIUM API]";
@@ -433,6 +441,64 @@ export async function confirmPremiumPayment(
       invoiceId: result.invoiceId,
       paymentStatus: result.paymentStatus,
       status: result.status,
+    });
+
+    return result;
+  } catch (error) {
+    logApiError(requestName, error);
+    throw error;
+  }
+}
+
+/**
+ * POST /api/user/premium/{invoiceId}/cancel
+ *
+ * Hủy GIA HẠN gói Premium (`PremiumSubscriptionController#cancelSubscription`).
+ * Backend không thu hồi quyền lợi ngay: chỉ set `willCancelAtEnd = true` +
+ * `canceledAt`, invoice giữ nguyên `ACTIVE` cho tới hết `endDate` rồi
+ * `PremiumExpiryScheduler` mới tắt Premium.
+ *
+ * Điều kiện phía BE (ném 400 kèm message tiếng Việt nếu vi phạm):
+ * - invoice phải thuộc chính user đang đăng nhập,
+ * - `status` phải là `ACTIVE`,
+ * - chưa từng hủy trước đó (`willCancelAtEnd` chưa bật).
+ *
+ * `reason` là tùy chọn ở BE nhưng nên gửi để admin đọc được trong
+ * `Invoice.cancelReason`.
+ */
+export async function cancelPremiumSubscription(
+  accessToken: string,
+  invoiceId: number,
+  reason?: string,
+): Promise<PremiumSubscriptionRecord> {
+  const requestName = "CANCEL PREMIUM SUBSCRIPTION";
+  const url = resolveApiUrl(`/api/user/premium/${invoiceId}/cancel`);
+  const startedAt = Date.now();
+  const body = { reason: reason?.trim() ?? "" };
+
+  logRequest(requestName, { method: "POST", url, accessToken, body });
+
+  try {
+    const result = await ensureOk<PremiumSubscriptionRecord>(
+      await fetch(url, {
+        method: "POST",
+        headers: {
+          ...getAuthHeaders(accessToken),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }),
+      "Không hủy được gia hạn gói Premium",
+      requestName,
+      startedAt,
+    );
+
+    console.log(`${PREMIUM_LOG_PREFIX} Cancel result:`, {
+      canceledAt: result.canceledAt,
+      endDate: result.endDate,
+      invoiceId: result.invoiceId,
+      status: result.status,
+      willCancelAtEnd: result.willCancelAtEnd,
     });
 
     return result;

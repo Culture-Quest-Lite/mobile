@@ -251,6 +251,15 @@ export default function PartnerSubscriptionScreen() {
   const [shopFiles, setShopFiles] = useState<UploadFile[]>([]);
   const [payment, setPayment] = useState<PaymentInitResponse | null>(null);
   const [registeredStatus, setRegisteredStatus] = useState<string | null>(null);
+  /**
+   * Id hóa đơn của hồ sơ đã đăng ký thành công trong phiên này. Có giá trị =
+   * không được gọi `register` nữa, chỉ khởi tạo lại thanh toán.
+   */
+  const [registeredSubscriptionId, setRegisteredSubscriptionId] = useState<
+    number | null
+  >(null);
+  /** Khoá chống double-tap, phải là ref để có hiệu lực ngay trong cùng tick. */
+  const isSubmittingRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -508,11 +517,18 @@ export default function PartnerSubscriptionScreen() {
   useEffect(() => {
     if (!incomingUrl) return;
     if (!incomingUrl.includes("subscription/partner")) return;
-    setPayment(null);
+    // KHÔNG xoá `payment`: xoá đi thì sau khi quay lại từ PayOS, nút duy nhất
+    // còn lại là "Đăng ký và thanh toán" -> user bấm tiếp là gửi thêm một hồ sơ
+    // đăng ký mới với cùng shopEmail và ăn 400 "Email đã được đăng ký".
     setRegisteredStatus("PENDING");
   }, [incomingUrl]);
 
   async function handleRegisterAndPay() {
+    // Guard bằng ref (đồng bộ) chứ không dùng `isSubmitting`: state chỉ được set
+    // SAU `await getValidAccessToken()`, nên hai lần chạm liên tiếp đều lọt qua
+    // và gửi 2 request đăng ký song song.
+    if (isSubmittingRef.current) return;
+
     const validationMessage = validateStep1();
     if (validationMessage) {
       appAlert.alert("Thiếu thông tin", validationMessage);
@@ -520,35 +536,48 @@ export default function PartnerSubscriptionScreen() {
       return;
     }
 
-    const accessToken = await getValidAccessToken();
-    if (!accessToken || !selectedPlan || !documentFile) {
-      appAlert.alert("Cần đăng nhập", "Vui lòng đăng nhập trước khi đăng ký gói Đối tác.");
-      return;
-    }
-
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setErrorMessage(null);
-    setPayment(null);
 
     try {
-      const subscription = await registerPartnerSubscription({
-        accessToken,
-        address,
-        billingCycle,
-        documentFile,
-        files: shopFiles,
-        latitude: parseCoordinate(latitude, "latitude")!,
-        longitude: parseCoordinate(longitude, "longitude")!,
-        shopEmail,
-        shopName,
-        subscriptionPlanId: selectedPlan.subscriptionPlanId,
-      });
-      setRegisteredStatus("PAYMENT_PENDING");
+      const accessToken = await getValidAccessToken();
+      if (!accessToken || !selectedPlan || !documentFile) {
+        appAlert.alert("Cần đăng nhập", "Vui lòng đăng nhập trước khi đăng ký gói Đối tác.");
+        return;
+      }
+
+      /**
+       * Hồ sơ đăng ký chỉ được gửi MỘT lần. Backend tạo `PartnerInfo` theo
+       * `shopEmail` và chặn trùng email, nên gọi lại `register` cho cùng shop
+       * luôn trả 400 — kể cả khi lần trước đã thành công và chỉ còn thiếu bước
+       * thanh toán. Đăng ký xong thì các lần bấm sau chỉ khởi tạo lại link
+       * PayOS cho đúng hóa đơn đó.
+       */
+      let subscriptionId = registeredSubscriptionId;
+
+      if (subscriptionId === null) {
+        const subscription = await registerPartnerSubscription({
+          accessToken,
+          address,
+          billingCycle,
+          documentFile,
+          files: shopFiles,
+          latitude: parseCoordinate(latitude, "latitude")!,
+          longitude: parseCoordinate(longitude, "longitude")!,
+          shopEmail,
+          shopName,
+          subscriptionPlanId: selectedPlan.subscriptionPlanId,
+        });
+        subscriptionId = subscription.id;
+        setRegisteredSubscriptionId(subscription.id);
+        setRegisteredStatus("PAYMENT_PENDING");
+      }
 
       const paymentResponse = await initiatePayOsPayment({
         accessToken,
         redirectUrl: PAYOS_SAFE_REDIRECT_URL,
-        subscriptionId: subscription.id,
+        subscriptionId,
       });
       setPayment(paymentResponse);
       await openBankPayment(paymentResponse);
@@ -557,6 +586,7 @@ export default function PartnerSubscriptionScreen() {
         error instanceof Error ? error.message : "Đăng ký Đối tác hoặc khởi tạo thanh toán ngân hàng thất bại.",
       );
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   }
@@ -1185,7 +1215,9 @@ export default function PartnerSubscriptionScreen() {
               <ActivityIndicator color="white" />
             ) : (
               <Text className="text-center text-[15px] font-extrabold text-white">
-                Đăng ký và thanh toán
+                {registeredSubscriptionId === null
+                  ? "Đăng ký và thanh toán"
+                  : "Tiếp tục thanh toán"}
               </Text>
             )}
           </Pressable>

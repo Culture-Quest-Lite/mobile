@@ -27,6 +27,7 @@ import {
   type PremiumPaymentInitResponse,
   type PremiumPlan,
   type PremiumSubscriptionRecord,
+  cancelPremiumSubscription,
   confirmPremiumPayment,
   getMyPremiumSubscriptions,
   getPremiumPlans,
@@ -93,6 +94,20 @@ const isActivatedRecord = (record: PremiumSubscriptionRecord) =>
  */
 const isRejectedRecord = (record: PremiumSubscriptionRecord) =>
   record.paymentStatus === "FAILED" || record.status === "CANCELLED";
+
+/**
+ * Hóa đơn còn hiệu lực và chưa đăng ký hủy -> mới cho bấm "Hủy gia hạn".
+ * Backend cũng chặn đúng hai điều kiện này, để lộ nút ra sẽ chỉ nhận 400.
+ */
+const canCancelRecord = (record: PremiumSubscriptionRecord) =>
+  record.status === "ACTIVE" && !record.willCancelAtEnd;
+
+/**
+ * Lý do mặc định gửi kèm khi hủy. App chưa có ô nhập text trong popup
+ * (`appAlert` chỉ hỗ trợ alert/confirm), mà `Invoice.cancelReason` bên BE là
+ * tùy chọn, nên gửi chuỗi cố định để admin vẫn biết yêu cầu đến từ mobile.
+ */
+const CANCEL_REASON = "Người dùng hủy gia hạn từ ứng dụng di động";
 
 const formatCurrency = (value?: number | null) => {
   if (!value) return "Liên hệ";
@@ -222,6 +237,9 @@ export default function PremiumSubscriptionScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
+  const [cancelingInvoiceId, setCancelingInvoiceId] = useState<number | null>(
+    null,
+  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   /**
@@ -246,6 +264,13 @@ export default function PremiumSubscriptionScreen() {
     checkedTimes: number;
     status: string | null;
     paymentStatus: string | null;
+    /**
+     * Lỗi của lần gọi `/confirm` gần nhất. Phải hiển thị ra màn hình: nếu
+     * backend không nói chuyện được với PayOS (sai key, hết hạn link, hóa đơn
+     * chưa có payosOrderCode...) thì trước đây lỗi bị nuốt hết, user chỉ thấy
+     * vòng quay 74 giây rồi một câu chung chung "PayOS chưa ghi nhận".
+     */
+    errorMessage: string | null;
   } | null>(null);
   /** Chặn 2 nguồn trigger (focus + AppState + deep link) chạy chồng nhau. */
   const isSyncingRef = useRef(false);
@@ -372,6 +397,7 @@ export default function PremiumSubscriptionScreen() {
       }
 
       const totalChecks = PAYMENT_POLL_BACKOFF_MS.length + 1;
+      let lastConfirmError: string | null = null;
 
       for (let attempt = 0; attempt < totalChecks; attempt += 1) {
         if (!isMountedRef.current) return;
@@ -381,10 +407,24 @@ export default function PremiumSubscriptionScreen() {
          * trả về invoice sau đối soát. Nếu confirm lỗi (mất mạng, PayOS timeout,
          * invoice chưa có payosOrderCode...) thì lùi về đọc `/my` — vẫn bắt được
          * trường hợp webhook PayOS đã tự cập nhật invoice trước đó.
+         *
+         * Lỗi confirm được GIỮ LẠI để hiển thị: đây là chỗ duy nhất phân biệt
+         * được "user chưa trả tiền" với "backend không gọi được PayOS" — hai
+         * tình huống nhìn y hệt nhau trên UI (vòng quay 74 giây) nhưng cách xử
+         * lý hoàn toàn khác.
          */
-        let record = await confirmPremiumPayment(accessToken, invoiceId).catch(
-          () => null,
-        );
+        let record: PremiumSubscriptionRecord | null = null;
+
+        try {
+          record = await confirmPremiumPayment(accessToken, invoiceId);
+          lastConfirmError = null;
+        } catch (confirmError) {
+          lastConfirmError =
+            confirmError instanceof Error
+              ? confirmError.message
+              : "Không gọi được API đối soát PayOS.";
+        }
+
         if (!record) {
           const records = await refreshHistory(accessToken);
           record = records?.find((item) => item.invoiceId === invoiceId) ?? null;
@@ -396,6 +436,7 @@ export default function PremiumSubscriptionScreen() {
         if (isMountedRef.current) {
           setPendingProbe({
             checkedTimes: attempt + 1,
+            errorMessage: lastConfirmError,
             paymentStatus: record?.paymentStatus ?? null,
             status: record?.status ?? null,
           });
@@ -442,7 +483,9 @@ export default function PremiumSubscriptionScreen() {
         await refreshHistory(accessToken);
         await refreshPremiumStatus().catch(() => false);
         setErrorMessage(
-          "PayOS vẫn chưa ghi nhận giao dịch này. Nếu bạn đã thanh toán, hãy bấm Kiểm tra lại sau ít phút.",
+          lastConfirmError
+            ? `Không đối soát được với PayOS: ${lastConfirmError}`
+            : "PayOS vẫn chưa ghi nhận giao dịch này. Nếu bạn đã thanh toán, hãy bấm Kiểm tra lại sau ít phút.",
         );
       }
     } finally {
@@ -522,6 +565,69 @@ export default function PremiumSubscriptionScreen() {
       "Không mở được trang thanh toán",
       "Hệ thống chưa trả liên kết thanh toán hợp lệ. Vui lòng thử đăng ký lại.",
     );
+  }
+
+  /**
+   * Hủy gia hạn gói đang chạy. Sau khi BE trả invoice đã cập nhật, patch thẳng
+   * record đó trong `history` để UI đổi ngay, rồi vẫn refetch `/my` để chắc
+   * chắn khớp server.
+   */
+  async function handleCancelSubscription(record: PremiumSubscriptionRecord) {
+    const confirmed = await appAlert.confirm({
+      cancelLabel: "Giữ gói",
+      confirmLabel: "Hủy gia hạn",
+      destructive: true,
+      message: `Bạn vẫn dùng được toàn bộ quyền lợi Premium đến hết ngày ${formatDate(
+        record.endDate,
+      )}. Sau ngày đó gói sẽ không tự gia hạn nữa.`,
+      title: "Hủy gia hạn Premium?",
+      tone: "warning",
+    });
+
+    if (!confirmed) return;
+
+    const accessToken = await getValidAccessToken();
+    if (!accessToken) {
+      appAlert.alert("Cần đăng nhập", "Vui lòng đăng nhập lại để thao tác.");
+      return;
+    }
+
+    setCancelingInvoiceId(record.invoiceId);
+    setErrorMessage(null);
+
+    try {
+      const updated = await cancelPremiumSubscription(
+        accessToken,
+        record.invoiceId,
+        CANCEL_REASON,
+      );
+
+      if (isMountedRef.current) {
+        setHistory((current) =>
+          current.map((item) =>
+            item.invoiceId === updated.invoiceId ? updated : item,
+          ),
+        );
+      }
+
+      appAlert.alert(
+        "Đã hủy gia hạn",
+        `Gói Premium vẫn hoạt động đến hết ngày ${formatDate(
+          updated.endDate ?? record.endDate,
+        )} và sẽ không tự gia hạn sau đó.`,
+      );
+
+      const records = await getMyPremiumSubscriptions(accessToken).catch(
+        () => null,
+      );
+      if (records && isMountedRef.current) setHistory(records);
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Không hủy được gia hạn Premium.",
+      );
+    } finally {
+      if (isMountedRef.current) setCancelingInvoiceId(null);
+    }
   }
 
   async function handleSubscribe() {
@@ -720,6 +826,17 @@ export default function PremiumSubscriptionScreen() {
                     Thanh toán:{" "}
                     {getPaymentStatusLabel(pendingProbe.paymentStatus ?? undefined)}
                   </Text>
+
+                  {/* Backend trả lỗi khi đối soát -> vấn đề nằm ở kết nối
+                      PayOS/hoá đơn, KHÔNG phải user chưa trả tiền. */}
+                  {pendingProbe.errorMessage ? (
+                    <Text
+                      className="mt-1 text-[11px] leading-4"
+                      style={{ color: "#B42345" }}
+                    >
+                      Lỗi đối soát: {pendingProbe.errorMessage}
+                    </Text>
+                  ) : null}
                 </View>
               ) : null}
               {!isConfirmingPayment ? (
@@ -1117,6 +1234,51 @@ export default function PremiumSubscriptionScreen() {
                         {formatDate(record.endDate)}
                       </Text>
                     </View>
+
+                    {/* Đã hủy gia hạn: gói vẫn chạy tới endDate nên không thể
+                        hiện "Đã huỷ" ở badge trạng thái (BE vẫn để ACTIVE). */}
+                    {record.willCancelAtEnd ? (
+                      <View
+                        className="mt-3 rounded-xl p-3"
+                        style={{ backgroundColor: premiumSoftPink }}
+                      >
+                        <Text
+                          className="text-[12px] leading-5"
+                          style={{ color: premiumBrandPink }}
+                        >
+                          Đã hủy gia hạn
+                          {record.canceledAt
+                            ? ` ngày ${formatDate(record.canceledAt)}`
+                            : ""}
+                          . Quyền lợi Premium giữ đến hết{" "}
+                          {formatDate(record.endDate)}.
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    {canCancelRecord(record) ? (
+                      <Pressable
+                        disabled={cancelingInvoiceId === record.invoiceId}
+                        onPress={() => void handleCancelSubscription(record)}
+                        className="mt-3 self-start rounded-xl border px-4 py-2"
+                        style={{
+                          borderColor: premiumBrandPink,
+                          opacity:
+                            cancelingInvoiceId === record.invoiceId ? 0.6 : 1,
+                        }}
+                      >
+                        {cancelingInvoiceId === record.invoiceId ? (
+                          <ActivityIndicator color={premiumBrandPink} />
+                        ) : (
+                          <Text
+                            className="text-[12px] font-semibold"
+                            style={{ color: premiumBrandPink }}
+                          >
+                            Hủy gia hạn
+                          </Text>
+                        )}
+                      </Pressable>
+                    ) : null}
                   </View>
                 ))}
               </View>
