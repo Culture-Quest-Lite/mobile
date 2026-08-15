@@ -36,7 +36,9 @@ type UseGroupLiveLocationParams = {
   enabled: boolean;
   groupId: string | null;
   isLeader: boolean;
+  listenOnly?: boolean;
   myUserId: string | null;
+  showForcedStopAlert?: boolean;
   username: string | null;
 };
 
@@ -66,12 +68,6 @@ function normalizeValue(value?: string | null) {
 function resolveGroupWebSocketUrl() {
   const envUrl = normalizeValue(PublicEnv.groupWsUrl);
   return envUrl ?? defaultGroupWebSocketUrl;
-}
-
-function getMessageText(error: unknown, fallback: string) {
-  return error instanceof Error && error.message.trim()
-    ? error.message
-    : fallback;
 }
 
 function parseLocationMessage(message: IMessage): GroupLiveLocationMessage | null {
@@ -136,7 +132,9 @@ export function useGroupLiveLocation({
   enabled,
   groupId,
   isLeader,
+  listenOnly = false,
   myUserId,
+  showForcedStopAlert = true,
   username,
 }: UseGroupLiveLocationParams): UseGroupLiveLocationResult {
   const authSession = useAuthSession();
@@ -214,6 +212,10 @@ export function useGroupLiveLocation({
   }
 
   async function publishLocation(latitude: number, longitude: number) {
+    if (listenOnly) {
+      return;
+    }
+
     const normalizedGroupId = normalizeValue(groupId);
     const normalizedUsername = normalizeValue(username);
 
@@ -236,6 +238,10 @@ export function useGroupLiveLocation({
   }
 
   async function startLocationWatcher() {
+    if (listenOnly) {
+      return;
+    }
+
     if (locationSubscriptionRef.current || devIntervalRef.current) {
       return;
     }
@@ -306,10 +312,13 @@ export function useGroupLiveLocation({
     if (
       !enabled ||
       !normalizedGroupId ||
-      !normalizedUsername ||
       shareModeRef.current !== "sharing" ||
       appStateRef.current !== "active"
     ) {
+      return;
+    }
+
+    if (!listenOnly && !normalizedUsername) {
       return;
     }
 
@@ -370,14 +379,19 @@ export function useGroupLiveLocation({
             }
 
             void pauseRealtime("group_forced_stop");
-            appAlert.alert(
-              "Thông báo",
-              "Trưởng nhóm đã kết thúc phiên chia sẻ vị trí.",
-            );
+
+            if (showForcedStopAlert) {
+              appAlert.alert(
+                "Thông báo",
+                "Trưởng nhóm đã kết thúc phiên chia sẻ vị trí.",
+              );
+            }
           },
         );
 
-        void startLocationWatcher();
+        if (!listenOnly) {
+          void startLocationWatcher();
+        }
       },
       onDisconnect: () => {
         setConnectionState("disconnected");
@@ -425,10 +439,20 @@ export function useGroupLiveLocation({
   }
 
   useEffect(() => {
-    if (!enabled || !groupId || !username || !myUserId) {
+    if (
+      !enabled ||
+      !groupId ||
+      (!listenOnly && (!username || !myUserId))
+    ) {
       shouldMaintainSessionRef.current = false;
-      setConnectionState("disconnected");
-      return;
+      clearGpsWatcher();
+      const timeoutId = setTimeout(() => {
+        void disconnectClient();
+      }, 0);
+
+      return () => {
+        clearTimeout(timeoutId);
+      };
     }
 
     shouldMaintainSessionRef.current = shareModeRef.current === "sharing";
@@ -442,7 +466,7 @@ export function useGroupLiveLocation({
       clearGpsWatcher();
       void disconnectClient();
     };
-  }, [enabled, groupId, myUserId, username]);
+  }, [enabled, groupId, listenOnly, myUserId, username]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
@@ -468,7 +492,7 @@ export function useGroupLiveLocation({
     return () => {
       subscription.remove();
     };
-  }, [enabled, groupId, username, myUserId]);
+  }, [enabled, groupId, listenOnly, myUserId, username]);
 
   return {
     connectionState,

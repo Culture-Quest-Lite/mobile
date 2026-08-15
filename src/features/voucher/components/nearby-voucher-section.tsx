@@ -1,4 +1,6 @@
+import type { ComponentProps } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import type { Href } from "expo-router";
 
@@ -17,6 +19,7 @@ type NearbyVoucherSectionProps = {
   title?: string;
   eyebrow?: string;
   eyebrowColor?: string;
+  actionColor?: string;
   showRadiusDescription?: boolean;
   titleFontWeight?: "font-semibold" | "font-bold" | "font-black";
   cardContentTextWeight?: "regular" | "emphasized";
@@ -28,7 +31,10 @@ type NearbyVoucherSectionProps = {
   };
   /** Nhãn phụ trên mỗi thẻ, ví dụ "Quanh Chợ Bến Thành". */
   contextLabel?: string | null;
+  emptyTitle?: string;
   emptyDescription?: string;
+  emptyStateVariant?: "default" | "illustrated";
+  emptyIllustrationSource?: ComponentProps<typeof Image>["source"];
   seeAllHref?: Href;
   /** Lề ngang của màn cha, để dải ngang tràn hết chiều rộng. */
   horizontalInset?: number;
@@ -46,12 +52,16 @@ export function NearbyVoucherSection({
   title = "Ưu đãi quanh đây",
   eyebrow = "ĐỔI ĐIỂM LẤY ƯU ĐÃI",
   eyebrowColor = "#EB489B",
+  actionColor = "#EB489B",
   showRadiusDescription = true,
   titleFontWeight = "font-black",
   cardContentTextWeight = "emphasized",
   headerTextSizes,
   contextLabel,
+  emptyTitle = "Chưa có ưu đãi nào",
   emptyDescription = "Chưa có đối tác nào có ưu đãi trong bán kính này.",
+  emptyStateVariant = "default",
+  emptyIllustrationSource,
   seeAllHref,
   horizontalInset = 0,
   cardWidth = 220,
@@ -116,9 +126,12 @@ export function NearbyVoucherSection({
         {seeAllHref ? (
           <Pressable hitSlop={8} onPress={() => router.push(seeAllHref)}>
             <Text
-              className="font-black text-[#EB489B]"
+              className="font-bold"
               numberOfLines={1}
-              style={[textStyle(actionFontSize), { fontSize: actionFontSize }]}
+              style={[
+                textStyle(actionFontSize),
+                { color: actionColor, fontSize: actionFontSize },
+              ]}
             >
               Xem tất cả
             </Text>
@@ -176,19 +189,63 @@ export function NearbyVoucherSection({
       ) : null}
 
       {!isLoading && !error && !locationNotice && vouchers.length === 0 ? (
-        <View className="rounded-[18px] border border-[#F0DEE7] bg-[#FFF8FB] px-4 py-5">
-          <Text
-            className="text-[14px] font-black text-[#2B2233]"
-            style={textStyle(14)}
-          >
-            Chưa có ưu đãi nào
-          </Text>
-          <Text
-            className="mt-1 text-[13px] text-[#8E869A]"
-            style={bodyTextStyle(13)}
-          >
-            {emptyDescription}
-          </Text>
+        <View
+          className={
+            emptyStateVariant === "illustrated"
+              ? "items-center px-4 py-5"
+              : "rounded-[18px] border border-[#F0DEE7] bg-[#FFF8FB] px-4 py-5"
+          }
+        >
+          {emptyStateVariant === "illustrated" ? (
+            <>
+              <View className="h-[84px] w-[84px] items-center justify-center rounded-full bg-[#FFF3F7]">
+                {emptyIllustrationSource ? (
+                  <Image
+                    source={emptyIllustrationSource}
+                    contentFit="contain"
+                    style={{ height: 44, width: 44 }}
+                  />
+                ) : (
+                  <SymbolView
+                    name={{
+                      ios: "ticket.fill",
+                      android: "confirmation_number",
+                      web: "confirmation_number",
+                    }}
+                    size={28}
+                    tintColor="#EB489B"
+                  />
+                )}
+              </View>
+              <Text
+                className="mt-3 text-center text-[15px] font-semibold text-[#2B2233]"
+                style={{ lineHeight: lineHeightFor(15) }}
+              >
+                {emptyTitle}
+              </Text>
+              <Text
+                className="mt-1.5 text-center text-[12px] text-[#8E869A]"
+                style={[bodyTextStyle(12), { maxWidth: 220 }]}
+              >
+                {emptyDescription}
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text
+                className="text-[14px] font-black text-[#2B2233]"
+                style={textStyle(14)}
+              >
+                {emptyTitle}
+              </Text>
+              <Text
+                className="mt-1 text-[13px] text-[#8E869A]"
+                style={bodyTextStyle(13)}
+              >
+                {emptyDescription}
+              </Text>
+            </>
+          )}
         </View>
       ) : null}
 
