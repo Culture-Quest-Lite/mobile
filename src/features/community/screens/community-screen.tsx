@@ -66,6 +66,7 @@ import {
 } from "@/features/home/data/liked-post-store";
 import { getMyProfile } from "@/features/profile/api/get-me";
 import { adjustCurrentProfileCount } from "@/features/profile/data/current-profile-store";
+import { usePremiumStatus } from "@/features/profile/hooks/use-premium-status";
 import {
   cacheProfilePost,
   updateCachedProfilePost,
@@ -90,7 +91,7 @@ import {
   CommunityCreateGroupCard,
   CommunityGroupCompactStateCard,
   CommunityGroupListCard,
-  CommunityGroupsLoginRequiredCard,
+  CommunityGroupsAccessRequiredCard,
   CommunityGroupPlaceholderCard,
 } from "../components/community-group-list-ui";
 import {
@@ -149,6 +150,7 @@ const subtleBorderWidth = 0.8;
 const headerImageContentHeight = 220;
 // Thanh "Chia sẻ trải nghiệm" đè lên mép dưới ảnh header để che đường giao nhau.
 const shareBarOverlap = 48;
+const COMMUNITY_GROUPS_PREMIUM_LABEL = "Nhóm cộng đồng";
 
 type SymbolName = ComponentProps<typeof SymbolView>["name"];
 type CommunityCommentsStatus = "idle" | "loading" | "ready" | "error";
@@ -1075,6 +1077,12 @@ export default function CommunityScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const authSession = useAuthSession();
+  const {
+    canUsePremiumFeatures: canUseCommunityGroupFeatures,
+    ensureLoaded: ensurePremiumLoaded,
+    isLoaded: isPremiumLoaded,
+    requirePremium,
+  } = usePremiumStatus();
   const isAuthenticated = authSession.isAuthenticated;
   const tokenType = authSession.tokenType;
   const sessionDisplayName = authSession.displayName;
@@ -1193,6 +1201,10 @@ export default function CommunityScreen() {
     reload: reloadCommunityGroups,
     status: communityGroupsStatus,
   } = useCommunityGroups();
+
+  useEffect(() => {
+    void ensurePremiumLoaded();
+  }, [ensurePremiumLoaded]);
 
   useEffect(() => {
     communitySessionKeyRef.current = communitySessionKey;
@@ -1965,6 +1977,10 @@ export default function CommunityScreen() {
       return;
     }
 
+    if (!requirePremium(COMMUNITY_GROUPS_PREMIUM_LABEL)) {
+      return;
+    }
+
     router.push("/community/group-create" as Href);
   };
   const openCommunityGroupsList = () => {
@@ -1973,9 +1989,22 @@ export default function CommunityScreen() {
       return;
     }
 
+    if (!requirePremium(COMMUNITY_GROUPS_PREMIUM_LABEL)) {
+      return;
+    }
+
     router.push("/community/groups" as Href);
   };
   const handleOpenDiscoverGroup = (group: CommunityGroupPayload) => {
+    if (!isAuthenticated) {
+      openCommunityLogin();
+      return;
+    }
+
+    if (!requirePremium(COMMUNITY_GROUPS_PREMIUM_LABEL)) {
+      return;
+    }
+
     const cachedGroup = cacheCommunityGroupSession({
       ...group,
       source: "listed",
@@ -2923,14 +2952,19 @@ export default function CommunityScreen() {
           <View className="pb-5" style={{ paddingHorizontal: gutter }}>
             <View className="mt-2">
               <CommunityDiscoverGroupsSection
+                canUsePremiumFeatures={canUseCommunityGroupFeatures}
                 currentProfileId={currentProfileId}
                 errorMessage={communityGroupsError}
                 groups={previewCommunityGroups}
                 isAuthenticated={isAuthenticated}
+                isPremiumLoaded={isPremiumLoaded}
                 onCreateGroup={openCommunityGroupCreate}
                 onLoginRequired={openCommunityGroupsList}
                 onOpenAll={openCommunityGroupsList}
                 onOpenGroup={handleOpenDiscoverGroup}
+                onPremiumRequired={() => {
+                  requirePremium(COMMUNITY_GROUPS_PREMIUM_LABEL);
+                }}
                 pageGutter={gutter}
                 status={communityGroupsStatus}
               />
@@ -3228,25 +3262,31 @@ function CircleIconButton({
 }
 
 function CommunityDiscoverGroupsSection({
+  canUsePremiumFeatures,
   currentProfileId,
   errorMessage,
   groups,
   isAuthenticated,
+  isPremiumLoaded,
   onCreateGroup,
   onLoginRequired,
   onOpenAll,
   onOpenGroup,
+  onPremiumRequired,
   pageGutter,
   status,
 }: {
+  canUsePremiumFeatures: boolean;
   currentProfileId: string | null;
   errorMessage: string | null;
   groups: readonly CommunityGroupPayload[];
   isAuthenticated: boolean;
+  isPremiumLoaded: boolean;
   onCreateGroup: () => void;
   onLoginRequired: () => void;
   onOpenAll: () => void;
   onOpenGroup: (group: CommunityGroupPayload) => void;
+  onPremiumRequired: () => void;
   pageGutter: number;
   status: CommunityGroupsStatus;
 }) {
@@ -3254,6 +3294,9 @@ function CommunityDiscoverGroupsSection({
   const showEmptyState = status === "ready" && groups.length === 0;
   const showErrorState = status === "error" && groups.length === 0;
   const showLoadingState = status === "loading" && groups.length === 0;
+  const showPremiumLoadingState = isAuthenticated && !isPremiumLoaded;
+  const showPremiumLockedState =
+    isAuthenticated && isPremiumLoaded && !canUsePremiumFeatures;
 
   return (
     <View>
@@ -3264,7 +3307,7 @@ function CommunityDiscoverGroupsSection({
         >
           {t("community.groups.title")}
         </Text>
-        {isAuthenticated ? (
+        {isAuthenticated && isPremiumLoaded && canUsePremiumFeatures ? (
           <Pressable hitSlop={8} onPress={onOpenAll}>
             <Text
               className="text-[13px] font-semibold text-[#D97706]"
@@ -3278,7 +3321,7 @@ function CommunityDiscoverGroupsSection({
 
       {!isAuthenticated ? (
         <View style={{ marginTop: 12 }}>
-          <CommunityGroupsLoginRequiredCard
+          <CommunityGroupsAccessRequiredCard
             actionLabel={t("community.groups.loginAction")}
             description={t("community.groups.loginRequiredDescription")}
             onPress={onLoginRequired}
@@ -3287,7 +3330,18 @@ function CommunityDiscoverGroupsSection({
         </View>
       ) : null}
 
-      {isAuthenticated ? (
+      {showPremiumLockedState ? (
+        <View style={{ marginTop: 12 }}>
+          <CommunityGroupsAccessRequiredCard
+            actionLabel={t("community.groups.premiumAction")}
+            description={t("community.groups.premiumRequiredDescription")}
+            onPress={onPremiumRequired}
+            title={t("community.groups.premiumRequiredTitle")}
+          />
+        </View>
+      ) : null}
+
+      {isAuthenticated && !showPremiumLockedState ? (
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -3303,30 +3357,36 @@ function CommunityDiscoverGroupsSection({
           marginTop: 10,
         }}
       >
-        <CommunityCreateGroupCard onPress={onCreateGroup} />
-        {groups.map((group) => (
-          <CommunityGroupListCard
-            key={group.shareToken}
-            group={group}
-            isLeader={isCommunityGroupLeader(group, currentProfileId)}
-            onPress={() => {
-              onOpenGroup(group);
-            }}
-          />
-        ))}
-        {showLoadingState ? <CommunityGroupPlaceholderCard /> : null}
-        {showErrorState ? (
-          <CommunityGroupCompactStateCard
-            description={errorMessage ?? t("community.groupsCommon.loadError")}
-            title={t("community.groupsCommon.loadErrorTitle")}
-          />
-        ) : null}
-        {showEmptyState ? (
-          <CommunityGroupCompactStateCard
-            description={t("community.groupsCommon.emptyDescription")}
-            title={t("community.groupsCommon.emptyTitle")}
-          />
-        ) : null}
+        {showPremiumLoadingState ? (
+          <CommunityGroupPlaceholderCard />
+        ) : (
+          <>
+            <CommunityCreateGroupCard onPress={onCreateGroup} />
+            {groups.map((group) => (
+              <CommunityGroupListCard
+                key={group.shareToken}
+                group={group}
+                isLeader={isCommunityGroupLeader(group, currentProfileId)}
+                onPress={() => {
+                  onOpenGroup(group);
+                }}
+              />
+            ))}
+            {showLoadingState ? <CommunityGroupPlaceholderCard /> : null}
+            {showErrorState ? (
+              <CommunityGroupCompactStateCard
+                description={errorMessage ?? t("community.groupsCommon.loadError")}
+                title={t("community.groupsCommon.loadErrorTitle")}
+              />
+            ) : null}
+            {showEmptyState ? (
+              <CommunityGroupCompactStateCard
+                description={t("community.groupsCommon.emptyDescription")}
+                title={t("community.groupsCommon.emptyTitle")}
+              />
+            ) : null}
+          </>
+        )}
       </ScrollView>
       ) : null}
     </View>

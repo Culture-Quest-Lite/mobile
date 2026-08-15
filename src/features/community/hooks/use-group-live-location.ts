@@ -19,6 +19,11 @@ export type GroupLiveLocationMessage = {
   username: string | null;
 };
 
+type GroupLiveLocationPublishPayload = {
+  latitude: number;
+  longitude: number;
+};
+
 export type GroupLiveShareMode =
   | "sharing"
   | "paused"
@@ -433,41 +438,31 @@ export function useGroupLiveLocation({
     }
 
     const normalizedGroupId = normalizeValue(groupId);
-    const normalizedUsername = normalizeValue(username);
-    const normalizedUserId = normalizeValue(myUserId);
-    const timestamp = Date.now();
 
     if (
       !normalizedGroupId ||
-      !normalizedUserId ||
       !clientRef.current?.connected
     ) {
       logGroupLiveLocation("skip publish location", {
         connected: Boolean(clientRef.current?.connected),
         groupId: normalizedGroupId,
-        hasUserId: Boolean(normalizedUserId),
         latitude,
         longitude,
       });
       return;
     }
 
-    logGroupLiveLocation("publish location", {
-      destination: `/app/group/${normalizedGroupId}/location`,
+    const payload = {
       latitude,
       longitude,
-      timestamp,
-      userId: normalizedUserId,
-      username: normalizedUsername,
+    } satisfies GroupLiveLocationPublishPayload;
+
+    logGroupLiveLocation("publish location", {
+      destination: `/app/group/${normalizedGroupId}/location`,
+      ...payload,
     });
     clientRef.current.publish({
-      body: JSON.stringify({
-        latitude,
-        longitude,
-        timestamp,
-        userId: normalizedUserId,
-        username: normalizedUsername,
-      }),
+      body: JSON.stringify(payload),
       destination: `/app/group/${normalizedGroupId}/location`,
     });
   }

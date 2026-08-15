@@ -625,7 +625,7 @@ export default function RouteGroupQuestScreen() {
         routeId: resolvedRouteId,
         routeName: routeDisplayName,
         shareToken: readMeaningfulText(cachedGroup?.shareToken),
-        startedAt: Date.now(),
+        startedAt: null,
       });
 
       setSuccessState({

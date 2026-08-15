@@ -481,8 +481,11 @@
       "create": "Create Group",
       "viewAll": "View All",
       "loginRequiredTitle": "Log in to view groups",
-      "loginRequiredDescription": "",
-      "loginAction": "Log in"
+      "loginRequiredDescription": "Log in to create groups, view your groups, and travel with friends.",
+      "loginAction": "Log in",
+      "premiumRequiredTitle": "Unlock community groups with Premium",
+      "premiumRequiredDescription": "Creating groups, joining groups, and traveling with friends are Premium-only features.",
+      "premiumAction": "Get Premium"
     },
     "empty": {
       "noPosts": "No posts yet",

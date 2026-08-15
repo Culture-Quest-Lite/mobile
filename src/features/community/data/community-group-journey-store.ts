@@ -6,7 +6,7 @@ export type CommunityGroupJourneySession = {
   routeId: string | null;
   routeName: string;
   shareToken: string | null;
-  startedAt: number;
+  startedAt: number | null;
 };
 
 const COMMUNITY_GROUP_JOURNEY_STORAGE_KEY = "community-group-journey-sessions";
@@ -35,7 +35,7 @@ function normalizeJourneySession(
     startedAt:
       typeof session.startedAt === "number" && Number.isFinite(session.startedAt)
         ? session.startedAt
-        : Date.now(),
+        : null,
   };
 }
 

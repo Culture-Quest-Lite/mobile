@@ -114,7 +114,7 @@ export function CommunityCreateGroupCard({ onPress }: { onPress: () => void }) {
   );
 }
 
-export function CommunityGroupsLoginRequiredCard({
+export function CommunityGroupsAccessRequiredCard({
   actionLabel,
   description,
   onPress,
@@ -133,7 +133,7 @@ export function CommunityGroupsLoginRequiredCard({
       })}
     >
       <LinearGradient
-        className="overflow-hidden rounded-[22px]"
+        className="overflow-hidden rounded-[18px]"
         colors={["#FFF7FA", "#FFFFFF"] as const}
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
@@ -142,48 +142,48 @@ export function CommunityGroupsLoginRequiredCard({
           {
             borderColor: "#F8E0E9",
             borderWidth: 1,
-            minHeight: 102,
-            paddingHorizontal: 14,
-            paddingVertical: 14,
+            minHeight: 88,
+            paddingHorizontal: 12,
+            paddingVertical: 12,
           },
         ]}
       >
         <View className="flex-row items-center">
           <View
-            className="h-[72px] w-[72px] items-center justify-center rounded-full bg-white"
+            className="h-[56px] w-[56px] items-center justify-center rounded-full bg-white"
             style={{
               borderColor: "#FCE0EB",
               borderWidth: 1,
               shadowColor: "rgba(244, 63, 126, 0.14)",
-              shadowOffset: { width: 0, height: 10 },
+              shadowOffset: { width: 0, height: 8 },
               shadowOpacity: 1,
-              shadowRadius: 18,
-              elevation: 6,
+              shadowRadius: 14,
+              elevation: 4,
             }}
           >
             <Image
               source={require("../../../../assets/images/okhoa.png")}
               resizeMode="contain"
-              style={{ height: 58, width: 58 }}
+              style={{ height: 42, width: 42 }}
             />
           </View>
 
-          <View className="ml-4 flex-1">
+          <View className="ml-3 flex-1">
             <Text
-              className="text-[15px] font-medium text-[#8F8298]"
-              style={{ includeFontPadding: false, lineHeight: lineHeightFor(16) }}
+              className="text-[13px] font-medium text-[#8F8298]"
+              style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
             >
               {title}
             </Text>
             {description ? (
               <Text
-                className="mt-1 text-[12px] text-[#7D7287]"
-                style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
+                className="mt-1 text-[11px] text-[#7D7287]"
+                style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
               >
                 {description}
               </Text>
             ) : null}
-            <View className="mt-3 items-center">
+            <View className="mt-2 items-center">
               <LinearGradient
                 colors={["#FF6B98", "#F43F7E"] as const}
                 end={{ x: 1, y: 0.5 }}
@@ -193,13 +193,13 @@ export function CommunityGroupsLoginRequiredCard({
                   alignItems: "center",
                   flexDirection: "row",
                   gap: 4,
-                  paddingHorizontal: 12,
-                  paddingVertical: 7,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
                 }}
               >
                 <Text
-                  className="text-[13px] font-semibold text-white"
-                  style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
+                  className="text-[12px] font-semibold text-white"
+                  style={{ includeFontPadding: false, lineHeight: lineHeightFor(12) }}
                 >
                   {actionLabel}
                 </Text>
@@ -209,7 +209,7 @@ export function CommunityGroupsLoginRequiredCard({
                     android: "chevron_right",
                     web: "chevron_right",
                   }}
-                  size={14}
+                  size={12}
                   tintColor="#FFFFFF"
                 />
               </LinearGradient>

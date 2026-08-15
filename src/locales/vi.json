@@ -481,8 +481,11 @@
       "create": "Tạo nhóm",
       "viewAll": "Xem tất cả",
       "loginRequiredTitle": "Đăng nhập để xem nhóm của tôi",
-      "loginRequiredDescription": "",
-      "loginAction": "Đăng nhập"
+      "loginRequiredDescription": "Đăng nhập để tạo nhóm, xem nhóm hiện có và đi tuyến cùng bạn bè.",
+      "loginAction": "Đăng nhập",
+      "premiumRequiredTitle": "Mở khóa nhóm cộng đồng với Premium",
+      "premiumRequiredDescription": "Tạo nhóm, tham gia nhóm và đi tuyến cùng bạn bè chỉ dành cho tài khoản Premium.",
+      "premiumAction": "Mua gói Premium"
     },
     "empty": {
       "noPosts": "Chưa có bài viết nào",

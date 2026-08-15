@@ -127,8 +127,14 @@ function resolveCommunityGroupJourneySession(
 }
 
 function parseStartedAtTimestamp(value?: string | null) {
-  const parsedTimestamp = Date.parse(value ?? "");
-  return Number.isFinite(parsedTimestamp) ? parsedTimestamp : Date.now();
+  const normalizedDate = normalizeDateValue(value);
+
+  if (!normalizedDate) {
+    return null;
+  }
+
+  const parsedTimestamp = Date.parse(normalizedDate);
+  return Number.isFinite(parsedTimestamp) ? parsedTimestamp : null;
 }
 
 function isActiveRouteProgress(progress: UserRouteProgressDto) {
@@ -200,20 +206,6 @@ function formatGroupDate(
   return `${padDatePart(date.getDate())}/${padDatePart(
     date.getMonth() + 1,
   )}/${date.getFullYear()}`;
-}
-
-function formatJourneyStartedLabel(value?: number | null) {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return "Vừa bắt đầu";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Vừa bắt đầu";
-  }
-
-  return `${`${date.getHours()}`.padStart(2, "0")}:${`${date.getMinutes()}`.padStart(2, "0")} · ${`${date.getDate()}`.padStart(2, "0")}/${`${date.getMonth() + 1}`.padStart(2, "0")}`;
 }
 
 function GroupSection({
@@ -441,12 +433,10 @@ function GroupJourneySection({
   hasActiveJourney,
   onPress,
   routeName,
-  startedAtLabel,
 }: {
   hasActiveJourney: boolean;
   onPress?: (() => void) | undefined;
   routeName?: string | null;
-  startedAtLabel?: string | null;
 }) {
   if (!hasActiveJourney) {
     return (
@@ -601,27 +591,6 @@ function GroupJourneySection({
           }}
         >
           {`Nhóm đang đi route ${routeName ?? "Hành trình nhóm"}`}
-        </Text>
-      </View>
-
-      <View className="mt-2 flex-row items-center">
-        <SymbolView
-          name={{
-            android: "schedule",
-            ios: "clock.fill",
-            web: "schedule",
-          }}
-          size={14}
-          tintColor="#F37E8E"
-        />
-        <Text
-          className="ml-1.5 text-[14px]"
-          style={{
-            color: palette.mutedText,
-            lineHeight: bodyLineHeightFor(14),
-          }}
-        >
-          {`Bắt đầu tham gia:  ${startedAtLabel ?? "vừa bắt đầu"}`}
         </Text>
       </View>
 
@@ -810,6 +779,7 @@ export default function CommunityGroupDetailScreen() {
   );
   const [isGroupMenuVisible, setIsGroupMenuVisible] = useState(false);
   const [isLeader, setIsLeader] = useState(false);
+  const [isRealtimeFocused, setIsRealtimeFocused] = useState(true);
   const [journeySession, setJourneySession] =
     useState<CommunityGroupJourneySession | null>(initialJourneySession);
   const [isLeavePending, setIsLeavePending] = useState(false);
@@ -817,6 +787,16 @@ export default function CommunityGroupDetailScreen() {
   const [retryNonce, setRetryNonce] = useState(0);
   const [status, setStatus] = useState<GroupDetailStatus>(
     resolvedRouteValue ? "loading" : "idle",
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      setIsRealtimeFocused(true);
+
+      return () => {
+        setIsRealtimeFocused(false);
+      };
+    }, []),
   );
 
   useFocusEffect(
@@ -987,7 +967,10 @@ export default function CommunityGroupDetailScreen() {
     locationsByUserId: liveLocationsByUserId,
     shareMode: livePresenceMode,
   } = useGroupLiveLocation({
-    enabled: authSession.isAuthenticated && Boolean(effectiveGroupId),
+    enabled:
+      authSession.isAuthenticated &&
+      Boolean(effectiveGroupId) &&
+      isRealtimeFocused,
     groupId: effectiveGroupId,
     isLeader: false,
     listenOnly: true,
@@ -1039,7 +1022,7 @@ export default function CommunityGroupDetailScreen() {
       routeId: null,
       routeName: "Hành trình nhóm",
       shareToken: readMeaningfulText(displayGroup?.shareToken) ?? resolvedRouteValue,
-      startedAt: Date.now(),
+      startedAt: null,
     });
     const frameId = requestAnimationFrame(() => {
       setJourneySession(detectedJourneySession);
@@ -1099,6 +1082,7 @@ export default function CommunityGroupDetailScreen() {
 
         const nextRouteName =
           readMeaningfulText(activeProgress.routeName) ?? "Hành trình nhóm";
+        const nextStartedAt = parseStartedAtTimestamp(activeProgress.startedAt);
         const nextJourneySession = cacheCommunityGroupJourneySession({
           groupId: effectiveGroupId,
           groupName:
@@ -1111,14 +1095,15 @@ export default function CommunityGroupDetailScreen() {
             readMeaningfulText(displayGroup?.shareToken) ??
             journeySession?.shareToken ??
             resolvedRouteValue,
-          startedAt: parseStartedAtTimestamp(activeProgress.startedAt),
+          startedAt: nextStartedAt,
         });
 
         if (
           journeySession?.routeId === nextJourneySession.routeId &&
           journeySession?.routeName === nextJourneySession.routeName &&
           journeySession?.shareToken === nextJourneySession.shareToken &&
-          journeySession?.groupId === nextJourneySession.groupId
+          journeySession?.groupId === nextJourneySession.groupId &&
+          journeySession?.startedAt === nextJourneySession.startedAt
         ) {
           return;
         }
@@ -1658,9 +1643,6 @@ export default function CommunityGroupDetailScreen() {
               hasActiveJourney={Boolean(journeySession)}
               onPress={handleOpenGroupJourney}
               routeName={readMeaningfulText(journeySession?.routeName)}
-              startedAtLabel={formatJourneyStartedLabel(
-                journeySession?.startedAt,
-              )}
             />
           </View>
 
