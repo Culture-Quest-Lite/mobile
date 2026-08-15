@@ -65,6 +65,21 @@ function normalizeValue(value?: string | null) {
   return trimmedValue ? trimmedValue : null;
 }
 
+function readFiniteNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsedValue = Number(value);
+    if (Number.isFinite(parsedValue)) {
+      return parsedValue;
+    }
+  }
+
+  return null;
+}
+
 function resolveGroupWebSocketUrl() {
   const envUrl = normalizeValue(PublicEnv.groupWsUrl);
   return envUrl ?? defaultGroupWebSocketUrl;
@@ -73,19 +88,42 @@ function resolveGroupWebSocketUrl() {
 function parseLocationMessage(message: IMessage): GroupLiveLocationMessage | null {
   try {
     const rawPayload = JSON.parse(message.body) as Record<string, unknown>;
+    const coordinatePayload =
+      typeof rawPayload.coordinate === "object" && rawPayload.coordinate !== null
+        ? (rawPayload.coordinate as Record<string, unknown>)
+        : null;
     const latitude =
-      typeof rawPayload.latitude === "number" && Number.isFinite(rawPayload.latitude)
-        ? rawPayload.latitude
-        : null;
+      readFiniteNumber(
+        rawPayload.latitude ??
+          rawPayload.lat ??
+          rawPayload.userLatitude ??
+          coordinatePayload?.latitude ??
+          coordinatePayload?.lat,
+      ) ?? null;
     const longitude =
-      typeof rawPayload.longitude === "number" && Number.isFinite(rawPayload.longitude)
-        ? rawPayload.longitude
-        : null;
+      readFiniteNumber(
+        rawPayload.longitude ??
+          rawPayload.lng ??
+          rawPayload.lon ??
+          rawPayload.userLongitude ??
+          coordinatePayload?.longitude ??
+          coordinatePayload?.lng ??
+          coordinatePayload?.lon,
+      ) ?? null;
     const timestamp =
-      typeof rawPayload.timestamp === "number" && Number.isFinite(rawPayload.timestamp)
-        ? rawPayload.timestamp
-        : Date.now();
-    const rawUserId = rawPayload.userId;
+      readFiniteNumber(
+        rawPayload.timestamp ??
+          rawPayload.sentAt ??
+          rawPayload.createdAt ??
+          rawPayload.updatedAt,
+      ) ?? Date.now();
+    const rawUserId =
+      rawPayload.userId ??
+      rawPayload.user_id ??
+      rawPayload.memberId ??
+      rawPayload.member_id ??
+      rawPayload.senderId ??
+      rawPayload.sender_id;
     const userId =
       typeof rawUserId === "number" && Number.isFinite(rawUserId)
         ? `${Math.trunc(rawUserId)}`
@@ -101,7 +139,13 @@ function parseLocationMessage(message: IMessage): GroupLiveLocationMessage | nul
       timestamp,
       userId,
       username: normalizeValue(
-        typeof rawPayload.username === "string" ? rawPayload.username : null,
+        typeof rawPayload.username === "string"
+          ? rawPayload.username
+          : typeof rawPayload.userName === "string"
+            ? rawPayload.userName
+            : typeof rawPayload.senderName === "string"
+              ? rawPayload.senderName
+              : null,
       ),
     };
   } catch (error) {
@@ -218,10 +262,13 @@ export function useGroupLiveLocation({
 
     const normalizedGroupId = normalizeValue(groupId);
     const normalizedUsername = normalizeValue(username);
+    const normalizedUserId = normalizeValue(myUserId);
+    const timestamp = Date.now();
 
     if (
       !normalizedGroupId ||
       !normalizedUsername ||
+      !normalizedUserId ||
       !clientRef.current?.connected
     ) {
       return;
@@ -231,10 +278,28 @@ export function useGroupLiveLocation({
       body: JSON.stringify({
         latitude,
         longitude,
+        timestamp,
+        userId: normalizedUserId,
         username: normalizedUsername,
       }),
       destination: `/app/group/${normalizedGroupId}/location`,
     });
+  }
+
+  function buildLocalLocationMessage(latitude: number, longitude: number) {
+    const normalizedUserId = normalizeValue(myUserId);
+
+    if (!normalizedUserId) {
+      return null;
+    }
+
+    return {
+      latitude,
+      longitude,
+      timestamp: Date.now(),
+      userId: normalizedUserId,
+      username: normalizeValue(username),
+    } satisfies GroupLiveLocationMessage;
   }
 
   async function startLocationWatcher() {
@@ -258,16 +323,15 @@ export function useGroupLiveLocation({
 
     if (devCoordinate && myUserId) {
       const publishDevCoordinate = () => {
-        const nextMessage: GroupLiveLocationMessage = {
-          latitude: devCoordinate.latitude,
-          longitude: devCoordinate.longitude,
-          timestamp: Date.now(),
-          userId: myUserId,
-          username: normalizeValue(username),
-        };
+        const nextMessage = buildLocalLocationMessage(
+          devCoordinate.latitude,
+          devCoordinate.longitude,
+        );
 
-        handleIncomingLocation(nextMessage);
-        void publishLocation(nextMessage.latitude, nextMessage.longitude);
+        if (nextMessage) {
+          handleIncomingLocation(nextMessage);
+          void publishLocation(nextMessage.latitude, nextMessage.longitude);
+        }
       };
 
       publishDevCoordinate();
@@ -283,15 +347,10 @@ export function useGroupLiveLocation({
         timeInterval: 5000,
       },
       (position) => {
-        const nextMessage: GroupLiveLocationMessage | null = myUserId
-          ? {
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              timestamp: Date.now(),
-              userId: myUserId,
-              username: normalizeValue(username),
-            }
-          : null;
+        const nextMessage = buildLocalLocationMessage(
+          position.coords.latitude,
+          position.coords.longitude,
+        );
 
         if (nextMessage) {
           handleIncomingLocation(nextMessage);
