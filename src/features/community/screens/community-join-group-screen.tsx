@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Image, Pressable, Text, View } from "react-native";
 import Animated, {
   Easing,
@@ -11,16 +12,15 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { useTranslation } from "react-i18next";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
   getValidAccessToken,
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 import { joinCommunityGroup } from "../api/group-api";
 import { cacheCommunityGroupSession } from "../data/community-group-session-store";
-import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 
 type JoinScreenStatus = "empty" | "error" | "loading" | "pending";
 type JoinFailureAction = "community" | "login" | "retry";
@@ -178,7 +178,10 @@ function JoinFailureCard({
           >
             <Text
               className="text-[30px] font-black text-white"
-              style={{ includeFontPadding: false, lineHeight: lineHeightFor(30) }}
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(30),
+              }}
             >
               !
             </Text>
@@ -194,7 +197,10 @@ function JoinFailureCard({
 
         <Text
           className="mt-4 px-2 text-center text-[16px] font-semibold text-[#6D7280]"
-          style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(16) }}
+          style={{
+            includeFontPadding: false,
+            lineHeight: bodyLineHeightFor(16),
+          }}
         >
           {presentation.description}
           {presentation.descriptionAccent ? (
@@ -208,7 +214,10 @@ function JoinFailureCard({
         <View className="mt-5 w-full rounded-[22px] border border-[#FFE6E9] bg-[#FFF6F7] px-4 py-4">
           <Text
             className="text-center text-[14px] font-medium text-[#7D8491]"
-            style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(14) }}
+            style={{
+              includeFontPadding: false,
+              lineHeight: bodyLineHeightFor(14),
+            }}
           >
             {presentation.hint}
           </Text>
@@ -237,11 +246,7 @@ function JoinFailureCard({
   );
 }
 
-function JoinPendingApprovalCard({
-  onPress,
-}: {
-  onPress: () => void;
-}) {
+function JoinPendingApprovalCard({ onPress }: { onPress: () => void }) {
   const { t } = useTranslation();
   const heroFloat = useSharedValue(0);
   const heroScale = useSharedValue(1);
@@ -330,7 +335,10 @@ function JoinPendingApprovalCard({
           >
             <Text
               className="text-[17px] font-black text-[#F4728B]"
-              style={{ includeFontPadding: false, lineHeight: lineHeightFor(17) }}
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(17),
+              }}
             >
               !
             </Text>
@@ -339,13 +347,19 @@ function JoinPendingApprovalCard({
           <View className="flex-1">
             <Text
               className="text-[14px] text-[#FF6D8D]"
-              style={{ includeFontPadding: false, lineHeight: lineHeightFor(14) }}
+              style={{
+                includeFontPadding: false,
+                lineHeight: lineHeightFor(14),
+              }}
             >
               {t("community.joinGroup.pending.statusLabel")}
             </Text>
             <Text
               className="mt-1 text-[12.5px] text-[#6F657A]"
-              style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(12.5) }}
+              style={{
+                includeFontPadding: false,
+                lineHeight: bodyLineHeightFor(12.5),
+              }}
             >
               {t("community.joinGroup.pending.statusHint")}
             </Text>
@@ -366,7 +380,10 @@ function JoinPendingApprovalCard({
       >
         <Text
           className="text-[14px] text-white"
-          style={{ includeFontPadding: false, lineHeight: bodyLineHeightFor(14) }}
+          style={{
+            includeFontPadding: false,
+            lineHeight: bodyLineHeightFor(14),
+          }}
         >
           {t("community.joinGroup.pending.backHome")}
         </Text>
@@ -539,7 +556,9 @@ export default function CommunityJoinGroupScreen() {
 
         {status === "empty" ? (
           <JoinFailureCard
-            onPress={() => handleJoinFailureAction(invalidLinkPresentation.action)}
+            onPress={() =>
+              handleJoinFailureAction(invalidLinkPresentation.action)
+            }
             presentation={invalidLinkPresentation}
           />
         ) : null}
