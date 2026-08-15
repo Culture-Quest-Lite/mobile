@@ -35,17 +35,6 @@ type JoinFailurePresentation = {
   title: string;
 };
 
-const loadingCardShadowStyle = {
-  shadowColor: "rgba(15, 23, 42, 0.12)",
-  shadowOpacity: 1,
-  shadowRadius: 28,
-  shadowOffset: {
-    width: 0,
-    height: 18,
-  },
-  elevation: 10,
-} as const;
-
 const pendingApprovalImage = require("../../../../assets/images/tachnen1.png");
 
 function normalizeLookupText(value: string) {
@@ -527,14 +516,7 @@ export default function CommunityJoinGroupScreen() {
         style={{ paddingHorizontal: status === "pending" ? 14 : 20 }}
       >
         {status === "loading" ? (
-          <View
-            className="w-full max-w-[360px] rounded-[32px] border border-[#F4DCE6] bg-white px-6 py-8"
-            style={loadingCardShadowStyle}
-          >
-            <View className="items-center">
-              <ActivityIndicator color="#EB489B" size="large" />
-            </View>
-          </View>
+          <ActivityIndicator color="#EB489B" size="large" />
         ) : null}
 
         {status === "empty" ? (

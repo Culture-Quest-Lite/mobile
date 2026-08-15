@@ -150,6 +150,7 @@ const mapLoadTimeoutMs = 6000;
 const recentReviewPreviewCount = 2;
 const hotspotReviewsPageSize = 20;
 const hiddenStoryStatusImage = require("../../../../assets/images/review_post.png");
+const nearbyVoucherEmptyStateImage = require("../../../../assets/images/card.png");
 
 const heroShadowStyle = {
   shadowColor: "rgba(15, 23, 42, 0.20)",
@@ -4087,8 +4088,15 @@ export default function HotspotDetailScreen() {
                 radiusMeters={1000}
                 title="Quán ngon quanh đây"
                 eyebrow="ƯU ĐÃI TỪ ĐỐI TÁC"
+                eyebrowColor="#7A6F67"
+                actionColor="#7A6F67"
+                showRadiusDescription={false}
+                titleFontWeight="font-semibold"
+                headerTextSizes={{ eyebrow: 14, title: 17, action: 13 }}
                 contextLabel={`Quanh ${hotspot.title}`}
-                emptyDescription={`Chưa có đối tác nào có ưu đãi trong bán kính 1km quanh ${hotspot.title}.`}
+                emptyDescription="Hiện không có ưu đãi nào trong bán kính 1km."
+                emptyStateVariant="illustrated"
+                emptyIllustrationSource={nearbyVoucherEmptyStateImage}
                 seeAllHref={
                   `/vouchers/nearby?hotspotId=${resolvedHotspotId}&hotspotName=${encodeURIComponent(hotspot.title)}` as Href
                 }

@@ -7,7 +7,7 @@ import {
   type Href,
 } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -36,6 +36,10 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 import { getMyProfile } from "@/features/profile/api/get-me";
 import { getUserProfileById } from "@/features/profile/api/get-user-by-id";
+import {
+  getUserRouteProgressList,
+  type UserRouteProgressDto,
+} from "@/features/route/api/route-api";
 import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 import {
   getCommunityGroupById,
@@ -46,14 +50,17 @@ import {
 } from "../api/group-api";
 import { CommunityGroupStateCard } from "../components/community-group-ui";
 import {
+  cacheCommunityGroupJourneySession,
   getCachedCommunityGroupJourneySession,
   removeCachedCommunityGroupJourneySession,
+  type CommunityGroupJourneySession,
 } from "../data/community-group-journey-store";
 import {
   cacheCommunityGroupSession,
   getCachedCommunityGroupSession,
   removeCachedCommunityGroupSession,
 } from "../data/community-group-session-store";
+import { useGroupLiveLocation } from "../hooks/use-group-live-location";
 import { buildCommunityInviteWebUrl } from "../lib/community-group-invite-links";
 
 const HERO_IMAGE = require("../../../../assets/images/hero-v2.png");
@@ -107,6 +114,49 @@ function readMeaningfulText(value?: string | null) {
 
   const trimmedValue = value.trim();
   return trimmedValue ? trimmedValue : null;
+}
+
+function resolveCommunityGroupJourneySession(
+  routeKey?: string | null,
+  groupId?: string | null,
+) {
+  return (
+    getCachedCommunityGroupJourneySession(routeKey) ??
+    getCachedCommunityGroupJourneySession(groupId)
+  );
+}
+
+function parseStartedAtTimestamp(value?: string | null) {
+  const parsedTimestamp = Date.parse(value ?? "");
+  return Number.isFinite(parsedTimestamp) ? parsedTimestamp : Date.now();
+}
+
+function isActiveRouteProgress(progress: UserRouteProgressDto) {
+  const normalizedStatus = readMeaningfulText(progress.status)?.toUpperCase();
+  return normalizedStatus === "IN_PROGRESS";
+}
+
+function resolveGroupJourneyProgress(
+  progresses: UserRouteProgressDto[],
+  groupId?: string | null,
+) {
+  const activeProgresses = progresses.filter(isActiveRouteProgress);
+  const normalizedGroupId =
+    typeof groupId === "string" && /^\d+$/.test(groupId.trim())
+      ? Number(groupId)
+      : null;
+
+  if (normalizedGroupId !== null) {
+    const matchedProgresses = activeProgresses.filter(
+      (progress) => progress.groupId === normalizedGroupId,
+    );
+
+    if (matchedProgresses.length > 0) {
+      return matchedProgresses[0] ?? null;
+    }
+  }
+
+  return activeProgresses.length === 1 ? activeProgresses[0] ?? null : null;
 }
 
 function isNumericIdentifier(value?: string | null) {
@@ -746,6 +796,10 @@ export default function CommunityGroupDetailScreen() {
   const resolvedGroupId = isNumericIdentifier(resolvedRouteValue)
     ? resolvedRouteValue
     : normalizeRouteValue(cachedGroupSession?.groupId);
+  const initialJourneySession = resolveCommunityGroupJourneySession(
+    resolvedRouteValue,
+    resolvedGroupId,
+  );
   const [copiedInviteLink, setCopiedInviteLink] = useState(false);
   const [creatorDisplayName, setCreatorDisplayName] = useState<string | null>(
     null,
@@ -756,6 +810,8 @@ export default function CommunityGroupDetailScreen() {
   );
   const [isGroupMenuVisible, setIsGroupMenuVisible] = useState(false);
   const [isLeader, setIsLeader] = useState(false);
+  const [journeySession, setJourneySession] =
+    useState<CommunityGroupJourneySession | null>(initialJourneySession);
   const [isLeavePending, setIsLeavePending] = useState(false);
   const [isRefreshPending, setIsRefreshPending] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
@@ -767,6 +823,10 @@ export default function CommunityGroupDetailScreen() {
     useCallback(() => {
       let isActive = true;
       const retrySeed = retryNonce;
+
+      setJourneySession(
+        resolveCommunityGroupJourneySession(resolvedRouteValue, resolvedGroupId),
+      );
 
       async function loadGroupDetail() {
         if (!resolvedRouteValue) {
@@ -871,10 +931,19 @@ export default function CommunityGroupDetailScreen() {
             ...nextGroupDetail,
             source: cachedGroupSession?.source ?? "listed",
           });
+          const nextJourneySession = resolveCommunityGroupJourneySession(
+            readMeaningfulText(cachedGroup?.shareToken) ??
+              readMeaningfulText(nextGroupDetail.shareToken) ??
+              resolvedRouteValue,
+            readMeaningfulText(cachedGroup?.groupId) ??
+              readMeaningfulText(nextGroupDetail.groupId) ??
+              resolvedGroupId,
+          );
 
           setGroupDetail(cachedGroup ?? nextGroupDetail);
           setCreatorDisplayName(resolvedCreatorName);
           setIsLeader(resolvedIsLeader);
+          setJourneySession(nextJourneySession);
           setStatus("ready");
         } catch (error) {
           if (!isActive) {
@@ -908,18 +977,179 @@ export default function CommunityGroupDetailScreen() {
   );
 
   const displayGroup = groupDetail ?? cachedGroupSession;
-  const cachedJourneySession =
-    getCachedCommunityGroupJourneySession(resolvedRouteValue) ??
-    getCachedCommunityGroupJourneySession(resolvedGroupId);
   const inviteWebUrl = !displayGroup?.shareToken
     ? null
     : (cachedGroupSession?.inviteWebUrl ??
       buildCommunityInviteWebUrl(displayGroup.shareToken));
   const effectiveGroupId =
     readMeaningfulText(displayGroup?.groupId) ?? resolvedGroupId;
+  const {
+    locationsByUserId: liveLocationsByUserId,
+    shareMode: livePresenceMode,
+  } = useGroupLiveLocation({
+    enabled: authSession.isAuthenticated && Boolean(effectiveGroupId),
+    groupId: effectiveGroupId,
+    isLeader: false,
+    listenOnly: true,
+    myUserId: null,
+    showForcedStopAlert: false,
+    username: null,
+  });
+  const hasLiveJourneyPresence =
+    Object.keys(liveLocationsByUserId).length > 0;
   const heroImageSource = readMeaningfulText(displayGroup?.imageUrl)
     ? { uri: displayGroup?.imageUrl as string }
     : HERO_IMAGE;
+
+  useEffect(() => {
+    if (
+      livePresenceMode !== "group_forced_stop" ||
+      (!journeySession && !hasLiveJourneyPresence)
+    ) {
+      return;
+    }
+
+    removeCachedCommunityGroupJourneySession(displayGroup?.shareToken);
+    removeCachedCommunityGroupJourneySession(effectiveGroupId);
+    const frameId = requestAnimationFrame(() => {
+      setJourneySession(null);
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [
+    displayGroup?.shareToken,
+    effectiveGroupId,
+    hasLiveJourneyPresence,
+    journeySession,
+    livePresenceMode,
+  ]);
+
+  useEffect(() => {
+    if (journeySession || !hasLiveJourneyPresence) {
+      return;
+    }
+
+    const detectedJourneySession = cacheCommunityGroupJourneySession({
+      groupId: effectiveGroupId ?? null,
+      groupName:
+        readMeaningfulText(displayGroup?.groupName) ??
+        (effectiveGroupId ? `Nhóm #${effectiveGroupId}` : "Nhóm cộng đồng"),
+      routeId: null,
+      routeName: "Hành trình nhóm",
+      shareToken: readMeaningfulText(displayGroup?.shareToken) ?? resolvedRouteValue,
+      startedAt: Date.now(),
+    });
+    const frameId = requestAnimationFrame(() => {
+      setJourneySession(detectedJourneySession);
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [
+    displayGroup?.groupName,
+    displayGroup?.shareToken,
+    effectiveGroupId,
+    hasLiveJourneyPresence,
+    journeySession,
+    resolvedRouteValue,
+  ]);
+
+  useEffect(() => {
+    if (
+      !authSession.isAuthenticated ||
+      !effectiveGroupId
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function syncJourneySessionFromActiveProgress() {
+      try {
+        const accessToken = await getValidAccessToken();
+
+        if (!accessToken || cancelled) {
+          return;
+        }
+
+        const progressPage = await getUserRouteProgressList({
+          accessToken,
+          page: 0,
+          size: 20,
+          sortBy: "startedAt",
+          sortDirection: "DESC",
+          tokenType: authSession.tokenType ?? undefined,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        const activeProgress = resolveGroupJourneyProgress(
+          progressPage.content,
+          effectiveGroupId,
+        );
+
+        if (!activeProgress) {
+          return;
+        }
+
+        const nextRouteName =
+          readMeaningfulText(activeProgress.routeName) ?? "Hành trình nhóm";
+        const nextJourneySession = cacheCommunityGroupJourneySession({
+          groupId: effectiveGroupId,
+          groupName:
+            readMeaningfulText(displayGroup?.groupName) ??
+            journeySession?.groupName ??
+            `Nhóm #${effectiveGroupId}`,
+          routeId: `${activeProgress.routeId}`,
+          routeName: nextRouteName,
+          shareToken:
+            readMeaningfulText(displayGroup?.shareToken) ??
+            journeySession?.shareToken ??
+            resolvedRouteValue,
+          startedAt: parseStartedAtTimestamp(activeProgress.startedAt),
+        });
+
+        if (
+          journeySession?.routeId === nextJourneySession.routeId &&
+          journeySession?.routeName === nextJourneySession.routeName &&
+          journeySession?.shareToken === nextJourneySession.shareToken &&
+          journeySession?.groupId === nextJourneySession.groupId
+        ) {
+          return;
+        }
+
+        if (!cancelled) {
+          setJourneySession(nextJourneySession);
+        }
+      } catch (error) {
+        console.info("[community] sync group journey from active progress skipped", {
+          error: error instanceof Error ? error.message : error,
+          groupId: effectiveGroupId,
+        });
+      }
+    }
+
+    void syncJourneySessionFromActiveProgress();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    displayGroup?.groupName,
+    displayGroup?.shareToken,
+    effectiveGroupId,
+    hasLiveJourneyPresence,
+    journeySession,
+    resolvedRouteValue,
+  ]);
+
   const closeGroupMenu = () => {
     setIsGroupMenuVisible(false);
   };
@@ -994,8 +1224,8 @@ export default function CommunityGroupDetailScreen() {
       return;
     }
 
-    const routeName = readMeaningfulText(cachedJourneySession?.routeName);
-    const routeId = readMeaningfulText(cachedJourneySession?.routeId);
+    const routeName = readMeaningfulText(journeySession?.routeName);
+    const routeId = readMeaningfulText(journeySession?.routeId);
     const query = routeId
       ? `?routeId=${encodeURIComponent(routeId)}&routeName=${encodeURIComponent(routeName ?? "Hành trình nhóm")}`
       : routeName
@@ -1043,6 +1273,7 @@ export default function CommunityGroupDetailScreen() {
       removeCachedCommunityGroupJourneySession(displayGroup?.shareToken);
       removeCachedCommunityGroupJourneySession(leftGroup.shareToken);
       removeCachedCommunityGroupJourneySession(effectiveGroupId);
+      setJourneySession(null);
       setIsGroupMenuVisible(false);
       appToast.success(t("community.groupDetail.leaveSuccess"));
       router.replace("/bookings" as Href);
@@ -1424,11 +1655,11 @@ export default function CommunityGroupDetailScreen() {
 
           <View className="mt-3.5">
             <GroupJourneySection
-              hasActiveJourney={Boolean(cachedJourneySession)}
+              hasActiveJourney={Boolean(journeySession)}
               onPress={handleOpenGroupJourney}
-              routeName={readMeaningfulText(cachedJourneySession?.routeName)}
+              routeName={readMeaningfulText(journeySession?.routeName)}
               startedAtLabel={formatJourneyStartedLabel(
-                cachedJourneySession?.startedAt,
+                journeySession?.startedAt,
               )}
             />
           </View>

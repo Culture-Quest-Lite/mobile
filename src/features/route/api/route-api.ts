@@ -99,6 +99,7 @@ export type HotspotProgressDto = {
 export type UserRouteProgressDto = {
   completedAt?: string | null;
   completedStops: number;
+  groupId?: number | null;
   progressPercentage: number;
   route?: RouteDto | null;
   routeId: number;
@@ -438,6 +439,11 @@ export function parseUserRouteProgress(
   return {
     completedAt: readString(value.completedAt) || null,
     completedStops: readNumber(value.completedStops),
+    groupId: readNullableNumber(
+      value.groupId ??
+        value.communityGroupId ??
+        (isObject(value.group) ? value.group.groupId ?? value.group.id : null),
+    ),
     hotspotProgressList: Array.isArray(value.hotspotProgressList)
       ? value.hotspotProgressList.map(parseHotspotProgress).filter(isNonNull)
       : [],
