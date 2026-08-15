@@ -14,14 +14,14 @@ export type CreateCheckInRequest = {
 
 export type CheckInResponse = {
   firstVisitedAt: string;
-  hotspotId: number;
+  hotspotId: number | null;
   isCheckedIn: boolean;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   totalPointEarned: number;
   totalXpEarned: number;
-  userId: number;
-  userProgressId: number;
+  userId: number | null;
+  userProgressId: number | null;
 };
 
 type CreateCheckInErrorCode =
@@ -86,44 +86,69 @@ function readBoolean(value: unknown) {
   return typeof value === "boolean" ? value : null;
 }
 
+/** Backend bọc response trong {data|result|payload}, giống các API route. */
+function unwrapCheckInBody(body: unknown): unknown {
+  if (!isObject(body)) {
+    return body;
+  }
+
+  for (const key of ["data", "result", "payload", "response"]) {
+    const candidate = body[key];
+
+    if (candidate !== undefined && candidate !== null) {
+      return candidate;
+    }
+  }
+
+  return body;
+}
+
+/**
+ * Chỉ 4 field được UI dùng tới (XP, điểm, isCheckedIn, thời gian). Trước đây
+ * parser bắt buộc cả userId/latitude/longitude/userProgressId nên chỉ cần
+ * backend thiếu một field không ai đọc là cả check-in bị coi như hỏng, dù
+ * server đã ghi nhận thành công. Giờ nới ra: thiếu field phụ thì dùng mặc định.
+ */
 function parseCheckInResponse(value: unknown): CheckInResponse | null {
-  if (!isObject(value)) {
+  const body = unwrapCheckInBody(value);
+
+  if (!isObject(body)) {
     return null;
   }
 
-  const userProgressId = readNumber(value.userProgressId);
-  const userId = readNumber(value.userId);
-  const hotspotId = readNumber(value.hotspotId);
-  const isCheckedIn = readBoolean(value.isCheckedIn ?? value.isCheckIn);
-  const latitude = readNumber(value.latitude);
-  const longitude = readNumber(value.longitude);
-  const totalPointEarned = readNumber(value.totalPointEarned);
-  const totalXpEarned = readNumber(value.totalXpEarned);
-  const firstVisitedAt = readString(value.firstVisitedAt);
+  const userProgressId = readNumber(
+    body.userProgressId ?? body.checkInId ?? body.id,
+  );
+  const hotspotId = readNumber(body.hotspotId);
+  const isCheckedIn = readBoolean(body.isCheckedIn ?? body.isCheckIn);
+  const totalPointEarned = readNumber(
+    body.totalPointEarned ?? body.pointEarned,
+  );
+  const totalXpEarned = readNumber(body.totalXpEarned ?? body.xpEarned);
+  const firstVisitedAt = readString(body.firstVisitedAt ?? body.checkInAt);
 
-  if (
-    userProgressId === null ||
-    userId === null ||
-    hotspotId === null ||
-    isCheckedIn === null ||
-    latitude === null ||
-    longitude === null ||
-    totalPointEarned === null ||
-    totalXpEarned === null ||
-    !firstVisitedAt.trim()
-  ) {
+  // Đủ để nhận ra đây là payload check-in chứ không phải body rỗng/lỗi.
+  const isCheckInPayload =
+    hotspotId !== null ||
+    userProgressId !== null ||
+    totalPointEarned !== null ||
+    totalXpEarned !== null ||
+    isCheckedIn !== null;
+
+  if (!isCheckInPayload) {
     return null;
   }
 
   return {
     firstVisitedAt,
     hotspotId,
-    isCheckedIn,
-    latitude,
-    longitude,
-    totalPointEarned,
-    totalXpEarned,
-    userId,
+    // Server trả 2xx cho POST check-in tức là đã check-in xong.
+    isCheckedIn: isCheckedIn ?? true,
+    latitude: readNumber(body.latitude),
+    longitude: readNumber(body.longitude),
+    totalPointEarned: totalPointEarned ?? 0,
+    totalXpEarned: totalXpEarned ?? 0,
+    userId: readNumber(body.userId),
     userProgressId,
   };
 }
