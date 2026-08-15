@@ -59,6 +59,11 @@ type UseGroupLiveLocationResult = {
 };
 
 const defaultGroupWebSocketUrl = "wss://www.culturequestlite.com/ws/websocket";
+const groupLiveLocationDebugEnabled = __DEV__;
+const initialLocationMaxAgeInMs = 60_000;
+const initialLocationRequiredAccuracyInMeters = 200;
+const liveLocationDistanceIntervalInMeters = 5;
+const liveLocationTimeIntervalInMs = 5_000;
 
 function normalizeValue(value?: string | null) {
   if (typeof value !== "string") {
@@ -86,10 +91,57 @@ function readFiniteNumber(value: unknown) {
 
 function resolveGroupWebSocketUrl() {
   const envUrl = normalizeValue(PublicEnv.groupWsUrl);
-  return envUrl ?? defaultGroupWebSocketUrl;
+  const rawUrl = envUrl ?? defaultGroupWebSocketUrl;
+
+  try {
+    const parsedUrl = new URL(rawUrl);
+
+    if (/\/ws\/?$/i.test(parsedUrl.pathname)) {
+      parsedUrl.pathname = `${parsedUrl.pathname.replace(/\/+$/g, "")}/websocket`;
+    }
+
+    return parsedUrl.toString();
+  } catch {
+    if (/\/ws\/?$/i.test(rawUrl)) {
+      return `${rawUrl.replace(/\/+$/g, "")}/websocket`;
+    }
+
+    return rawUrl;
+  }
 }
 
-function parseLocationMessage(message: IMessage): GroupLiveLocationMessage | null {
+function summarizeMessageBody(body: string, maxLength = 240) {
+  const normalizedBody = body.replace(/\s+/g, " ").trim();
+  return normalizedBody.length <= maxLength
+    ? normalizedBody
+    : `${normalizedBody.slice(0, maxLength)}...`;
+}
+
+function readMessageTopic(message: IMessage) {
+  return (
+    normalizeValue(message.headers.destination) ??
+    normalizeValue(message.headers.subscription) ??
+    "unknown"
+  );
+}
+
+function logGroupLiveLocation(event: string, details?: Record<string, unknown>) {
+  if (!groupLiveLocationDebugEnabled) {
+    return;
+  }
+
+  if (details) {
+    console.info(`[group-live-location] ${event}`, details);
+    return;
+  }
+
+  console.info(`[group-live-location] ${event}`);
+}
+
+function parseLocationMessage(
+  message: IMessage,
+  sourceTopic?: string,
+): GroupLiveLocationMessage | null {
   try {
     const rawPayload = JSON.parse(message.body) as Record<string, unknown>;
     const coordinatePayload =
@@ -134,10 +186,18 @@ function parseLocationMessage(message: IMessage): GroupLiveLocationMessage | nul
         : normalizeValue(typeof rawUserId === "string" ? rawUserId : null);
 
     if (!userId || latitude === null || longitude === null) {
+      logGroupLiveLocation("location payload ignored", {
+        body: summarizeMessageBody(message.body),
+        latitude,
+        longitude,
+        sourceTopic: sourceTopic ?? readMessageTopic(message),
+        timestamp,
+        userId,
+      });
       return null;
     }
 
-    return {
+    const parsedMessage = {
       latitude,
       longitude,
       timestamp,
@@ -151,26 +211,47 @@ function parseLocationMessage(message: IMessage): GroupLiveLocationMessage | nul
               ? rawPayload.senderName
               : null,
       ),
-    };
+    } satisfies GroupLiveLocationMessage;
+
+    logGroupLiveLocation("location payload parsed", {
+      latitude: parsedMessage.latitude,
+      longitude: parsedMessage.longitude,
+      sourceTopic: sourceTopic ?? readMessageTopic(message),
+      timestamp: parsedMessage.timestamp,
+      userId: parsedMessage.userId,
+      username: parsedMessage.username,
+    });
+
+    return parsedMessage;
   } catch (error) {
     console.warn("[group-live-location] parse location payload failed", {
       error,
       body: message.body,
+      sourceTopic: sourceTopic ?? readMessageTopic(message),
     });
     return null;
   }
 }
 
-function parseCommandAction(message: IMessage) {
+function parseCommandAction(message: IMessage, sourceTopic?: string) {
   try {
     const rawPayload = JSON.parse(message.body) as Record<string, unknown>;
-    return normalizeValue(
+    const action = normalizeValue(
       typeof rawPayload.action === "string" ? rawPayload.action : null,
     );
+
+    logGroupLiveLocation("command payload received", {
+      action,
+      body: summarizeMessageBody(message.body),
+      sourceTopic: sourceTopic ?? readMessageTopic(message),
+    });
+
+    return action;
   } catch (error) {
     console.warn("[group-live-location] parse command payload failed", {
       error,
       body: message.body,
+      sourceTopic: sourceTopic ?? readMessageTopic(message),
     });
     return null;
   }
@@ -214,6 +295,9 @@ export function useGroupLiveLocation({
     subscriptionRef.current.forEach((entry) => {
       try {
         entry.subscription.unsubscribe();
+        logGroupLiveLocation("unsubscribe topic", {
+          topic: entry.key,
+        });
       } catch (error) {
         console.warn("[group-live-location] unsubscribe topic failed", {
           error,
@@ -243,6 +327,7 @@ export function useGroupLiveLocation({
 
     if (currentClient) {
       try {
+        logGroupLiveLocation("disconnect stomp client");
         await currentClient.deactivate();
       } catch (error) {
         console.warn("[group-live-location] deactivate stomp failed", {
@@ -258,19 +343,88 @@ export function useGroupLiveLocation({
     clearGpsWatcher();
     shouldMaintainSessionRef.current = false;
     syncShareMode(stopMode);
+    logGroupLiveLocation("pause realtime", {
+      stopMode,
+    });
     await disconnectClient();
   }
 
   async function pauseForBackground() {
     clearGpsWatcher();
+    logGroupLiveLocation("pause for background");
     await disconnectClient();
   }
 
   function handleIncomingLocation(message: GroupLiveLocationMessage) {
+    logGroupLiveLocation("apply incoming location", {
+      latitude: message.latitude,
+      longitude: message.longitude,
+      timestamp: message.timestamp,
+      userId: message.userId,
+      username: message.username,
+    });
     setLocationsByUserId((currentLocations) => ({
       ...currentLocations,
       [message.userId]: message,
     }));
+  }
+
+  async function emitLocalLocation(latitude: number, longitude: number) {
+    const nextMessage = buildLocalLocationMessage(latitude, longitude);
+
+    if (nextMessage) {
+      handleIncomingLocation(nextMessage);
+    }
+
+    await publishLocation(latitude, longitude);
+  }
+
+  async function publishInitialLocationSnapshot() {
+    if (listenOnly || !myUserId) {
+      return;
+    }
+
+    try {
+      const lastKnownPosition = await Location.getLastKnownPositionAsync({
+        maxAge: initialLocationMaxAgeInMs,
+        requiredAccuracy: initialLocationRequiredAccuracyInMeters,
+      });
+
+      if (lastKnownPosition) {
+        logGroupLiveLocation("use last known position snapshot", {
+          accuracy: lastKnownPosition.coords.accuracy ?? null,
+          latitude: lastKnownPosition.coords.latitude,
+          longitude: lastKnownPosition.coords.longitude,
+          userId: myUserId,
+        });
+        await emitLocalLocation(
+          lastKnownPosition.coords.latitude,
+          lastKnownPosition.coords.longitude,
+        );
+        return;
+      }
+
+      const currentPosition = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        mayShowUserSettingsDialog: true,
+      });
+
+      logGroupLiveLocation("use current position snapshot", {
+        accuracy: currentPosition.coords.accuracy ?? null,
+        latitude: currentPosition.coords.latitude,
+        longitude: currentPosition.coords.longitude,
+        userId: myUserId,
+      });
+      await emitLocalLocation(
+        currentPosition.coords.latitude,
+        currentPosition.coords.longitude,
+      );
+    } catch (error) {
+      console.warn("[group-live-location] initial position snapshot failed", {
+        error,
+        userId: myUserId,
+      });
+    }
   }
 
   async function publishLocation(latitude: number, longitude: number) {
@@ -288,9 +442,24 @@ export function useGroupLiveLocation({
       !normalizedUserId ||
       !clientRef.current?.connected
     ) {
+      logGroupLiveLocation("skip publish location", {
+        connected: Boolean(clientRef.current?.connected),
+        groupId: normalizedGroupId,
+        hasUserId: Boolean(normalizedUserId),
+        latitude,
+        longitude,
+      });
       return;
     }
 
+    logGroupLiveLocation("publish location", {
+      destination: `/app/group/${normalizedGroupId}/location`,
+      latitude,
+      longitude,
+      timestamp,
+      userId: normalizedUserId,
+      username: normalizedUsername,
+    });
     clientRef.current.publish({
       body: JSON.stringify({
         latitude,
@@ -330,6 +499,9 @@ export function useGroupLiveLocation({
 
     const permission = await ensureForegroundLocationPermission();
     setIsPermissionGranted(permission.granted);
+    logGroupLiveLocation("location permission resolved", {
+      granted: permission.granted,
+    });
 
     if (!permission.granted) {
       setLastError("Bạn chưa cấp quyền vị trí để chia sẻ hành trình nhóm.");
@@ -339,16 +511,26 @@ export function useGroupLiveLocation({
     const devCoordinate = getDevelopmentLocationOverride();
 
     if (devCoordinate && myUserId) {
+      logGroupLiveLocation("use development location override", {
+        latitude: devCoordinate.latitude,
+        longitude: devCoordinate.longitude,
+      });
       const publishDevCoordinate = () => {
         const nextMessage = buildLocalLocationMessage(
           devCoordinate.latitude,
           devCoordinate.longitude,
         );
 
-        if (nextMessage) {
-          handleIncomingLocation(nextMessage);
-          void publishLocation(nextMessage.latitude, nextMessage.longitude);
+        if (!nextMessage) {
+          return;
         }
+
+        logGroupLiveLocation("dev coordinate tick", {
+          latitude: nextMessage.latitude,
+          longitude: nextMessage.longitude,
+          userId: nextMessage.userId,
+        });
+        void emitLocalLocation(nextMessage.latitude, nextMessage.longitude);
       };
 
       publishDevCoordinate();
@@ -356,12 +538,14 @@ export function useGroupLiveLocation({
       return;
     }
 
+    void publishInitialLocationSnapshot();
+
     locationSubscriptionRef.current = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.High,
-        distanceInterval: 15,
+        distanceInterval: liveLocationDistanceIntervalInMeters,
         mayShowUserSettingsDialog: true,
-        timeInterval: 5000,
+        timeInterval: liveLocationTimeIntervalInMs,
       },
       (position) => {
         const nextMessage = buildLocalLocationMessage(
@@ -369,14 +553,28 @@ export function useGroupLiveLocation({
           position.coords.longitude,
         );
 
-        if (nextMessage) {
-          handleIncomingLocation(nextMessage);
+        if (!nextMessage) {
+          return;
         }
 
-        void publishLocation(
+        logGroupLiveLocation("gps position update", {
+          accuracy: position.coords.accuracy ?? null,
+          latitude: nextMessage.latitude,
+          longitude: nextMessage.longitude,
+          userId: nextMessage.userId,
+        });
+
+        void emitLocalLocation(
           position.coords.latitude,
           position.coords.longitude,
         );
+      },
+      (reason) => {
+        setLastError(reason);
+        console.warn("[group-live-location] watch position failed", {
+          reason,
+          userId: myUserId,
+        });
       },
     );
   }
@@ -390,14 +588,28 @@ export function useGroupLiveLocation({
       shareModeRef.current !== "sharing" ||
       appStateRef.current !== "active"
     ) {
+      logGroupLiveLocation("skip connect realtime", {
+        appState: appStateRef.current,
+        enabled,
+        groupId: normalizedGroupId,
+        shareMode: shareModeRef.current,
+      });
       return;
     }
 
     if (!listenOnly && !myUserId) {
+      logGroupLiveLocation("skip connect realtime: missing user id", {
+        groupId: normalizedGroupId,
+        listenOnly,
+      });
       return;
     }
 
     if (clientRef.current?.connected || clientRef.current?.active) {
+      logGroupLiveLocation("reuse active stomp client", {
+        connected: Boolean(clientRef.current?.connected),
+        groupId: normalizedGroupId,
+      });
       await startLocationWatcher();
       return;
     }
@@ -406,11 +618,21 @@ export function useGroupLiveLocation({
 
     if (!accessToken) {
       setLastError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      logGroupLiveLocation("skip connect realtime: missing access token", {
+        groupId: normalizedGroupId,
+      });
       return;
     }
 
     setLastError(null);
     setConnectionState("connecting");
+    logGroupLiveLocation("connect realtime", {
+      groupId: normalizedGroupId,
+      listenOnly,
+      userId: normalizeValue(myUserId),
+      username: normalizeValue(username),
+      wsUrl: resolveGroupWebSocketUrl(),
+    });
 
     const nextClient = new Client({
       appendMissingNULLonIncoming: true,
@@ -430,9 +652,20 @@ export function useGroupLiveLocation({
       onConnect: () => {
         setConnectionState("connected");
         setLastError(null);
+        logGroupLiveLocation("stomp connected", {
+          groupId: normalizedGroupId,
+        });
 
-        const handleLocationTopicMessage = (incomingMessage: IMessage) => {
-          const parsedMessage = parseLocationMessage(incomingMessage);
+        const handleLocationTopicMessage = (
+          topic: string,
+          incomingMessage: IMessage,
+        ) => {
+          logGroupLiveLocation("location topic message", {
+            body: summarizeMessageBody(incomingMessage.body),
+            topic,
+          });
+
+          const parsedMessage = parseLocationMessage(incomingMessage, topic);
 
           if (!parsedMessage) {
             return;
@@ -444,13 +677,21 @@ export function useGroupLiveLocation({
           `/topic/group/${normalizedGroupId}`,
           `/topic/group/${normalizedGroupId}/location`,
         ];
-        locationTopicSubscriptionRef.current = locationTopics.map((topic) => ({
-          key: topic,
-          subscription: nextClient.subscribe(topic, handleLocationTopicMessage),
-        }));
+        locationTopicSubscriptionRef.current = locationTopics.map((topic) => {
+          logGroupLiveLocation("subscribe location topic", { topic });
+          return {
+            key: topic,
+            subscription: nextClient.subscribe(topic, (incomingMessage) => {
+              handleLocationTopicMessage(topic, incomingMessage);
+            }),
+          };
+        });
 
-        const handleCommandTopicMessage = (incomingMessage: IMessage) => {
-          const action = parseCommandAction(incomingMessage);
+        const handleCommandTopicMessage = (
+          topic: string,
+          incomingMessage: IMessage,
+        ) => {
+          const action = parseCommandAction(incomingMessage, topic);
 
           if (action !== "STOP_LOCATION") {
             return;
@@ -469,10 +710,15 @@ export function useGroupLiveLocation({
           `/topic/group/${normalizedGroupId}/commands`,
           `/topic/group/${normalizedGroupId}/command`,
         ];
-        commandSubscriptionRef.current = commandTopics.map((topic) => ({
-          key: topic,
-          subscription: nextClient.subscribe(topic, handleCommandTopicMessage),
-        }));
+        commandSubscriptionRef.current = commandTopics.map((topic) => {
+          logGroupLiveLocation("subscribe command topic", { topic });
+          return {
+            key: topic,
+            subscription: nextClient.subscribe(topic, (incomingMessage) => {
+              handleCommandTopicMessage(topic, incomingMessage);
+            }),
+          };
+        });
 
         if (!listenOnly) {
           void startLocationWatcher();
@@ -480,15 +726,25 @@ export function useGroupLiveLocation({
       },
       onDisconnect: () => {
         setConnectionState("disconnected");
+        logGroupLiveLocation("stomp disconnected", {
+          groupId: normalizedGroupId,
+        });
       },
       onStompError: (frame) => {
         setLastError(
           normalizeValue(frame.headers.message) ??
             "Kết nối live location gặp lỗi.",
         );
+        console.warn("[group-live-location] stomp error", {
+          body: frame.body,
+          headers: frame.headers,
+        });
       },
       onWebSocketClose: () => {
         setConnectionState("disconnected");
+        logGroupLiveLocation("websocket closed", {
+          groupId: normalizedGroupId,
+        });
       },
       reconnectDelay: 5000,
     });
