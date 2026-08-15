@@ -60,6 +60,10 @@ type UseGroupLiveLocationResult = {
 
 const defaultGroupWebSocketUrl = "wss://www.culturequestlite.com/ws/websocket";
 const groupLiveLocationDebugEnabled = __DEV__;
+const initialLocationMaxAgeInMs = 60_000;
+const initialLocationRequiredAccuracyInMeters = 200;
+const liveLocationDistanceIntervalInMeters = 5;
+const liveLocationTimeIntervalInMs = 5_000;
 
 function normalizeValue(value?: string | null) {
   if (typeof value !== "string") {
@@ -87,7 +91,23 @@ function readFiniteNumber(value: unknown) {
 
 function resolveGroupWebSocketUrl() {
   const envUrl = normalizeValue(PublicEnv.groupWsUrl);
-  return envUrl ?? defaultGroupWebSocketUrl;
+  const rawUrl = envUrl ?? defaultGroupWebSocketUrl;
+
+  try {
+    const parsedUrl = new URL(rawUrl);
+
+    if (/\/ws\/?$/i.test(parsedUrl.pathname)) {
+      parsedUrl.pathname = `${parsedUrl.pathname.replace(/\/+$/g, "")}/websocket`;
+    }
+
+    return parsedUrl.toString();
+  } catch {
+    if (/\/ws\/?$/i.test(rawUrl)) {
+      return `${rawUrl.replace(/\/+$/g, "")}/websocket`;
+    }
+
+    return rawUrl;
+  }
 }
 
 function summarizeMessageBody(body: string, maxLength = 240) {
@@ -349,6 +369,64 @@ export function useGroupLiveLocation({
     }));
   }
 
+  async function emitLocalLocation(latitude: number, longitude: number) {
+    const nextMessage = buildLocalLocationMessage(latitude, longitude);
+
+    if (nextMessage) {
+      handleIncomingLocation(nextMessage);
+    }
+
+    await publishLocation(latitude, longitude);
+  }
+
+  async function publishInitialLocationSnapshot() {
+    if (listenOnly || !myUserId) {
+      return;
+    }
+
+    try {
+      const lastKnownPosition = await Location.getLastKnownPositionAsync({
+        maxAge: initialLocationMaxAgeInMs,
+        requiredAccuracy: initialLocationRequiredAccuracyInMeters,
+      });
+
+      if (lastKnownPosition) {
+        logGroupLiveLocation("use last known position snapshot", {
+          accuracy: lastKnownPosition.coords.accuracy ?? null,
+          latitude: lastKnownPosition.coords.latitude,
+          longitude: lastKnownPosition.coords.longitude,
+          userId: myUserId,
+        });
+        await emitLocalLocation(
+          lastKnownPosition.coords.latitude,
+          lastKnownPosition.coords.longitude,
+        );
+        return;
+      }
+
+      const currentPosition = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        mayShowUserSettingsDialog: true,
+      });
+
+      logGroupLiveLocation("use current position snapshot", {
+        accuracy: currentPosition.coords.accuracy ?? null,
+        latitude: currentPosition.coords.latitude,
+        longitude: currentPosition.coords.longitude,
+        userId: myUserId,
+      });
+      await emitLocalLocation(
+        currentPosition.coords.latitude,
+        currentPosition.coords.longitude,
+      );
+    } catch (error) {
+      console.warn("[group-live-location] initial position snapshot failed", {
+        error,
+        userId: myUserId,
+      });
+    }
+  }
+
   async function publishLocation(latitude: number, longitude: number) {
     if (listenOnly) {
       return;
@@ -443,15 +521,16 @@ export function useGroupLiveLocation({
           devCoordinate.longitude,
         );
 
-        if (nextMessage) {
-          logGroupLiveLocation("dev coordinate tick", {
-            latitude: nextMessage.latitude,
-            longitude: nextMessage.longitude,
-            userId: nextMessage.userId,
-          });
-          handleIncomingLocation(nextMessage);
-          void publishLocation(nextMessage.latitude, nextMessage.longitude);
+        if (!nextMessage) {
+          return;
         }
+
+        logGroupLiveLocation("dev coordinate tick", {
+          latitude: nextMessage.latitude,
+          longitude: nextMessage.longitude,
+          userId: nextMessage.userId,
+        });
+        void emitLocalLocation(nextMessage.latitude, nextMessage.longitude);
       };
 
       publishDevCoordinate();
@@ -459,12 +538,14 @@ export function useGroupLiveLocation({
       return;
     }
 
+    void publishInitialLocationSnapshot();
+
     locationSubscriptionRef.current = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.High,
-        distanceInterval: 15,
+        distanceInterval: liveLocationDistanceIntervalInMeters,
         mayShowUserSettingsDialog: true,
-        timeInterval: 5000,
+        timeInterval: liveLocationTimeIntervalInMs,
       },
       (position) => {
         const nextMessage = buildLocalLocationMessage(
@@ -472,20 +553,28 @@ export function useGroupLiveLocation({
           position.coords.longitude,
         );
 
-        if (nextMessage) {
-          logGroupLiveLocation("gps position update", {
-            accuracy: position.coords.accuracy ?? null,
-            latitude: nextMessage.latitude,
-            longitude: nextMessage.longitude,
-            userId: nextMessage.userId,
-          });
-          handleIncomingLocation(nextMessage);
+        if (!nextMessage) {
+          return;
         }
 
-        void publishLocation(
+        logGroupLiveLocation("gps position update", {
+          accuracy: position.coords.accuracy ?? null,
+          latitude: nextMessage.latitude,
+          longitude: nextMessage.longitude,
+          userId: nextMessage.userId,
+        });
+
+        void emitLocalLocation(
           position.coords.latitude,
           position.coords.longitude,
         );
+      },
+      (reason) => {
+        setLastError(reason);
+        console.warn("[group-live-location] watch position failed", {
+          reason,
+          userId: myUserId,
+        });
       },
     );
   }
