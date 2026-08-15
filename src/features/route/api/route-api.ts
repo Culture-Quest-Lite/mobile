@@ -563,10 +563,13 @@ function getRouteImageMedia(route: Pick<RouteDto, "hotspots" | "medias">) {
   return null;
 }
 
+// RouteResponse của backend trả ảnh bìa riêng của tuyến ở `imageUrl` (S3
+// /routes/...), không có mảng `medias` cấp tuyến. Vì vậy phải ưu tiên
+// `imageUrl`, nếu không card tuyến sẽ hiển thị ảnh của hotspot đầu tiên.
 export function getRouteCoverUrl(
   route: Pick<RouteDto, "hotspots" | "imageUrl" | "medias">,
 ) {
-  return getRouteImageMedia(route)?.fileUrl || route.imageUrl || null;
+  return route.imageUrl?.trim() || getRouteImageMedia(route)?.fileUrl || null;
 }
 
 export function getRouteStopCount(route: Pick<RouteDto, "hotspots">) {
