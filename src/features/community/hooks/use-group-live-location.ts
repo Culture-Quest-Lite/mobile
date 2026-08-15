@@ -1,6 +1,6 @@
 import { Client, type IMessage, type StompSubscription } from "@stomp/stompjs";
 import * as Location from "expo-location";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 
 import { PublicEnv } from "@/constants/env";
@@ -31,6 +31,10 @@ export type GroupLiveConnectionState =
   | "disconnected";
 
 type StopMode = "group_forced_stop" | "paused" | "route_stopped";
+type TopicSubscriptionEntry = {
+  key: string;
+  subscription: StompSubscription;
+};
 
 type UseGroupLiveLocationParams = {
   enabled: boolean;
@@ -184,9 +188,9 @@ export function useGroupLiveLocation({
   const authSession = useAuthSession();
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const clientRef = useRef<Client | null>(null);
-  const commandSubscriptionRef = useRef<StompSubscription | null>(null);
+  const commandSubscriptionRef = useRef<TopicSubscriptionEntry[]>([]);
   const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
-  const locationTopicSubscriptionRef = useRef<StompSubscription | null>(null);
+  const locationTopicSubscriptionRef = useRef<TopicSubscriptionEntry[]>([]);
   const devIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const shouldMaintainSessionRef = useRef(false);
   const shareModeRef = useRef<GroupLiveShareMode>("sharing");
@@ -204,6 +208,22 @@ export function useGroupLiveLocation({
     setShareMode(nextShareMode);
   }
 
+  function clearTopicSubscriptions(
+    subscriptionRef: MutableRefObject<TopicSubscriptionEntry[]>,
+  ) {
+    subscriptionRef.current.forEach((entry) => {
+      try {
+        entry.subscription.unsubscribe();
+      } catch (error) {
+        console.warn("[group-live-location] unsubscribe topic failed", {
+          error,
+          topic: entry.key,
+        });
+      }
+    });
+    subscriptionRef.current = [];
+  }
+
   function clearGpsWatcher() {
     locationSubscriptionRef.current?.remove();
     locationSubscriptionRef.current = null;
@@ -215,10 +235,8 @@ export function useGroupLiveLocation({
   }
 
   async function disconnectClient() {
-    commandSubscriptionRef.current?.unsubscribe();
-    commandSubscriptionRef.current = null;
-    locationTopicSubscriptionRef.current?.unsubscribe();
-    locationTopicSubscriptionRef.current = null;
+    clearTopicSubscriptions(commandSubscriptionRef);
+    clearTopicSubscriptions(locationTopicSubscriptionRef);
 
     const currentClient = clientRef.current;
     clientRef.current = null;
@@ -267,7 +285,6 @@ export function useGroupLiveLocation({
 
     if (
       !normalizedGroupId ||
-      !normalizedUsername ||
       !normalizedUserId ||
       !clientRef.current?.connected
     ) {
@@ -366,7 +383,6 @@ export function useGroupLiveLocation({
 
   async function connectRealtime() {
     const normalizedGroupId = normalizeValue(groupId);
-    const normalizedUsername = normalizeValue(username);
 
     if (
       !enabled ||
@@ -377,7 +393,7 @@ export function useGroupLiveLocation({
       return;
     }
 
-    if (!listenOnly && !normalizedUsername) {
+    if (!listenOnly && !myUserId) {
       return;
     }
 
@@ -415,38 +431,48 @@ export function useGroupLiveLocation({
         setConnectionState("connected");
         setLastError(null);
 
-        locationTopicSubscriptionRef.current = nextClient.subscribe(
+        const handleLocationTopicMessage = (incomingMessage: IMessage) => {
+          const parsedMessage = parseLocationMessage(incomingMessage);
+
+          if (!parsedMessage) {
+            return;
+          }
+
+          handleIncomingLocation(parsedMessage);
+        };
+        const locationTopics = [
           `/topic/group/${normalizedGroupId}`,
-          (incomingMessage) => {
-            const parsedMessage = parseLocationMessage(incomingMessage);
+          `/topic/group/${normalizedGroupId}/location`,
+        ];
+        locationTopicSubscriptionRef.current = locationTopics.map((topic) => ({
+          key: topic,
+          subscription: nextClient.subscribe(topic, handleLocationTopicMessage),
+        }));
 
-            if (!parsedMessage) {
-              return;
-            }
+        const handleCommandTopicMessage = (incomingMessage: IMessage) => {
+          const action = parseCommandAction(incomingMessage);
 
-            handleIncomingLocation(parsedMessage);
-          },
-        );
+          if (action !== "STOP_LOCATION") {
+            return;
+          }
 
-        commandSubscriptionRef.current = nextClient.subscribe(
+          void pauseRealtime("group_forced_stop");
+
+          if (showForcedStopAlert) {
+            appAlert.alert(
+              "Thông báo",
+              "Trưởng nhóm đã kết thúc phiên chia sẻ vị trí.",
+            );
+          }
+        };
+        const commandTopics = [
           `/topic/group/${normalizedGroupId}/commands`,
-          (incomingMessage) => {
-            const action = parseCommandAction(incomingMessage);
-
-            if (action !== "STOP_LOCATION") {
-              return;
-            }
-
-            void pauseRealtime("group_forced_stop");
-
-            if (showForcedStopAlert) {
-              appAlert.alert(
-                "Thông báo",
-                "Trưởng nhóm đã kết thúc phiên chia sẻ vị trí.",
-              );
-            }
-          },
-        );
+          `/topic/group/${normalizedGroupId}/command`,
+        ];
+        commandSubscriptionRef.current = commandTopics.map((topic) => ({
+          key: topic,
+          subscription: nextClient.subscribe(topic, handleCommandTopicMessage),
+        }));
 
         if (!listenOnly) {
           void startLocationWatcher();
@@ -501,7 +527,7 @@ export function useGroupLiveLocation({
     if (
       !enabled ||
       !groupId ||
-      (!listenOnly && (!username || !myUserId))
+      (!listenOnly && !myUserId)
     ) {
       shouldMaintainSessionRef.current = false;
       clearGpsWatcher();
