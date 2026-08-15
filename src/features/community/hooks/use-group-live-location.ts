@@ -89,6 +89,47 @@ function readFiniteNumber(value: unknown) {
   return null;
 }
 
+/**
+ * `LocationMessage.timestamp` của backend là `LocalDateTime`, và converter của
+ * STOMP broker (MappingJackson2MessageConverter) bật WRITE_DATES_AS_TIMESTAMPS
+ * nên nó ra mảng `[2026,8,15,10,11,12,nano]` chứ không phải chuỗi ISO. Nếu chỉ
+ * đọc số thì mọi mốc thời gian đều hỏng, khiến "cập nhật lúc" và mốc 15s coi
+ * thành viên là offline bị sai. Chấp nhận cả 3 dạng: số epoch, chuỗi ISO, mảng.
+ */
+function readTimestamp(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    const [year, month, day, hour = 0, minute = 0, second = 0] = value.map(
+      (part) => readFiniteNumber(part) ?? 0,
+    );
+
+    if (!year || !month || !day) {
+      return null;
+    }
+
+    // LocalDateTime không kèm timezone; server và thiết bị cùng múi giờ VN nên
+    // dựng theo giờ local là sát nhất với ý nghĩa gốc.
+    const parsedDate = new Date(year, month - 1, day, hour, minute, second);
+    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate.getTime();
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const numericValue = Number(value);
+
+    if (Number.isFinite(numericValue)) {
+      return numericValue;
+    }
+
+    const parsedDate = new Date(value.trim());
+    return Number.isNaN(parsedDate.getTime()) ? null : parsedDate.getTime();
+  }
+
+  return null;
+}
+
 function resolveGroupWebSocketUrl() {
   const envUrl = normalizeValue(PublicEnv.groupWsUrl);
   const rawUrl = envUrl ?? defaultGroupWebSocketUrl;
@@ -167,7 +208,7 @@ function parseLocationMessage(
           coordinatePayload?.lon,
       ) ?? null;
     const timestamp =
-      readFiniteNumber(
+      readTimestamp(
         rawPayload.timestamp ??
           rawPayload.sentAt ??
           rawPayload.createdAt ??
@@ -202,14 +243,18 @@ function parseLocationMessage(
       longitude,
       timestamp,
       userId,
+      // Backend broadcast field tên là `displayName` (LocationMessage), phải
+      // đọc trước mấy tên cũ nếu không tên thành viên luôn rỗng.
       username: normalizeValue(
-        typeof rawPayload.username === "string"
-          ? rawPayload.username
-          : typeof rawPayload.userName === "string"
-            ? rawPayload.userName
-            : typeof rawPayload.senderName === "string"
-              ? rawPayload.senderName
-              : null,
+        typeof rawPayload.displayName === "string"
+          ? rawPayload.displayName
+          : typeof rawPayload.username === "string"
+            ? rawPayload.username
+            : typeof rawPayload.userName === "string"
+              ? rawPayload.userName
+              : typeof rawPayload.senderName === "string"
+                ? rawPayload.senderName
+                : null,
       ),
     } satisfies GroupLiveLocationMessage;
 
@@ -336,7 +381,14 @@ export function useGroupLiveLocation({
       }
     }
 
-    setConnectionState("disconnected");
+    // `deactivate()` chờ socket đóng hẳn nên có thể mất vài giây. Trong lúc đó
+    // effect thường đã dựng client mới (màn hành trình gọi setStatus("loading")
+    // mỗi lần focus nên vòng ngắt-nối này xảy ra liên tục). Nếu cứ hạ trạng
+    // thái vô điều kiện thì lần "disconnected" muộn này ghi đè lên
+    // "connected" của client mới và banner kẹt ở "Mất kết nối" dù đang online.
+    if (clientRef.current === null) {
+      setConnectionState("disconnected");
+    }
   }
 
   async function pauseRealtime(stopMode: StopMode) {
@@ -435,7 +487,6 @@ export function useGroupLiveLocation({
     const normalizedGroupId = normalizeValue(groupId);
     const normalizedUsername = normalizeValue(username);
     const normalizedUserId = normalizeValue(myUserId);
-    const timestamp = Date.now();
 
     if (
       !normalizedGroupId ||
@@ -454,19 +505,32 @@ export function useGroupLiveLocation({
 
     logGroupLiveLocation("publish location", {
       destination: `/app/group/${normalizedGroupId}/location`,
+      displayName: normalizedUsername,
       latitude,
       longitude,
-      timestamp,
       userId: normalizedUserId,
-      username: normalizedUsername,
     });
+    /**
+     * Body phải khớp đúng `LocationMessage` của backend:
+     * `{ userId: Long, displayName: String, latitude: Double, longitude: Double,
+     *    timestamp: LocalDateTime }`.
+     *
+     * KHÔNG gửi `timestamp`: trước đây client gửi `Date.now()` (số epoch ms),
+     * Jackson không đổi số thành `LocalDateTime` được ("raw timestamp not
+     * allowed for java.time.LocalDateTime") nên message bị từ chối ngay ở bước
+     * convert — handler @MessageMapping không bao giờ chạy, không ai được
+     * broadcast vị trí, và STOMP session bị đóng kèm ERROR frame (chính là lỗi
+     * "mất kết nối" ngay khi bắt đầu chia sẻ). Server tự set
+     * `LocalDateTime.now()` nên bỏ hẳn field này là đúng nhất.
+     *
+     * `username` cũng không tồn tại trong DTO — tên đúng là `displayName`.
+     */
     clientRef.current.publish({
       body: JSON.stringify({
+        displayName: normalizedUsername,
         latitude,
         longitude,
-        timestamp,
         userId: normalizedUserId,
-        username: normalizedUsername,
       }),
       destination: `/app/group/${normalizedGroupId}/location`,
     });
@@ -634,6 +698,12 @@ export function useGroupLiveLocation({
       wsUrl: resolveGroupWebSocketUrl(),
     });
 
+    /**
+     * Client cũ vẫn bắn onDisconnect/onWebSocketClose sau khi bị thay thế. Mọi
+     * callback vì thế phải tự kiểm tra mình còn là client đang dùng hay không,
+     * nếu không trạng thái kết nối của client mới sẽ bị client cũ ghi đè.
+     */
+    const isCurrentClient = () => clientRef.current === nextClient;
     const nextClient = new Client({
       appendMissingNULLonIncoming: true,
       brokerURL: resolveGroupWebSocketUrl(),
@@ -650,6 +720,13 @@ export function useGroupLiveLocation({
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,
       onConnect: () => {
+        if (!isCurrentClient()) {
+          logGroupLiveLocation("ignore stale stomp connect", {
+            groupId: normalizedGroupId,
+          });
+          return;
+        }
+
         setConnectionState("connected");
         setLastError(null);
         logGroupLiveLocation("stomp connected", {
@@ -725,22 +802,35 @@ export function useGroupLiveLocation({
         }
       },
       onDisconnect: () => {
+        if (!isCurrentClient()) {
+          return;
+        }
+
         setConnectionState("disconnected");
         logGroupLiveLocation("stomp disconnected", {
           groupId: normalizedGroupId,
         });
       },
       onStompError: (frame) => {
-        setLastError(
-          normalizeValue(frame.headers.message) ??
-            "Kết nối live location gặp lỗi.",
-        );
         console.warn("[group-live-location] stomp error", {
           body: frame.body,
           headers: frame.headers,
         });
+
+        if (!isCurrentClient()) {
+          return;
+        }
+
+        setLastError(
+          normalizeValue(frame.headers.message) ??
+            "Kết nối live location gặp lỗi.",
+        );
       },
       onWebSocketClose: () => {
+        if (!isCurrentClient()) {
+          return;
+        }
+
         setConnectionState("disconnected");
         logGroupLiveLocation("websocket closed", {
           groupId: normalizedGroupId,
@@ -799,6 +889,12 @@ export function useGroupLiveLocation({
     shouldMaintainSessionRef.current = shareModeRef.current === "sharing";
 
     if (shouldMaintainSessionRef.current) {
+      // Bám GPS ngay, không chờ STOMP connect. Vị trí của chính mình được đẩy
+      // vào state cục bộ (emitLocalLocation), nên tách khỏi socket thì user
+      // vẫn thấy chấm của mình trên bản đồ lúc đang kết nối lại — trước đây
+      // watcher chỉ khởi động trong onConnect nên socket lỗi là bản đồ trống.
+      // publishLocation tự bỏ qua khi chưa connected.
+      void startLocationWatcher();
       void connectRealtime();
     }
 
