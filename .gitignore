@@ -39,7 +39,8 @@ yarn-error.*
 *.tsbuildinfo
 
 example
-
+*.apk
+*.aab
 # generated native folders
 /ios
 /android

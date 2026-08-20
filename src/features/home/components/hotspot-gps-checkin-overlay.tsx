@@ -49,7 +49,6 @@ import {
   useCheckInZone,
 } from "../hooks/use-checkin-zone";
 
-import { getHotspotById as getHotspotByIdApi } from "../api/get-hotspot-by-id";
 import { getUnlockedHotspotStories } from "../api/get-hotspot-stories";
 import {
   createCheckIn,
@@ -912,12 +911,6 @@ export function HotspotGpsCheckinOverlay({
   routeId?: number | null;
   isStoryAvailable?: boolean;
   onClose: () => void;
-  /**
-   * Báo cho màn hình cha biết check-in đã được ghi nhận (để refetch, dò hoàn
-   * thành tuyến...). KHÔNG được đóng overlay trong callback này: overlay còn
-   * phải hiện màn hình "Check-in thành công" kèm số điểm/XP vừa nhận. Chỉ
-   * `onClose` mới được đóng.
-   */
   onSuccess: () => void;
 }) {
   const router = useRouter();
@@ -967,10 +960,6 @@ export function HotspotGpsCheckinOverlay({
   const [checkInDeviceTime, setCheckInDeviceTime] = useState<number | null>(
     null,
   );
-  const [existingCheckInReward, setExistingCheckInReward] = useState<{
-    point: number;
-    xp: number;
-  } | null>(null);
   const storiesHref =
     typeof hotspotId === "number" && hotspotId > 0
       ? ({
@@ -1042,48 +1031,6 @@ export function HotspotGpsCheckinOverlay({
   const userAvatarUri = authSession.isAuthenticated
     ? (profile?.avatar ?? null)
     : null;
-  const isOverlayMountedRef = useRef(true);
-
-  useEffect(() => {
-    isOverlayMountedRef.current = true;
-
-    return () => {
-      isOverlayMountedRef.current = false;
-    };
-  }, []);
-
-  // Check-in trùng chỉ nhận được message lỗi, không có số điểm/XP. Backend cộng
-  // đúng hotspot.point/hotspot.xp lúc check-in lần đầu, nên lấy lại từ hotspot
-  // để user vẫn thấy mình đã nhận bao nhiêu thay vì một thẻ trống.
-  const loadExistingCheckInReward = useCallback(async () => {
-    if (!(typeof hotspotId === "number" && hotspotId > 0)) {
-      return;
-    }
-
-    try {
-      const accessToken = await getValidAccessToken();
-      const remoteHotspot = await getHotspotByIdApi({
-        accessToken,
-        hotspotId,
-        tokenType: authSession.tokenType,
-      });
-
-      if (!isOverlayMountedRef.current) {
-        return;
-      }
-
-      setExistingCheckInReward({
-        point: remoteHotspot.point ?? 0,
-        xp: remoteHotspot.xp ?? 0,
-      });
-    } catch (error) {
-      console.warn("[hotspot-checkin] load existing check-in reward failed", {
-        error: error instanceof Error ? error.message : error,
-        hotspotId,
-      });
-    }
-  }, [authSession.tokenType, hotspotId]);
-
   const markCheckInLocally = useCallback(() => {
     if (typeof hotspotId === "number" && hotspotId > 0) {
       addApiCheckin(hotspotId);
@@ -1142,20 +1089,17 @@ export function HotspotGpsCheckinOverlay({
       setCheckInResult(nextCheckInResult);
       setCheckInDeviceTime(Date.now());
       markCheckInLocally();
-      setCheckinStage("success");
       onSuccess();
+      setCheckinStage("success");
       void prefetchUnlockedStories();
     } catch (error) {
       if (isDuplicateCheckInError(error)) {
         setIsExistingCheckIn(true);
         setCheckInResult(null);
         markCheckInLocally();
-        setCheckinStage("success");
-        // Điểm cuối có thể đã được server ghi nhận ở lần bấm trước (client báo
-        // lỗi nhưng server đã lưu), nên lần "trùng" này vẫn phải báo lên trên.
         onSuccess();
+        setCheckinStage("success");
         void prefetchUnlockedStories();
-        void loadExistingCheckInReward();
         return;
       }
 
@@ -1170,7 +1114,6 @@ export function HotspotGpsCheckinOverlay({
     authSession.tokenType,
     currentCoordinate,
     hotspotId,
-    loadExistingCheckInReward,
     markCheckInLocally,
     onClose,
     onSuccess,
@@ -1199,16 +1142,12 @@ export function HotspotGpsCheckinOverlay({
         .filter(Boolean),
     ),
   );
-  // Check-in trùng: server không trả lại phần thưởng đã cộng, nên lấy point/xp
-  // của chính hotspot — đúng con số backend đã cộng ở lần check-in đầu tiên.
   const totalXpEarned = isExistingCheckIn
-    ? (existingCheckInReward?.xp ?? 0)
+    ? 0
     : (checkInResult?.totalXpEarned ?? 0);
   const totalPointEarned = isExistingCheckIn
-    ? (existingCheckInReward?.point ?? null)
+    ? null
     : (checkInResult?.totalPointEarned ?? null);
-  const rewardRowLabelPrefix = isExistingCheckIn ? "Đã nhận" : "Tổng";
-  const shouldShowXpRow = !isExistingCheckIn || existingCheckInReward !== null;
   const checkInMetaLabel = isExistingCheckIn
     ? "Hệ thống xác nhận bạn đã check-in địa điểm này trước đó."
     : null;
@@ -1222,33 +1161,33 @@ export function HotspotGpsCheckinOverlay({
     verificationStatus === "ready" && isSubmittingCheckIn
       ? "Đang check-in..."
       : verificationCopy.primaryLabel;
-  // `isReward` thay cho việc so khớp label lúc tô màu: label đổi theo
-  // `rewardRowLabelPrefix` nên so chuỗi là hỏng ngay khi check-in trùng.
-  const successRows: {
-    icon: SymbolName;
-    iconBackground: string;
-    isReward?: boolean;
-    label: string;
-    trailing: string;
-    value: string;
-  }[] = [
-    {
-      icon: {
-        ios: "checkmark.seal.fill",
-        android: "verified",
-        web: "verified",
-      } as SymbolName,
-      iconBackground: SUCCESS_CHECK_ICON_COLOR,
-      label: "Trạng thái",
-      trailing: "✓",
-      value: isExistingCheckIn
-        ? "Đã check-in trước đó"
-        : checkInResult?.isCheckedIn
-          ? "Đã check-in"
-          : "Đang cập nhật",
-    },
-    ...(shouldShowXpRow
+  const successRows = [
+    ...(isExistingCheckIn
       ? [
+          {
+            icon: {
+              ios: "checkmark.seal.fill",
+              android: "verified",
+              web: "verified",
+            } as SymbolName,
+            iconBackground: SUCCESS_CHECK_ICON_COLOR,
+            label: "Trạng thái",
+            trailing: "✓",
+            value: "Đã check-in trước đó",
+          },
+        ]
+      : [
+          {
+            icon: {
+              ios: "checkmark.seal.fill",
+              android: "verified",
+              web: "verified",
+            } as SymbolName,
+            iconBackground: SUCCESS_CHECK_ICON_COLOR,
+            label: "Trạng thái",
+            trailing: "✓",
+            value: checkInResult?.isCheckedIn ? "Đã check-in" : "Đang cập nhật",
+          },
           {
             icon: {
               ios: "star.fill",
@@ -1256,13 +1195,11 @@ export function HotspotGpsCheckinOverlay({
               web: "star",
             } as SymbolName,
             iconBackground: "#FFC93C",
-            isReward: true,
-            label: `${rewardRowLabelPrefix} XP`,
+            label: "Tổng XP",
             trailing: `+${formatNumericValue(totalXpEarned)}`,
             value: `+${formatNumericValue(totalXpEarned)} XP`,
           },
-        ]
-      : []),
+        ]),
     ...(totalPointEarned !== null
       ? [
           {
@@ -1272,8 +1209,7 @@ export function HotspotGpsCheckinOverlay({
               web: "monetization_on",
             } as SymbolName,
             iconBackground: "#F58752",
-            isReward: true,
-            label: `${rewardRowLabelPrefix} điểm`,
+            label: "Tổng điểm",
             trailing: `+${formatNumericValue(totalPointEarned)}`,
             value: `+${formatNumericValue(totalPointEarned)} điểm`,
           },
@@ -1463,9 +1399,10 @@ export function HotspotGpsCheckinOverlay({
                     <Text
                       className="text-[15px] font-medium"
                       style={{
-                        color: item.isReward
-                          ? "#F58752"
-                          : SUCCESS_CHECK_ICON_COLOR,
+                        color:
+                          item.label === "Tổng XP" || item.label === "Tổng điểm"
+                            ? "#F58752"
+                            : SUCCESS_CHECK_ICON_COLOR,
                       }}
                     >
                       {item.trailing}
