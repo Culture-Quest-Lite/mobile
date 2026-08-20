@@ -238,72 +238,6 @@ function parseStoriesResponse(value: unknown): GetHotspotStoriesResponse | null 
   };
 }
 
-function compareHotspotStories(left: HotspotStoryDto, right: HotspotStoryDto) {
-  const leftOrder = left.orderIndex ?? Number.MAX_SAFE_INTEGER;
-  const rightOrder = right.orderIndex ?? Number.MAX_SAFE_INTEGER;
-
-  if (leftOrder !== rightOrder) {
-    return leftOrder - rightOrder;
-  }
-
-  return left.storyId - right.storyId;
-}
-
-function normalizeRouteId(routeId?: number | null) {
-  return typeof routeId === "number" && Number.isInteger(routeId) && routeId > 0
-    ? routeId
-    : null;
-}
-
-function readRouteTagIds(routeStories: HotspotStoryDto[]) {
-  const routeTagIds = new Set<number>();
-
-  routeStories.forEach((story) => {
-    const tagId = story.tag?.tagId;
-
-    if (typeof tagId === "number" && Number.isInteger(tagId) && tagId > 0) {
-      routeTagIds.add(tagId);
-    }
-  });
-
-  return routeTagIds;
-}
-
-function mergeRouteFirstStories(
-  routeStories: HotspotStoryDto[],
-  allStories: HotspotStoryDto[],
-): HotspotStoryDto[] {
-  const storiesById = new Map<number, HotspotStoryDto>();
-
-  routeStories.forEach((story) => {
-    storiesById.set(story.storyId, story);
-  });
-
-  allStories.forEach((story) => {
-    if (!storiesById.has(story.storyId)) {
-      storiesById.set(story.storyId, story);
-    }
-  });
-
-  const mergedStories = [...storiesById.values()].sort(compareHotspotStories);
-  const routeStoryIds = new Set(routeStories.map((story) => story.storyId));
-  const routeTagIds = readRouteTagIds(routeStories);
-  const isRouteFirstStory = (story: HotspotStoryDto) => {
-    if (routeStoryIds.has(story.storyId)) {
-      return true;
-    }
-
-    const tagId = story.tag?.tagId;
-
-    return typeof tagId === "number" && routeTagIds.has(tagId);
-  };
-
-  return [
-    ...mergedStories.filter(isRouteFirstStory),
-    ...mergedStories.filter((story) => !isRouteFirstStory(story)),
-  ];
-}
-
 function serializeError(error: unknown) {
   if (error instanceof Error) {
     return {
@@ -430,7 +364,16 @@ export async function getHotspotStories({
     throw new Error("API story trả về dữ liệu không đúng định dạng.");
   }
 
-  return [...parsedResponse.content].sort(compareHotspotStories);
+  return [...parsedResponse.content].sort((left, right) => {
+    const leftOrder = left.orderIndex ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder = right.orderIndex ?? Number.MAX_SAFE_INTEGER;
+
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+
+    return left.storyId - right.storyId;
+  });
 }
 
 export async function getUnlockedHotspotStories({
@@ -439,74 +382,10 @@ export async function getUnlockedHotspotStories({
   routeId,
   tokenType,
 }: GetUnlockedHotspotStoriesRequest): Promise<HotspotStoryDto[]> {
-  const normalizedRouteId = normalizeRouteId(routeId);
-
-  if (normalizedRouteId === null) {
-    return getHotspotStories({
-      accessToken,
-      hotspotId,
-      routeId,
-      tokenType,
-    });
-  }
-
-  const [routeStoriesResult, allStoriesResult] = await Promise.allSettled([
-    getHotspotStories({
-      accessToken,
-      hotspotId,
-      routeId: normalizedRouteId,
-      tokenType,
-    }),
-    getHotspotStories({
-      accessToken,
-      hotspotId,
-      routeId: null,
-      tokenType,
-    }),
-  ]);
-
-  const routeStories =
-    routeStoriesResult.status === "fulfilled" ? routeStoriesResult.value : null;
-  const allStories =
-    allStoriesResult.status === "fulfilled" ? allStoriesResult.value : null;
-
-  if (routeStories && allStories) {
-    return mergeRouteFirstStories(routeStories, allStories);
-  }
-
-  if (routeStories) {
-    console.warn(
-      "[stories] all-stories request failed, using route-only list",
-      {
-        error: serializeError(
-          allStoriesResult.status === "rejected"
-            ? allStoriesResult.reason
-            : null,
-        ),
-        hotspotId,
-        routeId: normalizedRouteId,
-      },
-    );
-
-    return routeStories;
-  }
-
-  if (allStories) {
-    console.warn("[stories] route request failed, using all-stories list", {
-      error: serializeError(
-        routeStoriesResult.status === "rejected"
-          ? routeStoriesResult.reason
-          : null,
-      ),
-      hotspotId,
-      routeId: normalizedRouteId,
-    });
-
-    return allStories;
-  }
-
-  throw routeStoriesResult.status === "rejected" &&
-    routeStoriesResult.reason instanceof Error
-    ? routeStoriesResult.reason
-    : new Error(`Không thể tải story cho hotspot #${hotspotId}.`);
+  return getHotspotStories({
+    accessToken,
+    hotspotId,
+    routeId,
+    tokenType,
+  });
 }
