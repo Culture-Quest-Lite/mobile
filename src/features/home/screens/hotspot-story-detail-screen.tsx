@@ -903,7 +903,7 @@ export default function HotspotStoryDetailScreen() {
       : rawAudioDurationChipLabel && rawAudioDurationChipLabel !== "Audio API"
         ? rawAudioDurationChipLabel
         : hasAudioUrl
-          ? "Đang tải"
+          ? ""
           : "Chưa có audio";
   const handleOpenImageViewer = (index: number) => {
     const nextIndex = clampNumber(index, 0, Math.max(gallery.length - 1, 0));

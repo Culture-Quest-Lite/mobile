@@ -153,7 +153,7 @@ function isLeaderCommunityGroup(
 
 function getRoutePrimaryMeta(route: RouteDto | null) {
   if (!route) {
-    return "Đang tải thông tin lộ trình";
+    return "";
   }
 
   const pieces = [
@@ -800,12 +800,6 @@ export default function RouteGroupQuestScreen() {
             style={cardShadow}
           >
             <ActivityIndicator color="#D95B8D" />
-            <Text
-              className="mt-3 text-[13px] text-[#8E869A]"
-              style={{ lineHeight: lineHeightFor(13) }}
-            >
-              Đang tải danh sách nhóm...
-            </Text>
           </View>
         ) : errorMessage ? (
           <View

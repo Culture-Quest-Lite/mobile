@@ -7,6 +7,7 @@ import * as Location from "expo-location";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   StatusBar as RNStatusBar,
@@ -158,6 +159,7 @@ const premiumBannerCtaShadowStyle = {
   elevation: 6,
 } as const;
 
+const premiumBannerPlaceholderHeight = 96;
 const premiumBannerTitleTextClassName = "text-[14px] font-black text-[#2B2233]";
 const premiumBannerSubtitleTextClassName = "mt-1 text-[11px] text-[#7F738C]";
 const premiumBannerActiveSubtitleTextClassName =
@@ -593,6 +595,30 @@ function PremiumBannerIllustration() {
           width: 252,
         }}
       />
+    </View>
+  );
+}
+
+/**
+ * Giữ chỗ cho banner Premium trong lúc `explorerSummary` chưa về. Không render
+ * thẳng nhánh upsell, nếu không user đã Premium sẽ thấy banner "nâng cấp" loé
+ * lên rồi mới đổi. Chiều cao khớp banner thật để layout không nhảy.
+ */
+function PremiumBannerPlaceholder() {
+  return (
+    <View
+      className="items-center justify-center overflow-hidden rounded-[26px]"
+      style={[
+        premiumBannerShadowStyle,
+        {
+          backgroundColor: "#FFFCFE",
+          borderColor: "#F4DFE7",
+          borderWidth: 1,
+          height: premiumBannerPlaceholderHeight,
+        },
+      ]}
+    >
+      <ActivityIndicator color="#E93D83" size="small" />
     </View>
   );
 }
@@ -1153,14 +1179,13 @@ type FeaturedRoutesSectionStatus = "empty" | "loading" | "ready";
 type ActiveJourneySectionStatus = "empty" | "loading" | "ready";
 type NearbyPlacesSectionStatus = "empty" | "loading" | "ready";
 type SuggestedRoutesSectionStatus = "empty" | "loading" | "ready";
-type InitialHomeLoadPart =
-  | "activeJourney"
-  | "communityLeaderboard"
-  | "explorerSummary"
-  | "featuredRoutes"
-  | "nearbyPlaces"
-  | "suggestedRoutes"
-  | "themeCategories";
+type ThemeCategoriesSectionStatus = "empty" | "loading" | "ready";
+/**
+ * Banner Premium phụ thuộc `explorerSummary`. Vì Home không còn chặn cả màn
+ * bằng spinner, phải biết lúc nào dữ liệu chưa về để tránh loé banner "nâng
+ * cấp" trước mắt user đã là Premium.
+ */
+type ExplorerSummarySectionStatus = "loading" | "ready";
 type SuggestedRouteCard = RouteItem & {
   difficultyKey: string;
   distanceLabel: string;
@@ -1317,8 +1342,8 @@ function buildCommunityBoardViewModelFromLeaderboard({
     return {
       entries: [],
       headlineRankLabel: "#--",
-      summaryLabel: t("home.community.loadingTitle"),
-      summaryNote: t("home.community.loadingNote"),
+      summaryLabel: "",
+      summaryNote: "",
       summaryXp: 0,
       totalPoints: "--",
     };
@@ -2094,6 +2119,10 @@ export default function HomeScreen() {
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
   const [explorerSummary, setExplorerSummary] =
     useState<ExplorerSummary | null>(null);
+  const [explorerSummaryStatus, setExplorerSummaryStatus] =
+    useState<ExplorerSummarySectionStatus>(() =>
+      authSession.isAuthenticated ? "loading" : "ready",
+    );
   const [nearbyPlacesNote, setNearbyPlacesNote] = useState<string | null>(null);
   const [nearbyPlacesStatus, setNearbyPlacesStatus] =
     useState<NearbyPlacesSectionStatus>("loading");
@@ -2120,6 +2149,8 @@ export default function HomeScreen() {
   const [themeCategories, setThemeCategories] = useState<NearbyCategoryCard[]>(
     [],
   );
+  const [themeCategoriesStatus, setThemeCategoriesStatus] =
+    useState<ThemeCategoriesSectionStatus>("loading");
   const [featuredRouteCards, setFeaturedRouteCards] = useState<
     FeaturedRouteCard[]
   >([]);
@@ -2136,47 +2167,19 @@ export default function HomeScreen() {
   const [homeVouchersStatus, setHomeVouchersStatus] =
     useState<HomeVouchersSectionStatus>("loading");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [hasCompletedInitialHomeLoad, setHasCompletedInitialHomeLoad] =
-    useState(false);
   const nearbyPlacesRequestRef = useRef(0);
   const themeCategoriesRequestRef = useRef(0);
   const communityLeaderboardRequestRef = useRef(0);
   const homeVouchersRequestRef = useRef(0);
   const explorerSummaryRequestRef = useRef(0);
-  const initialHomeLoadPendingRef = useRef<
-    Record<InitialHomeLoadPart, boolean>
-  >({
-    activeJourney: authSession.isAuthenticated,
-    communityLeaderboard: true,
-    explorerSummary: authSession.isAuthenticated,
-    featuredRoutes: true,
-    nearbyPlaces: true,
-    suggestedRoutes: true,
-    themeCategories: true,
-  });
-
-  const markInitialHomeLoadPartResolved = useCallback(
-    (part: InitialHomeLoadPart) => {
-      const pending = initialHomeLoadPendingRef.current;
-
-      if (!pending[part]) {
-        return;
-      }
-
-      pending[part] = false;
-
-      if (
-        !hasCompletedInitialHomeLoad &&
-        !Object.values(pending).some(Boolean)
-      ) {
-        setHasCompletedInitialHomeLoad(true);
-      }
-    },
-    [hasCompletedInitialHomeLoad],
-  );
+  /**
+   * `loadExplorerSummary` chạy lại ở mỗi lần focus tab Home. Chỉ lần đầu mới
+   * được phép quay về "loading", nếu không banner Premium sẽ nháy skeleton mỗi
+   * lần user quay lại Home.
+   */
+  const hasResolvedExplorerSummaryRef = useRef(false);
 
   const isGuest = authSession.role === "guest";
-  const shouldShowInitialHomeLoading = !hasCompletedInitialHomeLoad;
   const homeHeaderTopPadding = 12;
   const routeCardLeftInset = gutter;
   const routeCardWidth = Math.max(contentWidth, 264);
@@ -2362,7 +2365,6 @@ export default function HomeScreen() {
           ),
         );
         setFeaturedRoutesStatus(highlightRoutes.length > 0 ? "ready" : "empty");
-        markInitialHomeLoadPartResolved("featuredRoutes");
         setFeaturedRoutesNote(
           highlightRoutes.length > 0
             ? null
@@ -2382,7 +2384,6 @@ export default function HomeScreen() {
           error instanceof Error ? error.message : t("home.featured.loadError"),
         );
         setFeaturedRoutesStatus("empty");
-        markInitialHomeLoadPartResolved("featuredRoutes");
       }
     }
 
@@ -2394,7 +2395,6 @@ export default function HomeScreen() {
   }, [
     authSession.isAuthenticated,
     authSession.tokenType,
-    markInitialHomeLoadPartResolved,
     t,
   ]);
 
@@ -2406,7 +2406,6 @@ export default function HomeScreen() {
         if (!authSession.isAuthenticated) {
           setActiveJourneyView(null);
           setActiveJourneyStatus("empty");
-          markInitialHomeLoadPartResolved("activeJourney");
           return;
         }
 
@@ -2422,7 +2421,6 @@ export default function HomeScreen() {
           if (!accessToken) {
             setActiveJourneyView(null);
             setActiveJourneyStatus("empty");
-            markInitialHomeLoadPartResolved("activeJourney");
             return;
           }
 
@@ -2445,7 +2443,6 @@ export default function HomeScreen() {
           if (!activeProgress) {
             setActiveJourneyView(null);
             setActiveJourneyStatus("empty");
-            markInitialHomeLoadPartResolved("activeJourney");
             return;
           }
 
@@ -2477,7 +2474,6 @@ export default function HomeScreen() {
             buildActiveJourneyView(activeProgress, journeyRoute, t),
           );
           setActiveJourneyStatus("ready");
-          markInitialHomeLoadPartResolved("activeJourney");
         } catch (error) {
           console.warn("[home] load active journey failed", {
             error: error instanceof Error ? error.message : error,
@@ -2489,7 +2485,6 @@ export default function HomeScreen() {
 
           setActiveJourneyView(null);
           setActiveJourneyStatus("empty");
-          markInitialHomeLoadPartResolved("activeJourney");
         }
       }
 
@@ -2501,7 +2496,6 @@ export default function HomeScreen() {
     }, [
       authSession.isAuthenticated,
       authSession.tokenType,
-      markInitialHomeLoadPartResolved,
       t,
     ]),
   );
@@ -2528,11 +2522,9 @@ export default function HomeScreen() {
         setResolvedNearbyPlaces([]);
         setNearbyPlacesNote(fallbackMessage);
         setNearbyPlacesStatus("empty");
-        markInitialHomeLoadPartResolved("nearbyPlaces");
         setSuggestedRoutes([]);
         setSuggestedRoutesNote(t("home.suggestedRoutes.noLocation"));
         setSuggestedRoutesStatus("empty");
-        markInitialHomeLoadPartResolved("suggestedRoutes");
         return;
       }
 
@@ -2564,11 +2556,9 @@ export default function HomeScreen() {
               }),
         );
         setNearbyPlacesStatus("empty");
-        markInitialHomeLoadPartResolved("nearbyPlaces");
         setSuggestedRoutes([]);
         setSuggestedRoutesNote(t("home.suggestedRoutes.noRoutesNearby"));
         setSuggestedRoutesStatus("empty");
-        markInitialHomeLoadPartResolved("suggestedRoutes");
         return;
       }
 
@@ -2584,7 +2574,6 @@ export default function HomeScreen() {
           : null,
       );
       setNearbyPlacesStatus("ready");
-      markInitialHomeLoadPartResolved("nearbyPlaces");
 
       const nearbyHotspotsByDistance = sortNearbyHotspotsByDistance(
         apiNearbyHotspots,
@@ -2624,7 +2613,6 @@ export default function HomeScreen() {
           setSuggestedRoutes([]);
           setSuggestedRoutesNote(t("home.suggestedRoutes.noRoutesNearby"));
           setSuggestedRoutesStatus("empty");
-          markInitialHomeLoadPartResolved("suggestedRoutes");
           return;
         }
 
@@ -2646,7 +2634,6 @@ export default function HomeScreen() {
               : null,
         );
         setSuggestedRoutesStatus("ready");
-        markInitialHomeLoadPartResolved("suggestedRoutes");
       } catch (routeError) {
         console.warn("[home] load suggested routes failed", {
           error: routeError instanceof Error ? routeError.message : routeError,
@@ -2666,7 +2653,6 @@ export default function HomeScreen() {
             : t("home.suggestedRoutes.loadError"),
         );
         setSuggestedRoutesStatus("empty");
-        markInitialHomeLoadPartResolved("suggestedRoutes");
       }
     } catch (error) {
       console.warn("[home] load nearby places failed", {
@@ -2682,15 +2668,12 @@ export default function HomeScreen() {
         error instanceof Error ? error.message : t("home.nearby.loadError"),
       );
       setNearbyPlacesStatus("empty");
-      markInitialHomeLoadPartResolved("nearbyPlaces");
       setSuggestedRoutes([]);
       setSuggestedRoutesNote(t("home.suggestedRoutes.loadError"));
       setSuggestedRoutesStatus("empty");
-      markInitialHomeLoadPartResolved("suggestedRoutes");
     }
   }, [
     authSession.isAuthenticated,
-    markInitialHomeLoadPartResolved,
     authSession.tokenType,
     nearbySearchDistanceMeters,
     t,
@@ -2708,6 +2691,8 @@ export default function HomeScreen() {
     const requestId = themeCategoriesRequestRef.current + 1;
     themeCategoriesRequestRef.current = requestId;
     const isActive = () => themeCategoriesRequestRef.current === requestId;
+
+    setThemeCategoriesStatus("loading");
 
     try {
       const accessToken = authSession.isAuthenticated
@@ -2727,8 +2712,10 @@ export default function HomeScreen() {
         return;
       }
 
-      setThemeCategories(mapActiveTagsToThemeCategories(tags));
-      markInitialHomeLoadPartResolved("themeCategories");
+      const categories = mapActiveTagsToThemeCategories(tags);
+
+      setThemeCategories(categories);
+      setThemeCategoriesStatus(categories.length > 0 ? "ready" : "empty");
     } catch (error) {
       console.warn("[home] load theme categories failed", {
         error: error instanceof Error ? error.message : error,
@@ -2739,12 +2726,11 @@ export default function HomeScreen() {
       }
 
       setThemeCategories([]);
-      markInitialHomeLoadPartResolved("themeCategories");
+      setThemeCategoriesStatus("empty");
     }
   }, [
     authSession.isAuthenticated,
     authSession.tokenType,
-    markInitialHomeLoadPartResolved,
   ]);
 
   useEffect(() => {
@@ -2785,7 +2771,6 @@ export default function HomeScreen() {
       setCommunityLeaderboardStatus(
         leaderboardResponse.content.length > 0 ? "ready" : "empty",
       );
-      markInitialHomeLoadPartResolved("communityLeaderboard");
     } catch (error) {
       console.warn("[home] load community leaderboard failed", {
         error: error instanceof Error ? error.message : error,
@@ -2802,12 +2787,10 @@ export default function HomeScreen() {
           : t("community.leaderboard.loadError"),
       );
       setCommunityLeaderboardStatus("error");
-      markInitialHomeLoadPartResolved("communityLeaderboard");
     }
   }, [
     authSession.isAuthenticated,
     authSession.tokenType,
-    markInitialHomeLoadPartResolved,
     t,
   ]);
 
@@ -2822,8 +2805,6 @@ export default function HomeScreen() {
   /**
    * `/api/vouchers/**` (GET) nằm trong PUBLIC_GET_ENDPOINTS nên khách chưa đăng
    * nhập vẫn xem được carousel; token chỉ đính kèm khi đã đăng nhập.
-   * Không gắn vào `markInitialHomeLoadPartResolved` để section này không chặn
-   * màn hình loading đầu tiên của Home.
    */
   const loadHomeVouchers = useCallback(async () => {
     const requestId = homeVouchersRequestRef.current + 1;
@@ -2880,9 +2861,20 @@ export default function HomeScreen() {
     explorerSummaryRequestRef.current = requestId;
     const isActive = () => explorerSummaryRequestRef.current === requestId;
 
+    const resolveExplorerSummaryStatus = () => {
+      hasResolvedExplorerSummaryRef.current = true;
+      setExplorerSummaryStatus("ready");
+    };
+
+    if (!hasResolvedExplorerSummaryRef.current) {
+      setExplorerSummaryStatus(
+        authSession.isAuthenticated ? "loading" : "ready",
+      );
+    }
+
     if (!authSession.isAuthenticated) {
       setExplorerSummary(null);
-      markInitialHomeLoadPartResolved("explorerSummary");
+      resolveExplorerSummaryStatus();
       return;
     }
 
@@ -2895,7 +2887,7 @@ export default function HomeScreen() {
 
       if (!accessToken) {
         setExplorerSummary(null);
-        markInitialHomeLoadPartResolved("explorerSummary");
+        resolveExplorerSummaryStatus();
         return;
       }
 
@@ -2952,14 +2944,14 @@ export default function HomeScreen() {
           authSession.displayName.trim() ||
           resolvedName,
       });
-      markInitialHomeLoadPartResolved("explorerSummary");
+      resolveExplorerSummaryStatus();
     } catch (error) {
       if (!isActive()) {
         return;
       }
 
       setExplorerSummary(null);
-      markInitialHomeLoadPartResolved("explorerSummary");
+      resolveExplorerSummaryStatus();
       console.warn("[home] load explorer summary failed", {
         error: error instanceof Error ? error.message : error,
       });
@@ -2969,7 +2961,6 @@ export default function HomeScreen() {
     authSession.isAuthenticated,
     authSession.tokenType,
     authSession.username,
-    markInitialHomeLoadPartResolved,
   ]);
 
   useFocusEffect(
@@ -2999,10 +2990,6 @@ export default function HomeScreen() {
     loadNearbyPlaces,
     loadThemeCategories,
   ]);
-
-  if (shouldShowInitialHomeLoading) {
-    return <AppLoadingScreen />;
-  }
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
@@ -3081,7 +3068,9 @@ export default function HomeScreen() {
           )}
 
           {/* Premium status / upsell banner (driven by real subscription data) */}
-          {isPremiumExplorer ? (
+          {explorerSummaryStatus === "loading" ? (
+            <PremiumBannerPlaceholder />
+          ) : isPremiumExplorer ? (
             <LinearGradient
               colors={["#FFFDFF", "#F8F2FF", "#FFF7EE"]}
               end={{ x: 1, y: 1 }}
@@ -3967,7 +3956,9 @@ export default function HomeScreen() {
               </Pressable>
             </View>
 
-            {themeCategories.length === 0 ? (
+            {themeCategoriesStatus === "loading" ? (
+              <SectionEmptyState isLoading />
+            ) : themeCategories.length === 0 ? (
               <SectionEmptyState description={t("home.themes.empty")} />
             ) : (
               <ScrollView

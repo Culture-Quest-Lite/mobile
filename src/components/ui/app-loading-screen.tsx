@@ -11,7 +11,6 @@ import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 
 type AppLoadingScreenProps = {
   edges?: Edge[];
-  message?: string;
   mode?: "embedded" | "fullscreen";
   spinnerColor?: string;
   statusBarStyle?: StatusBarStyle;

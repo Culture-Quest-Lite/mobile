@@ -288,7 +288,7 @@ export default function NotificationScreen() {
       </View>
 
       {isLoading ? (
-        <AppLoadingScreen mode="embedded" message="Đang tải thông báo..." />
+        <AppLoadingScreen mode="embedded" />
       ) : (
         <ScrollView
           className="flex-1"

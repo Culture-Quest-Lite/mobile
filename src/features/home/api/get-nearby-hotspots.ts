@@ -448,16 +448,20 @@ export async function getNearbyHotspots({
   }
 
   const parsedHotspots = responseBody.map(parseNearbyHotspot);
+  const validHotspots = parsedHotspots.filter(isNonNull);
 
-  if (parsedHotspots.some((item) => item === null)) {
-    console.warn("[home] get nearby hotspots invalid item", {
+  // Bo qua ban ghi hong thay vi nem loi: truoc day chi can mot hotspot thieu
+  // hotspotId/latitude/longitude/hotspotName la ca response bi vut, keo theo
+  // man Explore lan Trang chu trong rong du cac hotspot con lai deu hop le.
+  if (validHotspots.length !== parsedHotspots.length) {
+    console.warn("[home] skipped invalid nearby hotspot items", {
       body: summarizeBody(responseBody),
+      invalidCount: parsedHotspots.length - validHotspots.length,
+      totalCount: parsedHotspots.length,
       url: getNearbyHotspotsUrl,
     });
-    throw new Error("API nearby hotspot có phần tử dữ liệu không hợp lệ.");
   }
 
-  const validHotspots = parsedHotspots.filter(isNonNull);
   const publishedHotspots = validHotspots.filter((hotspot) =>
     isPublishedHotspotStatus(hotspot.status),
   );

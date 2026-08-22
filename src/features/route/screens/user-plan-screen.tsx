@@ -960,9 +960,6 @@ export default function UserPlanScreen() {
           {isBrowseLoading ? (
             <View className="items-center py-5">
               <ActivityIndicator color="#EB489B" />
-              <Text className="mt-2 text-[13px] font-bold text-[#8E869A]">
-                Đang tải địa điểm...
-              </Text>
             </View>
           ) : null}
 

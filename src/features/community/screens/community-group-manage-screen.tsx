@@ -566,10 +566,7 @@ export default function CommunityGroupManageScreen() {
 
   if (status === "loading" && !displayGroup) {
     return (
-      <AppLoadingScreen
-        edges={["left", "right"]}
-        message={t("community.groupManage.loadingMessage")}
-      />
+      <AppLoadingScreen edges={["left", "right"]} />
     );
   }
 

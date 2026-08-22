@@ -756,9 +756,6 @@ export default function PartnerSubscriptionScreen() {
           {isLoading ? (
             <View className="mb-4 items-center rounded-2xl bg-[#FFF9F5] p-6">
               <ActivityIndicator color="#F58752" />
-              <Text className="mt-3 text-center text-[13px] text-[#8E869A]">
-                Đang tải gói đăng ký...
-              </Text>
             </View>
           ) : null}
 
