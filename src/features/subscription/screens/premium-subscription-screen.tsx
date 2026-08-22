@@ -860,12 +860,6 @@ export default function PremiumSubscriptionScreen() {
               style={{ backgroundColor: premiumSoftPink }}
             >
               <ActivityIndicator color={premiumBrandPink} />
-              <Text
-                className="mt-3 text-[13px]"
-                style={{ color: premiumBodyColor }}
-              >
-                Đang tải gói Premium...
-              </Text>
             </View>
           ) : null}
 

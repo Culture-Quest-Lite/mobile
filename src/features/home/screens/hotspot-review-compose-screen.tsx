@@ -421,7 +421,7 @@ export default function HotspotReviewComposeScreen() {
   const locationLabel =
     resolvedHotspotName ||
     (isHotspotNameLoading
-      ? `Đang tải tên ${isRouteReviewMode ? "tuyến" : "địa điểm"}...`
+      ? ""
       : `Chưa xác định ${isRouteReviewMode ? "tuyến" : "địa điểm"}`);
   useEffect(() => {
     if (isRouteReviewMode || resolvedHotspotId === null) {

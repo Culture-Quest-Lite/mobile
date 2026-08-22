@@ -1239,9 +1239,6 @@ function RoutePickerSheet({
               {isLoading ? (
                 <View className="flex-1 items-center justify-center py-8">
                   <ActivityIndicator color="#F43F78" />
-                  <Text className="mt-2 text-[12px] font-normal text-[#8B7280]">
-                    {t("community.postCompose.loadingRoutes")}
-                  </Text>
                 </View>
               ) : errorMessage ? (
                 <View className="mt-4 rounded-[20px] bg-[#FFF4F6] p-4">
@@ -1406,11 +1403,11 @@ function HotspotPickerSheet({
               {isLoading || isSearching ? (
                 <View className="items-center py-6">
                   <ActivityIndicator color="#F43F78" />
-                  <Text className="mt-2 text-[12px] font-normal text-[#8B7280]">
-                    {isShowingSearchResults
-                      ? t("community.postCompose.searchingHotspots")
-                      : t("community.postCompose.loadingHotspots")}
-                  </Text>
+                  {isShowingSearchResults ? (
+                    <Text className="mt-2 text-[12px] font-normal text-[#8B7280]">
+                      {t("community.postCompose.searchingHotspots")}
+                    </Text>
+                  ) : null}
                 </View>
               ) : null}
 

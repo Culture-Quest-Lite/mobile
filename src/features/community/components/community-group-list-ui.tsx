@@ -283,14 +283,7 @@ export function CommunityGroupPlaceholderCard({
           width,
         },
       ]}
-    >
-      <Text
-        className="text-center text-[13px] font-normal text-[#8F8298]"
-        style={{ includeFontPadding: false, lineHeight: cardTextLineHeight }}
-      >
-        Đang tải nhóm...
-      </Text>
-    </View>
+    />
   );
 }
 

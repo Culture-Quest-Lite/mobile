@@ -1532,7 +1532,7 @@ export default function RouteDetailScreen() {
   }, [routeId]);
 
   if (isLoading) {
-    return <AppLoadingScreen message="Đang tải chi tiết tuyến..." />;
+    return <AppLoadingScreen />;
   }
 
   if (!route) {
@@ -2336,14 +2336,7 @@ export default function RouteDetailScreen() {
                   </Text>
                 </View>
               ) : isRouteReviewsLoading ? (
-                <View className="py-3">
-                  <Text
-                    className="text-[13px] text-[#8E869A]"
-                    style={bodyTextStyle(13)}
-                  >
-                    Đang tải đánh giá...
-                  </Text>
-                </View>
+                <View className="py-3" />
               ) : filteredReviews.length ? (
                 filteredReviews.map((review, index) => (
                   <RouteReviewCard

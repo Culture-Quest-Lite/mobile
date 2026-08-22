@@ -53,6 +53,8 @@ type UseGroupLiveLocationResult = {
 };
 
 const defaultGroupWebSocketUrl = "wss://www.culturequestlite.com/ws/websocket";
+// Phai nho hon nguong 15 giay ma buildJourneyMembers dung de danh dau offline.
+const LOCATION_HEARTBEAT_INTERVAL_MS = 5000;
 
 function normalizeValue(value?: string | null) {
   if (typeof value !== "string") {
@@ -66,6 +68,10 @@ function normalizeValue(value?: string | null) {
 function resolveGroupWebSocketUrl() {
   const envUrl = normalizeValue(PublicEnv.groupWsUrl);
   return envUrl ?? defaultGroupWebSocketUrl;
+}
+
+function readPayloadText(value: unknown) {
+  return normalizeValue(typeof value === "string" ? value : null);
 }
 
 function getMessageText(error: unknown, fallback: string) {
@@ -104,9 +110,11 @@ function parseLocationMessage(message: IMessage): GroupLiveLocationMessage | nul
       longitude,
       timestamp,
       userId,
-      username: normalizeValue(
-        typeof rawPayload.username === "string" ? rawPayload.username : null,
-      ),
+      // LocationMessage serialize ra field `displayName`; `@JsonAlias` chi
+      // anh huong chieu deserialize nen broadcast khong bao gio co `username`.
+      username:
+        readPayloadText(rawPayload.displayName) ??
+        readPayloadText(rawPayload.username),
     };
   } catch (error) {
     console.warn("[group-live-location] parse location payload failed", {
@@ -145,7 +153,11 @@ export function useGroupLiveLocation({
   const commandSubscriptionRef = useRef<StompSubscription | null>(null);
   const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
   const locationTopicSubscriptionRef = useRef<StompSubscription | null>(null);
-  const devIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastCoordinateRef = useRef<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   const shouldMaintainSessionRef = useRef(false);
   const shareModeRef = useRef<GroupLiveShareMode>("sharing");
   const [connectionState, setConnectionState] =
@@ -165,10 +177,11 @@ export function useGroupLiveLocation({
   function clearGpsWatcher() {
     locationSubscriptionRef.current?.remove();
     locationSubscriptionRef.current = null;
+    lastCoordinateRef.current = null;
 
-    if (devIntervalRef.current) {
-      clearInterval(devIntervalRef.current);
-      devIntervalRef.current = null;
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
     }
   }
 
@@ -216,12 +229,18 @@ export function useGroupLiveLocation({
   async function publishLocation(latitude: number, longitude: number) {
     const normalizedGroupId = normalizeValue(groupId);
     const normalizedUsername = normalizeValue(username);
+    const normalizedUserId = normalizeValue(myUserId);
+    // LocationWebSocketController chi ghi de userId khi doc duoc claim
+    // `internal_id` tu JWT. Claim do chua co trong access token, nen khong gui
+    // kem userId thi server broadcast ra `"userId": null` va moi client deu
+    // drop goi tin o parseLocationMessage. Khi backend resolve duoc principal,
+    // gia tri nay se bi server ghi de nen van an toan.
+    const numericUserId =
+      normalizedUserId && /^\d+$/.test(normalizedUserId)
+        ? Number(normalizedUserId)
+        : null;
 
-    if (
-      !normalizedGroupId ||
-      !normalizedUsername ||
-      !clientRef.current?.connected
-    ) {
+    if (!normalizedGroupId || !clientRef.current?.connected) {
       return;
     }
 
@@ -229,14 +248,36 @@ export function useGroupLiveLocation({
       body: JSON.stringify({
         latitude,
         longitude,
-        username: normalizedUsername,
+        ...(normalizedUsername === null
+          ? null
+          : { username: normalizedUsername }),
+        ...(numericUserId === null ? null : { userId: numericUserId }),
       }),
       destination: `/app/group/${normalizedGroupId}/location`,
     });
   }
 
+  function publishCurrentCoordinate(coordinate: {
+    latitude: number;
+    longitude: number;
+  }) {
+    lastCoordinateRef.current = coordinate;
+
+    if (myUserId) {
+      handleIncomingLocation({
+        latitude: coordinate.latitude,
+        longitude: coordinate.longitude,
+        timestamp: Date.now(),
+        userId: myUserId,
+        username: normalizeValue(username),
+      });
+    }
+
+    void publishLocation(coordinate.latitude, coordinate.longitude);
+  }
+
   async function startLocationWatcher() {
-    if (locationSubscriptionRef.current || devIntervalRef.current) {
+    if (locationSubscriptionRef.current || heartbeatIntervalRef.current) {
       return;
     }
 
@@ -248,24 +289,23 @@ export function useGroupLiveLocation({
       return;
     }
 
+    // watchPositionAsync chi ban callback khi thiet bi di chuyen du
+    // distanceInterval; timeInterval la Android-only nen tren iOS dung yen la
+    // khong co update nao. Khong co nhip phat lai dinh ky thi nguoi dung dung
+    // yen se bi ca nhom coi la "offline" sau 15 giay, va nguoi mo man hinh sau
+    // khong thay ai cho den khi co nguoi di chuyen du 15 met.
+    heartbeatIntervalRef.current = setInterval(() => {
+      const lastCoordinate = lastCoordinateRef.current;
+
+      if (lastCoordinate) {
+        publishCurrentCoordinate(lastCoordinate);
+      }
+    }, LOCATION_HEARTBEAT_INTERVAL_MS);
+
     const devCoordinate = getDevelopmentLocationOverride();
 
-    if (devCoordinate && myUserId) {
-      const publishDevCoordinate = () => {
-        const nextMessage: GroupLiveLocationMessage = {
-          latitude: devCoordinate.latitude,
-          longitude: devCoordinate.longitude,
-          timestamp: Date.now(),
-          userId: myUserId,
-          username: normalizeValue(username),
-        };
-
-        handleIncomingLocation(nextMessage);
-        void publishLocation(nextMessage.latitude, nextMessage.longitude);
-      };
-
-      publishDevCoordinate();
-      devIntervalRef.current = setInterval(publishDevCoordinate, 5000);
+    if (devCoordinate) {
+      publishCurrentCoordinate(devCoordinate);
       return;
     }
 
@@ -277,36 +317,23 @@ export function useGroupLiveLocation({
         timeInterval: 5000,
       },
       (position) => {
-        const nextMessage: GroupLiveLocationMessage | null = myUserId
-          ? {
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              timestamp: Date.now(),
-              userId: myUserId,
-              username: normalizeValue(username),
-            }
-          : null;
-
-        if (nextMessage) {
-          handleIncomingLocation(nextMessage);
-        }
-
-        void publishLocation(
-          position.coords.latitude,
-          position.coords.longitude,
-        );
+        publishCurrentCoordinate({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
       },
     );
   }
 
   async function connectRealtime() {
     const normalizedGroupId = normalizeValue(groupId);
-    const normalizedUsername = normalizeValue(username);
 
+    // username chi la ten hien thi du phong (profile tu REST moi la nguon
+    // chinh), nen khong dung no lam dieu kien ket noi: user khong co name lan
+    // username se bi tat hoan toan tinh nang chia se vi tri.
     if (
       !enabled ||
       !normalizedGroupId ||
-      !normalizedUsername ||
       shareModeRef.current !== "sharing" ||
       appStateRef.current !== "active"
     ) {
@@ -425,7 +452,7 @@ export function useGroupLiveLocation({
   }
 
   useEffect(() => {
-    if (!enabled || !groupId || !username || !myUserId) {
+    if (!enabled || !groupId || !myUserId) {
       shouldMaintainSessionRef.current = false;
       setConnectionState("disconnected");
       return;

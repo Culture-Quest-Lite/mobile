@@ -868,7 +868,7 @@ export default function RouteScreen() {
       : currentTabCount
         ? `${currentTabCount} mục`
         : isCurrentTabLoading && (tab === "community" || tab === "groups")
-          ? "Đang tải"
+          ? ""
           : "Trống";
 
   return (
@@ -1048,7 +1048,7 @@ export default function RouteScreen() {
               <View key={tab} className="mt-3 gap-3">
                 {tab === "official" &&
                   (isLoadingRoutes ? (
-                    <EmptyState text="Đang tải tuyến từ API..." />
+                    <EmptyState />
                   ) : (
                     <>
                       {routeError ? (
@@ -1760,7 +1760,7 @@ function MyGroupsTab({
       ) : null}
 
       {groups.length === 0 && isLoading ? (
-        <EmptyState text="Đang tải nhóm của bạn..." />
+        <EmptyState />
       ) : null}
 
       {groups.length === 0 && status === "ready" ? (
@@ -1886,7 +1886,7 @@ function CommunityTab({
       </View>
 
       {isLoading ? (
-        <EmptyState text="Đang tải hành trình cộng đồng..." />
+        <EmptyState />
       ) : communityRoutes.length === 0 ? (
         <EmptyState text="Chưa có hành trình cộng đồng nào" />
       ) : (
@@ -2401,7 +2401,7 @@ function Badge({ text }: { text: string }) {
   );
 }
 
-function EmptyState({ text }: { text: string }) {
+function EmptyState({ text }: { text?: string }) {
   return (
     <View className="items-center rounded-[24px] border border-[#F4E2E8] bg-[#FFF9FB] px-6 py-10">
       <View className="h-14 w-14 items-center justify-center rounded-full bg-[#FFF0F4]">
@@ -2411,9 +2411,11 @@ function EmptyState({ text }: { text: string }) {
           tintColor="#FF4F86"
         />
       </View>
-      <Text className="mt-3 text-center text-[13px] leading-5 text-[#8E869A]">
-        {text}
-      </Text>
+      {text ? (
+        <Text className="mt-3 text-center text-[13px] leading-5 text-[#8E869A]">
+          {text}
+        </Text>
+      ) : null}
     </View>
   );
 }

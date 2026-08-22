@@ -626,7 +626,10 @@ export default function ExploreScreen() {
         const accessToken = await getValidAccessToken();
         const hotspots = await getNearbyHotspots({
           accessToken,
-          distance: radiusKm,
+          // API nhan don vi met (ST_DWithin tren geography cua PostGIS), con
+          // radiusKm la km. Truoc day truyen thang radiusKm nen backend tim
+          // trong ban kinh 1-10 met va gan nhu luon tra ve rong.
+          distance: radiusKm * 1000,
           latitude: coordinate.latitude,
           longitude: coordinate.longitude,
           tokenType: session.tokenType,
@@ -645,7 +648,9 @@ export default function ExploreScreen() {
         );
       } catch (error) {
         if (cancelled) return;
-        setPlaces([]);
+        // Khong xoa `places`: mot lan hong tam thoi (GPS timeout, mang chap
+        // chon, token vua het han) khong nen lam mat danh sach dang hien.
+        // Khi chua co du lieu nao thi SheetEmptyState van hien placeError.
         setPlaceError(
           error instanceof Error ? error.message : t('explore.places.loadError'),
         );

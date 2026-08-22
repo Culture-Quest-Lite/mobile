@@ -786,18 +786,6 @@ export default function CommunityGroupCreateScreen() {
             {isInviteCandidatesLoading ? (
               <View className="items-center px-4 py-8">
                 <ActivityIndicator color={screenPalette.accent} size="small" />
-                <Text
-                  className="mt-2.5 text-center"
-                  style={{
-                    color: screenPalette.muted,
-                    fontSize: isCompactScreen ? 12 : 13,
-                    fontWeight: "400",
-                    includeFontPadding: false,
-                    lineHeight: lineHeightFor(isCompactScreen ? 12 : 13),
-                  }}
-                >
-                  {t("community.groupCreate.loadingFriends")}
-                </Text>
               </View>
             ) : resolvedInviteCandidatesErrorMessage ? (
               <View

@@ -265,7 +265,7 @@ export default function UserPlanDetailScreen() {
   }
 
   if (loading) {
-    return <AppLoadingScreen message="Đang tải kế hoạch..." />;
+    return <AppLoadingScreen />;
   }
 
   if (!plan || error) {

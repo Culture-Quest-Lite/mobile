@@ -499,7 +499,7 @@ function buildExplorerRouteLabel(
       : resolvedRoutes[primaryRouteId]?.routeName?.trim() || null;
 
   if (validRouteIds.length === 1) {
-    return primaryRouteName ?? t("community.explorerProfile.loadingRoute");
+    return primaryRouteName ?? "";
   }
 
   return `${
@@ -528,7 +528,7 @@ function buildExplorerHotspotSubtitle(
     .filter((hotspotName): hotspotName is string => Boolean(hotspotName));
 
   if (validHotspotIds.length === 1) {
-    return hotspotNames[0] ?? t("community.explorerProfile.loadingLocation");
+    return hotspotNames[0] ?? "";
   }
 
   if (hotspotNames.length >= 2) {

@@ -460,9 +460,6 @@ export default function CommunityPostVisibilityScreen() {
           {isEditMode && isLoadingPost ? (
             <View className="mt-8 items-center justify-center px-5">
               <ActivityIndicator color={palette.accent} size="small" />
-              <Text className="mt-3 text-[13px] font-normal text-[#6B7280]">
-                {t("community.postVisibility.loadingLabel")}
-              </Text>
             </View>
           ) : loadError ? (
             <View
