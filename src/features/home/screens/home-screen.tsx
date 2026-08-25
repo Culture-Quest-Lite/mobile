@@ -710,17 +710,6 @@ const homeVoucherCardShadowStyle = {
   elevation: 3,
 } as const;
 
-const homeVoucherArtworkShadowStyle = {
-  shadowColor: "rgba(246, 91, 146, 0.22)",
-  shadowOpacity: 1,
-  shadowRadius: 18,
-  shadowOffset: {
-    width: 0,
-    height: 10,
-  },
-  elevation: 5,
-} as const;
-
 const homeVoucherBorderColor = "#F1F5F9";
 
 const homeSectionTitleClassName =
@@ -798,6 +787,12 @@ const homeVoucherCardGap = 10;
 const homeVoucherInactiveScale = 0.82;
 const homeVoucherInactiveTranslateY = 18;
 const homeVoucherArtworkInactiveScale = 0.92;
+/**
+ * Ảnh voucher phủ kín phần đầu thẻ (giống `VoucherMiniCard` ở màn hotspot và
+ * màn tuyến) nên chỉ được phóng TO khi thẻ ở trạng thái phụ — thu nhỏ dưới 1 sẽ
+ * hở nền gradient ở mép.
+ */
+const homeVoucherCoverInactiveScale = 1.05;
 
 function getHomeVoucherDiscountLabel(voucher: Voucher) {
   if (voucher.discountType === "PERCENTAGE") {
@@ -909,6 +904,26 @@ function HomeVoucherCard({
     };
   });
 
+  const animatedCoverStyle = useAnimatedStyle(() => {
+    const scale = interpolate(
+      scrollX.value,
+      inputRange,
+      [homeVoucherCoverInactiveScale, 1, homeVoucherCoverInactiveScale],
+      Extrapolation.CLAMP,
+    );
+    const opacity = interpolate(
+      scrollX.value,
+      inputRange,
+      [0.88, 1, 0.88],
+      Extrapolation.CLAMP,
+    );
+
+    return {
+      opacity,
+      transform: [{ scale }],
+    };
+  });
+
   return (
     <Pressable
       style={{
@@ -929,6 +944,9 @@ function HomeVoucherCard({
             borderColor: homeVoucherBorderColor,
           }}
         >
+          {/* Ảnh phủ kín phần đầu thẻ như `VoucherMiniCard` (màn hotspot / màn
+              tuyến); gradient + hoạ tiết chỉ còn là nền dự phòng khi voucher
+              chưa có ảnh. */}
           <LinearGradient
             colors={palette.topGradient}
             start={{ x: 0, y: 0 }}
@@ -936,109 +954,114 @@ function HomeVoucherCard({
             style={{
               height: imageHeight,
               overflow: "hidden",
-              paddingHorizontal: 14,
-              paddingVertical: 14,
             }}
           >
-            <View
-              pointerEvents="none"
-              style={{
-                backgroundColor: palette.accentSoft,
-                borderRadius: 999,
-                height: 54,
-                left: -12,
-                opacity: 0.72,
-                position: "absolute",
-                top: 18,
-                width: 54,
-              }}
-            />
-            <View
-              pointerEvents="none"
-              style={{
-                backgroundColor: "#FFFFFF",
-                borderRadius: 999,
-                height: 10,
-                left: 28,
-                opacity: 0.48,
-                position: "absolute",
-                top: 22,
-                width: 10,
-              }}
-            />
-            <View
-              pointerEvents="none"
-              style={{
-                backgroundColor: palette.accentSoft,
-                borderRadius: 18,
-                height: 34,
-                opacity: 0.74,
-                position: "absolute",
-                right: -8,
-                top: 14,
-                transform: [{ rotate: "18deg" }],
-                width: 34,
-              }}
-            />
-            <View
-              pointerEvents="none"
-              style={{
-                alignItems: "center",
-                backgroundColor: "#FFFFFF",
-                borderRadius: 14,
-                height: 24,
-                justifyContent: "center",
-                opacity: 0.88,
-                position: "absolute",
-                right: 14,
-                top: 12,
-                width: 24,
-              }}
-            >
-              <SymbolView
-                name={{
-                  ios: "sparkles",
-                  android: "auto_awesome",
-                  web: "auto_awesome",
+            {imageUri ? (
+              <Animated.View
+                style={[{ position: "absolute", inset: 0 }, animatedCoverStyle]}
+              >
+                <Image
+                  source={{ uri: imageUri }}
+                  contentFit="cover"
+                  transition={180}
+                  cachePolicy="memory-disk"
+                  style={{ height: "100%", width: "100%" }}
+                />
+              </Animated.View>
+            ) : (
+              <View
+                style={{
+                  flex: 1,
+                  paddingHorizontal: 14,
+                  paddingVertical: 14,
                 }}
-                size={11}
-                tintColor={palette.accent}
-              />
-            </View>
-
-            <Animated.View
-              className="flex-1 items-center justify-center"
-              style={animatedArtworkStyle}
-            >
-              {imageUri ? (
-                <Animated.View style={homeVoucherArtworkShadowStyle}>
-                  <Image
-                    source={{ uri: imageUri }}
-                    contentFit="contain"
-                    transition={180}
-                    cachePolicy="memory-disk"
-                    style={{
-                      height: imageHeight - 16,
-                      width: "80%",
-                    }}
-                  />
-                </Animated.View>
-              ) : (
+              >
                 <View
-                  className="items-center justify-center rounded-full bg-white/90"
+                  pointerEvents="none"
                   style={{
-                    height: 68,
-                    width: 68,
+                    backgroundColor: palette.accentSoft,
+                    borderRadius: 999,
+                    height: 54,
+                    left: -12,
+                    opacity: 0.72,
+                    position: "absolute",
+                    top: 18,
+                    width: 54,
+                  }}
+                />
+                <View
+                  pointerEvents="none"
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 999,
+                    height: 10,
+                    left: 28,
+                    opacity: 0.48,
+                    position: "absolute",
+                    top: 22,
+                    width: 10,
+                  }}
+                />
+                <View
+                  pointerEvents="none"
+                  style={{
+                    backgroundColor: palette.accentSoft,
+                    borderRadius: 18,
+                    height: 34,
+                    opacity: 0.74,
+                    position: "absolute",
+                    right: -8,
+                    top: 14,
+                    transform: [{ rotate: "18deg" }],
+                    width: 34,
+                  }}
+                />
+                <View
+                  pointerEvents="none"
+                  style={{
+                    alignItems: "center",
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 14,
+                    height: 24,
+                    justifyContent: "center",
+                    opacity: 0.88,
+                    position: "absolute",
+                    right: 14,
+                    top: 12,
+                    width: 24,
                   }}
                 >
                   <SymbolView
-                    name={getHomeVoucherFallbackSymbol(index)}
-                    size={34}
+                    name={{
+                      ios: "sparkles",
+                      android: "auto_awesome",
+                      web: "auto_awesome",
+                    }}
+                    size={11}
                     tintColor={palette.accent}
                   />
                 </View>
-              )}
-            </Animated.View>
+
+                <Animated.View
+                  className="flex-1 items-center justify-center"
+                  style={animatedArtworkStyle}
+                >
+                  <View
+                    className="items-center justify-center rounded-full bg-white/90"
+                    style={{
+                      height: 68,
+                      width: 68,
+                    }}
+                  >
+                    <SymbolView
+                      name={getHomeVoucherFallbackSymbol(index)}
+                      size={34}
+                      tintColor={palette.accent}
+                    />
+                  </View>
+                </Animated.View>
+              </View>
+            )}
           </LinearGradient>
 
           <View
