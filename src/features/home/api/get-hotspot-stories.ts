@@ -50,16 +50,24 @@ type GetHotspotStoriesResponse = {
   content: HotspotStoryDto[];
 };
 
+function isValidId(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
 function resolveGetHotspotStoriesUrl({
   hotspotId,
   routeId,
 }: {
-  hotspotId: number;
+  hotspotId?: number | null;
   routeId?: number | null;
 }) {
-  const query = new URLSearchParams({ hotspotId: `${hotspotId}` });
+  const query = new URLSearchParams();
 
-  if (typeof routeId === "number" && Number.isInteger(routeId) && routeId > 0) {
+  if (isValidId(hotspotId)) {
+    query.set("hotspotId", `${hotspotId}`);
+  }
+
+  if (isValidId(routeId)) {
     query.set("routeId", `${routeId}`);
   }
 
@@ -278,7 +286,11 @@ async function parseResponseBody(response: Response) {
   }
 }
 
-function getErrorMessage(body: unknown, hotspotId: number, status: number) {
+function getErrorMessage(
+  body: unknown,
+  hotspotId: number | null | undefined,
+  status: number,
+) {
   if (isObject(body)) {
     for (const key of ["message", "error", "detail", "title"]) {
       const candidate = body[key];
@@ -293,6 +305,10 @@ function getErrorMessage(body: unknown, hotspotId: number, status: number) {
     return body.trim();
   }
 
+  if (!isValidId(hotspotId)) {
+    return `Không thể tải story (${status}).`;
+  }
+
   return `Không thể tải story cho hotspot #${hotspotId} (${status}).`;
 }
 
@@ -304,12 +320,18 @@ function getConnectionErrorMessage(url: string) {
   return "Không thể kết nối đến máy chủ story.";
 }
 
-export async function getHotspotStories({
+/** Gọi `/api/v1/stories/hotspot` và trả về danh sách đã parse, CHƯA sắp xếp. */
+async function fetchStories({
   accessToken,
   hotspotId,
   routeId,
   tokenType,
-}: GetHotspotStoriesRequest): Promise<HotspotStoryDto[]> {
+}: {
+  accessToken?: string | null;
+  hotspotId?: number | null;
+  routeId?: number | null;
+  tokenType?: string | null;
+}): Promise<HotspotStoryDto[]> {
   const getHotspotStoriesUrl = resolveGetHotspotStoriesUrl({
     hotspotId,
     routeId,
@@ -364,15 +386,113 @@ export async function getHotspotStories({
     throw new Error("API story trả về dữ liệu không đúng định dạng.");
   }
 
-  return [...parsedResponse.content].sort((left, right) => {
-    const leftOrder = left.orderIndex ?? Number.MAX_SAFE_INTEGER;
-    const rightOrder = right.orderIndex ?? Number.MAX_SAFE_INTEGER;
+  return parsedResponse.content;
+}
 
-    if (leftOrder !== rightOrder) {
-      return leftOrder - rightOrder;
+function compareByOrderIndex(left: HotspotStoryDto, right: HotspotStoryDto) {
+  const leftOrder = left.orderIndex ?? Number.MAX_SAFE_INTEGER;
+  const rightOrder = right.orderIndex ?? Number.MAX_SAFE_INTEGER;
+
+  if (leftOrder !== rightOrder) {
+    return leftOrder - rightOrder;
+  }
+
+  return left.storyId - right.storyId;
+}
+
+/**
+ * Tập tag của các story thuộc một tuyến — bản sao phía client của
+ * `StoryRepository.findTagIdsByRouteId` bên backend.
+ */
+async function getRouteStoryTagIds({
+  accessToken,
+  routeId,
+  tokenType,
+}: {
+  accessToken?: string | null;
+  routeId: number;
+  tokenType?: string | null;
+}): Promise<Set<number>> {
+  const routeStories = await fetchStories({
+    accessToken,
+    routeId,
+    tokenType,
+  });
+  const tagIds = new Set<number>();
+
+  for (const story of routeStories) {
+    if (story.tag && isValidId(story.tag.tagId)) {
+      tagIds.add(story.tag.tagId);
+    }
+  }
+
+  return tagIds;
+}
+
+/**
+ * Story của một hotspot.
+ *
+ * Khi đang đi theo tuyến (`routeId`), CỐ Ý không gửi `routeId` lên endpoint
+ * story: `StoryServiceImpl.getByHotspot` bên backend nhận đủ cả hai tham số thì
+ * chuyển sang LỌC (`findByRoute_RouteIdAndHotspot_HotspotIdAndStatus`), làm biến
+ * mất những story khác của hotspot. Thay vào đó lấy hết story của hotspot rồi tự
+ * đẩy story có tag trùng tuyến lên đầu — đúng hành vi của
+ * `findByHotspotOrderedByRouteTag` mà commit `30c33be` đã comment lại:
+ *
+ *     ORDER BY (CASE WHEN tag.tagId IN :routeTagIds THEN 0 ELSE 1) ASC,
+ *              orderIndex ASC
+ *
+ * Ưu tiên theo TAG chứ không phải theo `routeId` của story: story của hotspot
+ * không thuộc tuyến nào nhưng cùng chủ đề với tuyến vẫn được lên đầu.
+ */
+export async function getHotspotStories({
+  accessToken,
+  hotspotId,
+  routeId,
+  tokenType,
+}: GetHotspotStoriesRequest): Promise<HotspotStoryDto[]> {
+  const [storiesResult, routeTagIdsResult] = await Promise.allSettled([
+    fetchStories({ accessToken, hotspotId, tokenType }),
+    isValidId(routeId)
+      ? getRouteStoryTagIds({ accessToken, routeId, tokenType })
+      : Promise.resolve(new Set<number>()),
+  ]);
+
+  if (storiesResult.status !== "fulfilled") {
+    throw storiesResult.reason;
+  }
+
+  const stories = storiesResult.value;
+
+  // Hỏng phần tag của tuyến thì vẫn hiện đủ story, chỉ mất thứ tự ưu tiên.
+  if (routeTagIdsResult.status !== "fulfilled") {
+    console.warn("[stories] load route tag ids failed", {
+      error: serializeError(routeTagIdsResult.reason),
+      hotspotId,
+      routeId,
+    });
+
+    return [...stories].sort(compareByOrderIndex);
+  }
+
+  const routeTagIds = routeTagIdsResult.value;
+
+  if (routeTagIds.size === 0) {
+    return [...stories].sort(compareByOrderIndex);
+  }
+
+  const matchesRouteTag = (story: HotspotStoryDto) =>
+    story.tag !== null && routeTagIds.has(story.tag.tagId);
+
+  return [...stories].sort((left, right) => {
+    const leftPriority = matchesRouteTag(left) ? 0 : 1;
+    const rightPriority = matchesRouteTag(right) ? 0 : 1;
+
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
     }
 
-    return left.storyId - right.storyId;
+    return compareByOrderIndex(left, right);
   });
 }
 

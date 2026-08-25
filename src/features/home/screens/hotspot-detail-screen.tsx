@@ -55,9 +55,13 @@ import {
   useAuthSession,
 } from "@/features/auth/hooks/use-auth-session";
 import {
+  getRouteCompletionBonus,
   getRoutesByHotspot,
   mapRouteToRouteItem,
+  type RouteCompletionBonusDto,
 } from "@/features/route/api/route-api";
+import { RouteCompletionOverlay } from "@/features/route/components/route-completion-overlay";
+import { useCurrentProfile } from "@/features/profile/data/current-profile-store";
 import { type RouteItem } from "@/lib/demo-data";
 import { NearbyVoucherSection } from "@/features/voucher/components/nearby-voucher-section";
 import type { NearbyVoucherAnchor } from "@/features/voucher/hooks/use-nearby-vouchers";
@@ -147,6 +151,13 @@ const defaultRemoteHotspotImageUri =
   "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
 const meaninglessApiTextValues = new Set(["", "string", "null", "undefined"]);
 const mapLoadTimeoutMs = 6000;
+/**
+ * Backend cập nhật tiến độ tuyến trong @Async @TransactionalEventListener
+ * (AFTER_COMMIT), nên ngay sau khi POST check-in trả 201 thì status vẫn còn
+ * IN_PROGRESS. Phải hỏi lại vài lần mới bắt được lúc nó chuyển COMPLETED.
+ * Lần đầu hỏi ngay, phòng khi listener đã chạy xong.
+ */
+const routeCompletionPollDelaysMs = [0, 1200, 2500, 4000, 6000] as const;
 const recentReviewPreviewCount = 2;
 const hotspotReviewsPageSize = 20;
 const hiddenStoryStatusImage = require("../../../../assets/images/review_post.png");
@@ -3083,8 +3094,11 @@ export default function HotspotDetailScreen() {
     slug: resolvedSlug,
   });
   const resolvedRouteId = resolveRouteIdParam(routeId);
+  const currentProfile = useCurrentProfile();
   const hasResolvedHotspotSlug = resolvedSlug.trim().length > 0;
   const scrollY = useSharedValue(0);
+  const [routeCompletionBonus, setRouteCompletionBonus] =
+    useState<RouteCompletionBonusDto | null>(null);
   const [isCheckinOverlayVisible, setIsCheckinOverlayVisible] = useState(false);
   const [isStickyCheckinVisible, setIsStickyCheckinVisible] = useState(false);
   const [remoteHotspot, setRemoteHotspot] = useState<NearbyHotspotDto | null>(
@@ -3438,6 +3452,108 @@ export default function HotspotDetailScreen() {
       return undefined;
     }, [loadRemoteHotspot]),
   );
+
+  // Chụp trạng thái tuyến TRƯỚC khi check-in, để tuyến vốn đã hoàn thành từ
+  // trước thì không bật lại popup ăn mừng. null = chưa rõ, khi đó vẫn cho hiện
+  // (bỏ sót lần hoàn thành thật khó chịu hơn là ăn mừng thừa một lần).
+  const routeCompletedBeforeCheckInRef = useRef<boolean | null>(null);
+  const isRouteCompletionPollRunningRef = useRef(false);
+
+  useEffect(() => {
+    if (!isCheckinOverlayVisible || resolvedRouteId === null) {
+      return;
+    }
+
+    let isActive = true;
+
+    const loadInitialRouteStatus = async () => {
+      try {
+        const accessToken = await getValidAccessToken();
+
+        if (!accessToken) {
+          return;
+        }
+
+        const initialBonus = await getRouteCompletionBonus({
+          accessToken,
+          routeId: resolvedRouteId,
+          tokenType: authSession.tokenType,
+        });
+
+        if (isActive) {
+          routeCompletedBeforeCheckInRef.current = initialBonus !== null;
+        }
+      } catch {
+        // Giữ null: chưa xác định được thì ưu tiên hiện popup.
+      }
+    };
+
+    void loadInitialRouteStatus();
+
+    return () => {
+      isActive = false;
+    };
+  }, [authSession.tokenType, isCheckinOverlayVisible, resolvedRouteId]);
+
+  /**
+   * Check-in vừa rồi có thể là điểm cuối của tuyến. Hỏi lại server thay vì tự
+   * đếm ở client để tránh báo "hoàn thành" sai khi progress chưa kịp cập nhật.
+   *
+   * Vòng lặp này phải sống ở màn hình chứ không phải trong overlay check-in:
+   * user thường bấm "Tiếp tục khám phá" ngay khi thấy màn hình thành công, và
+   * nếu vòng lặp chết theo overlay thì popup hoàn thành tuyến không bao giờ kịp
+   * hiện.
+   */
+  const detectRouteCompletion = useCallback(async () => {
+    if (resolvedRouteId === null) {
+      return;
+    }
+
+    if (routeCompletedBeforeCheckInRef.current === true) {
+      return;
+    }
+
+    if (isRouteCompletionPollRunningRef.current) {
+      return;
+    }
+
+    isRouteCompletionPollRunningRef.current = true;
+
+    try {
+      for (const delayMs of routeCompletionPollDelaysMs) {
+        if (delayMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+
+        try {
+          const accessToken = await getValidAccessToken();
+
+          if (!accessToken) {
+            return;
+          }
+
+          const nextBonus = await getRouteCompletionBonus({
+            accessToken,
+            routeId: resolvedRouteId,
+            tokenType: authSession.tokenType,
+          });
+
+          if (nextBonus) {
+            setRouteCompletionBonus(nextBonus);
+            return;
+          }
+        } catch (error) {
+          console.warn("[hotspot-checkin] detect route completion failed", {
+            error: error instanceof Error ? error.message : error,
+            hotspotId: resolvedHotspotId,
+            routeId: resolvedRouteId,
+          });
+        }
+      }
+    } finally {
+      isRouteCompletionPollRunningRef.current = false;
+    }
+  }, [authSession.tokenType, resolvedHotspotId, resolvedRouteId]);
 
   const remoteHotspotResult = useMemo(
     () =>
@@ -4154,8 +4270,14 @@ export default function HotspotDetailScreen() {
             isStoryAvailable={canOpenStories}
             onClose={() => setIsCheckinOverlayVisible(false)}
             onSuccess={() => {
-              setIsCheckinOverlayVisible(false);
+              // KHÔNG đóng overlay ở đây: overlay còn phải hiện màn hình
+              // "Check-in thành công" kèm điểm/XP vừa nhận. Đóng ở đây chính là
+              // lý do popup phần thưởng không bao giờ xuất hiện trước đây —
+              // `onSuccess()` chạy TRƯỚC `setCheckinStage("success")`, nên hạ cờ
+              // ở đây là unmount overlay trước khi nó kịp đổi sang màn thành công.
+              // Người dùng tự đóng bằng nút X (`onClose`) sau khi xem xong.
               void loadRemoteHotspot();
+              void detectRouteCompletion();
             }}
           />
         ) : null}
@@ -4208,6 +4330,23 @@ export default function HotspotDetailScreen() {
           </View>
         ) : null}
       </SafeAreaView>
+
+      {/*
+        Chờ overlay check-in đóng hẳn rồi mới bật popup hoàn thành tuyến, để
+        user đọc xong phần thưởng của điểm dừng rồi mới thấy phần thưởng tuyến.
+      */}
+      {routeCompletionBonus && !isCheckinOverlayVisible ? (
+        <RouteCompletionOverlay
+          avatarUri={currentProfile?.avatar ?? null}
+          bonus={routeCompletionBonus}
+          onClose={() => setRouteCompletionBonus(null)}
+          onContinueExplore={() => setRouteCompletionBonus(null)}
+          onViewRoute={() => {
+            setRouteCompletionBonus(null);
+            router.push(`/route/${routeCompletionBonus.routeId}` as Href);
+          }}
+        />
+      ) : null}
     </View>
   );
 }

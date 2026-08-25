@@ -2363,6 +2363,12 @@ function RouteCard({
   );
 }
 
+/**
+ * Dòng khoảng cách · thời gian · địa điểm nằm trên gradient tối của ảnh bìa,
+ * nên phải là xám SÁNG. Xám trung (#8E869A) đọc không nổi trên nền này.
+ */
+const routeStatTextColor = "#DAD4DF";
+
 function RouteStat({
   icon,
   label,
@@ -2372,8 +2378,13 @@ function RouteStat({
 }) {
   return (
     <View className="flex-row items-center gap-1.5">
-      <SymbolView name={icon} size={11} tintColor="rgba(255,255,255,0.94)" />
-      <Text className="text-[11px] font-medium text-white/92">{label}</Text>
+      <SymbolView name={icon} size={11} tintColor={routeStatTextColor} />
+      <Text
+        className="text-[11px] font-medium"
+        style={{ color: routeStatTextColor }}
+      >
+        {label}
+      </Text>
     </View>
   );
 }

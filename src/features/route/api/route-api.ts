@@ -138,6 +138,13 @@ export type CheckInResponseDto = {
   userId?: number | null;
 };
 
+export type RouteCompletionBonusDto = {
+  point: number;
+  routeId: number;
+  routeName: string;
+  xp: number;
+};
+
 export type JoinRouteGroupQuestResponseDto = {
   groupId: number | null;
   message: string | null;
@@ -557,6 +564,16 @@ function getRouteImageMedia(route: Pick<RouteDto, "hotspots" | "medias">) {
   return null;
 }
 
+export function isRouteProgressCompleted(status?: string | null) {
+  return (status ?? "").trim().toUpperCase() === "COMPLETED";
+}
+
+function readBonusValue(value?: number | null) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.round(value))
+    : 0;
+}
+
 // RouteResponse của backend trả ảnh bìa riêng của tuyến ở `imageUrl` (S3
 // /routes/...), không có mảng `medias` cấp tuyến. Vì vậy phải ưu tiên
 // `imageUrl`, nếu không card tuyến sẽ hiển thị ảnh của hotspot đầu tiên.
@@ -749,6 +766,30 @@ export async function getRouteById({
   }
 
   return route;
+}
+
+/**
+ * Backend chưa có field bonus riêng cho lúc hoàn thành tuyến, nên phần thưởng
+ * hiển thị lấy từ `point`/`xp` của chính tuyến đó. Khi backend bổ sung field
+ * bonus thật thì chỉ cần đổi phần map bên dưới, UI không phải sửa.
+ */
+export async function getRouteCompletionBonus({
+  accessToken,
+  routeId,
+  tokenType,
+}: RouteDetailRequest): Promise<RouteCompletionBonusDto | null> {
+  const route = await getRouteById({ accessToken, routeId, tokenType });
+
+  if (!isRouteProgressCompleted(route.userProgress)) {
+    return null;
+  }
+
+  return {
+    point: readBonusValue(route.point),
+    routeId: route.routeId,
+    routeName: route.routeName,
+    xp: readBonusValue(route.xp),
+  };
 }
 
 export async function getRoutesByHotspot({
