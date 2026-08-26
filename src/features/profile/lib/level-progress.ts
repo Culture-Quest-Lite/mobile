@@ -60,6 +60,32 @@ function findLevelIndexByTotalXp(
   return matchedIndex >= 0 ? matchedIndex : 0;
 }
 
+/**
+ * Nhãn cấp độ để hiển thị cho người dùng, ví dụ "Cấp 4 · Nhà Thám Hiểm".
+ *
+ * Tên cấp trong `GET /api/gamification/levels` là tên thuần chữ do curator đặt
+ * ("Tân Binh", "Lữ Khách", "Nhà Thám Hiểm"...) và KHÔNG chứa số, nên `level`
+ * được suy ra từ vị trí trong bảng cấp chứ không phải từ tên. Vì vậy phải ghép
+ * số cấp vào thì người dùng mới biết mình đang ở bậc mấy.
+ *
+ * Trường hợp bản backend cũ đặt tên kiểu "Level 3" thì bỏ phần ghép để không
+ * ra "Cấp 3 · Level 3".
+ */
+export function getLevelDisplayLabel(profile: Profile): string | null {
+  const levelName = profile.levelName?.trim() ?? "";
+  const levelNumber = typeof profile.level === "number" ? profile.level : null;
+
+  if (!levelName) {
+    return levelNumber !== null ? `Cấp ${levelNumber}` : null;
+  }
+
+  if (levelNumber === null || levelName.includes(String(levelNumber))) {
+    return levelName;
+  }
+
+  return `Cấp ${levelNumber} · ${levelName}`;
+}
+
 export function applyLevelProgressToProfile(
   profile: Profile,
   levels: readonly GamificationLevel[],

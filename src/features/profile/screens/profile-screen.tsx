@@ -64,6 +64,7 @@ import {
 } from "@/lib/post-visibility";
 import type { SharedPostSummary } from "@/lib/shared-post";
 import { LevelProgressCard } from "../components/level-progress-card";
+import { getLevelDisplayLabel } from "../lib/level-progress";
 import {
   cacheProfilePost,
   updateCachedProfilePost,
@@ -1505,6 +1506,9 @@ export default function ProfileScreen() {
 
   const levelNumber = typeof profile.level === "number" ? profile.level : null;
   const levelDisplayName = profile.levelName?.trim() ?? "";
+  // Tên cấp ("Nhà Thám Hiểm") trước đây chỉ dùng để quyết định có hiện thẻ hay
+  // không, không hiển thị ở đâu cả — người dùng chỉ thấy con số trên avatar.
+  const levelLabel = getLevelDisplayLabel(profile);
   const resolvedDisplayName =
     profile.name.trim() || authSession.displayName.trim() || "Explorer";
   const resolvedProfileUsername =
@@ -1836,6 +1840,7 @@ export default function ProfileScreen() {
                 <LevelProgressCard
                   currentXp={currentTotalXp}
                   hasExactProgress={hasExactLevelProgress}
+                  levelLabel={levelLabel}
                   markerSource={levelBadgeLogo}
                   nextLevelRequiredXp={nextLevelRequiredXp}
                   progressPercent={levelProgressPercent}

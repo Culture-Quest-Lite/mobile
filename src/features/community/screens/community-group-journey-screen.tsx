@@ -355,7 +355,7 @@ function getShareCardMeta({
   shareMode,
   updatedLabel,
 }: {
-  connectionState: "connected" | "connecting" | "disconnected";
+  connectionState: "connected" | "connecting" | "disconnected" | "idle";
   shareMode: "group_forced_stop" | "paused" | "route_stopped" | "sharing";
   updatedLabel: string;
 }) {
@@ -374,6 +374,15 @@ function getShareCardMeta({
       detail: "Bạn đang tạm dừng",
       dotColor: palette.warning,
       title: "Tạm dừng chia sẻ",
+    };
+  }
+
+  if (connectionState === "idle") {
+    return {
+      bars: 2,
+      detail: "Đang chuẩn bị",
+      dotColor: palette.warning,
+      title: "Sắp bắt đầu chia sẻ",
     };
   }
 
@@ -463,7 +472,7 @@ function getCurrentUserStatus({
   hasLocation,
   shareMode,
 }: {
-  connectionState: "connected" | "connecting" | "disconnected";
+  connectionState: "connected" | "connecting" | "disconnected" | "idle";
   hasLocation: boolean;
   shareMode: "group_forced_stop" | "paused" | "route_stopped" | "sharing";
 }): JourneyMemberStatus {
@@ -479,6 +488,11 @@ function getCurrentUserStatus({
     return "sharing";
   }
 
+  // Chưa thử kết nối lần nào thì là "đang chờ", không phải "mất kết nối".
+  if (connectionState === "idle" || connectionState === "connecting") {
+    return "waiting";
+  }
+
   return "offline";
 }
 
@@ -490,7 +504,7 @@ function buildJourneyMembers({
   shareMode,
   userProfiles,
 }: {
-  connectionState: "connected" | "connecting" | "disconnected";
+  connectionState: "connected" | "connecting" | "disconnected" | "idle";
   currentUserId: string | null;
   groupMembers: CommunityGroupMemberPayload[];
   locationsByUserId: Record<
