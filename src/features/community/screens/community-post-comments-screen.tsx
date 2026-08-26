@@ -52,6 +52,7 @@ import {
   getPostVisibilityIcon,
   getPostVisibilityLabel,
 } from "@/lib/post-visibility";
+import { useCommunityAuthorAvatar } from "../data/community-author-avatar-cache";
 import { getCachedCommunityExplorerProfile } from "../data/community-explorer-profile-cache";
 import {
   cacheCommunityPost,
@@ -670,8 +671,12 @@ function CommunityPostAuthorAvatar({
   initials: string;
   size: number;
 }) {
+  // Dùng chung cache ảnh tác giả với bảng tin: người dùng mở bình luận từ bảng
+  // tin nên ảnh thường đã có sẵn, không phát sinh request mới.
+  const fetchedAvatarUri = useCommunityAuthorAvatar(authorId);
   const avatarUri =
-    getCachedCommunityExplorerProfile(authorId)?.profile.avatar ?? null;
+    getCachedCommunityExplorerProfile(authorId)?.profile.avatar ??
+    fetchedAvatarUri;
   return (
     <UserAvatar
       displayName={authorName}

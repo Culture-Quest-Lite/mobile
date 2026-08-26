@@ -7,7 +7,7 @@ import {
   type Href,
 } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -36,6 +36,10 @@ import {
 } from "@/features/auth/hooks/use-auth-session";
 import { getMyProfile } from "@/features/profile/api/get-me";
 import { getUserProfileById } from "@/features/profile/api/get-user-by-id";
+import {
+  getUserRouteProgressList,
+  type UserRouteProgressDto,
+} from "@/features/route/api/route-api";
 import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
 import {
   getCommunityGroupById,
@@ -46,6 +50,7 @@ import {
 } from "../api/group-api";
 import { CommunityGroupStateCard } from "../components/community-group-ui";
 import {
+  cacheCommunityGroupJourneySession,
   getCachedCommunityGroupJourneySession,
   removeCachedCommunityGroupJourneySession,
 } from "../data/community-group-journey-store";
@@ -150,6 +155,56 @@ function formatGroupDate(
   return `${padDatePart(date.getDate())}/${padDatePart(
     date.getMonth() + 1,
   )}/${date.getFullYear()}`;
+}
+
+function resolveCommunityGroupJourneySession(
+  routeKey?: string | null,
+  groupId?: string | null,
+) {
+  return (
+    getCachedCommunityGroupJourneySession(routeKey) ??
+    getCachedCommunityGroupJourneySession(groupId)
+  );
+}
+
+function parseStartedAtTimestamp(value?: string | null) {
+  const parsedTimestamp = Date.parse(value ?? "");
+  return Number.isFinite(parsedTimestamp) ? parsedTimestamp : Date.now();
+}
+
+function isActiveRouteProgress(progress: UserRouteProgressDto) {
+  const normalizedStatus = readMeaningfulText(progress.status)?.toUpperCase();
+  return normalizedStatus === "IN_PROGRESS";
+}
+
+/**
+ * Tìm tiến độ tuyến đang chạy ứng với nhóm này.
+ *
+ * Ưu tiên khớp đúng `groupId`; nếu backend chưa trả trường đó thì chỉ chấp nhận
+ * khi user có ĐÚNG MỘT tuyến đang đi — đoán bừa giữa nhiều tuyến sẽ đưa người
+ * dùng vào nhầm hành trình.
+ */
+function resolveGroupJourneyProgress(
+  progresses: UserRouteProgressDto[],
+  groupId?: string | null,
+) {
+  const activeProgresses = progresses.filter(isActiveRouteProgress);
+  const normalizedGroupId =
+    typeof groupId === "string" && /^\d+$/.test(groupId.trim())
+      ? Number(groupId)
+      : null;
+
+  if (normalizedGroupId !== null) {
+    const matchedProgresses = activeProgresses.filter(
+      (progress) => progress.groupId === normalizedGroupId,
+    );
+
+    if (matchedProgresses.length > 0) {
+      return matchedProgresses[0] ?? null;
+    }
+  }
+
+  return activeProgresses.length === 1 ? (activeProgresses[0] ?? null) : null;
 }
 
 function formatJourneyStartedLabel(value?: number | null) {
@@ -908,9 +963,11 @@ export default function CommunityGroupDetailScreen() {
   );
 
   const displayGroup = groupDetail ?? cachedGroupSession;
-  const cachedJourneySession =
-    getCachedCommunityGroupJourneySession(resolvedRouteValue) ??
-    getCachedCommunityGroupJourneySession(resolvedGroupId);
+  // Phải là state chứ không đọc thẳng cache: effect bên dưới dựng lại phiên từ
+  // tiến độ tuyến trên server, và màn hình cần render lại khi việc đó xong.
+  const [journeySession, setJourneySession] = useState(() =>
+    resolveCommunityGroupJourneySession(resolvedRouteValue, resolvedGroupId),
+  );
   const inviteWebUrl = !displayGroup?.shareToken
     ? null
     : (cachedGroupSession?.inviteWebUrl ??
@@ -920,6 +977,93 @@ export default function CommunityGroupDetailScreen() {
   const heroImageSource = readMeaningfulText(displayGroup?.imageUrl)
     ? { uri: displayGroup?.imageUrl as string }
     : HERO_IMAGE;
+
+  /**
+   * Dựng lại phiên hành trình nhóm từ tiến độ tuyến trên server.
+   *
+   * Không có effect này thì `journeySession` chỉ đến từ cache trong RAM, mà
+   * cache đó chỉ được ghi khi chính máy này bấm bắt đầu hành trình. Cài lại
+   * app, đổi máy, hoặc là thành viên tham gia sau đều thấy `null` → khối hành
+   * trình không hiện → không vào được màn chia sẻ vị trí.
+   */
+  useEffect(() => {
+    if (!authSession.isAuthenticated || !effectiveGroupId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function syncJourneySessionFromActiveProgress() {
+      try {
+        const accessToken = await getValidAccessToken();
+
+        if (!accessToken || cancelled) {
+          return;
+        }
+
+        const progressPage = await getUserRouteProgressList({
+          accessToken,
+          page: 0,
+          size: 20,
+          sortBy: "startedAt",
+          sortDirection: "DESC",
+          tokenType: authSession.tokenType ?? undefined,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        const activeProgress = resolveGroupJourneyProgress(
+          progressPage.content,
+          effectiveGroupId,
+        );
+
+        if (!activeProgress) {
+          return;
+        }
+
+        const nextJourneySession = cacheCommunityGroupJourneySession({
+          groupId: effectiveGroupId,
+          groupName:
+            readMeaningfulText(displayGroup?.groupName) ??
+            `Nhóm #${effectiveGroupId}`,
+          routeId: `${activeProgress.routeId}`,
+          routeName:
+            readMeaningfulText(activeProgress.routeName) ?? "Hành trình nhóm",
+          shareToken:
+            readMeaningfulText(displayGroup?.shareToken) ?? resolvedRouteValue,
+          startedAt: parseStartedAtTimestamp(activeProgress.startedAt),
+        });
+
+        if (!cancelled) {
+          setJourneySession(nextJourneySession);
+        }
+      } catch (error) {
+        console.info(
+          "[community] sync group journey from active progress skipped",
+          {
+            error: error instanceof Error ? error.message : error,
+            groupId: effectiveGroupId,
+          },
+        );
+      }
+    }
+
+    void syncJourneySessionFromActiveProgress();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    displayGroup?.groupName,
+    displayGroup?.shareToken,
+    effectiveGroupId,
+    resolvedRouteValue,
+  ]);
+
   const closeGroupMenu = () => {
     setIsGroupMenuVisible(false);
   };
@@ -994,8 +1138,8 @@ export default function CommunityGroupDetailScreen() {
       return;
     }
 
-    const routeName = readMeaningfulText(cachedJourneySession?.routeName);
-    const routeId = readMeaningfulText(cachedJourneySession?.routeId);
+    const routeName = readMeaningfulText(journeySession?.routeName);
+    const routeId = readMeaningfulText(journeySession?.routeId);
     const query = routeId
       ? `?routeId=${encodeURIComponent(routeId)}&routeName=${encodeURIComponent(routeName ?? "Hành trình nhóm")}`
       : routeName
@@ -1424,11 +1568,11 @@ export default function CommunityGroupDetailScreen() {
 
           <View className="mt-3.5">
             <GroupJourneySection
-              hasActiveJourney={Boolean(cachedJourneySession)}
+              hasActiveJourney={Boolean(journeySession)}
               onPress={handleOpenGroupJourney}
-              routeName={readMeaningfulText(cachedJourneySession?.routeName)}
+              routeName={readMeaningfulText(journeySession?.routeName)}
               startedAtLabel={formatJourneyStartedLabel(
-                cachedJourneySession?.startedAt,
+                journeySession?.startedAt,
               )}
             />
           </View>

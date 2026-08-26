@@ -26,6 +26,8 @@ export type GroupLiveShareMode =
   | "group_forced_stop";
 
 export type GroupLiveConnectionState =
+  /** Chưa bắt đầu kết nối lần nào — KHÁC với "disconnected" (đã nối rồi mất). */
+  | "idle"
   | "connecting"
   | "connected"
   | "disconnected";
@@ -55,6 +57,28 @@ type UseGroupLiveLocationResult = {
 const defaultGroupWebSocketUrl = "wss://www.culturequestlite.com/ws/websocket";
 // Phai nho hon nguong 15 giay ma buildJourneyMembers dung de danh dau offline.
 const LOCATION_HEARTBEAT_INTERVAL_MS = 5000;
+const groupLiveLocationDebugEnabled = __DEV__;
+/** Ngưỡng chấp nhận vị trí đã lưu sẵn trong máy cho lần phát đầu tiên. */
+const initialLocationMaxAgeInMs = 60_000;
+const initialLocationRequiredAccuracyInMeters = 200;
+
+/**
+ * `connectRealtime` có nhiều cổng chặn và tất cả đều `return` im lặng. Không có
+ * log ở đó thì lúc không kết nối được sẽ không có cách nào biết cổng nào chặn —
+ * đúng tình trạng sau khi commit `2a07975` xoá hệ thống log này.
+ */
+function logGroupLiveLocation(event: string, details?: Record<string, unknown>) {
+  if (!groupLiveLocationDebugEnabled) {
+    return;
+  }
+
+  if (details) {
+    console.info(`[group-live-location] ${event}`, details);
+    return;
+  }
+
+  console.info(`[group-live-location] ${event}`);
+}
 
 function normalizeValue(value?: string | null) {
   if (typeof value !== "string") {
@@ -160,8 +184,10 @@ export function useGroupLiveLocation({
   } | null>(null);
   const shouldMaintainSessionRef = useRef(false);
   const shareModeRef = useRef<GroupLiveShareMode>("sharing");
+  // "idle" chứ không phải "disconnected": lúc mới mở màn chưa hề thử kết nối,
+  // báo "Mất kết nối" ngay khi vào là sai và làm người dùng tưởng tính năng hỏng.
   const [connectionState, setConnectionState] =
-    useState<GroupLiveConnectionState>("disconnected");
+    useState<GroupLiveConnectionState>("idle");
   const [isPermissionGranted, setIsPermissionGranted] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [locationsByUserId, setLocationsByUserId] = useState<
@@ -196,6 +222,7 @@ export function useGroupLiveLocation({
 
     if (currentClient) {
       try {
+        logGroupLiveLocation("disconnect stomp client");
         await currentClient.deactivate();
       } catch (error) {
         console.warn("[group-live-location] deactivate stomp failed", {
@@ -204,7 +231,14 @@ export function useGroupLiveLocation({
       }
     }
 
-    setConnectionState("disconnected");
+    // `deactivate()` chờ socket đóng hẳn nên có thể mất vài giây. Trong lúc đó
+    // effect thường đã dựng client mới (màn hành trình gọi setStatus("loading")
+    // mỗi lần focus nên vòng ngắt-nối này xảy ra liên tục). Nếu cứ hạ trạng
+    // thái vô điều kiện thì lần "disconnected" muộn này ghi đè lên "connected"
+    // của client mới và banner kẹt ở "Mất kết nối" dù đang online.
+    if (clientRef.current === null) {
+      setConnectionState("disconnected");
+    }
   }
 
   async function pauseRealtime(stopMode: StopMode) {
@@ -276,6 +310,61 @@ export function useGroupLiveLocation({
     void publishLocation(coordinate.latitude, coordinate.longitude);
   }
 
+  /**
+   * Phát ngay một vị trí lúc vừa vào, không chờ `watchPositionAsync`.
+   *
+   * `watchPositionAsync` chỉ bắn callback đầu tiên khi có fix GPS mới, trong
+   * nhà hoặc khu nhiều nhà cao tầng có thể mất vài chục giây. Không có bước này
+   * thì `lastCoordinateRef` còn null nên heartbeat cũng không có gì để gửi, và
+   * cả nhóm không nhìn thấy bạn suốt quãng đó.
+   *
+   * Ưu tiên vị trí đã lưu trong máy (còn mới dưới 60 giây và sai số dưới 200m);
+   * không có thì mới đo trực tiếp một lần.
+   */
+  async function publishInitialLocationSnapshot() {
+    if (!myUserId) {
+      return;
+    }
+
+    try {
+      const lastKnownPosition = await Location.getLastKnownPositionAsync({
+        maxAge: initialLocationMaxAgeInMs,
+        requiredAccuracy: initialLocationRequiredAccuracyInMeters,
+      });
+
+      if (lastKnownPosition) {
+        logGroupLiveLocation("use last known position snapshot", {
+          accuracy: lastKnownPosition.coords.accuracy ?? null,
+          userId: myUserId,
+        });
+        publishCurrentCoordinate({
+          latitude: lastKnownPosition.coords.latitude,
+          longitude: lastKnownPosition.coords.longitude,
+        });
+        return;
+      }
+
+      const currentPosition = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        mayShowUserSettingsDialog: true,
+      });
+
+      logGroupLiveLocation("use current position snapshot", {
+        accuracy: currentPosition.coords.accuracy ?? null,
+        userId: myUserId,
+      });
+      publishCurrentCoordinate({
+        latitude: currentPosition.coords.latitude,
+        longitude: currentPosition.coords.longitude,
+      });
+    } catch (error) {
+      console.warn("[group-live-location] initial position snapshot failed", {
+        error,
+        userId: myUserId,
+      });
+    }
+  }
+
   async function startLocationWatcher() {
     if (locationSubscriptionRef.current || heartbeatIntervalRef.current) {
       return;
@@ -288,6 +377,12 @@ export function useGroupLiveLocation({
       setLastError("Bạn chưa cấp quyền vị trí để chia sẻ hành trình nhóm.");
       return;
     }
+
+    // KHÔNG await: `getCurrentPositionAsync` có thể treo hàng chục giây khi ở
+    // trong nhà, và `mayShowUserSettingsDialog` còn dựng hộp thoại hệ thống chờ
+    // người dùng bấm. Chờ nó xong mới dựng heartbeat và watcher thì suốt quãng
+    // đó không có toạ độ nào được phát, cả nhóm coi như bạn offline.
+    void publishInitialLocationSnapshot();
 
     // watchPositionAsync chi ban callback khi thiet bi di chuyen du
     // distanceInterval; timeInterval la Android-only nen tren iOS dung yen la
@@ -337,10 +432,20 @@ export function useGroupLiveLocation({
       shareModeRef.current !== "sharing" ||
       appStateRef.current !== "active"
     ) {
+      logGroupLiveLocation("skip connect realtime", {
+        appState: appStateRef.current,
+        enabled,
+        groupId: normalizedGroupId,
+        shareMode: shareModeRef.current,
+      });
       return;
     }
 
     if (clientRef.current?.connected || clientRef.current?.active) {
+      logGroupLiveLocation("reuse active stomp client", {
+        connected: Boolean(clientRef.current?.connected),
+        groupId: normalizedGroupId,
+      });
       await startLocationWatcher();
       return;
     }
@@ -349,30 +454,69 @@ export function useGroupLiveLocation({
 
     if (!accessToken) {
       setLastError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      logGroupLiveLocation("skip connect realtime: missing access token", {
+        groupId: normalizedGroupId,
+      });
       return;
     }
 
     setLastError(null);
     setConnectionState("connecting");
+    logGroupLiveLocation("connect realtime", {
+      groupId: normalizedGroupId,
+      userId: normalizeValue(myUserId),
+      username: normalizeValue(username),
+      wsUrl: resolveGroupWebSocketUrl(),
+    });
 
+    /**
+     * Client cũ vẫn bắn `onDisconnect`/`onWebSocketClose` SAU khi đã bị thay
+     * thế — `reconnectDelay` tự dựng client mới, hoặc effect chạy lại khi đổi
+     * nhóm. Mọi callback vì thế phải tự kiểm tra mình còn là client đang dùng
+     * hay không.
+     *
+     * Thiếu bước này thì client cũ ghi đè `connectionState` của client mới về
+     * "disconnected" ngay sau khi nó vừa kết nối xong, và màn hình báo mất kết
+     * nối vĩnh viễn dù WebSocket vẫn sống. Đây chính là thứ commit `2a07975`
+     * xoá mất.
+     */
+    const isCurrentClient = () => clientRef.current === nextClient;
     const nextClient = new Client({
       appendMissingNULLonIncoming: true,
       brokerURL: resolveGroupWebSocketUrl(),
       connectHeaders: {
         Authorization: `${authSession.tokenType ?? "Bearer"} ${accessToken}`,
       },
-      debug:
-        __DEV__
-          ? (message) => {
-              console.info("[group-live-location]", message);
-            }
-          : undefined,
+      /**
+       * PHẢI luôn truyền một hàm — tuyệt đối không `undefined`.
+       *
+       * `Client` đặt mặc định `this.debug = noOp` rồi mới `Object.assign(this,
+       * conf)` trong `configure()`. `Object.assign` chép cả thuộc tính có giá
+       * trị `undefined`, nên `debug: undefined` GHI ĐÈ noOp thành undefined.
+       * Sau đó 10 chỗ trong thư viện gọi `this.debug(...)` — trong đó có
+       * `activate()` — và ném `TypeError: this.debug is not a function`.
+       *
+       * Vì điều kiện là `__DEV__`, bản debug truyền hàm thật nên chạy bình
+       * thường, còn bản release truyền undefined nên chết ngay lúc activate.
+       * Đây là lý do group chạy với `expo run:android` nhưng hỏng với
+       * `--variant release`.
+       */
+      debug: (message: string) => {
+        logGroupLiveLocation(message);
+      },
       forceBinaryWSFrames: true,
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,
       onConnect: () => {
+        if (!isCurrentClient()) {
+          return;
+        }
+
         setConnectionState("connected");
         setLastError(null);
+        logGroupLiveLocation("stomp connected", {
+          groupId: normalizedGroupId,
+        });
 
         locationTopicSubscriptionRef.current = nextClient.subscribe(
           `/topic/group/${normalizedGroupId}`,
@@ -407,16 +551,39 @@ export function useGroupLiveLocation({
         void startLocationWatcher();
       },
       onDisconnect: () => {
+        if (!isCurrentClient()) {
+          return;
+        }
+
         setConnectionState("disconnected");
+        logGroupLiveLocation("stomp disconnected", {
+          groupId: normalizedGroupId,
+        });
       },
       onStompError: (frame) => {
+        console.warn("[group-live-location] stomp error", {
+          body: frame.body,
+          headers: frame.headers,
+        });
+
+        if (!isCurrentClient()) {
+          return;
+        }
+
         setLastError(
           normalizeValue(frame.headers.message) ??
             "Kết nối live location gặp lỗi.",
         );
       },
       onWebSocketClose: () => {
+        if (!isCurrentClient()) {
+          return;
+        }
+
         setConnectionState("disconnected");
+        logGroupLiveLocation("websocket closed", {
+          groupId: normalizedGroupId,
+        });
       },
       reconnectDelay: 5000,
     });
@@ -454,7 +621,14 @@ export function useGroupLiveLocation({
   useEffect(() => {
     if (!enabled || !groupId || !myUserId) {
       shouldMaintainSessionRef.current = false;
-      setConnectionState("disconnected");
+      // Màn hình còn đang tải (`enabled` false) hoặc chưa có userId thì đây là
+      // trạng thái CHƯA bắt đầu, không phải mất kết nối.
+      setConnectionState("idle");
+      logGroupLiveLocation("live location not started yet", {
+        enabled,
+        groupId,
+        hasUserId: Boolean(myUserId),
+      });
       return;
     }
 

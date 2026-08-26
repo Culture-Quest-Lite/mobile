@@ -99,6 +99,8 @@ export type HotspotProgressDto = {
 export type UserRouteProgressDto = {
   completedAt?: string | null;
   completedStops: number;
+  /** Nhóm đang cùng đi tuyến này; màn chi tiết nhóm dùng để nhận ra hành trình đang chạy. */
+  groupId?: number | null;
   progressPercentage: number;
   route?: RouteDto | null;
   routeId: number;
@@ -445,6 +447,11 @@ export function parseUserRouteProgress(
   return {
     completedAt: readString(value.completedAt) || null,
     completedStops: readNumber(value.completedStops),
+    groupId: readNullableNumber(
+      value.groupId ??
+        value.communityGroupId ??
+        (isObject(value.group) ? value.group.groupId ?? value.group.id : null),
+    ),
     hotspotProgressList: Array.isArray(value.hotspotProgressList)
       ? value.hotspotProgressList.map(parseHotspotProgress).filter(isNonNull)
       : [],

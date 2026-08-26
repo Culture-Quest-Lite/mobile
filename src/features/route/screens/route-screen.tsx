@@ -56,6 +56,7 @@ import {
   type CommunityGroupsStatus,
 } from "@/features/community/hooks/use-community-groups";
 import { LevelProgressCard } from "@/features/profile/components/level-progress-card";
+import { getLevelDisplayLabel } from "@/features/profile/lib/level-progress";
 import { useMyLevelProgress } from "@/features/profile/hooks/use-my-level-progress";
 import type { Profile } from "@/features/profile/types";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -356,19 +357,16 @@ function getLevelSummary(profile: Profile | null) {
     nextLevelRequiredXp !== null &&
     typeof profile.levelProgressPercent === "number";
 
-  // levelName của backend thường đã chứa số cấp ("Level 3"), tránh lặp "Cấp 3 · Level 3".
-  const title =
-    levelName && level !== null && !levelName.includes(String(level))
-      ? `Cấp ${level} · ${levelName}`
-      : levelName || (level !== null ? `Cấp ${level}` : "Cấp của bạn");
+  const levelLabel = getLevelDisplayLabel(profile);
 
   return {
     currentXp: totalXp,
     hasExactProgress,
     level,
+    levelLabel,
     nextLevelRequiredXp,
     progressPercent: profile.levelProgressPercent,
-    title,
+    title: levelLabel ?? "Cấp của bạn",
   };
 }
 
@@ -836,6 +834,16 @@ export default function RouteScreen() {
         : activeList,
     [activeList, featuredActiveRouteId],
   );
+  // Thẻ tóm tắt trước đây chỉ có tên tuyến và phần trăm; lấy thêm RouteItem đầy
+  // đủ để hiện ảnh bìa, quãng đường, thời gian, độ khó và XP.
+  const featuredActiveRoute = useMemo(
+    () =>
+      featuredActiveRouteId
+        ? (activeList.find((route) => route.id === featuredActiveRouteId) ??
+          null)
+        : null,
+    [activeList, featuredActiveRouteId],
+  );
   const currentTabCount = (() => {
     switch (tab) {
       case "official":
@@ -951,6 +959,7 @@ export default function RouteScreen() {
                         <LevelProgressCard
                           currentXp={levelSummary.currentXp}
                           hasExactProgress={levelSummary.hasExactProgress}
+                          levelLabel={levelSummary.levelLabel}
                           markerSource={levelBadgeLogo}
                           nextLevelRequiredXp={levelSummary.nextLevelRequiredXp}
                           progressPercent={levelSummary.progressPercent}
@@ -1073,6 +1082,7 @@ export default function RouteScreen() {
                     <View className="gap-3">
                       <ActiveProgressSummary
                         progress={featuredActiveProgress}
+                        routeItem={featuredActiveRoute}
                         onAbandonRoute={handleAbandonRoute}
                         abandoningProgressId={abandoningProgressId}
                       />
@@ -1140,17 +1150,26 @@ export default function RouteScreen() {
 
 function ActiveProgressSummary({
   progress,
+  routeItem,
   onAbandonRoute,
   abandoningProgressId,
 }: {
   progress: UserRouteProgressDto;
+  /** Thông tin tuyến đầy đủ (ảnh bìa, quãng đường, thời gian, độ khó, XP). */
+  routeItem: RouteItem | null;
   onAbandonRoute: (progressId: number) => void;
   abandoningProgressId: number | null;
 }) {
   const router = useRouter();
-  const routeName = progress.route?.routeName || `Tuyến #${progress.routeId}`;
+  const routeName =
+    routeItem?.title || progress.route?.routeName || `Tuyến #${progress.routeId}`;
   const progressValue = Math.round(progress.progressPercentage || 0);
   const isAbandoning = abandoningProgressId === progress.userRouteProgressId;
+  const coverUri = routeItem?.cover?.trim() ? routeItem.cover : null;
+  const remainingStops = Math.max(
+    (progress.totalStops || 0) - (progress.completedStops || 0),
+    0,
+  );
 
   return (
     <View
@@ -1164,17 +1183,29 @@ function ActiveProgressSummary({
         className="p-4"
       >
         <View className="flex-row items-start gap-3">
-          <View className="h-11 w-11 items-center justify-center rounded-[16px] bg-[#FFF0F4]">
-            <SymbolView
-              name={{
-                ios: "figure.walk.circle.fill",
-                android: "directions_walk",
-                web: "directions_walk",
-              }}
-              size={20}
-              tintColor="#FF4F86"
+          {/* Ảnh bìa tuyến thay cho icon chung chung — người dùng nhận ra tuyến
+              mình đang đi nhanh hơn nhiều qua ảnh. */}
+          {coverUri ? (
+            <Image
+              source={{ uri: coverUri }}
+              contentFit="cover"
+              transition={180}
+              cachePolicy="memory-disk"
+              style={{ borderRadius: 16, height: 56, width: 56 }}
             />
-          </View>
+          ) : (
+            <View className="h-14 w-14 items-center justify-center rounded-[16px] bg-[#FFF0F4]">
+              <SymbolView
+                name={{
+                  ios: "figure.walk.circle.fill",
+                  android: "directions_walk",
+                  web: "directions_walk",
+                }}
+                size={22}
+                tintColor="#FF4F86"
+              />
+            </View>
+          )}
 
           <View className="flex-1">
             <Text className="text-[11px] font-extrabold uppercase tracking-[1.2px] text-[#EB489B]">
@@ -1188,7 +1219,9 @@ function ActiveProgressSummary({
             </Text>
             <Text className="mt-1 text-[12px] leading-5 text-[#7A6F67]">
               {progress.completedStops}/{progress.totalStops} điểm ·{" "}
-              {progressValue}% hoàn thành
+              {remainingStops > 0
+                ? `còn ${remainingStops} điểm`
+                : "đã đi hết các điểm"}
             </Text>
           </View>
 
@@ -1198,6 +1231,40 @@ function ActiveProgressSummary({
             </Text>
           </View>
         </View>
+
+        {routeItem ? (
+          <View className="mt-3 flex-row flex-wrap items-center gap-1.5">
+            <View className="rounded-full bg-[#FFF1F6] px-2.5 py-1">
+              <Text className="text-[11px] font-extrabold text-[#EB489B]">
+                {routeItem.distance}
+              </Text>
+            </View>
+            <View className="rounded-full bg-[#FFF4EF] px-2.5 py-1">
+              <Text className="text-[11px] font-extrabold text-[#F58752]">
+                {routeItem.duration}
+              </Text>
+            </View>
+            <View className="rounded-full bg-[#FFF7E8] px-2.5 py-1">
+              <Text className="text-[11px] font-extrabold text-[#D97706]">
+                {routeItem.hotspotIds.length} điểm dừng
+              </Text>
+            </View>
+            {routeItem.difficulty?.trim() ? (
+              <View className="rounded-full bg-[#EEF6FF] px-2.5 py-1">
+                <Text className="text-[11px] font-extrabold text-[#1677C8]">
+                  {routeItem.difficulty}
+                </Text>
+              </View>
+            ) : null}
+            {routeItem.xp > 0 ? (
+              <View className="rounded-full bg-[#F4EFF8] px-2.5 py-1">
+                <Text className="text-[11px] font-extrabold text-[#6F657A]">
+                  +{routeItem.xp} XP
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         <View className="mt-3">
           <XPBar

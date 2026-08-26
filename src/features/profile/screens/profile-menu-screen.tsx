@@ -273,10 +273,6 @@ export default function ProfileMenuScreen() {
       },
     },
     {
-      label: t('profile.menu.updateBio'),
-      onPress: () => {},
-    },
-    {
       label: t('profile.menu.vouchers'),
       onPress: () => {
         router.push("/vouchers" as Href);
@@ -304,27 +300,11 @@ export default function ProfileMenuScreen() {
       },
     },
     {
-      label: t('profile.menu.myQRCode'),
-      onPress: () => {},
-    },
-    {
-      label: t('profile.menu.privacy'),
-      onPress: () => {},
-    },
-    {
-      label: t('profile.menu.accountManagement'),
-      onPress: () => {},
-    },
-    {
       label: t('profile.menu.language'),
       value: currentLanguage,
       onPress: () => {
         router.push("/settings/language" as Href);
       },
-    },
-    {
-      label: t('profile.menu.generalSettings'),
-      onPress: () => {},
     },
     {
       label: "Kho lưu trữ",

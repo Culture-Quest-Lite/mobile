@@ -65,6 +65,7 @@ import {
   useLikedPostIds,
 } from "@/features/home/data/liked-post-store";
 import { getMyProfile } from "@/features/profile/api/get-me";
+import { getUserProfileById } from "@/features/profile/api/get-user-by-id";
 import { adjustCurrentProfileCount } from "@/features/profile/data/current-profile-store";
 import {
   cacheProfilePost,
@@ -83,7 +84,7 @@ import {
   type PostVisibilityValue,
 } from "@/lib/post-visibility";
 import type { SharedPostSummary } from "@/lib/shared-post";
-import { bodyLineHeightFor, textStyle } from "@/lib/text-scale";
+import { bodyLineHeightFor, bodyTextStyle, textStyle } from "@/lib/text-scale";
 import { getNewsfeedPosts, type NewsfeedPost } from "../api/get-newsfeed-posts";
 import type { CommunityGroupPayload } from "../api/group-api";
 import {
@@ -97,6 +98,13 @@ import {
   communityPosts,
   type CommunityPostTopic,
 } from "../data/community-demo";
+import {
+  isResolvableCommunityAuthorId,
+  releaseCommunityAuthorIds,
+  setCommunityAuthorAvatar,
+  takeUnresolvedCommunityAuthorIds,
+  useCommunityAuthorAvatar,
+} from "../data/community-author-avatar-cache";
 import {
   cacheCommunityExplorerProfile,
   getCachedCommunityExplorerProfile,
@@ -1539,6 +1547,83 @@ export default function CommunityScreen() {
     routeIdsToResolve,
     t,
   ]);
+
+  /**
+   * Gom id tác giả của mọi bài đang hiển thị (kể cả bài được chia sẻ lại).
+   * Chỉ gom, không lọc ở đây — việc lọc người đã có ảnh nằm trong effect bên
+   * dưới để `useMemo` giữ được tính thuần khiết.
+   */
+  const feedAuthorIds = useMemo(() => {
+    const authorIds = new Set<string>();
+
+    for (const post of communityFeedPosts) {
+      for (const authorId of [
+        post.authorId,
+        post.sharedPost ? `${post.sharedPost.userId}` : null,
+      ]) {
+        if (isResolvableCommunityAuthorId(authorId)) {
+          authorIds.add(authorId.trim());
+        }
+      }
+    }
+
+    return Array.from(authorIds);
+  }, [communityFeedPosts]);
+
+  /**
+   * Ảnh đại diện tác giả phải hỏi riêng vì `PostResponse` không trả kèm — xem
+   * ghi chú ở `community-author-avatar-cache.ts`.
+   *
+   * Chạy SAU khi bảng tin đã render nên không chặn nội dung hiện ra; trong lúc
+   * chờ thì avatar vẫn là chữ cái đầu nên không nhảy layout. Cache lọc sẵn
+   * người đã lấy rồi, nên cuộn sang trang 2 chỉ hỏi thêm tác giả mới.
+   */
+  useEffect(() => {
+    const unresolvedAuthorIds =
+      takeUnresolvedCommunityAuthorIds(feedAuthorIds);
+
+    if (unresolvedAuthorIds.length === 0) {
+      return;
+    }
+
+    async function loadAuthorAvatars() {
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+        const results = await Promise.allSettled(
+          unresolvedAuthorIds.map((authorId) =>
+            getUserProfileById({
+              accessToken,
+              tokenType: authSession.tokenType,
+              userId: authorId,
+            }),
+          ),
+        );
+
+        results.forEach((result, index) => {
+          // Hỏng thì KHÔNG ghi cache: để lần bảng tin đổi sau còn thử lại,
+          // thay vì kẹt vĩnh viễn ở chữ cái đầu vì một lần rớt mạng.
+          if (result.status !== "fulfilled") {
+            return;
+          }
+
+          setCommunityAuthorAvatar(
+            unresolvedAuthorIds[index],
+            result.value.avatar ?? null,
+          );
+        });
+      } catch (error) {
+        console.warn("[community] load author avatars failed", {
+          error: error instanceof Error ? error.message : error,
+        });
+      } finally {
+        releaseCommunityAuthorIds(unresolvedAuthorIds);
+      }
+    }
+
+    void loadAuthorAvatars();
+  }, [authSession.isAuthenticated, authSession.tokenType, feedAuthorIds]);
 
   const displayedPosts = useMemo<CommunityFeedPost[]>(
     () =>
@@ -3530,9 +3615,9 @@ function CommunityPostRouteCard({
             {t("community.feed.badge.route")}
           </Text>
           <Text
-            className="text-[16px] font-medium text-[#4B414C]"
+            className="mt-0.5 text-[16px] font-medium text-[#4B414C]"
             numberOfLines={2}
-            style={textStyle(16)}
+            style={bodyTextStyle(16)}
           >
             {label}
           </Text>
@@ -3599,9 +3684,9 @@ function CommunityPostHotspotCard({
             {t("community.feed.hotspotCountLabel", { count })}
           </Text>
           <Text
-            className="text-[15px] text-[#6D6671]"
+            className="mt-0.5 text-[15px] text-[#6D6671]"
             numberOfLines={2}
-            style={textStyle(15)}
+            style={bodyTextStyle(15)}
           >
             {subtitle}
           </Text>
@@ -3660,8 +3745,13 @@ function CommunityPostAuthorAvatar({
   initials: string;
   size: number;
 }) {
+  // Ưu tiên hồ sơ đã xem chi tiết (đầy đủ hơn), sau đó tới ảnh lấy riêng theo
+  // id tác giả — xem `community-author-avatar-cache.ts` để biết vì sao cần vòng
+  // gọi riêng này.
+  const fetchedAvatarUri = useCommunityAuthorAvatar(authorId);
   const avatarUri =
-    getCachedCommunityExplorerProfile(authorId)?.profile.avatar ?? null;
+    getCachedCommunityExplorerProfile(authorId)?.profile.avatar ??
+    fetchedAvatarUri;
   return <UserAvatar displayName={authorName} size={size} uri={avatarUri} />;
 }
 
@@ -3968,10 +4058,7 @@ function CommunityPostCard({
               {post.author}
             </Text>
 
-            <View
-              className="flex-row flex-wrap items-center gap-x-1"
-              style={{ marginTop: -4 }}
-            >
+            <View className="mt-0.5 flex-row flex-wrap items-center gap-x-1">
               <Text
                 className="text-[14px] text-[#8A7D86]"
                 style={textStyle(14)}
@@ -4022,7 +4109,7 @@ function CommunityPostCard({
           </Pressable>
         </View>
 
-        <View className="pt-0.5">
+        <View className="pt-2">
           {caption ? <ExpandablePostCaption text={caption} /> : null}
 
           {sharedPost ? (
@@ -4038,7 +4125,7 @@ function CommunityPostCard({
           ) : null}
 
           {tagLabels.length > 0 ? (
-            <View className="mt-1 flex-row flex-wrap items-center">
+            <View className="mt-2 flex-row flex-wrap items-center">
               {tagLabels.map((tagLabel) => (
                 <CommunityPostTagChip
                   key={`${post.id}-${tagLabel}`}
@@ -4082,7 +4169,7 @@ function CommunityPostCard({
           </View>
         ) : null}
 
-        <View className="mt-1.5 flex-row items-center">
+        <View className="mt-2.5 flex-row items-center">
           <CommunityPostFooterAction
             active={isLiked}
             disabled={!post.canLike || isLiking}
@@ -4405,7 +4492,10 @@ function ExpandablePostCaption({ text }: { text: string }) {
     : normalizedText;
 
   return (
-    <Text className="text-[15px] text-[#2B232D]" style={textStyle(15)}>
+    // `bodyTextStyle` chứ không phải `textStyle`: nội dung bài viết là đoạn
+    // nhiều dòng nên cần tỉ lệ giãn dòng 1.45, dùng tỉ lệ nhãn 1.15 thì các
+    // dòng dính sát nhau, rất khó đọc.
+    <Text className="text-[15px] text-[#2B232D]" style={bodyTextStyle(15)}>
       {expanded || !shouldTruncate ? normalizedText : collapsedText}
       {shouldTruncate ? (
         <Text

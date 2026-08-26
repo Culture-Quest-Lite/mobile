@@ -13,6 +13,8 @@ import Animated, {
 export type LevelProgressCardProps = {
   currentXp: number;
   hasExactProgress: boolean;
+  /** Nhãn cấp độ, dựng bằng `getLevelDisplayLabel`. Ẩn dòng này khi bỏ trống. */
+  levelLabel?: string | null;
   markerSource?: ImageSourcePropType | null;
   nextLevelRequiredXp?: number | null;
   progressPercent?: number | null;
@@ -122,6 +124,7 @@ function AnimatedLevelProgressTrack({
 export function LevelProgressCard({
   currentXp,
   hasExactProgress,
+  levelLabel,
   markerSource,
   nextLevelRequiredXp,
   progressPercent,
@@ -135,8 +138,18 @@ export function LevelProgressCard({
       ? `${formatNumber(normalizedCurrentXp)} / ${formatNumber(nextLevelRequiredXp)} XP`
       : `${formatNumber(normalizedCurrentXp)} XP hiện tại`;
 
+  const resolvedLevelLabel = levelLabel?.trim() ?? "";
+
   return (
     <View className="mt-0">
+      {resolvedLevelLabel ? (
+        <Text
+          className="mb-1 text-[12px] font-extrabold text-[#EB489B]"
+          numberOfLines={1}
+        >
+          {resolvedLevelLabel}
+        </Text>
+      ) : null}
       <AnimatedLevelProgressTrack
         markerSource={markerSource}
         progress={normalizedProgress}

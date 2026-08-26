@@ -400,11 +400,19 @@ function compareByOrderIndex(left: HotspotStoryDto, right: HotspotStoryDto) {
   return left.storyId - right.storyId;
 }
 
-/**
- * Tập tag của các story thuộc một tuyến — bản sao phía client của
- * `StoryRepository.findTagIdsByRouteId` bên backend.
- */
-async function getRouteStoryTagIds({
+type RouteStoryIndex = {
+  /** Tag của story trong tuyến — bản sao client của `findTagIdsByRouteId`. */
+  tagIds: Set<number>;
+  /** Id story thuộc chính tuyến này, kể cả khi tag của nó không nằm trong tuyến. */
+  storyIds: Set<number>;
+};
+
+const emptyRouteStoryIndex: RouteStoryIndex = {
+  storyIds: new Set<number>(),
+  tagIds: new Set<number>(),
+};
+
+async function getRouteStoryIndex({
   accessToken,
   routeId,
   tokenType,
@@ -412,21 +420,24 @@ async function getRouteStoryTagIds({
   accessToken?: string | null;
   routeId: number;
   tokenType?: string | null;
-}): Promise<Set<number>> {
+}): Promise<RouteStoryIndex> {
   const routeStories = await fetchStories({
     accessToken,
     routeId,
     tokenType,
   });
   const tagIds = new Set<number>();
+  const storyIds = new Set<number>();
 
   for (const story of routeStories) {
+    storyIds.add(story.storyId);
+
     if (story.tag && isValidId(story.tag.tagId)) {
       tagIds.add(story.tag.tagId);
     }
   }
 
-  return tagIds;
+  return { storyIds, tagIds };
 }
 
 /**
@@ -451,11 +462,11 @@ export async function getHotspotStories({
   routeId,
   tokenType,
 }: GetHotspotStoriesRequest): Promise<HotspotStoryDto[]> {
-  const [storiesResult, routeTagIdsResult] = await Promise.allSettled([
+  const [storiesResult, routeIndexResult] = await Promise.allSettled([
     fetchStories({ accessToken, hotspotId, tokenType }),
     isValidId(routeId)
-      ? getRouteStoryTagIds({ accessToken, routeId, tokenType })
-      : Promise.resolve(new Set<number>()),
+      ? getRouteStoryIndex({ accessToken, routeId, tokenType })
+      : Promise.resolve(emptyRouteStoryIndex),
   ]);
 
   if (storiesResult.status !== "fulfilled") {
@@ -464,10 +475,10 @@ export async function getHotspotStories({
 
   const stories = storiesResult.value;
 
-  // Hỏng phần tag của tuyến thì vẫn hiện đủ story, chỉ mất thứ tự ưu tiên.
-  if (routeTagIdsResult.status !== "fulfilled") {
-    console.warn("[stories] load route tag ids failed", {
-      error: serializeError(routeTagIdsResult.reason),
+  // Hỏng phần tuyến thì vẫn hiện đủ story, chỉ mất thứ tự ưu tiên.
+  if (routeIndexResult.status !== "fulfilled") {
+    console.warn("[stories] load route story index failed", {
+      error: serializeError(routeIndexResult.reason),
       hotspotId,
       routeId,
     });
@@ -475,18 +486,23 @@ export async function getHotspotStories({
     return [...stories].sort(compareByOrderIndex);
   }
 
-  const routeTagIds = routeTagIdsResult.value;
+  const { storyIds: routeStoryIds, tagIds: routeTagIds } =
+    routeIndexResult.value;
 
-  if (routeTagIds.size === 0) {
+  if (routeStoryIds.size === 0 && routeTagIds.size === 0) {
     return [...stories].sort(compareByOrderIndex);
   }
 
-  const matchesRouteTag = (story: HotspotStoryDto) =>
-    story.tag !== null && routeTagIds.has(story.tag.tagId);
+  // Story được ưu tiên khi thuộc CHÍNH tuyến này, hoặc khi mang tag của tuyến.
+  // Thiếu vế đầu thì story nằm trong tuyến nhưng gắn tag khác sẽ bị đẩy xuống
+  // dưới, dù nó mới là nội dung người dùng đang cần khi đang đi tuyến.
+  const isRouteFirstStory = (story: HotspotStoryDto) =>
+    routeStoryIds.has(story.storyId) ||
+    (story.tag !== null && routeTagIds.has(story.tag.tagId));
 
   return [...stories].sort((left, right) => {
-    const leftPriority = matchesRouteTag(left) ? 0 : 1;
-    const rightPriority = matchesRouteTag(right) ? 0 : 1;
+    const leftPriority = isRouteFirstStory(left) ? 0 : 1;
+    const rightPriority = isRouteFirstStory(right) ? 0 : 1;
 
     if (leftPriority !== rightPriority) {
       return leftPriority - rightPriority;
