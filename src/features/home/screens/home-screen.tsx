@@ -1,0 +1,4626 @@
+import { AppLoadingScreen } from "@/components/ui/app-loading-screen";
+import { SymbolView } from "@/components/ui/symbol-view";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import * as Location from "expo-location";
+import { type Href, useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StatusBar as RNStatusBar,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import Animated, {
+  Extrapolation,
+  Easing,
+  ReduceMotion,
+  cancelAnimation,
+  interpolate,
+  interpolateColor,
+  type SharedValue,
+  useAnimatedStyle,
+  useAnimatedScrollHandler,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
+
+import {
+  getValidAccessToken,
+  useAuthSession,
+} from "@/features/auth/hooks/use-auth-session";
+import { getGamificationLevels } from "@/features/profile/api/get-levels";
+import { getMyProfile } from "@/features/profile/api/get-me";
+import { setPremiumStatusFromProfile } from "@/features/profile/hooks/use-premium-status";
+import { applyLevelProgressToProfile } from "@/features/profile/lib/level-progress";
+import {
+  type HotspotProgressDto,
+  type RouteDto,
+  type RouteHotspotDto,
+  type UserRouteProgressDto,
+  getRouteById,
+  getRouteCoverUrl,
+  getRoutesByHotspot,
+  getUserRouteProgressList,
+  mapRouteToRouteItem,
+  searchRoutes,
+} from "@/features/route/api/route-api";
+import {
+  getAvailableVouchers,
+  getVoucherImage,
+  type Voucher,
+} from "@/features/voucher/api/voucher-api";
+import { useScreenLayout } from "@/hooks/use-screen-layout";
+import { type RouteItem } from "@/lib/demo-data";
+import {
+  type AppCoordinate,
+  ensureForegroundLocationPermission,
+  formatCoordinateLabel,
+  getDevelopmentLocationOverride,
+  getDeviceCoordinate,
+} from "@/lib/location";
+
+import {
+  type NearbyHotspotDto,
+  getNearbyHotspots,
+} from "../api/get-nearby-hotspots";
+import { getActiveTags } from "../api/get-tags";
+import {
+  type UserLeaderboardEntryDto,
+  getUserLeaderboard,
+} from "../api/get-user-leaderboard";
+import { LeaderRankingCard } from "../components/leader-ranking-card";
+import {
+  type NearbyCategoryCard,
+  activeJourney,
+  featuredRoutes,
+} from "../data/home-screen.mock";
+import { getApiHotspotRouteSlug, getHotspotHref } from "../data/hotspots";
+import { mapActiveTagsToThemeCategories } from "../lib/theme-categories";
+import { getThemeDetailHref } from "../lib/theme-detail";
+import { bodyLineHeightFor, lineHeightFor } from "@/lib/text-scale";
+
+const gradientColors = ["#EB489B", "#F58752", "#FFC93C"] as const;
+const guestPreviewLogo = require("../../../../assets/images/logo3.png");
+const nearbyShowcaseMascot = require("../../../../assets/images/hotspot_nearby.png");
+const continueJourneyEmptyIllustration = require("../../../../assets/images/continnueroute.png");
+const premiumBannerReviewLogo = require("../../../../assets/images/review_post.png");
+const heroShadowStyle = {
+  shadowColor: "rgba(235, 72, 155, 0.26)",
+  shadowOpacity: 1,
+  shadowRadius: 24,
+  shadowOffset: {
+    width: 0,
+    height: 18,
+  },
+  elevation: 12,
+} as const;
+
+const cardShadowStyle = {
+  shadowColor: "rgba(245, 135, 82, 0.14)",
+  shadowOpacity: 1,
+  shadowRadius: 16,
+  shadowOffset: {
+    width: 0,
+    height: 10,
+  },
+  elevation: 7,
+} as const;
+
+const nearbyPlaceShadowStyle = {
+  shadowColor: "rgba(15, 23, 42, 0.12)",
+  shadowOpacity: 1,
+  shadowRadius: 14,
+  shadowOffset: {
+    width: 0,
+    height: 8,
+  },
+  elevation: 5,
+} as const;
+
+const themeCategoryShadowStyle = {
+  shadowColor: "rgba(31, 41, 64, 0.08)",
+  shadowOpacity: 1,
+  shadowRadius: 14,
+  shadowOffset: {
+    width: 0,
+    height: 6,
+  },
+  elevation: 3,
+} as const;
+
+const premiumBannerShadowStyle = {
+  shadowColor: "rgba(235, 72, 155, 0.16)",
+  shadowOpacity: 0.66,
+  shadowRadius: 14,
+  shadowOffset: {
+    width: 0,
+    height: 8,
+  },
+  elevation: 5,
+} as const;
+
+const premiumBannerCtaShadowStyle = {
+  shadowColor: "rgba(245, 72, 141, 0.24)",
+  shadowOpacity: 1,
+  shadowRadius: 18,
+  shadowOffset: {
+    width: 0,
+    height: 10,
+  },
+  elevation: 6,
+} as const;
+
+const premiumBannerPlaceholderHeight = 96;
+const premiumBannerTitleTextClassName = "text-[14px] font-black text-[#2B2233]";
+const premiumBannerSubtitleTextClassName = "mt-1 text-[11px] text-[#7F738C]";
+const premiumBannerActiveSubtitleTextClassName =
+  "mt-1 text-[11px] font-medium text-[#6F657A]";
+
+const premiumCrownSymbolName = {
+  ios: "crown.fill",
+  android: "workspace_premium",
+  web: "workspace_premium",
+} as const;
+
+const routeDifficultyStyles: Record<
+  string,
+  { background: string; color: string }
+> = {
+  EASY: {
+    background: "#DCFCE7",
+    color: "#15803D",
+  },
+  HARD: {
+    background: "#FEE2E2",
+    color: "#DC2626",
+  },
+  MEDIUM: {
+    background: "#FEF3C7",
+    color: "#B45309",
+  },
+};
+
+const journeyProgressSegmentCount = 72;
+const journeyProgressRingSize = 76;
+const journeyProgressRingStrokeWidth = 6;
+const journeyProgressSegmentLength = 8;
+const journeyProgressSegmentThickness = 6;
+const journeyProgressStartAngle = -128;
+const activeJourneyAccent = "#EB489B";
+const activeJourneyAccentSoft = "#FDE1EC";
+const activeJourneyAccentWarm = "#F58752";
+const activeJourneyCardBackground = "#FFF8FC";
+const journeyProgressSegmentRadius =
+  journeyProgressRingSize / 2 - journeyProgressRingStrokeWidth / 2 - 1;
+
+const featuredRouteHighlightLimit = 5;
+
+// Ảnh minh hoạ cũ chỉ còn dùng làm fallback khi route/tiến độ từ API không
+// đính kèm media nào, để phần hình không bị vỡ layout.
+const activeJourneyFallbackImageUri =
+  activeJourney?.imageUri ?? featuredRoutes[0].imageUri;
+
+type FeaturedRouteCard = {
+  coverUri: string;
+  difficultyLabel: string;
+  distanceLabel: string;
+  durationLabel: string;
+  routeId: number;
+  stopsLabel: string;
+  tagLabel: string;
+  title: string;
+  xpLabel: string | null;
+};
+
+type ActiveJourneyView = {
+  coverUri: string;
+  currentCheckpoint: number;
+  distanceToNextLabel: string | null;
+  nextStopName: string | null;
+  progress: number;
+  remainingStopsLabel: string;
+  remainingTimeLabel: string | null;
+  routeId: number;
+  title: string;
+  totalCheckpoints: number;
+};
+
+function getFeaturedRouteFallbackImageUri(index: number) {
+  return featuredRoutes[index % featuredRoutes.length].imageUri;
+}
+
+function normalizeRouteDifficultyKey(difficulty?: string | null) {
+  return (difficulty ?? "").trim().toUpperCase();
+}
+
+function getRouteDifficultyLabel(
+  difficulty: string | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  switch (normalizeRouteDifficultyKey(difficulty)) {
+    case "EASY":
+      return t("home.difficulty.easy");
+    case "MEDIUM":
+      return t("home.difficulty.medium");
+    case "HARD":
+      return t("home.difficulty.hard");
+    default:
+      return difficulty?.trim() || t("home.difficulty.easy");
+  }
+}
+
+function formatRouteDistanceLabel(
+  totalDistanceKm: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  if (!Number.isFinite(totalDistanceKm) || totalDistanceKm <= 0) {
+    return t("home.stats.updating");
+  }
+
+  if (totalDistanceKm < 1) {
+    return t("home.stats.distanceMeters", {
+      value: Math.round(totalDistanceKm * 1000),
+    });
+  }
+
+  return t("home.stats.distance", {
+    value: Number.isInteger(totalDistanceKm)
+      ? totalDistanceKm
+      : totalDistanceKm.toFixed(1),
+  });
+}
+
+function formatRouteDurationLabel(
+  estimateMinutes: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  if (!Number.isFinite(estimateMinutes) || estimateMinutes <= 0) {
+    return t("home.stats.updating");
+  }
+
+  const roundedMinutes = Math.round(estimateMinutes);
+
+  if (roundedMinutes < 60) {
+    return t("home.stats.duration", { value: roundedMinutes });
+  }
+
+  const hours = Math.floor(roundedMinutes / 60);
+  const minutes = roundedMinutes % 60;
+
+  return minutes > 0
+    ? t("home.stats.durationHoursMinutes", { hours, minutes })
+    : t("home.stats.durationHours", { hours });
+}
+
+function formatRouteStopsLabel(
+  stopCount: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  if (stopCount <= 0) {
+    return t("home.stats.updating");
+  }
+
+  return t("home.stats.stops", {
+    count: String(stopCount).padStart(2, "0"),
+  });
+}
+
+function isPublishedRoute(route: RouteDto) {
+  return route.status.trim().toUpperCase() === "PUBLISHED";
+}
+
+function getHighlightRoutes(routes: RouteDto[]) {
+  return [...routes]
+    .sort((left, right) => {
+      const xpGap = (right.xp || 0) - (left.xp || 0);
+
+      if (xpGap !== 0) {
+        return xpGap;
+      }
+
+      const stopGap = right.hotspots.length - left.hotspots.length;
+
+      return stopGap !== 0 ? stopGap : right.routeId - left.routeId;
+    })
+    .slice(0, featuredRouteHighlightLimit);
+}
+
+function mapRouteToFeaturedRouteCard(
+  route: RouteDto,
+  index: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): FeaturedRouteCard {
+  // Ưu tiên media của chính route (hoặc media hotspot đầu tiên trong route).
+  // Chỉ khi API không có hình nào mới quay lại ảnh mặc định của màn hình.
+  const apiCoverUri = getRouteCoverUrl(route)?.trim();
+
+  return {
+    coverUri: apiCoverUri || getFeaturedRouteFallbackImageUri(index),
+    difficultyLabel: getRouteDifficultyLabel(route.difficulty, t),
+    distanceLabel: formatRouteDistanceLabel(route.totalDistance, t),
+    durationLabel: formatRouteDurationLabel(route.estimateTime, t),
+    routeId: route.routeId,
+    stopsLabel: formatRouteStopsLabel(route.hotspots.length, t),
+    tagLabel: route.tags[0]?.tagName.trim() || t("home.featured.tagFallback"),
+    title:
+      route.routeName.trim() ||
+      t("home.featured.routeFallbackName", { id: route.routeId }),
+    xpLabel: route.xp > 0 ? `+${route.xp} XP` : null,
+  };
+}
+
+function normalizeProgressStatus(status?: string | null) {
+  return (status ?? "").trim().toUpperCase();
+}
+
+function isActiveRouteProgress(progress: UserRouteProgressDto) {
+  return normalizeProgressStatus(progress.status) === "IN_PROGRESS";
+}
+
+function getRouteHotspotOrder(hotspot: RouteHotspotDto) {
+  return (
+    hotspot.orderIndex ??
+    hotspot.sequenceNumber ??
+    hotspot.index ??
+    Number.MAX_SAFE_INTEGER
+  );
+}
+
+function getOrderedRouteHotspots(route: RouteDto | null) {
+  if (!route) {
+    return [];
+  }
+
+  return [...route.hotspots].sort(
+    (left, right) => getRouteHotspotOrder(left) - getRouteHotspotOrder(right),
+  );
+}
+
+function getOrderedHotspotProgressList(progress: UserRouteProgressDto) {
+  return [...progress.hotspotProgressList].sort(
+    (left, right) =>
+      (left.index ?? Number.MAX_SAFE_INTEGER) -
+      (right.index ?? Number.MAX_SAFE_INTEGER),
+  );
+}
+
+function readStopCoordinate(
+  stop?: HotspotProgressDto | RouteHotspotDto | null,
+): Pick<AppCoordinate, "latitude" | "longitude"> | null {
+  if (
+    typeof stop?.latitude !== "number" ||
+    typeof stop?.longitude !== "number"
+  ) {
+    return null;
+  }
+
+  return { latitude: stop.latitude, longitude: stop.longitude };
+}
+
+function buildActiveJourneyView(
+  progress: UserRouteProgressDto,
+  route: RouteDto | null,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): ActiveJourneyView {
+  const orderedProgressStops = getOrderedHotspotProgressList(progress);
+  const orderedRouteHotspots = getOrderedRouteHotspots(route);
+  const totalCheckpoints = Math.max(
+    progress.totalStops,
+    orderedProgressStops.length,
+    orderedRouteHotspots.length,
+    1,
+  );
+  const checkedInStops = orderedProgressStops.filter(
+    (stop) => stop.isCheckedIn,
+  );
+  const currentCheckpoint = clamp(
+    Math.max(progress.completedStops, checkedInStops.length),
+    0,
+    totalCheckpoints,
+  );
+  const progressPercentage = Math.round(
+    clamp(
+      progress.progressPercentage > 0
+        ? progress.progressPercentage
+        : (currentCheckpoint / totalCheckpoints) * 100,
+      0,
+      100,
+    ),
+  );
+  const nextStopProgress =
+    orderedProgressStops.find((stop) => !stop.isCheckedIn) ?? null;
+  const nextRouteHotspot = nextStopProgress
+    ? (orderedRouteHotspots.find(
+        (hotspot) => hotspot.hotspotId === nextStopProgress.hotspotId,
+      ) ?? null)
+    : (orderedRouteHotspots[currentCheckpoint] ?? null);
+  const previousStop = checkedInStops[checkedInStops.length - 1] ?? null;
+  const previousCoordinate =
+    readStopCoordinate(previousStop) ??
+    readStopCoordinate(
+      previousStop
+        ? (orderedRouteHotspots.find(
+            (hotspot) => hotspot.hotspotId === previousStop.hotspotId,
+          ) ?? null)
+        : null,
+    );
+  const nextCoordinate =
+    readStopCoordinate(nextStopProgress) ??
+    readStopCoordinate(nextRouteHotspot);
+  const remainingStops = Math.max(totalCheckpoints - currentCheckpoint, 0);
+  const remainingMinutes =
+    route && route.estimateTime > 0 && totalCheckpoints > 0
+      ? Math.round((route.estimateTime * remainingStops) / totalCheckpoints)
+      : 0;
+  const routeCoverUri = route ? getRouteCoverUrl(route)?.trim() : null;
+
+  return {
+    // Hình lấy từ media của route/hotspot; không có mới dùng ảnh mặc định cũ.
+    coverUri: routeCoverUri || activeJourneyFallbackImageUri,
+    currentCheckpoint,
+    distanceToNextLabel:
+      previousCoordinate && nextCoordinate
+        ? formatDistanceMeters(
+            getDistanceMeters(previousCoordinate, nextCoordinate),
+          )
+        : null,
+    nextStopName:
+      readMeaningfulNearbyText(nextStopProgress?.hotspotName) ??
+      readMeaningfulNearbyText(nextRouteHotspot?.hotspotName),
+    progress: progressPercentage,
+    remainingStopsLabel:
+      remainingStops > 0
+        ? t("home.activeJourney.remainingStops", { count: remainingStops })
+        : t("home.activeJourney.allStopsVisited"),
+    remainingTimeLabel:
+      remainingMinutes > 0
+        ? t("home.activeJourney.remainingTime", {
+            duration: formatRouteDurationLabel(remainingMinutes, t),
+          })
+        : null,
+    routeId: progress.routeId,
+    title:
+      readMeaningfulNearbyText(route?.routeName) ??
+      t("home.featured.routeFallbackName", { id: progress.routeId }),
+    totalCheckpoints,
+  };
+}
+
+function JourneyProgressRing({ progress }: { progress: number }) {
+  const { t } = useTranslation();
+  const boundedProgress = Math.min(Math.max(progress, 0), 100);
+  const activeSegments = Math.round(
+    (boundedProgress / 100) * journeyProgressSegmentCount,
+  );
+
+  return (
+    <View
+      className="items-center justify-center"
+      style={{
+        height: journeyProgressRingSize,
+        width: journeyProgressRingSize,
+      }}
+    >
+      <View
+        className="absolute rounded-full bg-white"
+        style={{
+          borderColor: activeJourneyAccentSoft,
+          borderWidth: journeyProgressRingStrokeWidth,
+          height: journeyProgressRingSize,
+          width: journeyProgressRingSize,
+        }}
+      />
+
+      <View
+        pointerEvents="none"
+        style={{
+          height: journeyProgressRingSize,
+          position: "absolute",
+          width: journeyProgressRingSize,
+        }}
+      >
+        {Array.from({ length: activeSegments }).map((_, index) => {
+          const angle =
+            journeyProgressStartAngle +
+            (index / journeyProgressSegmentCount) * 360;
+          const radians = (angle * Math.PI) / 180;
+          const left =
+            journeyProgressRingSize / 2 +
+            Math.cos(radians) * journeyProgressSegmentRadius -
+            journeyProgressSegmentLength / 2;
+          const top =
+            journeyProgressRingSize / 2 +
+            Math.sin(radians) * journeyProgressSegmentRadius -
+            journeyProgressSegmentThickness / 2;
+
+          return (
+            <View
+              key={index}
+              className="absolute rounded-full"
+              style={{
+                backgroundColor: activeJourneyAccent,
+                height: journeyProgressSegmentThickness,
+                left,
+                top,
+                transform: [{ rotate: `${angle}deg` }],
+                width: journeyProgressSegmentLength,
+              }}
+            />
+          );
+        })}
+      </View>
+
+      <View className="h-[60px] w-[60px] items-center justify-center rounded-full bg-white px-1">
+        <Text className="text-[16px] font-black leading-4 text-[#2B2233]">
+          {boundedProgress}%
+        </Text>
+        <Text className="text-[8px] font-semibold leading-3 text-[#6F657A]">
+          {t("route.progress.completed")}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function PremiumBannerIllustration() {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        alignItems: "flex-end",
+        height: 118,
+        justifyContent: "flex-start",
+        overflow: "visible",
+        position: "relative",
+        width: 128,
+      }}
+    >
+      <Image
+        source={premiumBannerReviewLogo}
+        contentFit="contain"
+        transition={120}
+        style={{
+          height: 220,
+          marginRight: -60,
+          marginTop: -28,
+          width: 252,
+        }}
+      />
+    </View>
+  );
+}
+
+/**
+ * Giữ chỗ cho banner Premium trong lúc `explorerSummary` chưa về. Không render
+ * thẳng nhánh upsell, nếu không user đã Premium sẽ thấy banner "nâng cấp" loé
+ * lên rồi mới đổi. Chiều cao khớp banner thật để layout không nhảy.
+ */
+function PremiumBannerPlaceholder() {
+  return (
+    <View
+      className="items-center justify-center overflow-hidden rounded-[26px]"
+      style={[
+        premiumBannerShadowStyle,
+        {
+          backgroundColor: "#FFFCFE",
+          borderColor: "#F4DFE7",
+          borderWidth: 1,
+          height: premiumBannerPlaceholderHeight,
+        },
+      ]}
+    >
+      <ActivityIndicator color="#E93D83" size="small" />
+    </View>
+  );
+}
+
+function PremiumBannerCtaArrow() {
+  const arrowOffset = useSharedValue(0);
+  const arrowOpacity = useSharedValue(0.8);
+
+  useEffect(() => {
+    arrowOffset.set(
+      withRepeat(
+        withTiming(5, {
+          duration: 760,
+          easing: Easing.inOut(Easing.quad),
+          reduceMotion: ReduceMotion.System,
+        }),
+        -1,
+        true,
+        undefined,
+        ReduceMotion.System,
+      ),
+    );
+    arrowOpacity.set(
+      withRepeat(
+        withTiming(1, {
+          duration: 760,
+          easing: Easing.inOut(Easing.quad),
+          reduceMotion: ReduceMotion.System,
+        }),
+        -1,
+        true,
+        undefined,
+        ReduceMotion.System,
+      ),
+    );
+
+    return () => {
+      cancelAnimation(arrowOffset);
+      cancelAnimation(arrowOpacity);
+      arrowOffset.set(0);
+      arrowOpacity.set(0.8);
+    };
+  }, [arrowOffset, arrowOpacity]);
+
+  const animatedArrowStyle = useAnimatedStyle(() => {
+    return {
+      opacity: arrowOpacity.get(),
+      transform: [{ translateX: arrowOffset.get() }],
+    };
+  });
+
+  return (
+    <Animated.View
+      className="ml-1.5 h-[18px] w-[18px] items-center justify-center rounded-full bg-white/15"
+      style={animatedArrowStyle}
+    >
+      <SymbolView
+        name={{
+          ios: "chevron.right",
+          android: "chevron_right",
+          web: "chevron_right",
+        }}
+        size={10}
+        tintColor="#FFFFFF"
+      />
+    </Animated.View>
+  );
+}
+
+const communityRowShadowStyle = {
+  shadowColor: "rgba(15, 23, 42, 0.08)",
+  shadowOpacity: 1,
+  shadowRadius: 10,
+  shadowOffset: {
+    width: 0,
+    height: 4,
+  },
+  elevation: 2,
+} as const;
+
+const homeVoucherCardShadowStyle = {
+  shadowColor: "rgba(15, 23, 42, 0.08)",
+  shadowOpacity: 1,
+  shadowRadius: 12,
+  shadowOffset: {
+    width: 0,
+    height: 6,
+  },
+  elevation: 3,
+} as const;
+
+const homeVoucherBorderColor = "#F1F5F9";
+
+const homeSectionTitleClassName =
+  "text-[17px] font-extrabold leading-[22px] text-[#2B2233]";
+const homeSectionActionTextClassName = "text-[12px] font-bold text-[#D85B86]";
+
+type ExplorerSummary = {
+  avatar: string | null;
+  isPremium: boolean;
+  level: number | null;
+  name: string;
+  username: string;
+};
+
+type NearbyPlaceListItem = {
+  detailIcon: "location" | "star";
+  detailPrimaryText: string;
+  detailSecondaryText?: string;
+  distance: string;
+  hotspotId: number | null;
+  imageUri: string;
+  isCheckedIn: boolean;
+  key: string;
+  openingHours: string;
+  rating: string;
+  reviewCountText: string;
+  reward: string;
+  slug: string | null;
+  title: string;
+};
+
+type CommunityLeaderboardStatus = "empty" | "error" | "loading" | "ready";
+type HomeVouchersSectionStatus = "empty" | "error" | "loading" | "ready";
+
+/** Số voucher hiển thị ở carousel Home; xem đủ thì bấm "Xem tất cả". */
+const homeVouchersPreviewSize = 8;
+
+const homeVoucherCardPalettes = [
+  {
+    accent: "#F65B92",
+    accentSoft: "#FFD6E7",
+    badgeBackground: "#FFE3EE",
+    badgeText: "#FF4F83",
+    coinBackground: "#FFF4D5",
+    coinText: "#D89208",
+    detailText: "#978D9F",
+    surface: "#FFF8FB",
+    topGradient: ["#FFF4F7", "#FFE9F1"] as const,
+  },
+  {
+    accent: "#FF7B6B",
+    accentSoft: "#FFE2D8",
+    badgeBackground: "#FFE8E1",
+    badgeText: "#FF6A56",
+    coinBackground: "#FFF0CC",
+    coinText: "#C98507",
+    detailText: "#978893",
+    surface: "#FFF9F7",
+    topGradient: ["#FFF5F0", "#FFEADD"] as const,
+  },
+  {
+    accent: "#F16A9A",
+    accentSoft: "#FFE0EC",
+    badgeBackground: "#FFE4EF",
+    badgeText: "#F54E87",
+    coinBackground: "#FFF2CF",
+    coinText: "#CC8A08",
+    detailText: "#9A8A98",
+    surface: "#FFF9FC",
+    topGradient: ["#FFF5F8", "#FFEAF2"] as const,
+  },
+] as const;
+
+const homeVoucherCardGap = 10;
+const homeVoucherInactiveScale = 0.82;
+const homeVoucherInactiveTranslateY = 18;
+const homeVoucherArtworkInactiveScale = 0.92;
+/**
+ * Ảnh voucher phủ kín phần đầu thẻ (giống `VoucherMiniCard` ở màn hotspot và
+ * màn tuyến) nên chỉ được phóng TO khi thẻ ở trạng thái phụ — thu nhỏ dưới 1 sẽ
+ * hở nền gradient ở mép.
+ */
+const homeVoucherCoverInactiveScale = 1.05;
+
+function getHomeVoucherDiscountLabel(voucher: Voucher) {
+  if (voucher.discountType === "PERCENTAGE") {
+    return `-${voucher.discountValue}%`;
+  }
+
+  return `-${Number(voucher.discountValue).toLocaleString("vi-VN")}đ`;
+}
+
+function getHomeVoucherCardPalette(index: number) {
+  return homeVoucherCardPalettes[index % homeVoucherCardPalettes.length];
+}
+
+function getHomeVoucherFallbackSymbol(index: number) {
+  switch (index % 3) {
+    case 0:
+      return {
+        ios: "ticket.fill",
+        android: "confirmation_number",
+        web: "confirmation_number",
+      } as const;
+    case 1:
+      return {
+        ios: "gift.fill",
+        android: "redeem",
+        web: "redeem",
+      } as const;
+    default:
+      return {
+        ios: "megaphone.fill",
+        android: "campaign",
+        web: "campaign",
+      } as const;
+  }
+}
+
+function HomeVoucherCard({
+  imageHeight,
+  index,
+  isLast,
+  onPress,
+  scrollX,
+  snapInterval,
+  t,
+  voucher,
+  width,
+}: {
+  imageHeight: number;
+  index: number;
+  isLast: boolean;
+  onPress: () => void;
+  scrollX: SharedValue<number>;
+  snapInterval: number;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  voucher: Voucher;
+  width: number;
+}) {
+  const palette = getHomeVoucherCardPalette(index);
+  const imageUri = getVoucherImage(voucher);
+  const inputRange = [
+    (index - 1) * snapInterval,
+    index * snapInterval,
+    (index + 1) * snapInterval,
+  ];
+
+  const animatedCardStyle = useAnimatedStyle(() => {
+    const scale = interpolate(
+      scrollX.value,
+      inputRange,
+      [homeVoucherInactiveScale, 1, homeVoucherInactiveScale],
+      Extrapolation.CLAMP,
+    );
+    const translateY = interpolate(
+      scrollX.value,
+      inputRange,
+      [homeVoucherInactiveTranslateY, 0, homeVoucherInactiveTranslateY],
+      Extrapolation.CLAMP,
+    );
+    const opacity = interpolate(
+      scrollX.value,
+      inputRange,
+      [0.9, 1, 0.9],
+      Extrapolation.CLAMP,
+    );
+
+    return {
+      opacity,
+      transform: [{ scale }, { translateY }],
+    };
+  });
+
+  const animatedArtworkStyle = useAnimatedStyle(() => {
+    const scale = interpolate(
+      scrollX.value,
+      inputRange,
+      [homeVoucherArtworkInactiveScale, 1, homeVoucherArtworkInactiveScale],
+      Extrapolation.CLAMP,
+    );
+    const opacity = interpolate(
+      scrollX.value,
+      inputRange,
+      [0.88, 1, 0.88],
+      Extrapolation.CLAMP,
+    );
+
+    return {
+      opacity,
+      transform: [{ scale }],
+    };
+  });
+
+  const animatedCoverStyle = useAnimatedStyle(() => {
+    const scale = interpolate(
+      scrollX.value,
+      inputRange,
+      [homeVoucherCoverInactiveScale, 1, homeVoucherCoverInactiveScale],
+      Extrapolation.CLAMP,
+    );
+    const opacity = interpolate(
+      scrollX.value,
+      inputRange,
+      [0.88, 1, 0.88],
+      Extrapolation.CLAMP,
+    );
+
+    return {
+      opacity,
+      transform: [{ scale }],
+    };
+  });
+
+  return (
+    <Pressable
+      style={{
+        marginRight: isLast ? 0 : snapInterval - width,
+        paddingBottom: 16,
+        paddingTop: 6,
+        width,
+      }}
+      onPress={onPress}
+    >
+      <Animated.View
+        style={[homeVoucherCardShadowStyle, animatedCardStyle]}
+      >
+        <Animated.View
+          className="overflow-hidden rounded-[24px] border"
+          style={{
+            backgroundColor: "#FFFFFF",
+            borderColor: homeVoucherBorderColor,
+          }}
+        >
+          {/* Ảnh phủ kín phần đầu thẻ như `VoucherMiniCard` (màn hotspot / màn
+              tuyến); gradient + hoạ tiết chỉ còn là nền dự phòng khi voucher
+              chưa có ảnh. */}
+          <LinearGradient
+            colors={palette.topGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              height: imageHeight,
+              overflow: "hidden",
+            }}
+          >
+            {imageUri ? (
+              <Animated.View
+                style={[{ position: "absolute", inset: 0 }, animatedCoverStyle]}
+              >
+                <Image
+                  source={{ uri: imageUri }}
+                  contentFit="cover"
+                  transition={180}
+                  cachePolicy="memory-disk"
+                  style={{ height: "100%", width: "100%" }}
+                />
+              </Animated.View>
+            ) : (
+              <View
+                style={{
+                  flex: 1,
+                  paddingHorizontal: 14,
+                  paddingVertical: 14,
+                }}
+              >
+                <View
+                  pointerEvents="none"
+                  style={{
+                    backgroundColor: palette.accentSoft,
+                    borderRadius: 999,
+                    height: 54,
+                    left: -12,
+                    opacity: 0.72,
+                    position: "absolute",
+                    top: 18,
+                    width: 54,
+                  }}
+                />
+                <View
+                  pointerEvents="none"
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 999,
+                    height: 10,
+                    left: 28,
+                    opacity: 0.48,
+                    position: "absolute",
+                    top: 22,
+                    width: 10,
+                  }}
+                />
+                <View
+                  pointerEvents="none"
+                  style={{
+                    backgroundColor: palette.accentSoft,
+                    borderRadius: 18,
+                    height: 34,
+                    opacity: 0.74,
+                    position: "absolute",
+                    right: -8,
+                    top: 14,
+                    transform: [{ rotate: "18deg" }],
+                    width: 34,
+                  }}
+                />
+                <View
+                  pointerEvents="none"
+                  style={{
+                    alignItems: "center",
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 14,
+                    height: 24,
+                    justifyContent: "center",
+                    opacity: 0.88,
+                    position: "absolute",
+                    right: 14,
+                    top: 12,
+                    width: 24,
+                  }}
+                >
+                  <SymbolView
+                    name={{
+                      ios: "sparkles",
+                      android: "auto_awesome",
+                      web: "auto_awesome",
+                    }}
+                    size={11}
+                    tintColor={palette.accent}
+                  />
+                </View>
+
+                <Animated.View
+                  className="flex-1 items-center justify-center"
+                  style={animatedArtworkStyle}
+                >
+                  <View
+                    className="items-center justify-center rounded-full bg-white/90"
+                    style={{
+                      height: 68,
+                      width: 68,
+                    }}
+                  >
+                    <SymbolView
+                      name={getHomeVoucherFallbackSymbol(index)}
+                      size={34}
+                      tintColor={palette.accent}
+                    />
+                  </View>
+                </Animated.View>
+              </View>
+            )}
+          </LinearGradient>
+
+          <View
+            className="rounded-t-[18px] bg-white px-3.5 pb-3.5 pt-4"
+            style={{
+              marginTop: -2,
+            }}
+          >
+            <View
+              className="self-start rounded-full px-2.5 py-1"
+              style={{
+                backgroundColor: palette.badgeBackground,
+                marginTop: -10,
+              }}
+            >
+              <Text
+                className="text-[11px] font-black"
+                numberOfLines={1}
+                style={{ color: palette.badgeText }}
+              >
+                {getHomeVoucherDiscountLabel(voucher)}
+              </Text>
+            </View>
+
+            <Text
+              className="mt-2 text-[13px] font-extrabold text-[#2B2233]"
+              numberOfLines={2}
+              style={{ lineHeight: lineHeightFor(13) }}
+            >
+              {voucher.voucherName}
+            </Text>
+
+            <Text
+              className="mt-1 text-[11px] font-semibold"
+              numberOfLines={1}
+              style={{
+                color: palette.detailText,
+                lineHeight: bodyLineHeightFor(11),
+              }}
+            >
+              {voucher.partnerName}
+            </Text>
+
+            <View className="mt-3 flex-row items-center">
+              <View
+                className="h-5 w-5 items-center justify-center rounded-full"
+                style={{ backgroundColor: palette.coinBackground }}
+              >
+                <SymbolView
+                  name={{
+                    ios: "star.fill",
+                    android: "stars",
+                    web: "stars",
+                  }}
+                  size={10}
+                  tintColor={palette.coinText}
+                />
+              </View>
+              <Text
+                className="ml-1.5 text-[12px] font-extrabold"
+                numberOfLines={1}
+                style={{ color: palette.coinText }}
+              >
+                {t("home.vouchers.points", {
+                  points: voucher.pointsRequired.toLocaleString("vi-VN"),
+                })}
+              </Text>
+            </View>
+          </View>
+        </Animated.View>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+function HomeVoucherCarouselDot({
+  index,
+  scrollX,
+  snapInterval,
+}: {
+  index: number;
+  scrollX: SharedValue<number>;
+  snapInterval: number;
+}) {
+  const inputRange = [
+    (index - 1) * snapInterval,
+    index * snapInterval,
+    (index + 1) * snapInterval,
+  ];
+  const animatedDotStyle = useAnimatedStyle(() => {
+    return {
+      backgroundColor: interpolateColor(
+        scrollX.value,
+        inputRange,
+        ["#E4DDE4", "#FF5F95", "#E4DDE4"],
+      ),
+      opacity: interpolate(
+        scrollX.value,
+        inputRange,
+        [0.92, 1, 0.92],
+        Extrapolation.CLAMP,
+      ),
+      width: interpolate(scrollX.value, inputRange, [8, 18, 8], Extrapolation.CLAMP),
+    };
+  });
+
+  return <Animated.View className="h-2 rounded-full" style={animatedDotStyle} />;
+}
+
+function HomeVoucherCarouselDots({
+  count,
+  scrollX,
+  snapInterval,
+}: {
+  count: number;
+  scrollX: SharedValue<number>;
+  snapInterval: number;
+}) {
+  if (count <= 1) {
+    return null;
+  }
+
+  return (
+    <View className="mt-3 flex-row items-center justify-center gap-2">
+      {Array.from({ length: count }).map((_, index) => (
+        <HomeVoucherCarouselDot
+          key={`voucher-dot-${index}`}
+          index={index}
+          scrollX={scrollX}
+          snapInterval={snapInterval}
+        />
+      ))}
+    </View>
+  );
+}
+
+type FeaturedRoutesSectionStatus = "empty" | "loading" | "ready";
+type ActiveJourneySectionStatus = "empty" | "loading" | "ready";
+type NearbyPlacesSectionStatus = "empty" | "loading" | "ready";
+type SuggestedRoutesSectionStatus = "empty" | "loading" | "ready";
+type ThemeCategoriesSectionStatus = "empty" | "loading" | "ready";
+/**
+ * Banner Premium phụ thuộc `explorerSummary`. Vì Home không còn chặn cả màn
+ * bằng spinner, phải biết lúc nào dữ liệu chưa về để tránh loé banner "nâng
+ * cấp" trước mắt user đã là Premium.
+ */
+type ExplorerSummarySectionStatus = "loading" | "ready";
+type SuggestedRouteCard = RouteItem & {
+  difficultyKey: string;
+  distanceLabel: string;
+  durationLabel: string;
+};
+type CommunityBoardViewEntry = {
+  avatarUri: string | null;
+  isCurrentUser: boolean;
+  name: string;
+  points: string;
+  rank: number;
+  subtitle: string;
+  userId: string | null;
+};
+type CommunityBoardViewModel = {
+  entries: CommunityBoardViewEntry[];
+  headlineRankLabel: string;
+  summaryLabel: string;
+  summaryNote: string;
+  summaryXp: number;
+  totalPoints: string;
+};
+
+const defaultNearbySearchDistanceMeters = 10000;
+const suggestedRouteCardImageHeight = 136;
+const suggestedRouteCardHeight = 248;
+const nearbyPlaceTitleHeight = 22;
+const nearbyPlaceCategoryHeight = 16;
+const nearbyPlaceDetailRowHeight = 18;
+const nearbyPlaceContentHeight = 132;
+const communityLeaderboardLoadingHeight = 420;
+const nearbyPlaceFallbackImageUri =
+  "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee";
+const nearbyPlaceFallbackRating = "4.9";
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
+}
+
+function getDistanceMeters(
+  from: Pick<AppCoordinate, "latitude" | "longitude">,
+  to: Pick<AppCoordinate, "latitude" | "longitude">,
+) {
+  const earthRadius = 6_371_000;
+  const latitudeDelta = toRadians(to.latitude - from.latitude);
+  const longitudeDelta = toRadians(to.longitude - from.longitude);
+  const fromLatitude = toRadians(from.latitude);
+  const toLatitude = toRadians(to.latitude);
+
+  const a =
+    Math.sin(latitudeDelta / 2) * Math.sin(latitudeDelta / 2) +
+    Math.cos(fromLatitude) *
+      Math.cos(toLatitude) *
+      Math.sin(longitudeDelta / 2) *
+      Math.sin(longitudeDelta / 2);
+
+  return earthRadius * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+function formatDistanceMeters(distanceMeters: number) {
+  if (distanceMeters < 1000) {
+    return `${Math.max(1, Math.round(distanceMeters))}m`;
+  }
+
+  return `${(distanceMeters / 1000).toFixed(1)}km`;
+}
+
+function formatRewardLabel(value: number | null | undefined, fallback = "+0") {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return `+${Math.max(0, Math.round(value))}`;
+}
+
+function formatNearbyRating(
+  value: number | null | undefined,
+  fallback = nearbyPlaceFallbackRating,
+) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return clamp(value, 0, 5).toFixed(1);
+}
+
+function formatNearbyReviewCount(
+  value: number | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  const roundedValue =
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.max(0, Math.round(value))
+      : 0;
+
+  return t("home.nearby.reviewCount", {
+    value: new Intl.NumberFormat("vi-VN").format(roundedValue),
+  });
+}
+
+function readMeaningfulCommunityText(value?: string | null) {
+  const trimmedValue = value?.trim();
+  return trimmedValue ? trimmedValue : null;
+}
+
+function formatCommunityXp(value: number) {
+  return new Intl.NumberFormat("vi-VN").format(Math.max(0, Math.round(value)));
+}
+
+function getCommunityLeaderboardDisplayName(
+  entry: UserLeaderboardEntryDto,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  return (
+    readMeaningfulCommunityText(entry.displayName) ??
+    readMeaningfulCommunityText(entry.username) ??
+    t("home.community.explorerFallback", { id: entry.userId })
+  );
+}
+
+function getCommunityLeaderboardSubtitle(entry: UserLeaderboardEntryDto) {
+  return `@${entry.username}`;
+}
+
+function getVisibleCommunityLeaderboardEntries(
+  entries: UserLeaderboardEntryDto[],
+) {
+  const topEntries = entries.slice(0, 5);
+  const currentUserEntry = entries.find((entry) => entry.isCurrentUser);
+
+  if (!currentUserEntry || currentUserEntry.rank <= topEntries.length) {
+    return topEntries;
+  }
+
+  return [...topEntries, currentUserEntry];
+}
+
+function buildCommunityBoardViewModelFromLeaderboard({
+  entries,
+  errorMessage,
+  status,
+  t,
+}: {
+  entries: UserLeaderboardEntryDto[];
+  errorMessage: string | null;
+  status: CommunityLeaderboardStatus;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}): CommunityBoardViewModel {
+  if (status === "loading") {
+    return {
+      entries: [],
+      headlineRankLabel: "#--",
+      summaryLabel: "",
+      summaryNote: "",
+      summaryXp: 0,
+      totalPoints: "--",
+    };
+  }
+
+  if (status === "error") {
+    return {
+      entries: [],
+      headlineRankLabel: "#--",
+      summaryLabel: t("community.leaderboard.errorTitle"),
+      summaryNote: errorMessage ?? t("community.leaderboard.errorFallback"),
+      summaryXp: 0,
+      totalPoints: "--",
+    };
+  }
+
+  if (status === "empty" || entries.length === 0) {
+    return {
+      entries: [],
+      headlineRankLabel: "#--",
+      summaryLabel: t("community.leaderboard.emptyTitle"),
+      summaryNote: t("community.leaderboard.emptyNote"),
+      summaryXp: 0,
+      totalPoints: "0 XP",
+    };
+  }
+
+  const sortedEntries = [...entries].sort(
+    (left, right) => left.rank - right.rank,
+  );
+  const currentUserEntry =
+    sortedEntries.find((entry) => entry.isCurrentUser) ?? null;
+  const summaryEntry = currentUserEntry ?? sortedEntries[0];
+  const summaryXpLabel = t("community.leaderboard.xpLabel", {
+    value: formatCommunityXp(summaryEntry.totalXp),
+  });
+  let summaryLabel = t("home.community.leaderLabel", {
+    name: getCommunityLeaderboardDisplayName(summaryEntry, t),
+    rank: summaryEntry.rank,
+  });
+  let summaryNote = t("home.community.leaderNote", { xp: summaryXpLabel });
+
+  if (currentUserEntry) {
+    if (currentUserEntry.rank === 1) {
+      summaryLabel = t("community.leaderboard.rankOneTitle");
+      summaryNote = t("community.leaderboard.rankOneNote");
+    } else {
+      summaryLabel = t("home.community.yourRank", {
+        rank: currentUserEntry.rank,
+      });
+      const previousRankEntry = sortedEntries.find(
+        (entry) => entry.rank === currentUserEntry.rank - 1,
+      );
+
+      if (previousRankEntry) {
+        const xpGap = Math.max(
+          previousRankEntry.totalXp - currentUserEntry.totalXp,
+          0,
+        );
+        summaryNote =
+          xpGap > 0
+            ? t("community.leaderboard.gapNote", {
+                gap: t("community.leaderboard.xpLabel", {
+                  value: formatCommunityXp(xpGap),
+                }),
+                rank: previousRankEntry.rank,
+              })
+            : t("home.community.currentTotal", { xp: summaryXpLabel });
+      } else {
+        summaryNote = t("home.community.currentTotal", { xp: summaryXpLabel });
+      }
+    }
+  }
+
+  return {
+    entries: getVisibleCommunityLeaderboardEntries(sortedEntries).map(
+      (entry) => ({
+        avatarUri: readMeaningfulCommunityText(entry.avatarUrl) ?? null,
+        isCurrentUser: entry.isCurrentUser,
+        name: getCommunityLeaderboardDisplayName(entry, t),
+        points: t("community.leaderboard.xpLabel", {
+          value: formatCommunityXp(entry.totalXp),
+        }),
+        rank: entry.rank,
+        subtitle: getCommunityLeaderboardSubtitle(entry),
+        userId: `${entry.userId}`,
+      }),
+    ),
+    headlineRankLabel: currentUserEntry
+      ? `#${currentUserEntry.rank}`
+      : `#${sortedEntries[0].rank}`,
+    summaryLabel,
+    summaryNote,
+    summaryXp: summaryEntry.totalXp,
+    totalPoints: summaryXpLabel,
+  };
+}
+
+function readMeaningfulNearbyText(value?: string | null) {
+  const trimmedValue = value?.trim();
+
+  return trimmedValue ? trimmedValue : null;
+}
+
+function formatNearbyTimeValue(value?: string | null) {
+  const meaningfulValue = readMeaningfulNearbyText(value);
+
+  if (!meaningfulValue) {
+    return null;
+  }
+
+  const matchedValue = meaningfulValue.match(/^\d{2}:\d{2}/);
+
+  return matchedValue?.[0] ?? meaningfulValue;
+}
+
+function formatNearbyTimeWindow(start?: string | null, end?: string | null) {
+  const formattedStart = formatNearbyTimeValue(start);
+  const formattedEnd = formatNearbyTimeValue(end);
+
+  if (formattedStart && formattedEnd) {
+    return formattedStart === formattedEnd
+      ? formattedStart
+      : `${formattedStart} - ${formattedEnd}`;
+  }
+
+  return formattedStart ?? formattedEnd;
+}
+
+function sortNearbyHotspotsByDistance(
+  hotspots: NearbyHotspotDto[],
+  currentCoordinate: Pick<AppCoordinate, "latitude" | "longitude">,
+) {
+  return [...hotspots].sort(
+    (left, right) =>
+      getDistanceMeters(currentCoordinate, {
+        latitude: left.latitude,
+        longitude: left.longitude,
+      }) -
+      getDistanceMeters(currentCoordinate, {
+        latitude: right.latitude,
+        longitude: right.longitude,
+      }),
+  );
+}
+
+function dedupeRoutesById(routes: RouteDto[]) {
+  const routeById = new Map<number, RouteDto>();
+
+  routes.forEach((route) => {
+    if (!routeById.has(route.routeId)) {
+      routeById.set(route.routeId, route);
+    }
+  });
+
+  return [...routeById.values()];
+}
+
+function mapRouteToSuggestedRouteCard(
+  route: RouteDto,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): SuggestedRouteCard {
+  return {
+    ...mapRouteToRouteItem(route),
+    difficultyKey: normalizeRouteDifficultyKey(route.difficulty),
+    distanceLabel: formatRouteDistanceLabel(route.totalDistance, t),
+    durationLabel: formatRouteDurationLabel(route.estimateTime, t),
+  };
+}
+
+function getSuggestedRouteDescription(route: SuggestedRouteCard) {
+  return (
+    route.description?.trim() || route.subtitle.trim() || route.theme.trim()
+  );
+}
+
+function getSuggestedRouteTagLabel(route: SuggestedRouteCard) {
+  return route.era.trim() || route.theme.trim();
+}
+
+function getNearbyOpeningHoursLabel(
+  hotspot: NearbyHotspotDto,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  return (
+    formatNearbyTimeWindow(hotspot.openingTime, hotspot.closingTime) ??
+    formatNearbyTimeWindow(hotspot.startTime, hotspot.endTime) ??
+    t("home.nearby.openingHoursUpdating")
+  );
+}
+
+function getPrimaryNearbyImageUri(hotspot: NearbyHotspotDto) {
+  const medias = [...hotspot.medias]
+    .filter((media) => media.fileUrl.trim())
+    .sort((left, right) => {
+      const leftOrder = left.displayOrder ?? Number.MAX_SAFE_INTEGER;
+      const rightOrder = right.displayOrder ?? Number.MAX_SAFE_INTEGER;
+
+      return leftOrder - rightOrder;
+    });
+
+  return medias[0]?.fileUrl.trim() || nearbyPlaceFallbackImageUri;
+}
+
+function buildApiNearbyPlaceItems(
+  hotspots: NearbyHotspotDto[],
+  currentCoordinate: Pick<AppCoordinate, "latitude" | "longitude">,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): NearbyPlaceListItem[] {
+  return hotspots
+    .map((hotspot, index) => {
+      const distanceMeters = getDistanceMeters(currentCoordinate, {
+        latitude: hotspot.latitude,
+        longitude: hotspot.longitude,
+      });
+      const detailIcon: NearbyPlaceListItem["detailIcon"] = "location";
+
+      return {
+        detailIcon,
+        detailPrimaryText: hotspot.address.trim() || t("home.nearby.noData"),
+        distance: formatDistanceMeters(distanceMeters),
+        hotspotId: hotspot.hotspotId,
+        imageUri: getPrimaryNearbyImageUri(hotspot),
+        isCheckedIn: hotspot.isCheckedIn === true,
+        key: `${hotspot.hotspotId}-${index}`,
+        openingHours: getNearbyOpeningHoursLabel(hotspot, t),
+        rating: formatNearbyRating(hotspot.averageRating),
+        reviewCountText: formatNearbyReviewCount(hotspot.totalReviews, t),
+        reward: formatRewardLabel(hotspot.xp),
+        slug: null,
+        sortDistanceMeters: distanceMeters,
+        title: hotspot.hotspotName.trim() || t("home.nearby.noData"),
+      };
+    })
+    .sort((left, right) => left.sortDistanceMeters - right.sortDistanceMeters)
+    .map(({ sortDistanceMeters: _sortDistanceMeters, ...item }) => item);
+}
+
+function isNearbyPlaceCheckedIn(place: NearbyPlaceListItem) {
+  return place.isCheckedIn;
+}
+
+async function resolveNearbyRequestCoordinate(
+  t: (key: string, options?: Record<string, unknown>) => string,
+): Promise<{
+  coordinate: AppCoordinate | null;
+  fallbackMessage: string | null;
+}> {
+  const developmentLocation = getDevelopmentLocationOverride();
+
+  if (developmentLocation) {
+    return {
+      coordinate: developmentLocation,
+      fallbackMessage: null,
+    };
+  }
+
+  const servicesEnabled = await Location.hasServicesEnabledAsync();
+
+  if (!servicesEnabled) {
+    return {
+      coordinate: null,
+      fallbackMessage: t("home.nearby.enableGps"),
+    };
+  }
+
+  const permission = await Location.getForegroundPermissionsAsync();
+  const permissionResponse =
+    permission.granted || !permission.canAskAgain
+      ? permission
+      : await ensureForegroundLocationPermission();
+
+  if (permissionResponse.status !== "granted") {
+    return {
+      coordinate: null,
+      fallbackMessage: t("home.nearby.allowLocation"),
+    };
+  }
+
+  if (Platform.OS === "android") {
+    try {
+      await Location.enableNetworkProviderAsync();
+    } catch {
+      // Ignore when the device already has an active location provider.
+    }
+  }
+
+  const currentLocation = await getDeviceCoordinate({
+    accuracy: Location.Accuracy.Balanced,
+    maxAge: 60_000,
+    mayShowUserSettingsDialog: Platform.OS === "android",
+    requiredAccuracy: 150,
+  });
+
+  if (!currentLocation) {
+    return {
+      coordinate: null,
+      fallbackMessage: t("home.nearby.unknownLocation"),
+    };
+  }
+
+  return {
+    coordinate: currentLocation,
+    fallbackMessage: null,
+  };
+}
+
+function GuestAccessCard({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+  const arrowOffset = useSharedValue(0);
+
+  useEffect(() => {
+    arrowOffset.set(
+      withRepeat(
+        withTiming(10, {
+          duration: 850,
+          easing: Easing.inOut(Easing.quad),
+          reduceMotion: ReduceMotion.System,
+        }),
+        -1,
+        true,
+        undefined,
+        ReduceMotion.System,
+      ),
+    );
+
+    return () => {
+      cancelAnimation(arrowOffset);
+      arrowOffset.set(0);
+    };
+  }, [arrowOffset]);
+
+  const animatedArrowStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateX: arrowOffset.get() }],
+    };
+  });
+
+  return (
+    <View className="gap-3">
+      <Text
+        className={homeSectionTitleClassName}
+        style={{ lineHeight: lineHeightFor(17) }}
+      >
+        {t("home.guest.unlockTitle")}
+      </Text>
+
+      <View
+        className="overflow-hidden rounded-[28px] border border-[#F8D7E3] bg-white"
+        style={cardShadowStyle}
+      >
+        <LinearGradient
+          colors={["#FFF7FB", "#FFF3EC"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          className="absolute inset-0"
+        />
+
+        <View className="gap-5 px-4 py-4">
+          <View className="flex-row items-start gap-4">
+            <View className="flex-1 gap-2">
+              <View className="self-start rounded-full bg-white/90 px-3 py-1">
+                <Text
+                  className="text-[11px] font-extrabold uppercase tracking-[0.6px] text-[#EB489B]"
+                  style={{ lineHeight: lineHeightFor(11) }}
+                >
+                  {t("home.guest.notLoggedIn")}
+                </Text>
+              </View>
+
+              <View className="items-center py-1.5">
+                <LinearGradient
+                  colors={gradientColors}
+                  start={{ x: 0, y: 0.2 }}
+                  end={{ x: 1, y: 0.8 }}
+                  className="h-24 w-24 rounded-full p-[2px]"
+                  style={{
+                    shadowColor: "rgba(235, 72, 155, 0.16)",
+                    shadowOpacity: 1,
+                    shadowRadius: 14,
+                    shadowOffset: {
+                      width: 0,
+                      height: 8,
+                    },
+                    elevation: 5,
+                  }}
+                >
+                  <View className="h-full w-full items-center justify-center rounded-full bg-[#FFF1F6]">
+                    <SymbolView
+                      name={{
+                        ios: "lock.fill",
+                        android: "lock",
+                        web: "lock",
+                      }}
+                      size={30}
+                      tintColor="#EB489B"
+                    />
+                  </View>
+                </LinearGradient>
+              </View>
+            </View>
+          </View>
+
+          <View className="flex-row items-stretch gap-2">
+            <View className="min-h-[54px] flex-1 items-center justify-center rounded-[18px] border border-white/80 bg-white/90 px-2.5 py-2.5">
+              <Text
+                className="text-center text-[11px] font-bold text-[#D9587F]"
+                numberOfLines={2}
+                style={{ lineHeight: lineHeightFor(11) }}
+              >
+                {t("home.guest.benefitProgress")}
+              </Text>
+            </View>
+            <View className="min-h-[54px] flex-1 items-center justify-center rounded-[18px] border border-white/80 bg-white/90 px-2.5 py-2.5">
+              <Text
+                className="text-center text-[11px] font-bold text-[#D9587F]"
+                numberOfLines={2}
+                style={{ lineHeight: lineHeightFor(11) }}
+              >
+                {t("home.guest.benefitStories")}
+              </Text>
+            </View>
+            <View className="min-h-[54px] flex-1 items-center justify-center rounded-[18px] border border-white/80 bg-white/90 px-2.5 py-2.5">
+              <Text
+                className="text-center text-[11px] font-bold text-[#D9587F]"
+                numberOfLines={2}
+                style={{ lineHeight: lineHeightFor(11) }}
+              >
+                {t("home.guest.benefitVouchers")}
+              </Text>
+            </View>
+          </View>
+
+          <Pressable
+            onPress={onPress}
+            className="self-center overflow-hidden rounded-[18px]"
+            style={{ minWidth: 282 }}
+          >
+            <LinearGradient
+              colors={gradientColors}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              locations={[0, 0.58, 1]}
+              className="relative items-center justify-center px-5 py-3.5"
+            >
+              <Text
+                className="text-[15px] font-extrabold text-white"
+                style={{ lineHeight: lineHeightFor(15) }}
+              >
+                {t("home.guest.cta")}
+              </Text>
+
+              <View className="absolute right-3 h-9 w-9 items-center justify-center rounded-full bg-white/18">
+                <Animated.View style={animatedArrowStyle}>
+                  <SymbolView
+                    name={{
+                      ios: "arrow.right",
+                      android: "arrow_forward",
+                      web: "arrow_forward",
+                    }}
+                    size={15}
+                    tintColor="#FFFFFF"
+                  />
+                </Animated.View>
+              </View>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function SectionEmptyState({
+  description,
+  isLoading = false,
+  title,
+}: {
+  description?: string;
+  isLoading?: boolean;
+  title?: string;
+}) {
+  const { t } = useTranslation();
+
+  if (isLoading) {
+    return (
+      <AppLoadingScreen mode="embedded" style={{ minHeight: 92 }} />
+    );
+  }
+
+  return (
+    <View className="rounded-[22px] border border-[#EEF1F4] bg-[#FAF7FC] px-4 py-4">
+      <>
+        <Text className="text-[15px] font-bold text-[#3B4454]">
+          {title ?? t("home.empty.title")}
+        </Text>
+        <Text className="mt-1 text-[13px] leading-5 text-[#8E869A]">
+          {description ?? t("home.empty.description")}
+        </Text>
+      </>
+    </View>
+  );
+}
+
+function ActiveJourneyEmptyStateCard({
+  illustrationWidth,
+  onPress,
+}: {
+  illustrationWidth: number;
+  onPress: () => void;
+}) {
+  return (
+    <View
+      className="overflow-hidden rounded-[22px] bg-white px-4 py-4"
+      style={cardShadowStyle}
+    >
+      <View className="flex-row items-center gap-3">
+        <View
+          className="shrink-0"
+          style={{
+            height: illustrationWidth,
+            width: illustrationWidth,
+          }}
+        >
+          <Image
+            source={continueJourneyEmptyIllustration}
+            contentFit="contain"
+            transition={220}
+            cachePolicy="memory-disk"
+            style={{ height: "100%", width: "100%" }}
+          />
+        </View>
+
+        <View className="min-w-0 flex-1 items-center">
+          <Text
+            className="text-center text-[12px] text-[#7C7281]"
+            style={{ lineHeight: bodyLineHeightFor(12) }}
+          >
+            Bạn chưa tham gia tuyến nào. Hãy khám phá và bắt đầu hành trình đầu
+            tiên của bạn nhé!
+          </Text>
+
+          <Pressable
+            className="mt-3 overflow-hidden rounded-[12px]"
+            onPress={onPress}
+          >
+            <LinearGradient
+              colors={["#F07AA8", "#EB489B"]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              className="px-4 py-2.5"
+            >
+              <Text className="text-[12px] font-extrabold text-white">
+                Khám phá tuyến
+              </Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function NearbyPlacesShowcaseCard({
+  cardHeight,
+  cardWidth,
+  imageHeight,
+}: {
+  cardHeight: number;
+  cardWidth: number;
+  imageHeight: number;
+}) {
+  return (
+    <View
+      className="overflow-hidden"
+      style={{
+        height: cardHeight,
+        width: cardWidth,
+      }}
+    >
+      <View className="absolute -right-6 top-5 h-24 w-24 rounded-full bg-[#FFD6E4]/55" />
+      <View className="absolute -bottom-8 -left-7 h-24 w-24 rounded-full bg-[#FFF8FB]" />
+
+      <View className="flex-1 items-start justify-end px-1 pb-1 pt-1">
+        <View className="mt-auto items-start">
+          <Image
+            source={nearbyShowcaseMascot}
+            contentFit="contain"
+            transition={220}
+            cachePolicy="memory-disk"
+            style={{
+              height: imageHeight,
+              marginBottom: -18,
+              marginLeft: -48,
+              width: cardWidth + 92,
+            }}
+          />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function GuestWelcomeHeader({
+  onGreetingPress,
+  onSearchPress,
+}: {
+  onGreetingPress: () => void;
+  onSearchPress: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <View className="flex-row items-center gap-4 px-1 pb-2">
+      <View>
+        <View className="h-16 w-16 items-center justify-center rounded-full bg-white/95">
+          <Image
+            source={guestPreviewLogo}
+            contentFit="contain"
+            transition={380}
+            style={{ height: 90, width: 90 }}
+          />
+        </View>
+      </View>
+
+      <View className="flex-1 gap-0.5">
+        <View className="flex-row items-center justify-between gap-3">
+          <Pressable className="flex-1" hitSlop={8} onPress={onGreetingPress}>
+            <View className="gap-0 pt-0.5">
+              <Text
+                className="text-[15px] font-semibold tracking-[-0.3px] text-[#2B2233]"
+                style={{ lineHeight: lineHeightFor(15) }}
+              >
+                {t("home.guest.greeting")}
+              </Text>
+            </View>
+          </Pressable>
+
+          <View className="flex-row items-center gap-2.5">
+            <Pressable
+              accessibilityLabel={t("home.a11y.openHotspots")}
+              className="h-10 w-10 items-center justify-center rounded-full border border-[#ECE1E9] bg-[#FAF7FC]"
+              hitSlop={8}
+              onPress={onSearchPress}
+            >
+              <SymbolView
+                name={{
+                  ios: "magnifyingglass",
+                  android: "search",
+                  web: "search",
+                }}
+                size={16}
+                tintColor="#8E869A"
+              />
+            </Pressable>
+          </View>
+        </View>
+
+        <View className="mt-[-1px] flex-row items-center gap-1.5">
+          <SymbolView
+            name={{
+              ios: "star.fill",
+              android: "star",
+              web: "star",
+            }}
+            size={14}
+            tintColor="#F7B500"
+          />
+          <Text
+            className="text-[11px] text-[#8E869A]"
+            style={{ lineHeight: lineHeightFor(11), marginTop: -1 }}
+          >
+            {t("home.guest.loginToSave")}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function ExplorerHeaderAvatar({
+  avatar,
+  level,
+  name,
+  username,
+}: Omit<ExplorerSummary, "isPremium">) {
+  return (
+    <View className="relative">
+      <LinearGradient
+        colors={gradientColors}
+        end={{ x: 1, y: 0.9 }}
+        start={{ x: 0, y: 0.1 }}
+        className="h-16 w-16 rounded-full p-[2px]"
+      >
+        <View className="flex-1 items-center justify-center rounded-full bg-white p-[3px]">
+          <UserAvatar
+            displayName={name}
+            size={54}
+            uri={avatar}
+            username={username}
+          />
+        </View>
+      </LinearGradient>
+
+      {typeof level === "number" ? (
+        <View className="absolute -bottom-1 -right-2 rounded-full border-2 border-white bg-[#b1741e] px-2.5 py-1">
+          <Text className="text-[11px] font-extrabold text-white">
+            {`Lv.${level}`}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function ExplorerHeaderActions({
+  onSearchPress,
+  onNotificationPress,
+}: {
+  onSearchPress: () => void;
+  onNotificationPress: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <View className="flex-row items-center gap-2.5">
+      <Pressable
+        accessibilityLabel={t("home.a11y.openHotspots")}
+        className="h-10 w-10 items-center justify-center rounded-full bg-[#FAF7FC]"
+        hitSlop={8}
+        onPress={onSearchPress}
+      >
+        <SymbolView
+          name={{
+            ios: "magnifyingglass",
+            android: "search",
+            web: "search",
+          }}
+          size={16}
+          tintColor="#8E869A"
+        />
+      </Pressable>
+
+      <Pressable
+        accessibilityLabel={t("home.a11y.openNotifications")}
+        className="h-10 w-10 items-center justify-center rounded-full bg-[#FFF4EF]"
+        hitSlop={8}
+        onPress={onNotificationPress}
+      >
+        <SymbolView
+          name={{
+            ios: "bell",
+            android: "notifications",
+            web: "notifications",
+          }}
+          size={16}
+          tintColor="#EB489B"
+        />
+      </Pressable>
+    </View>
+  );
+}
+
+export default function HomeScreen() {
+  const router = useRouter();
+  const authSession = useAuthSession();
+  const { t } = useTranslation();
+  const { contentWidth, gutter, safeWidth } = useScreenLayout({
+    maxContentWidth: 640,
+  });
+  const homeContentBottomPadding = 24;
+  const activeRouteIndexRef = useRef(0);
+  const [activeRouteIndex, setActiveRouteIndex] = useState(0);
+  const [explorerSummary, setExplorerSummary] =
+    useState<ExplorerSummary | null>(null);
+  const [explorerSummaryStatus, setExplorerSummaryStatus] =
+    useState<ExplorerSummarySectionStatus>(() =>
+      authSession.isAuthenticated ? "loading" : "ready",
+    );
+  const [nearbyPlacesNote, setNearbyPlacesNote] = useState<string | null>(null);
+  const [nearbyPlacesStatus, setNearbyPlacesStatus] =
+    useState<NearbyPlacesSectionStatus>("loading");
+  const nearbySearchDistanceMeters = defaultNearbySearchDistanceMeters;
+  const [resolvedNearbyPlaces, setResolvedNearbyPlaces] = useState<
+    NearbyPlaceListItem[]
+  >([]);
+  const [suggestedRoutes, setSuggestedRoutes] = useState<SuggestedRouteCard[]>(
+    [],
+  );
+  const [suggestedRoutesNote, setSuggestedRoutesNote] = useState<string | null>(
+    null,
+  );
+  const [suggestedRoutesStatus, setSuggestedRoutesStatus] =
+    useState<SuggestedRoutesSectionStatus>("loading");
+  const [communityLeaderboardEntries, setCommunityLeaderboardEntries] =
+    useState<UserLeaderboardEntryDto[]>([]);
+  const [
+    communityLeaderboardErrorMessage,
+    setCommunityLeaderboardErrorMessage,
+  ] = useState<string | null>(null);
+  const [communityLeaderboardStatus, setCommunityLeaderboardStatus] =
+    useState<CommunityLeaderboardStatus>("loading");
+  const [themeCategories, setThemeCategories] = useState<NearbyCategoryCard[]>(
+    [],
+  );
+  const [themeCategoriesStatus, setThemeCategoriesStatus] =
+    useState<ThemeCategoriesSectionStatus>("loading");
+  const [featuredRouteCards, setFeaturedRouteCards] = useState<
+    FeaturedRouteCard[]
+  >([]);
+  const [featuredRoutesStatus, setFeaturedRoutesStatus] =
+    useState<FeaturedRoutesSectionStatus>("loading");
+  const [featuredRoutesNote, setFeaturedRoutesNote] = useState<string | null>(
+    null,
+  );
+  const [activeJourneyView, setActiveJourneyView] =
+    useState<ActiveJourneyView | null>(null);
+  const [activeJourneyStatus, setActiveJourneyStatus] =
+    useState<ActiveJourneySectionStatus>("loading");
+  const [homeVouchers, setHomeVouchers] = useState<Voucher[]>([]);
+  const [homeVouchersStatus, setHomeVouchersStatus] =
+    useState<HomeVouchersSectionStatus>("loading");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const nearbyPlacesRequestRef = useRef(0);
+  const themeCategoriesRequestRef = useRef(0);
+  const communityLeaderboardRequestRef = useRef(0);
+  const homeVouchersRequestRef = useRef(0);
+  const explorerSummaryRequestRef = useRef(0);
+  /**
+   * `loadExplorerSummary` chạy lại ở mỗi lần focus tab Home. Chỉ lần đầu mới
+   * được phép quay về "loading", nếu không banner Premium sẽ nháy skeleton mỗi
+   * lần user quay lại Home.
+   */
+  const hasResolvedExplorerSummaryRef = useRef(false);
+
+  const isGuest = authSession.role === "guest";
+  const homeHeaderTopPadding = 12;
+  const routeCardLeftInset = gutter;
+  const routeCardWidth = Math.max(contentWidth, 264);
+  const nearbyRouteCardWidth = Math.min(Math.max(safeWidth * 0.68, 228), 260);
+  const nearbyPlaceCardWidth = Math.min(Math.max(safeWidth * 0.45, 168), 196);
+  const nearbyPlaceImageHeight = Math.round(nearbyPlaceCardWidth * 0.8);
+  const nearbyPlaceCardHeight =
+    nearbyPlaceImageHeight + nearbyPlaceContentHeight;
+  const nearbyPlacesShowcaseWidth = Math.min(
+    Math.max(safeWidth * 0.31, 130),
+    158,
+  );
+  const nearbyPlacesShowcaseHeight = nearbyPlaceCardHeight + 6;
+  const nearbyPlacesShowcaseImageHeight = Math.max(
+    nearbyPlacesShowcaseHeight - 18,
+    232,
+  );
+  const nearbyPlacesSectionTopInset = 10;
+  const nearbyPlacesSectionHeight = nearbyPlacesShowcaseHeight + 24;
+  const nearbyPlacesScrollStartInset = Math.round(
+    gutter + nearbyPlacesShowcaseWidth + 10,
+  );
+  const themeCategoryCircleSize = Math.min(Math.max(safeWidth * 0.2, 74), 84);
+  const themeCategoryItemWidth = themeCategoryCircleSize + 14;
+  const themeCategoryImageSize = Math.round(themeCategoryCircleSize * 0.74);
+  const homeVoucherCardWidth = Math.min(Math.max(safeWidth * 0.48, 166), 190);
+  const homeVoucherImageHeight = Math.round(homeVoucherCardWidth * 0.65);
+  const homeVoucherCarouselSideInset = Math.max(
+    Math.round((safeWidth - homeVoucherCardWidth) / 2),
+    gutter,
+  );
+  const homeVoucherSnapInterval = homeVoucherCardWidth + homeVoucherCardGap;
+  const homeVoucherInitialIndex = homeVouchers.length === 3 ? 1 : 0;
+  const homeVoucherInitialOffset =
+    homeVoucherInitialIndex * homeVoucherSnapInterval;
+  const homeVoucherScrollX = useSharedValue(homeVoucherInitialOffset);
+  const homeVoucherScrollHandler = useAnimatedScrollHandler((event) => {
+    homeVoucherScrollX.value = event.contentOffset.x;
+  });
+  const activeJourneyEmptyIllustrationWidth = Math.min(
+    Math.max(contentWidth * 0.38, 134),
+    152,
+  );
+  const currentJourney = !isGuest ? activeJourneyView : null;
+  const activeJourneyProgress = currentJourney
+    ? Math.min(Math.max(currentJourney.progress, 0), 100)
+    : 0;
+  const isActiveJourneyLoading =
+    !isGuest && activeJourneyStatus === "loading" && !activeJourneyView;
+  const isCommunityLeaderboardLoading =
+    communityLeaderboardStatus === "loading";
+  const activeCommunityBoard = buildCommunityBoardViewModelFromLeaderboard({
+    entries: communityLeaderboardEntries,
+    errorMessage: communityLeaderboardErrorMessage,
+    status: communityLeaderboardStatus,
+    t,
+  });
+  const activeFeaturedRoute =
+    featuredRouteCards[
+      Math.min(activeRouteIndex, Math.max(featuredRouteCards.length - 1, 0))
+    ] ?? null;
+  const explorerName =
+    explorerSummary?.name.trim() ||
+    authSession.displayName.trim() ||
+    authSession.username?.trim() ||
+    "Ngọc";
+  const explorerAvatar = explorerSummary?.avatar ?? null;
+  const explorerLevel = explorerSummary?.level ?? null;
+  const isPremiumExplorer = explorerSummary?.isPremium ?? false;
+  const explorerUsername =
+    explorerSummary?.username.trim() ||
+    authSession.username?.trim() ||
+    explorerName;
+
+  useEffect(() => {
+    if (homeVouchersStatus !== "ready" || homeVouchers.length === 0) {
+      return;
+    }
+
+    homeVoucherScrollX.set(homeVoucherInitialOffset);
+  }, [
+    homeVoucherInitialOffset,
+    homeVoucherScrollX,
+    homeVouchers.length,
+    homeVouchersStatus,
+  ]);
+
+  const handleOpenAllThemes = () => {
+    router.push("/theme" as Href);
+  };
+  const handleOpenNearbyHotspots = () => {
+    router.push("/hotspots");
+  };
+  const handleOpenThemeCategory = (item: NearbyCategoryCard) => {
+    router.push(
+      getThemeDetailHref({
+        accent: item.accent,
+        background: item.background,
+        imageUrl: item.imageUrl,
+        tagId: item.tagId,
+        title: item.label,
+      }),
+    );
+  };
+  const handleOpenRoutes = () => {
+    router.push("/route");
+  };
+  const handleOpenRouteDetail = (routeId: number) => {
+    router.push(`/route/${routeId}` as Href);
+  };
+  const handleOpenCommunityLeaderboard = () => {
+    router.push("/community/leaderboard" as Href);
+  };
+  const handleOpenNotifications = () => {
+    router.push("/notifications" as Href);
+  };
+  const handleOpenRegister = () => {
+    router.push("/login?entry=home");
+  };
+
+  useEffect(() => {
+    if (featuredRouteCards.length <= 1) {
+      activeRouteIndexRef.current = 0;
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      const nextIndex =
+        (activeRouteIndexRef.current + 1) % featuredRouteCards.length;
+
+      activeRouteIndexRef.current = nextIndex;
+      setActiveRouteIndex(nextIndex);
+    }, 3600);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [featuredRouteCards.length]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadFeaturedRoutes() {
+      setFeaturedRoutesStatus("loading");
+      setFeaturedRoutesNote(null);
+
+      try {
+        const accessToken = authSession.isAuthenticated
+          ? await getValidAccessToken()
+          : null;
+
+        if (!isActive) {
+          return;
+        }
+
+        // Chỉ lấy tuyến OFFICIAL, khớp với tab "Chính thức" ở màn Hành trình -
+        // trước đây không truyền `type` nên carousel trộn lẫn cả tuyến cộng đồng.
+        const routePage = await searchRoutes({
+          accessToken,
+          page: 0,
+          size: 20,
+          sortDirection: "DESC",
+          status: "PUBLISHED",
+          tokenType: authSession.tokenType,
+          type: "OFFICIAL",
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        // Backend có thể chưa lọc status theo filter động nên lọc thêm ở client.
+        const publishedRoutes = routePage.content.filter(isPublishedRoute);
+        const highlightRoutes = getHighlightRoutes(
+          publishedRoutes.length > 0 ? publishedRoutes : routePage.content,
+        );
+
+        activeRouteIndexRef.current = 0;
+        setActiveRouteIndex(0);
+        setFeaturedRouteCards(
+          highlightRoutes.map((route, index) =>
+            mapRouteToFeaturedRouteCard(route, index, t),
+          ),
+        );
+        setFeaturedRoutesStatus(highlightRoutes.length > 0 ? "ready" : "empty");
+        setFeaturedRoutesNote(
+          highlightRoutes.length > 0
+            ? null
+            : t("home.featured.noPublishedRoutes"),
+        );
+      } catch (error) {
+        console.warn("[home] load featured routes failed", {
+          error: error instanceof Error ? error.message : error,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setFeaturedRouteCards([]);
+        setFeaturedRoutesNote(
+          error instanceof Error ? error.message : t("home.featured.loadError"),
+        );
+        setFeaturedRoutesStatus("empty");
+      }
+    }
+
+    void loadFeaturedRoutes();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    t,
+  ]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      async function loadActiveJourney() {
+        if (!authSession.isAuthenticated) {
+          setActiveJourneyView(null);
+          setActiveJourneyStatus("empty");
+          return;
+        }
+
+        setActiveJourneyStatus("loading");
+
+        try {
+          const accessToken = await getValidAccessToken();
+
+          if (!isActive) {
+            return;
+          }
+
+          if (!accessToken) {
+            setActiveJourneyView(null);
+            setActiveJourneyStatus("empty");
+            return;
+          }
+
+          const progressPage = await getUserRouteProgressList({
+            accessToken,
+            page: 0,
+            size: 20,
+            sortBy: "startedAt",
+            sortDirection: "DESC",
+            tokenType: authSession.tokenType,
+          });
+
+          if (!isActive) {
+            return;
+          }
+
+          const activeProgress =
+            progressPage.content.find(isActiveRouteProgress) ?? null;
+
+          if (!activeProgress) {
+            setActiveJourneyView(null);
+            setActiveJourneyStatus("empty");
+            return;
+          }
+
+          // API danh sách tiến độ có thể không kèm route đầy đủ (thiếu media,
+          // hotspot). Khi đó gọi thêm route detail để lấy hình và điểm dừng.
+          let journeyRoute = activeProgress.route ?? null;
+
+          if (!journeyRoute || journeyRoute.hotspots.length === 0) {
+            try {
+              journeyRoute = await getRouteById({
+                accessToken,
+                routeId: activeProgress.routeId,
+                tokenType: authSession.tokenType,
+              });
+            } catch (routeError) {
+              console.info("[home] load active journey route skipped", {
+                error:
+                  routeError instanceof Error ? routeError.message : routeError,
+                routeId: activeProgress.routeId,
+              });
+            }
+          }
+
+          if (!isActive) {
+            return;
+          }
+
+          setActiveJourneyView(
+            buildActiveJourneyView(activeProgress, journeyRoute, t),
+          );
+          setActiveJourneyStatus("ready");
+        } catch (error) {
+          console.warn("[home] load active journey failed", {
+            error: error instanceof Error ? error.message : error,
+          });
+
+          if (!isActive) {
+            return;
+          }
+
+          setActiveJourneyView(null);
+          setActiveJourneyStatus("empty");
+        }
+      }
+
+      void loadActiveJourney();
+
+      return () => {
+        isActive = false;
+      };
+    }, [
+      authSession.isAuthenticated,
+      authSession.tokenType,
+      t,
+    ]),
+  );
+
+  const loadNearbyPlaces = useCallback(async () => {
+    const requestId = nearbyPlacesRequestRef.current + 1;
+    nearbyPlacesRequestRef.current = requestId;
+    const isActive = () => nearbyPlacesRequestRef.current === requestId;
+
+    setNearbyPlacesStatus("loading");
+    setNearbyPlacesNote(null);
+    setSuggestedRoutesStatus("loading");
+    setSuggestedRoutesNote(null);
+
+    try {
+      const { coordinate, fallbackMessage } =
+        await resolveNearbyRequestCoordinate(t);
+
+      if (!isActive()) {
+        return;
+      }
+
+      if (!coordinate) {
+        setResolvedNearbyPlaces([]);
+        setNearbyPlacesNote(fallbackMessage);
+        setNearbyPlacesStatus("empty");
+        setSuggestedRoutes([]);
+        setSuggestedRoutesNote(t("home.suggestedRoutes.noLocation"));
+        setSuggestedRoutesStatus("empty");
+        return;
+      }
+
+      const accessToken = authSession.isAuthenticated
+        ? await getValidAccessToken()
+        : null;
+      const apiNearbyHotspots = await getNearbyHotspots({
+        accessToken,
+        distance: nearbySearchDistanceMeters,
+        latitude: coordinate.latitude,
+        longitude: coordinate.longitude,
+        tokenType: authSession.tokenType,
+      });
+
+      if (!isActive()) {
+        return;
+      }
+
+      if (apiNearbyHotspots.length === 0) {
+        setResolvedNearbyPlaces([]);
+        setNearbyPlacesNote(
+          coordinate.source === "dev-override"
+            ? t("home.nearby.emptyRadiusDevOverride", {
+                coordinate: formatCoordinateLabel(coordinate),
+                radius: formatDistanceMeters(nearbySearchDistanceMeters),
+              })
+            : t("home.nearby.emptyRadius", {
+                radius: formatDistanceMeters(nearbySearchDistanceMeters),
+              }),
+        );
+        setNearbyPlacesStatus("empty");
+        setSuggestedRoutes([]);
+        setSuggestedRoutesNote(t("home.suggestedRoutes.noRoutesNearby"));
+        setSuggestedRoutesStatus("empty");
+        return;
+      }
+
+      setResolvedNearbyPlaces(
+        buildApiNearbyPlaceItems(apiNearbyHotspots, coordinate, t),
+      );
+      setNearbyPlacesNote(
+        coordinate.source === "dev-override"
+          ? t("home.nearby.devOverrideNote", {
+              coordinate: formatCoordinateLabel(coordinate),
+              radius: formatDistanceMeters(nearbySearchDistanceMeters),
+            })
+          : null,
+      );
+      setNearbyPlacesStatus("ready");
+
+      const nearbyHotspotsByDistance = sortNearbyHotspotsByDistance(
+        apiNearbyHotspots,
+        coordinate,
+      );
+
+      try {
+        const hotspotRouteResults = await Promise.allSettled(
+          nearbyHotspotsByDistance.map((hotspot) =>
+            getRoutesByHotspot({
+              accessToken,
+              hotspotId: hotspot.hotspotId,
+              routeStatus: "PUBLISHED",
+              tokenType: authSession.tokenType,
+            }),
+          ),
+        );
+
+        if (!isActive()) {
+          return;
+        }
+
+        const failedRouteLookups = hotspotRouteResults.filter(
+          (result) => result.status === "rejected",
+        );
+        const mergedRoutes = dedupeRoutesById(
+          hotspotRouteResults.flatMap((result) =>
+            result.status === "fulfilled" ? result.value : [],
+          ),
+        );
+
+        if (mergedRoutes.length === 0) {
+          if (failedRouteLookups.length === hotspotRouteResults.length) {
+            throw new Error(t("home.suggestedRoutes.loadFailed"));
+          }
+
+          setSuggestedRoutes([]);
+          setSuggestedRoutesNote(t("home.suggestedRoutes.noRoutesNearby"));
+          setSuggestedRoutesStatus("empty");
+          return;
+        }
+
+        setSuggestedRoutes(
+          mergedRoutes.map((route) => mapRouteToSuggestedRouteCard(route, t)),
+        );
+        setSuggestedRoutesNote(
+          failedRouteLookups.length > 0
+            ? t("home.suggestedRoutes.partialNote", {
+                count: mergedRoutes.length,
+                failed: failedRouteLookups.length,
+              })
+            : coordinate.source === "dev-override"
+              ? t("home.suggestedRoutes.devOverrideNote", {
+                  coordinate: formatCoordinateLabel(coordinate),
+                  count: mergedRoutes.length,
+                  hotspots: nearbyHotspotsByDistance.length,
+                })
+              : null,
+        );
+        setSuggestedRoutesStatus("ready");
+      } catch (routeError) {
+        console.warn("[home] load suggested routes failed", {
+          error: routeError instanceof Error ? routeError.message : routeError,
+          hotspotIds: nearbyHotspotsByDistance.map(
+            (hotspot) => hotspot.hotspotId,
+          ),
+        });
+
+        if (!isActive()) {
+          return;
+        }
+
+        setSuggestedRoutes([]);
+        setSuggestedRoutesNote(
+          routeError instanceof Error
+            ? routeError.message
+            : t("home.suggestedRoutes.loadError"),
+        );
+        setSuggestedRoutesStatus("empty");
+      }
+    } catch (error) {
+      console.warn("[home] load nearby places failed", {
+        error: error instanceof Error ? error.message : error,
+      });
+
+      if (!isActive()) {
+        return;
+      }
+
+      setResolvedNearbyPlaces([]);
+      setNearbyPlacesNote(
+        error instanceof Error ? error.message : t("home.nearby.loadError"),
+      );
+      setNearbyPlacesStatus("empty");
+      setSuggestedRoutes([]);
+      setSuggestedRoutesNote(t("home.suggestedRoutes.loadError"));
+      setSuggestedRoutesStatus("empty");
+    }
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    nearbySearchDistanceMeters,
+    t,
+  ]);
+
+  useEffect(() => {
+    async function runNearbyPlacesLoad() {
+      await loadNearbyPlaces();
+    }
+
+    void runNearbyPlacesLoad();
+  }, [loadNearbyPlaces]);
+
+  const loadThemeCategories = useCallback(async () => {
+    const requestId = themeCategoriesRequestRef.current + 1;
+    themeCategoriesRequestRef.current = requestId;
+    const isActive = () => themeCategoriesRequestRef.current === requestId;
+
+    setThemeCategoriesStatus("loading");
+
+    try {
+      const accessToken = authSession.isAuthenticated
+        ? await getValidAccessToken()
+        : null;
+
+      if (!isActive()) {
+        return;
+      }
+
+      const tags = await getActiveTags({
+        accessToken,
+        tokenType: authSession.tokenType,
+      });
+
+      if (!isActive()) {
+        return;
+      }
+
+      const categories = mapActiveTagsToThemeCategories(tags);
+
+      setThemeCategories(categories);
+      setThemeCategoriesStatus(categories.length > 0 ? "ready" : "empty");
+    } catch (error) {
+      console.warn("[home] load theme categories failed", {
+        error: error instanceof Error ? error.message : error,
+      });
+
+      if (!isActive()) {
+        return;
+      }
+
+      setThemeCategories([]);
+      setThemeCategoriesStatus("empty");
+    }
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+  ]);
+
+  useEffect(() => {
+    async function runThemeCategoriesLoad() {
+      await loadThemeCategories();
+    }
+
+    void runThemeCategoriesLoad();
+  }, [loadThemeCategories]);
+
+  const loadCommunityLeaderboard = useCallback(async () => {
+    const requestId = communityLeaderboardRequestRef.current + 1;
+    communityLeaderboardRequestRef.current = requestId;
+    const isActive = () => communityLeaderboardRequestRef.current === requestId;
+
+    setCommunityLeaderboardStatus("loading");
+    setCommunityLeaderboardErrorMessage(null);
+
+    try {
+      const accessToken = authSession.isAuthenticated
+        ? await getValidAccessToken()
+        : null;
+
+      if (!isActive()) {
+        return;
+      }
+
+      const leaderboardResponse = await getUserLeaderboard({
+        accessToken,
+        tokenType: authSession.tokenType,
+      });
+
+      if (!isActive()) {
+        return;
+      }
+
+      setCommunityLeaderboardEntries(leaderboardResponse.content);
+      setCommunityLeaderboardStatus(
+        leaderboardResponse.content.length > 0 ? "ready" : "empty",
+      );
+    } catch (error) {
+      console.warn("[home] load community leaderboard failed", {
+        error: error instanceof Error ? error.message : error,
+      });
+
+      if (!isActive()) {
+        return;
+      }
+
+      setCommunityLeaderboardEntries([]);
+      setCommunityLeaderboardErrorMessage(
+        error instanceof Error
+          ? error.message
+          : t("community.leaderboard.loadError"),
+      );
+      setCommunityLeaderboardStatus("error");
+    }
+  }, [
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    t,
+  ]);
+
+  useEffect(() => {
+    async function runCommunityLeaderboardLoad() {
+      await loadCommunityLeaderboard();
+    }
+
+    void runCommunityLeaderboardLoad();
+  }, [loadCommunityLeaderboard]);
+
+  /**
+   * `/api/vouchers/**` (GET) nằm trong PUBLIC_GET_ENDPOINTS nên khách chưa đăng
+   * nhập vẫn xem được carousel; token chỉ đính kèm khi đã đăng nhập.
+   */
+  const loadHomeVouchers = useCallback(async () => {
+    const requestId = homeVouchersRequestRef.current + 1;
+    homeVouchersRequestRef.current = requestId;
+    const isActive = () => homeVouchersRequestRef.current === requestId;
+
+    setHomeVouchersStatus("loading");
+
+    try {
+      const accessToken = authSession.isAuthenticated
+        ? await getValidAccessToken()
+        : null;
+
+      if (!isActive()) {
+        return;
+      }
+
+      const voucherPage = await getAvailableVouchers(
+        { page: 0, size: homeVouchersPreviewSize },
+        accessToken,
+      );
+
+      if (!isActive()) {
+        return;
+      }
+
+      const vouchers = voucherPage.content ?? [];
+      setHomeVouchers(vouchers);
+      setHomeVouchersStatus(vouchers.length > 0 ? "ready" : "empty");
+    } catch (error) {
+      console.warn("[home] load vouchers failed", {
+        error: error instanceof Error ? error.message : error,
+      });
+
+      if (!isActive()) {
+        return;
+      }
+
+      setHomeVouchers([]);
+      setHomeVouchersStatus("error");
+    }
+  }, [authSession.isAuthenticated]);
+
+  useEffect(() => {
+    async function runHomeVouchersLoad() {
+      await loadHomeVouchers();
+    }
+
+    void runHomeVouchersLoad();
+  }, [loadHomeVouchers]);
+
+  const loadExplorerSummary = useCallback(async () => {
+    const requestId = explorerSummaryRequestRef.current + 1;
+    explorerSummaryRequestRef.current = requestId;
+    const isActive = () => explorerSummaryRequestRef.current === requestId;
+
+    const resolveExplorerSummaryStatus = () => {
+      hasResolvedExplorerSummaryRef.current = true;
+      setExplorerSummaryStatus("ready");
+    };
+
+    if (!hasResolvedExplorerSummaryRef.current) {
+      setExplorerSummaryStatus(
+        authSession.isAuthenticated ? "loading" : "ready",
+      );
+    }
+
+    if (!authSession.isAuthenticated) {
+      setExplorerSummary(null);
+      resolveExplorerSummaryStatus();
+      return;
+    }
+
+    try {
+      const accessToken = await getValidAccessToken();
+
+      if (!isActive()) {
+        return;
+      }
+
+      if (!accessToken) {
+        setExplorerSummary(null);
+        resolveExplorerSummaryStatus();
+        return;
+      }
+
+      const [profileResult, levelsResult] = await Promise.allSettled([
+        getMyProfile({
+          accessToken,
+          tokenType: authSession.tokenType,
+        }),
+        getGamificationLevels({
+          accessToken,
+          tokenType: authSession.tokenType,
+        }),
+      ]);
+
+      if (profileResult.status !== "fulfilled") {
+        throw profileResult.reason;
+      }
+
+      const profile =
+        levelsResult.status === "fulfilled"
+          ? applyLevelProgressToProfile(profileResult.value, levelsResult.value)
+          : profileResult.value;
+
+      if (!isActive()) {
+        return;
+      }
+
+      if (levelsResult.status !== "fulfilled") {
+        console.warn("[home] load explorer levels failed", {
+          error:
+            levelsResult.reason instanceof Error
+              ? levelsResult.reason.message
+              : levelsResult.reason,
+        });
+      }
+
+      const resolvedName =
+        profile.name.trim() ||
+        authSession.displayName.trim() ||
+        profile.username.trim() ||
+        authSession.username?.trim() ||
+        "Ngọc";
+
+      setPremiumStatusFromProfile(profile.isPremium);
+
+      setExplorerSummary({
+        avatar: profile.avatar?.trim() || null,
+        isPremium: profile.isPremium,
+        level: profile.level,
+        name: resolvedName,
+        username:
+          profile.username.trim() ||
+          authSession.username?.trim() ||
+          authSession.displayName.trim() ||
+          resolvedName,
+      });
+      resolveExplorerSummaryStatus();
+    } catch (error) {
+      if (!isActive()) {
+        return;
+      }
+
+      setExplorerSummary(null);
+      resolveExplorerSummaryStatus();
+      console.warn("[home] load explorer summary failed", {
+        error: error instanceof Error ? error.message : error,
+      });
+    }
+  }, [
+    authSession.displayName,
+    authSession.isAuthenticated,
+    authSession.tokenType,
+    authSession.username,
+  ]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadExplorerSummary();
+    }, [loadExplorerSummary]),
+  );
+
+  const handleRefreshHome = useCallback(async () => {
+    setIsRefreshing(true);
+
+    try {
+      await Promise.allSettled([
+        loadExplorerSummary(),
+        loadNearbyPlaces(),
+        loadThemeCategories(),
+        loadCommunityLeaderboard(),
+        loadHomeVouchers(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [
+    loadCommunityLeaderboard,
+    loadExplorerSummary,
+    loadHomeVouchers,
+    loadNearbyPlaces,
+    loadThemeCategories,
+  ]);
+
+  return (
+    <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
+      <RNStatusBar
+        animated
+        backgroundColor="transparent"
+        barStyle="dark-content"
+        translucent={Platform.OS === "android"}
+      />
+      <ScrollView
+        alwaysBounceVertical={false}
+        bounces={false}
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: homeContentBottomPadding }}
+        overScrollMode="never"
+        refreshControl={
+          <RefreshControl
+            colors={["#EB489B", "#F58752", "#FFC93C"]}
+            onRefresh={() => {
+              void handleRefreshHome();
+            }}
+            progressBackgroundColor="#FFFFFF"
+            refreshing={isRefreshing}
+            tintColor="#EB489B"
+            title={t("home.refreshing")}
+            titleColor="#8E869A"
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        <View
+          className="gap-6"
+          style={{
+            paddingHorizontal: gutter,
+            paddingTop: homeHeaderTopPadding,
+          }}
+        >
+          {isGuest ? (
+            <GuestWelcomeHeader
+              onGreetingPress={handleOpenRegister}
+              onSearchPress={handleOpenNearbyHotspots}
+            />
+          ) : (
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 flex-row items-center gap-3.5 pr-3">
+                <ExplorerHeaderAvatar
+                  avatar={explorerAvatar}
+                  level={explorerLevel}
+                  name={explorerName}
+                  username={explorerUsername}
+                />
+
+                <View className="flex-1 gap-1">
+                  <View className="gap-0 pt-1">
+                    <Text
+                      className="text-[15px] font-semibold tracking-[-0.3px] text-[#2B2233]"
+                      style={{ lineHeight: lineHeightFor(15) }}
+                    >
+                      {t("home.greeting", { name: explorerName })}
+                    </Text>
+                    <Text
+                      className="text-[11px] text-[#8E869A]"
+                      style={{ lineHeight: lineHeightFor(11), marginTop: -1 }}
+                    >
+                      {t("home.readyToExplore")}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <ExplorerHeaderActions
+                onSearchPress={handleOpenNearbyHotspots}
+                onNotificationPress={handleOpenNotifications}
+              />
+            </View>
+          )}
+
+          {/* Premium status / upsell banner (driven by real subscription data) */}
+          {explorerSummaryStatus === "loading" ? (
+            <PremiumBannerPlaceholder />
+          ) : isPremiumExplorer ? (
+            <LinearGradient
+              colors={["#FFFDFF", "#F8F2FF", "#FFF7EE"]}
+              end={{ x: 1, y: 1 }}
+              start={{ x: 0, y: 0 }}
+              className="overflow-hidden rounded-[26px]"
+              style={[
+                premiumBannerShadowStyle,
+                {
+                  backgroundColor: "#FFFDFF",
+                  borderColor: "#E7DCF3",
+                  borderWidth: 1,
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={["rgba(208, 168, 255, 0.32)", "rgba(208, 168, 255, 0)"]}
+                end={{ x: 1, y: 1 }}
+                start={{ x: 0, y: 0 }}
+                style={{
+                  borderRadius: 90,
+                  height: 180,
+                  position: "absolute",
+                  right: -44,
+                  top: -72,
+                  width: 180,
+                }}
+              />
+              <LinearGradient
+                colors={["rgba(255, 208, 148, 0.22)", "rgba(255, 208, 148, 0)"]}
+                end={{ x: 1, y: 1 }}
+                start={{ x: 0, y: 0 }}
+                style={{
+                  borderRadius: 96,
+                  bottom: -84,
+                  height: 192,
+                  left: -52,
+                  position: "absolute",
+                  width: 192,
+                }}
+              />
+
+              <View className="flex-row items-start gap-2.5 px-4 py-3">
+                <View className="flex-1 pr-0.5">
+                  <LinearGradient
+                    colors={["#A855F7", "#7C3AED", "#EC4899"]}
+                    end={{ x: 1, y: 0.5 }}
+                    start={{ x: 0, y: 0.5 }}
+                    className="mb-2 self-start rounded-full"
+                    style={{
+                      borderColor: "rgba(255, 255, 255, 0.4)",
+                      borderWidth: 1,
+                    }}
+                  >
+                    <View className="flex-row items-center gap-1.5 px-3 py-1">
+                      <SymbolView
+                        name={premiumCrownSymbolName}
+                        size={9}
+                        tintColor="#FFFFFF"
+                      />
+                      <Text
+                        className="text-[8px] font-extrabold uppercase tracking-[0.6px] text-white"
+                        style={{ lineHeight: lineHeightFor(8) }}
+                      >
+                        {t("home.premium.activeBadge")}
+                      </Text>
+                    </View>
+                  </LinearGradient>
+
+                  <Text
+                    className={premiumBannerTitleTextClassName}
+                    style={{ lineHeight: lineHeightFor(14) }}
+                  >
+                    {t("home.premium.activeTitle")}
+                  </Text>
+
+                  <Text
+                    className={premiumBannerActiveSubtitleTextClassName}
+                    style={{ lineHeight: bodyLineHeightFor(11) }}
+                  >
+                    {t("home.premium.activeSubtitle")}
+                  </Text>
+                </View>
+
+                <View
+                  className="w-[116px] shrink-0 items-end justify-start"
+                  style={{ marginRight: -1, marginTop: -6 }}
+                >
+                  <PremiumBannerIllustration />
+                </View>
+              </View>
+            </LinearGradient>
+          ) : (
+            <Pressable
+              onPress={() => router.push("/subscription/premium")}
+              className="overflow-hidden rounded-[26px]"
+              style={[
+                premiumBannerShadowStyle,
+                {
+                  backgroundColor: "#FFFCFE",
+                  borderColor: "#F4DFE7",
+                  borderWidth: 1,
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={["#FFFEFF", "#FFF5FA", "#FFF7EF"]}
+                end={{ x: 1, y: 1 }}
+                start={{ x: 0, y: 0 }}
+                className="rounded-[24px]"
+              >
+                <LinearGradient
+                  colors={["rgba(255, 184, 214, 0.38)", "rgba(255, 184, 214, 0)"]}
+                  end={{ x: 1, y: 1 }}
+                  start={{ x: 0, y: 0 }}
+                  style={{
+                    borderRadius: 92,
+                    height: 184,
+                    position: "absolute",
+                    right: -48,
+                    top: -76,
+                    width: 184,
+                  }}
+                />
+
+                <View className="px-4 py-2.5">
+                  <View className="flex-row items-start gap-1.5">
+                    <View className="flex-1 pr-0.5">
+                      <View className="mb-1.5 flex-row items-center gap-1.5 self-start rounded-full bg-[#EC4D94] px-2.5 py-1">
+                        <SymbolView
+                          name={premiumCrownSymbolName}
+                          size={9}
+                          tintColor="#FFFFFF"
+                        />
+                        <Text
+                          className="text-[8px] font-extrabold uppercase tracking-[0.6px] text-white"
+                          style={{ lineHeight: lineHeightFor(8) }}
+                        >
+                          {t("home.premium.upsellBadge")}
+                        </Text>
+                      </View>
+
+                      <Text
+                        className={premiumBannerTitleTextClassName}
+                        style={{ lineHeight: lineHeightFor(14) }}
+                      >
+                        {t("home.premium.upsellTitle")}
+                      </Text>
+
+                      <Text
+                        className={premiumBannerSubtitleTextClassName}
+                        style={{ lineHeight: bodyLineHeightFor(11) }}
+                      >
+                        {t("home.premium.upsellSubtitle")}
+                      </Text>
+                    </View>
+
+                    <View
+                      className="w-[116px] shrink-0 items-center justify-start"
+                      style={{ marginRight: -1, marginTop: -6 }}
+                    >
+                      <PremiumBannerIllustration />
+
+                      <LinearGradient
+                        colors={["#FF5E9C", "#F44A90", "#FF8A57"]}
+                        end={{ x: 1, y: 0.5 }}
+                        locations={[0, 0.56, 1]}
+                        start={{ x: 0, y: 0.5 }}
+                        className="mt-[-4px] rounded-full self-center"
+                        style={premiumBannerCtaShadowStyle}
+                      >
+                        <View className="flex-row items-center justify-center px-3.5 py-1.5">
+                          <Text
+                            className="text-[10px] font-extrabold text-white"
+                            style={{ lineHeight: lineHeightFor(10) }}
+                          >
+                            {t("home.premium.upsellCta").replace(/\s*→\s*$/, "")}
+                          </Text>
+                          <PremiumBannerCtaArrow />
+                        </View>
+                      </LinearGradient>
+                    </View>
+                  </View>
+                </View>
+              </LinearGradient>
+            </Pressable>
+          )}
+
+          <View className="gap-4">
+            <View className="flex-row items-center justify-between gap-3">
+              <View className="flex-1">
+                <Text className="text-[17px] font-extrabold text-[#2B2233]">
+                  {t("home.featuredRoutes")}
+                </Text>
+                <Text className="mt-0.5 text-[11px] font-medium text-[#9C94A5]">
+                  {t("home.featured.subtitle")}
+                </Text>
+              </View>
+
+              {featuredRouteCards.length > 0 ? (
+                <Pressable
+                  className="flex-row items-center"
+                  hitSlop={6}
+                  onPress={handleOpenRoutes}
+                >
+                  <Text className={homeSectionActionTextClassName}>
+                    {t("home.viewAll")}
+                  </Text>
+                  <SymbolView
+                    name={{
+                      ios: "chevron.right",
+                      android: "chevron_right",
+                      web: "chevron_right",
+                    }}
+                    size={14}
+                    tintColor="#D85B86"
+                  />
+                </Pressable>
+              ) : null}
+            </View>
+
+            {featuredRoutesStatus === "loading" ? (
+              <SectionEmptyState isLoading />
+            ) : !activeFeaturedRoute ? (
+              <SectionEmptyState
+                description={
+                  featuredRoutesNote ?? t("home.featured.emptyDescription")
+                }
+                title={t("home.featured.emptyTitle")}
+              />
+            ) : (
+              <>
+                <View
+                  className="items-start"
+                  style={{
+                    marginHorizontal: -gutter,
+                    width: safeWidth,
+                    paddingLeft: routeCardLeftInset,
+                  }}
+                >
+                  <Pressable
+                    key={activeFeaturedRoute.routeId}
+                    className="overflow-hidden rounded-[28px] bg-[#20182B]"
+                    onPress={() => {
+                      handleOpenRouteDetail(activeFeaturedRoute.routeId);
+                    }}
+                    style={[
+                      heroShadowStyle,
+                      {
+                        width: routeCardWidth,
+                      },
+                    ]}
+                  >
+                    <Image
+                      source={activeFeaturedRoute.coverUri}
+                      contentFit="cover"
+                      transition={220}
+                      cachePolicy="memory-disk"
+                      style={{ height: 224, width: "100%" }}
+                    />
+
+                    <View className="absolute inset-0 px-3.5 py-3.5">
+                      <View className="mt-auto max-w-[84%]">
+                        <Text
+                          className="text-[18px] font-semibold text-white"
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                          style={{
+                            lineHeight: lineHeightFor(18),
+                            textShadowColor: "rgba(0, 0, 0, 0.35)",
+                            textShadowOffset: { width: 0, height: 1 },
+                            textShadowRadius: 4,
+                          }}
+                        >
+                          {activeFeaturedRoute.title}
+                        </Text>
+
+                        <View className="mt-1.5 flex-row flex-wrap items-center gap-x-3 gap-y-1">
+                          <View className="flex-row items-center">
+                            <SymbolView
+                              name={{
+                                ios: "star.fill",
+                                android: "star",
+                                web: "star",
+                              }}
+                              size={12}
+                              tintColor="#FFC93C"
+                            />
+                            <Text
+                              className="ml-1 text-[12px] font-semibold text-white"
+                              numberOfLines={1}
+                              style={{
+                                lineHeight: lineHeightFor(12),
+                                textShadowColor: "rgba(0, 0, 0, 0.35)",
+                                textShadowOffset: { width: 0, height: 1 },
+                                textShadowRadius: 4,
+                              }}
+                            >
+                              {activeFeaturedRoute.xpLabel ??
+                                t("home.featured.xpUpdating")}
+                            </Text>
+                          </View>
+
+                          <View className="flex-row items-center">
+                            <SymbolView
+                              name={{
+                                ios: "mappin.and.ellipse",
+                                android: "place",
+                                web: "place",
+                              }}
+                              size={12}
+                              tintColor="#7DD3FC"
+                            />
+                            <Text
+                              className="ml-1 text-[12px] font-semibold text-white"
+                              numberOfLines={1}
+                              style={{
+                                lineHeight: lineHeightFor(12),
+                                textShadowColor: "rgba(0, 0, 0, 0.35)",
+                                textShadowOffset: { width: 0, height: 1 },
+                                textShadowRadius: 4,
+                              }}
+                            >
+                              {activeFeaturedRoute.stopsLabel}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  </Pressable>
+                </View>
+
+                {featuredRouteCards.length > 1 ? (
+                  <View
+                    className="flex-row items-center justify-center gap-2"
+                    style={{ paddingHorizontal: gutter }}
+                  >
+                    {featuredRouteCards.map((route, index) => (
+                      <Pressable
+                        key={route.routeId}
+                        onPress={() => {
+                          activeRouteIndexRef.current = index;
+                          setActiveRouteIndex(index);
+                        }}
+                        className={`rounded-full ${
+                          index === activeRouteIndex
+                            ? "h-2.5 w-8 bg-[#EB489B]"
+                            : "h-2.5 w-2.5 bg-[#F3C9D9]"
+                        }`}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+              </>
+            )}
+          </View>
+
+          {isGuest ? (
+            <GuestAccessCard onPress={handleOpenRegister} />
+          ) : isActiveJourneyLoading ? (
+            <View className="gap-3">
+              <Text className="text-[18px] font-extrabold text-[#2B2233]">
+                {t("home.activeJourney.continue")}
+              </Text>
+
+              <SectionEmptyState isLoading />
+            </View>
+          ) : activeJourneyStatus === "empty" ? (
+            <View className="gap-3">
+              <Text className={homeSectionTitleClassName}>
+                {t("home.activeJourney.continue")}
+              </Text>
+
+              <ActiveJourneyEmptyStateCard
+                illustrationWidth={activeJourneyEmptyIllustrationWidth}
+                onPress={handleOpenRoutes}
+              />
+            </View>
+          ) : currentJourney ? (
+            <View className="gap-3">
+              <Text className={homeSectionTitleClassName}>
+                {t("home.activeJourney.continue")}
+              </Text>
+
+              <View
+                className="overflow-hidden rounded-[22px] border"
+                style={[
+                  cardShadowStyle,
+                  {
+                    backgroundColor: activeJourneyCardBackground,
+                    borderColor: activeJourneyAccentSoft,
+                  },
+                ]}
+              >
+                <View className="relative h-[118px]">
+                  <Image
+                    source={currentJourney.coverUri}
+                    contentFit="cover"
+                    transition={220}
+                    cachePolicy="memory-disk"
+                    style={{ height: "100%", width: "100%" }}
+                  />
+
+                  <LinearGradient
+                    colors={[
+                      "rgba(36, 28, 44, 0.14)",
+                      "rgba(255, 255, 255, 0.38)",
+                      "rgba(255, 255, 255, 0.98)",
+                    ]}
+                    locations={[0, 0.56, 1]}
+                    start={{ x: 0.5, y: 0 }}
+                    end={{ x: 0.5, y: 1 }}
+                    className="absolute inset-0"
+                  />
+
+                  <View className="absolute inset-x-3 top-3 flex-row items-center justify-end">
+                    <View
+                      className="flex-row items-center rounded-full px-2.5 py-1.5"
+                      style={{ backgroundColor: activeJourneyAccentSoft }}
+                    >
+                      <View
+                        className="mr-1.5 h-2 w-2 rounded-full"
+                        style={{ backgroundColor: activeJourneyAccentWarm }}
+                      />
+                      <Text className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-[#7A5167]">
+                        {t("route.progress.inProgress")}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View className="-mt-9 gap-2.5 px-4 pb-4">
+                  <View className="flex-row items-center gap-3">
+                    <View className="shrink-0 rounded-full bg-white p-1.5">
+                      <JourneyProgressRing progress={activeJourneyProgress} />
+                    </View>
+
+                    <View className="flex-1 gap-0.5 pt-4">
+                      <Text
+                        className="text-[15px] font-extrabold text-[#2B2233]"
+                        numberOfLines={2}
+                        style={{ lineHeight: lineHeightFor(15) }}
+                      >
+                        {currentJourney.title}
+                      </Text>
+
+                      <View className="flex-row items-center gap-1">
+                        <SymbolView
+                          name={{
+                            ios: "mappin.and.ellipse",
+                            android: "place",
+                            web: "place",
+                          }}
+                          size={13}
+                          tintColor="#8E869A"
+                        />
+                        <Text
+                          className="flex-1 text-[12px] text-[#6F657A]"
+                          numberOfLines={1}
+                          style={{ lineHeight: lineHeightFor(12) }}
+                        >
+                          {currentJourney.nextStopName
+                            ? currentJourney.distanceToNextLabel
+                              ? t("home.activeJourney.nextStopWithDistance", {
+                                  distance: currentJourney.distanceToNextLabel,
+                                  name: currentJourney.nextStopName,
+                                })
+                              : t("home.activeJourney.nextStopName", {
+                                  name: currentJourney.nextStopName,
+                                })
+                            : t("home.activeJourney.checkedInStops", {
+                                current: currentJourney.currentCheckpoint,
+                                total: currentJourney.totalCheckpoints,
+                              })}
+                        </Text>
+                      </View>
+
+                      <View className="mt-0.5 flex-row items-center">
+                        {Array.from({
+                          length: currentJourney.totalCheckpoints,
+                        }).map((_, index) => {
+                          const isPast =
+                            index < currentJourney.currentCheckpoint;
+                          const isCurrent =
+                            index === currentJourney.currentCheckpoint;
+
+                          return (
+                            <View
+                              key={index}
+                              className="flex-1 flex-row items-center"
+                            >
+                              <View
+                                className={`h-3.5 w-3.5 rounded-full border-2 ${
+                                  isPast
+                                    ? "bg-white"
+                                    : isCurrent
+                                      ? "bg-white"
+                                      : "border-[#E5DCE2] bg-white"
+                                }`}
+                                style={
+                                  isPast || isCurrent
+                                    ? { borderColor: activeJourneyAccent }
+                                    : undefined
+                                }
+                              />
+                              {index < currentJourney.totalCheckpoints - 1 ? (
+                                <View
+                                  className={`h-[3px] flex-1 rounded-full ${
+                                    index < currentJourney.currentCheckpoint
+                                      ? ""
+                                      : "bg-[#E5DCE2]"
+                                  }`}
+                                  style={
+                                    index < currentJourney.currentCheckpoint
+                                      ? { backgroundColor: activeJourneyAccent }
+                                      : undefined
+                                  }
+                                />
+                              ) : null}
+                            </View>
+                          );
+                        })}
+                      </View>
+
+                      <Text
+                        className="text-[11px] font-medium text-[#8E869A]"
+                        style={{ lineHeight: lineHeightFor(11) }}
+                      >
+                        {currentJourney.remainingTimeLabel
+                          ? `${currentJourney.remainingStopsLabel} · ${currentJourney.remainingTimeLabel}`
+                          : currentJourney.remainingStopsLabel}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Pressable
+                    className="overflow-hidden rounded-[15px]"
+                    onPress={() => {
+                      handleOpenRouteDetail(currentJourney.routeId);
+                    }}
+                  >
+                    <LinearGradient
+                      colors={gradientColors}
+                      start={{ x: 0, y: 0.5 }}
+                      end={{ x: 1, y: 0.5 }}
+                      locations={[0, 0.58, 1]}
+                      className="flex-row items-center justify-center px-4 py-3"
+                    >
+                      <SymbolView
+                        name={{
+                          ios: "play.fill",
+                          android: "play_arrow",
+                          web: "play_arrow",
+                        }}
+                        size={13}
+                        tintColor="#FFFFFF"
+                      />
+                      <Text
+                        className="ml-1.5 text-[13px] font-extrabold text-white"
+                        style={{ lineHeight: bodyLineHeightFor(13) }}
+                      >
+                        {t("home.activeJourney.continueExploring")}
+                      </Text>
+                    </LinearGradient>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          <View className="gap-4">
+            <View className="flex-row items-center justify-between gap-3">
+              <Pressable
+                className="flex-1"
+                hitSlop={8}
+                onPress={handleOpenNearbyHotspots}
+              >
+                <Text className={homeSectionTitleClassName}>
+                  {t("home.nearbyPlaces")}
+                </Text>
+              </Pressable>
+              <Pressable
+                className="flex-row items-center"
+                hitSlop={8}
+                onPress={handleOpenNearbyHotspots}
+              >
+                <Text className={homeSectionActionTextClassName}>
+                  {t("home.viewAll")}
+                </Text>
+                <SymbolView
+                  name={{
+                    ios: "chevron.right",
+                    android: "chevron_right",
+                    web: "chevron_right",
+                  }}
+                  size={14}
+                  tintColor="#D85B86"
+                />
+              </Pressable>
+            </View>
+
+            {nearbyPlacesStatus !== "empty" && nearbyPlacesNote ? (
+              <Text className="text-[13px] leading-5 text-[#8E869A]">
+                {nearbyPlacesNote}
+              </Text>
+            ) : null}
+
+            {nearbyPlacesStatus === "loading" ? (
+              <SectionEmptyState isLoading />
+            ) : nearbyPlacesStatus === "empty" ? (
+              <SectionEmptyState
+                description={nearbyPlacesNote ?? t("home.empty.description")}
+                title={t("home.nearby.emptyTitle")}
+              />
+            ) : (
+              <View
+                style={{
+                  marginHorizontal: -gutter,
+                  width: safeWidth,
+                }}
+              >
+                <View
+                  className="bg-[#FFF0F6]"
+                  style={{
+                    minHeight: nearbyPlacesSectionHeight,
+                    paddingVertical: nearbyPlacesSectionTopInset,
+                  }}
+                >
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      left: gutter,
+                      position: "absolute",
+                      top: nearbyPlacesSectionTopInset,
+                    }}
+                  >
+                    <NearbyPlacesShowcaseCard
+                      cardHeight={nearbyPlacesShowcaseHeight}
+                      cardWidth={nearbyPlacesShowcaseWidth}
+                      imageHeight={nearbyPlacesShowcaseImageHeight}
+                    />
+                  </View>
+
+                  <ScrollView
+                    horizontal
+                    contentContainerStyle={{
+                      paddingBottom: 6,
+                      paddingLeft: nearbyPlacesScrollStartInset,
+                      paddingRight: gutter,
+                      paddingTop: 6,
+                    }}
+                    showsHorizontalScrollIndicator={false}
+                    style={{
+                      width: safeWidth,
+                    }}
+                  >
+                    {resolvedNearbyPlaces.map((place, index) => {
+                      const isPlaceCheckedIn = isNearbyPlaceCheckedIn(place);
+
+                      return (
+                        <Pressable
+                          key={place.key}
+                          disabled={!place.slug && place.hotspotId === null}
+                          onPress={() => {
+                            const hotspotId = place.hotspotId;
+                            const routeSlug =
+                              place.slug ??
+                              (hotspotId !== null
+                                ? getApiHotspotRouteSlug(hotspotId)
+                                : null);
+
+                            if (routeSlug) {
+                              router.push(getHotspotHref(routeSlug, hotspotId));
+                            }
+                          }}
+                          style={{
+                            marginRight:
+                              index === resolvedNearbyPlaces.length - 1
+                                ? 0
+                                : 12,
+                            width: nearbyPlaceCardWidth,
+                          }}
+                        >
+                          <View
+                            className="overflow-hidden rounded-[10px] border border-[#EEF1F4] bg-white"
+                            style={[
+                              nearbyPlaceShadowStyle,
+                              { height: nearbyPlaceCardHeight },
+                            ]}
+                          >
+                            <View className="relative">
+                              <Image
+                                source={place.imageUri}
+                                contentFit="cover"
+                                transition={220}
+                                cachePolicy="memory-disk"
+                                style={{
+                                  height: nearbyPlaceImageHeight,
+                                  width: "100%",
+                                }}
+                              />
+
+                              <View className="absolute inset-x-2.5 top-2.5 flex-row items-center justify-between">
+                                <View className="rounded-full bg-[#45414D]/92 px-2.5 py-1">
+                                  <Text className="text-[11px] font-extrabold text-white">
+                                    {place.distance}
+                                  </Text>
+                                </View>
+
+                                <View
+                                  className={`rounded-full px-2.5 py-1 ${
+                                    isPlaceCheckedIn
+                                      ? "bg-[#DCFCE7]"
+                                      : "bg-[#f0af16]"
+                                  }`}
+                                >
+                                  <Text
+                                    className={`text-[11px] font-extrabold ${
+                                      isPlaceCheckedIn
+                                        ? "text-[#15803D]"
+                                        : "text-[#2B2233]"
+                                    }`}
+                                  >
+                                    {isPlaceCheckedIn
+                                      ? t("home.nearby.checkedIn")
+                                      : `${place.reward} XP`}
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+
+                            <View
+                              className="flex-1 gap-0.5 px-3.5 pb-3.5 pt-3"
+                              style={{ minHeight: nearbyPlaceContentHeight }}
+                            >
+                              <Text
+                                className="text-[13px] font-extrabold leading-[16px] text-[#3B4454]"
+                                numberOfLines={2}
+                                style={{ minHeight: nearbyPlaceTitleHeight }}
+                              >
+                                {place.title}
+                              </Text>
+
+                              <View
+                                className="flex-row items-center gap-1"
+                                style={{ minHeight: nearbyPlaceCategoryHeight }}
+                              >
+                                <SymbolView
+                                  name={{
+                                    ios: "clock.fill",
+                                    android: "schedule",
+                                    web: "schedule",
+                                  }}
+                                  size={11}
+                                  tintColor="#A39AAB"
+                                />
+                                <Text
+                                  className="flex-1 text-[12px] text-[#A39AAB]"
+                                  numberOfLines={1}
+                                >
+                                  {place.openingHours}
+                                </Text>
+                              </View>
+
+                              <View
+                                className="flex-row items-center gap-1"
+                                style={{
+                                  minHeight: nearbyPlaceDetailRowHeight,
+                                }}
+                              >
+                                <SymbolView
+                                  name={{
+                                    ios: "star.fill",
+                                    android: "star",
+                                    web: "star",
+                                  }}
+                                  size={11}
+                                  tintColor="#F58752"
+                                />
+                                <Text className="text-[12px] font-bold text-[#F58752]">
+                                  {place.rating} ({place.reviewCountText})
+                                </Text>
+                              </View>
+
+                              {isPlaceCheckedIn ? (
+                                <View
+                                  className="flex-row items-center gap-1.5"
+                                  style={{
+                                    minHeight: nearbyPlaceDetailRowHeight,
+                                  }}
+                                >
+                                  <View className="h-5 w-5 items-center justify-center rounded-full bg-[#DCFCE7]">
+                                    <SymbolView
+                                      name={{
+                                        ios: "checkmark",
+                                        android: "check",
+                                        web: "check",
+                                      }}
+                                      size={11}
+                                      tintColor="#15803D"
+                                    />
+                                  </View>
+                                  <Text
+                                    className="flex-1 text-[12px] font-bold text-[#15803D]"
+                                    numberOfLines={1}
+                                  >
+                                    {t("home.nearby.viewStory")}
+                                  </Text>
+                                </View>
+                              ) : (
+                                <View
+                                  className="flex-row items-center gap-1"
+                                  style={{
+                                    minHeight: nearbyPlaceDetailRowHeight,
+                                  }}
+                                >
+                                  {place.detailIcon === "star" ? (
+                                    <Text className="text-[12px] text-[#F58752]">
+                                      ★
+                                    </Text>
+                                  ) : (
+                                    <SymbolView
+                                      name={{
+                                        ios: "location.fill",
+                                        android: "place",
+                                        web: "place",
+                                      }}
+                                      size={11}
+                                      tintColor="#8E869A"
+                                    />
+                                  )}
+                                  <Text
+                                    className={
+                                      place.detailIcon === "star"
+                                        ? "text-[12px] font-bold text-[#F58752]"
+                                        : "flex-1 text-[12px] text-[#8E869A]"
+                                    }
+                                    numberOfLines={1}
+                                  >
+                                    {place.detailPrimaryText}
+                                  </Text>
+                                  {place.detailSecondaryText ? (
+                                    <Text
+                                      className="text-[12px] text-[#8E869A]"
+                                      numberOfLines={1}
+                                    >
+                                      {place.detailSecondaryText}
+                                    </Text>
+                                  ) : null}
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              </View>
+            )}
+
+            <View className="flex-row items-center justify-between gap-3">
+              <Text className={homeSectionTitleClassName}>
+                {t("home.themes.sectionTitle")}
+              </Text>
+
+              <Pressable
+                className="flex-row items-center"
+                hitSlop={8}
+                onPress={handleOpenAllThemes}
+              >
+                <Text className={homeSectionActionTextClassName}>
+                  {t("home.viewAll")}
+                </Text>
+                <SymbolView
+                  name={{
+                    ios: "chevron.right",
+                    android: "chevron_right",
+                    web: "chevron_right",
+                  }}
+                  size={14}
+                  tintColor="#D85B86"
+                />
+              </Pressable>
+            </View>
+
+            {themeCategoriesStatus === "loading" ? (
+              <SectionEmptyState isLoading />
+            ) : themeCategories.length === 0 ? (
+              <SectionEmptyState description={t("home.themes.empty")} />
+            ) : (
+              <ScrollView
+                horizontal
+                contentContainerStyle={{
+                  paddingLeft: gutter,
+                  paddingRight: gutter,
+                }}
+                showsHorizontalScrollIndicator={false}
+                style={{
+                  marginHorizontal: -gutter,
+                  width: safeWidth,
+                }}
+              >
+                {themeCategories.map((item, index) => (
+                  <Pressable
+                    key={`${item.label}-${index}`}
+                    className={`items-center ${index === themeCategories.length - 1 ? "" : "mr-4"}`}
+                    onPress={() => handleOpenThemeCategory(item)}
+                    style={{ width: themeCategoryItemWidth }}
+                  >
+                    <View
+                      className="items-center"
+                      style={{ width: themeCategoryItemWidth }}
+                    >
+                      <View
+                        className="items-center justify-center rounded-full border border-[#F2EDF2] bg-white"
+                        style={[
+                          themeCategoryShadowStyle,
+                          {
+                            height: themeCategoryCircleSize,
+                            width: themeCategoryCircleSize,
+                          },
+                        ]}
+                      >
+                        {item.imageUrl ? (
+                          <Image
+                            source={item.imageUrl}
+                            contentFit="contain"
+                            transition={180}
+                            cachePolicy="memory-disk"
+                            style={{
+                              height: themeCategoryImageSize,
+                              width: themeCategoryImageSize,
+                            }}
+                          />
+                        ) : (
+                          <View
+                            className="items-center justify-center rounded-full"
+                            style={{
+                              backgroundColor: item.background,
+                              height: themeCategoryImageSize,
+                              width: themeCategoryImageSize,
+                            }}
+                          >
+                            <SymbolView
+                              name={item.icon}
+                              size={20}
+                              tintColor={item.accent}
+                            />
+                          </View>
+                        )}
+                      </View>
+
+                      <Text
+                        className="mt-3 text-center text-[13px] font-semibold leading-4 text-[#2F2A35]"
+                        numberOfLines={2}
+                      >
+                        {item.label}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+
+            <View className="flex-row items-center justify-between">
+              <Text className={homeSectionTitleClassName}>
+                {t("home.suggestedRoutes.title")}
+              </Text>
+              {suggestedRoutes.length > 1 ? (
+                <Pressable
+                  className="flex-row items-center"
+                  hitSlop={8}
+                  onPress={handleOpenRoutes}
+                >
+                  <Text className={homeSectionActionTextClassName}>
+                    {t("home.viewAll")}
+                  </Text>
+                  <SymbolView
+                    name={{
+                      ios: "chevron.right",
+                      android: "chevron_right",
+                      web: "chevron_right",
+                    }}
+                    size={14}
+                    tintColor="#D85B86"
+                  />
+                </Pressable>
+              ) : null}
+            </View>
+
+            {suggestedRoutesStatus !== "empty" && suggestedRoutesNote ? (
+              <Text className="text-[13px] leading-5 text-[#8E869A]">
+                {suggestedRoutesNote}
+              </Text>
+            ) : null}
+
+            {suggestedRoutesStatus === "loading" ? (
+              <SectionEmptyState isLoading />
+            ) : suggestedRoutesStatus === "empty" ? (
+              <SectionEmptyState
+                description={suggestedRoutesNote ?? t("home.empty.description")}
+                title={t("home.suggestedRoutes.emptyTitle")}
+              />
+            ) : (
+              <ScrollView
+                horizontal
+                contentContainerStyle={{
+                  alignItems: "stretch",
+                  paddingLeft: gutter,
+                  paddingRight: gutter,
+                }}
+                showsHorizontalScrollIndicator={false}
+                style={{
+                  marginHorizontal: -gutter,
+                  width: safeWidth,
+                }}
+              >
+                {suggestedRoutes.map((route, index) => (
+                  <Pressable
+                    key={route.id || `${route.title}-${index}`}
+                    className={
+                      index === suggestedRoutes.length - 1 ? "" : "mr-4"
+                    }
+                    onPress={() => {
+                      router.push(`/route/${route.id}` as Href);
+                    }}
+                    style={{ width: nearbyRouteCardWidth }}
+                  >
+                    <View
+                      className="flex-1 overflow-hidden border border-[#EEF1F4] bg-white"
+                      style={[
+                        cardShadowStyle,
+                        {
+                          borderRadius: 16,
+                          minHeight: suggestedRouteCardHeight,
+                        },
+                      ]}
+                    >
+                      <View className="relative">
+                        <Image
+                          source={route.cover}
+                          contentFit="cover"
+                          transition={220}
+                          cachePolicy="memory-disk"
+                          style={{
+                            height: suggestedRouteCardImageHeight,
+                            width: "100%",
+                          }}
+                        />
+
+                        <View className="absolute right-2 top-2 rounded-full bg-[#FFF1F6] px-2 py-[5px]">
+                          <Text className="text-[10px] font-extrabold text-[#EB489B]">
+                            +{route.xp} XP
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View className="flex-1 justify-between px-3 pb-3 pt-2">
+                        <View style={{ gap: 1 }}>
+                          <View className="flex-row flex-wrap items-center gap-1.5">
+                            <View className="rounded-full bg-[#FFF1F6] px-2 py-[5px]">
+                              <Text className="text-[10px] font-extrabold text-[#EB489B]">
+                                {route.distanceLabel}
+                              </Text>
+                            </View>
+                            <View className="rounded-full bg-[#FFF4EF] px-2 py-[5px]">
+                              <Text className="text-[10px] font-extrabold text-[#F58752]">
+                                {route.durationLabel}
+                              </Text>
+                            </View>
+
+                            <View
+                              className="rounded-full px-2 py-[5px]"
+                              style={{
+                                backgroundColor: (
+                                  routeDifficultyStyles[route.difficultyKey] ??
+                                  routeDifficultyStyles.MEDIUM
+                                ).background,
+                              }}
+                            >
+                              <Text
+                                className="text-[10px] font-extrabold"
+                                style={{
+                                  color: (
+                                    routeDifficultyStyles[
+                                      route.difficultyKey
+                                    ] ?? routeDifficultyStyles.MEDIUM
+                                  ).color,
+                                }}
+                              >
+                                {getRouteDifficultyLabel(
+                                  route.difficultyKey,
+                                  t,
+                                )}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <Text
+                            className="text-[14px] font-semibold text-[#2B2233]"
+                            numberOfLines={2}
+                            ellipsizeMode="tail"
+                            style={{ lineHeight: lineHeightFor(14) }}
+                          >
+                            {route.title}
+                          </Text>
+
+                          <Text
+                            className="text-[12px] text-[#7A6F67]"
+                            numberOfLines={2}
+                            ellipsizeMode="tail"
+                            style={{ lineHeight: lineHeightFor(12) }}
+                          >
+                            {getSuggestedRouteDescription(route)}
+                          </Text>
+                        </View>
+
+                        <View className="flex-row flex-wrap items-center justify-end gap-1.5 pt-2">
+                          {getSuggestedRouteTagLabel(route) ? (
+                            <View className="rounded-full bg-[#F4EFF8] px-2 py-[5px]">
+                              <Text className="text-[10px] font-extrabold text-[#6F657A]">
+                                {getSuggestedRouteTagLabel(route)}
+                              </Text>
+                            </View>
+                          ) : null}
+
+                          <View className="rounded-full bg-[#FFF7E8] px-2 py-[5px]">
+                            <Text className="text-[10px] font-extrabold text-[#D97706]">
+                              {t("home.stats.stops", {
+                                count: route.hotspotIds.length,
+                              })}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+
+            <View className="gap-4">
+              <View className="flex-row items-start justify-between gap-3">
+                <View className="flex-1 flex-row items-center gap-2">
+                  <Text className={homeSectionTitleClassName}>
+                    {t("home.vouchers.title")}
+                  </Text>
+                  <SymbolView
+                    name={{
+                      ios: "sparkles",
+                      android: "auto_awesome",
+                      web: "auto_awesome",
+                    }}
+                    size={15}
+                    tintColor="#FF7DA8"
+                  />
+                </View>
+
+                <Pressable
+                  className="flex-row items-center"
+                  hitSlop={8}
+                  onPress={() => {
+                    router.push("/vouchers" as Href);
+                  }}
+                >
+                  <Text className={homeSectionActionTextClassName}>
+                    {t("home.viewAll")}
+                  </Text>
+                  <SymbolView
+                    name={{
+                      ios: "chevron.right",
+                      android: "chevron_right",
+                      web: "chevron_right",
+                    }}
+                    size={14}
+                    tintColor="#D85B86"
+                  />
+                </Pressable>
+              </View>
+
+              <View
+                style={{
+                  marginHorizontal: -gutter,
+                  width: safeWidth,
+                }}
+              >
+                {homeVouchersStatus === "ready" ? (
+                  <View>
+                    <Animated.ScrollView
+                      key={`home-voucher-carousel-${homeVouchers.length}-${homeVoucherCardWidth}-${homeVoucherInitialIndex}`}
+                      contentOffset={{
+                        x: homeVoucherInitialOffset,
+                        y: 0,
+                      }}
+                      horizontal
+                      contentContainerStyle={{
+                        alignItems: "stretch",
+                        paddingBottom: 6,
+                        paddingLeft: homeVoucherCarouselSideInset,
+                        paddingRight: homeVoucherCarouselSideInset,
+                        paddingTop: 2,
+                      }}
+                      decelerationRate="fast"
+                      disableIntervalMomentum
+                      onScroll={homeVoucherScrollHandler}
+                      scrollEventThrottle={16}
+                      showsHorizontalScrollIndicator={false}
+                      snapToAlignment="start"
+                      snapToInterval={homeVoucherSnapInterval}
+                    >
+                      {homeVouchers.map((voucher, index) => (
+                        <HomeVoucherCard
+                          key={voucher.voucherId}
+                          imageHeight={homeVoucherImageHeight}
+                          index={index}
+                          isLast={index === homeVouchers.length - 1}
+                          onPress={() =>
+                            router.push(`/vouchers/${voucher.voucherId}` as Href)
+                          }
+                          scrollX={homeVoucherScrollX}
+                          snapInterval={homeVoucherSnapInterval}
+                          t={t}
+                          voucher={voucher}
+                          width={homeVoucherCardWidth}
+                        />
+                      ))}
+                    </Animated.ScrollView>
+
+                    <HomeVoucherCarouselDots
+                      count={homeVouchers.length}
+                      scrollX={homeVoucherScrollX}
+                      snapInterval={homeVoucherSnapInterval}
+                    />
+                  </View>
+                ) : homeVouchersStatus === "loading" ? (
+                  <View
+                    className="mx-4 overflow-hidden rounded-[24px] border bg-white"
+                    style={[
+                      homeVoucherCardShadowStyle,
+                      { borderColor: homeVoucherBorderColor },
+                    ]}
+                  >
+                    <AppLoadingScreen
+                      mode="embedded"
+                      style={{ minHeight: 116 }}
+                    />
+                  </View>
+                ) : (
+                  <Pressable
+                    className="mx-4 items-center rounded-[24px] border bg-[#FFF9FC] px-4 py-6"
+                    style={[
+                      homeVoucherCardShadowStyle,
+                      { borderColor: homeVoucherBorderColor },
+                    ]}
+                    onPress={() => {
+                      void loadHomeVouchers();
+                    }}
+                  >
+                    <Text className="text-center text-[13px] font-semibold text-[#8E869A]">
+                      {homeVouchersStatus === "empty"
+                        ? t("home.vouchers.empty")
+                        : t("home.vouchers.error")}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            </View>
+          </View>
+          <View className="gap-4">
+            <View>
+              <View className="flex-row items-start justify-between">
+                <View className="min-w-0 flex-1 flex-row items-center gap-3">
+                  <View className="h-11 w-11 items-center justify-center rounded-[16px] bg-[#FFF1D6]">
+                    <SymbolView
+                      name={{
+                        ios: "trophy.fill",
+                        android: "emoji_events",
+                        web: "emoji_events",
+                      }}
+                      size={22}
+                      tintColor="#E8A317"
+                    />
+                  </View>
+                  <View className="min-w-0 flex-1">
+                    <Text className={homeSectionTitleClassName}>
+                      {t("home.community.title")}
+                    </Text>
+                  </View>
+                </View>
+
+                <Pressable
+                  className="ml-2 flex-row items-center pt-1"
+                  hitSlop={8}
+                  onPress={handleOpenCommunityLeaderboard}
+                >
+                  <Text className="text-[13px] font-bold uppercase tracking-[0.3px] text-[#FF5F87]">
+                    {t("route.header.leaderboard")}
+                  </Text>
+                  <SymbolView
+                    name={{
+                      ios: "chevron.right",
+                      android: "chevron_right",
+                      web: "chevron_right",
+                    }}
+                    size={14}
+                    tintColor="#FF5F87"
+                  />
+                </Pressable>
+              </View>
+
+              {isCommunityLeaderboardLoading ? (
+                <View className="mt-4 overflow-hidden rounded-[24px]">
+                  <AppLoadingScreen
+                    mode="embedded"
+                    style={{ minHeight: communityLeaderboardLoadingHeight }}
+                  />
+                </View>
+              ) : (
+                <>
+                  <View className="mt-4 gap-3">
+                    {activeCommunityBoard.entries.length > 0 ? (
+                      <View style={{ marginHorizontal: -16 }}>
+                        <LeaderRankingCard
+                          topEntries={activeCommunityBoard.entries.filter(
+                            (entry) => entry.rank >= 1 && entry.rank <= 3,
+                          )}
+                          xp={activeCommunityBoard.summaryXp}
+                        />
+                      </View>
+                    ) : (
+                      <View className="items-center rounded-[24px] border border-[#F3E7ED] bg-[#FFF8FB] px-4 py-5">
+                        <>
+                          <Text className="text-center text-[13px] font-semibold text-[#1F2940]">
+                            {activeCommunityBoard.summaryLabel}
+                          </Text>
+                          <Text className="mt-1 text-center text-[13px] leading-[18px] text-[#8F8290]">
+                            {activeCommunityBoard.summaryNote}
+                          </Text>
+                        </>
+                      </View>
+                    )}
+
+                    <View className="gap-2.5">
+                      {activeCommunityBoard.entries.length > 0
+                        ? activeCommunityBoard.entries.map((entry) => {
+                            const isChampion = entry.rank === 1;
+                            const badgeColor =
+                              entry.rank === 1
+                                ? "#F7B500"
+                                : entry.rank === 2
+                                  ? "#9AACBF"
+                                  : entry.rank === 3
+                                    ? "#FF8A00"
+                                    : "#C7D1DE";
+
+                            return (
+                              <View
+                                key={`community-${entry.userId ?? entry.name}-${entry.rank}`}
+                                className="flex-row items-center rounded-[18px] px-3 py-2.5"
+                                style={[
+                                  communityRowShadowStyle,
+                                  {
+                                    backgroundColor: entry.isCurrentUser
+                                      ? "#FFF7FA"
+                                      : "#FFFFFF",
+                                    borderColor: entry.isCurrentUser
+                                      ? "#F8D8E3"
+                                      : isChampion
+                                        ? "#F4D493"
+                                        : "#EEF1F4",
+                                    borderWidth: 1,
+                                  },
+                                ]}
+                              >
+                                <View className="mr-2.5 w-7 items-center justify-center">
+                                  {isChampion ? (
+                                    <View className="absolute -top-3">
+                                      <SymbolView
+                                        name={{
+                                          ios: "crown.fill",
+                                          android: "workspace_premium",
+                                          web: "workspace_premium",
+                                        }}
+                                        size={14}
+                                        tintColor="#F7B500"
+                                      />
+                                    </View>
+                                  ) : null}
+
+                                  {entry.rank === 2 || entry.rank === 3 ? (
+                                    <View className="absolute -bottom-1 flex-row gap-[3px]">
+                                      <View
+                                        style={{
+                                          backgroundColor: badgeColor,
+                                          borderBottomLeftRadius: 2,
+                                          borderBottomRightRadius: 2,
+                                          height: 10,
+                                          transform: [{ rotate: "10deg" }],
+                                          width: 5,
+                                        }}
+                                      />
+                                      <View
+                                        style={{
+                                          backgroundColor: badgeColor,
+                                          borderBottomLeftRadius: 2,
+                                          borderBottomRightRadius: 2,
+                                          height: 10,
+                                          transform: [{ rotate: "-10deg" }],
+                                          width: 5,
+                                        }}
+                                      />
+                                    </View>
+                                  ) : null}
+
+                                  <View
+                                    className="h-6 w-6 items-center justify-center rounded-full"
+                                    style={{
+                                      backgroundColor:
+                                        entry.rank >= 1 && entry.rank <= 3
+                                          ? badgeColor
+                                          : "#EEF2F7",
+                                      borderColor: "#FFFFFF",
+                                      borderWidth: 2,
+                                    }}
+                                  >
+                                    <Text
+                                      className="text-[11px] font-medium leading-[13px]"
+                                      style={{
+                                        color:
+                                          entry.rank >= 1 && entry.rank <= 3
+                                            ? "#FFFFFF"
+                                            : "#667085",
+                                      }}
+                                    >
+                                      {entry.rank}
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <View className="mr-2.5 h-10 w-10 items-center justify-center">
+                                  <UserAvatar
+                                    borderColor={
+                                      entry.rank === 1
+                                        ? "#F7B500"
+                                        : entry.rank === 2
+                                          ? "#C9D4E5"
+                                          : entry.rank === 3
+                                            ? "#FF8A00"
+                                            : "#D7DCE4"
+                                    }
+                                    borderWidth={
+                                      entry.rank >= 1 && entry.rank <= 3
+                                        ? 2
+                                        : 1.5
+                                    }
+                                    containerStyle={{
+                                      backgroundColor: "#FFFFFF",
+                                    }}
+                                    displayName={entry.name}
+                                    size={38}
+                                    textSize={12}
+                                    uri={entry.avatarUri}
+                                  />
+                                </View>
+
+                                <View className="flex-1 pr-2">
+                                  <Text
+                                    className="text-[12px] font-medium leading-[14px] text-[#2B2233]"
+                                    numberOfLines={1}
+                                  >
+                                    {entry.name}
+                                  </Text>
+                                  <Text
+                                    className="text-[10px] font-normal leading-[12px] text-[#9A93A5]"
+                                    numberOfLines={1}
+                                  >
+                                    {entry.subtitle}
+                                  </Text>
+                                </View>
+
+                                <View className="flex-row items-center rounded-full bg-[#FFF0F5] px-2.5 py-1.5">
+                                  <SymbolView
+                                    name={{
+                                      ios: "star.fill",
+                                      android: "star",
+                                      web: "star",
+                                    }}
+                                    size={10}
+                                    tintColor="#FF5F87"
+                                  />
+                                  <Text className="ml-1 text-[10px] font-medium leading-[13px] text-[#2B2233]">
+                                    {entry.points}
+                                  </Text>
+                                </View>
+                              </View>
+                            );
+                          })
+                        : null}
+                    </View>
+                  </View>
+
+                  <Pressable
+                    className="mt-2 rounded-[20px] border border-[#F3E7ED] bg-white px-4 py-3"
+                    onPress={handleOpenCommunityLeaderboard}
+                    style={communityRowShadowStyle}
+                  >
+                    <View className="flex-row items-center justify-center">
+                      <SymbolView
+                        name={{
+                          ios: "list.number",
+                          android: "leaderboard",
+                          web: "leaderboard",
+                        }}
+                        size={13}
+                        tintColor="#FF5F87"
+                      />
+                      <Text className="ml-1.5 text-[12px] font-semibold text-[#FF5F87]">
+                        {t("home.community.viewFullLeaderboard")}
+                      </Text>
+                    </View>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}

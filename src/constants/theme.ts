@@ -3,24 +3,28 @@
  * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
  */
 
-import '@/global.css';
-
 import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#1B1D1F',
+    background: '#F7F3EA',
+    surface: '#FFFFFF',
+    backgroundElement: '#EFE6D7',
+    backgroundSelected: '#E9DCC5',
+    border: '#D7C6A8',
+    textSecondary: '#5D625C',
+    primary: '#A25B24',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#F6EFE2',
+    background: '#171A17',
+    surface: '#20241F',
+    backgroundElement: '#2A3029',
+    backgroundSelected: '#353E34',
+    border: '#465143',
+    textSecondary: '#B5B9AF',
+    primary: '#F0A35C',
   },
 } as const;
 
@@ -61,5 +65,13 @@ export const Spacing = {
   six: 64,
 } as const;
 
+export const ScreenHorizontalPadding = Spacing.three;
+
+export const Radius = {
+  small: 8,
+  medium: 14,
+  large: 22,
+} as const;
+
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 800;
+export const MaxContentWidth = 920;

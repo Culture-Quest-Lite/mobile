@@ -1,73 +1,45 @@
-import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
+import { Platform, Text, type TextProps, type TextStyle } from 'react-native';
 
 import { Fonts, ThemeColor } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
 
 export type ThemedTextProps = TextProps & {
   type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code';
   themeColor?: ThemeColor;
 };
 
-export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
-  const theme = useTheme();
+const themeColorClassNames: Record<ThemeColor, string> = {
+  text: 'text-[#1B1D1F] dark:text-[#F6EFE2]',
+  background: 'text-[#F7F3EA] dark:text-[#171A17]',
+  surface: 'text-white dark:text-[#20241F]',
+  backgroundElement: 'text-[#EFE6D7] dark:text-[#2A3029]',
+  backgroundSelected: 'text-[#E9DCC5] dark:text-[#353E34]',
+  border: 'text-[#D7C6A8] dark:text-[#465143]',
+  textSecondary: 'text-[#5D625C] dark:text-[#B5B9AF]',
+  primary: 'text-[#A25B24] dark:text-[#F0A35C]',
+};
 
+const typeClassNames: Record<NonNullable<ThemedTextProps['type']>, string> = {
+  default: 'text-base font-medium leading-7',
+  title: 'text-5xl font-semibold leading-[58px]',
+  small: 'text-sm font-medium leading-6',
+  smallBold: 'text-sm font-bold leading-6',
+  subtitle: 'text-[34px] font-semibold leading-[46px]',
+  link: 'text-sm leading-[32px]',
+  linkPrimary: 'text-sm leading-[32px] text-[#3C87F7]',
+  code: 'text-[13px] font-medium',
+};
+
+const codeStyle = {
+  fontFamily: Fonts.mono,
+  fontWeight: (Platform.select({ android: '700', default: '500' }) ?? '500') as TextStyle['fontWeight'],
+} satisfies TextStyle;
+
+export function ThemedText({ className, style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
   return (
     <Text
-      style={[
-        { color: theme[themeColor ?? 'text'] },
-        type === 'default' && styles.default,
-        type === 'title' && styles.title,
-        type === 'small' && styles.small,
-        type === 'smallBold' && styles.smallBold,
-        type === 'subtitle' && styles.subtitle,
-        type === 'link' && styles.link,
-        type === 'linkPrimary' && styles.linkPrimary,
-        type === 'code' && styles.code,
-        style,
-      ]}
+      className={`${themeColorClassNames[themeColor ?? 'text']} ${typeClassNames[type]} ${className ?? ''}`.trim()}
+      style={[type === 'code' ? codeStyle : undefined, style]}
       {...rest}
     />
   );
 }
-
-const styles = StyleSheet.create({
-  small: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 500,
-  },
-  smallBold: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 700,
-  },
-  default: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: 500,
-  },
-  title: {
-    fontSize: 48,
-    fontWeight: 600,
-    lineHeight: 52,
-  },
-  subtitle: {
-    fontSize: 32,
-    lineHeight: 44,
-    fontWeight: 600,
-  },
-  link: {
-    lineHeight: 30,
-    fontSize: 14,
-  },
-  linkPrimary: {
-    lineHeight: 30,
-    fontSize: 14,
-    color: '#3c87f7',
-  },
-  code: {
-    fontFamily: Fonts.mono,
-    fontWeight: Platform.select({ android: 700 }) ?? 500,
-    fontSize: 12,
-  },
-});

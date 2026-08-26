@@ -1,0 +1,1128 @@
+{
+  "common": {
+    "back": "Quay lại",
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "confirm": "Xác nhận",
+    "delete": "Xóa",
+    "edit": "Chỉnh sửa",
+    "loading": "Đang tải...",
+    "error": "Lỗi",
+    "success": "Thành công",
+    "close": "Đóng",
+    "retry": "Thử lại",
+    "continue": "Tiếp tục",
+    "apply": "Áp dụng",
+    "search": "Tìm kiếm",
+    "filter": "Bộ lọc",
+    "done": "Xong",
+    "skip": "Bỏ qua"
+  },
+  "auth": {
+    "login": {
+      "title": "Đăng nhập",
+      "subtitle": "Nhập tài khoản của bạn để đăng nhập",
+      "username": "Tên đăng nhập",
+      "password": "Mật khẩu",
+      "usernamePlaceholder": "Nhập tên đăng nhập",
+      "passwordPlaceholder": "Nhập mật khẩu",
+      "forgotPassword": "Bạn quên mật khẩu?",
+      "loginButton": "Đăng nhập",
+      "loggingIn": "Đang đăng nhập...",
+      "orLoginWith": "Hoặc đăng nhập với",
+      "noAccount": "Bạn chưa có tài khoản?",
+      "signUp": "Đăng ký",
+      "showPassword": "Hiện mật khẩu",
+      "hidePassword": "Ẩn mật khẩu",
+      "errorCannotLogin": "Không thể đăng nhập. Vui lòng thử lại.",
+      "errorCannotLoginWithProvider": "Không thể đăng nhập với {{provider}}. Vui lòng thử lại."
+    },
+    "register": {
+      "title": "Đăng ký",
+      "subtitle": "Tạo tài khoản để bắt đầu hành trình",
+      "username": "Tên đăng nhập",
+      "displayName": "Tên hiển thị",
+      "email": "Email",
+      "password": "Mật khẩu",
+      "confirmPassword": "Nhập lại mật khẩu",
+      "usernamePlaceholder": "Chọn tên đăng nhập",
+      "displayNamePlaceholder": "Chọn tên hiển thị",
+      "emailPlaceholder": "Nhập địa chỉ email",
+      "passwordPlaceholder": "Nhập mật khẩu",
+      "confirmPasswordPlaceholder": "Nhập lại mật khẩu",
+      "createAccountButton": "Tạo tài khoản",
+      "creatingAccount": "Đang tạo tài khoản...",
+      "orSignUpWith": "Hoặc đăng ký với",
+      "haveAccount": "Bạn đã có tài khoản?",
+      "signIn": "Đăng nhập",
+      "errorCannotRegister": "Không thể đăng ký. Vui lòng thử lại.",
+      "errorCannotRegisterWithProvider": "Không thể đăng ký với {{provider}}. Vui lòng thử lại."
+    },
+    "forgotPassword": {
+      "title": "Quên mật khẩu",
+      "subtitle": "Nhập email bạn đã dùng để đăng ký để tiếp tục khôi phục mật khẩu",
+      "email": "Email",
+      "emailPlaceholder": "Nhập địa chỉ email",
+      "sendEmailButton": "Gửi email khôi phục",
+      "sendingEmail": "Đang gửi email...",
+      "errorCannotSend": "Không thể gửi email khôi phục. Vui lòng thử lại.",
+      "errorEmailRequired": "Vui lòng nhập email.",
+      "errorEmailInvalid": "Email không đúng định dạng."
+    },
+    "forgotPasswordSuccess": {
+      "title": "Kiểm tra email",
+      "sentToPrefix": "Chúng tôi đã gửi email khôi phục mật khẩu tới",
+      "defaultMessage": "Chúng tôi đã gửi hướng dẫn khôi phục mật khẩu tới email của bạn.",
+      "emailFallback": "email của bạn",
+      "backToLogin": "Về đăng nhập",
+      "resendDifferentEmail": "Gửi lại email khác"
+    },
+    "resetPassword": {
+      "title": "Đặt lại mật khẩu",
+      "subtitle": "Nhập mật khẩu mới cho tài khoản của bạn",
+      "invalidTokenSubtitle": "Liên kết đổi mật khẩu không hợp lệ hoặc đã hết hạn",
+      "newPassword": "Mật khẩu mới",
+      "newPasswordPlaceholder": "Nhập mật khẩu mới",
+      "confirmPassword": "Nhập lại mật khẩu mới",
+      "confirmPasswordPlaceholder": "Nhập lại mật khẩu mới",
+      "submitButton": "Đổi mật khẩu",
+      "submitting": "Đang đổi mật khẩu...",
+      "errorCannotReset": "Không thể đổi mật khẩu. Vui lòng thử lại.",
+      "resendRecoveryEmail": "Gửi lại email khôi phục",
+      "successTitle": "Đổi mật khẩu thành công",
+      "successSubtitle": "Hãy đăng nhập lại bằng mật khẩu mới của bạn.",
+      "backToLogin": "Về đăng nhập"
+    },
+    "verifyOtp": {
+      "title": "Xác thực OTP",
+      "subtitle": "Nhập mã OTP đã gửi đến email của bạn",
+      "emailFallback": "Email của bạn",
+      "step": "Bước 2 / 2",
+      "codeSentTo": "Nhập mã gồm 6 số được gửi tới",
+      "confirmButton": "Xác nhận OTP",
+      "verifying": "Đang xác thực...",
+      "noCodeReceived": "Không nhận được mã?",
+      "resendCode": "Gửi lại mã",
+      "resending": "Đang gửi lại...",
+      "resendAfter": "Gửi lại mã sau {{time}}",
+      "backToRegister": "Quay lại đăng ký",
+      "registerSuccessTitle": "Đăng ký thành công!",
+      "resendSuccessMessage": "Mã OTP đã được gửi thành công",
+      "errorCannotResend": "Không thể gửi lại mã OTP. Vui lòng thử lại.",
+      "errorCheckCode": "Vui lòng kiểm tra lại mã OTP.",
+      "errorCannotVerify": "Không thể xác thực OTP. Vui lòng thử lại."
+    }
+  },
+  "profile": {
+    "title": "Hồ sơ",
+    "menu": {
+      "information": "Thông tin",
+      "changeAvatar": "Đổi ảnh đại diện",
+      "changeCover": "Đổi ảnh bìa",
+      "vouchers": "Kho voucher",
+      "notifications": "Thông báo",
+      "subscription": "Gói đăng ký",
+      "language": "Ngôn ngữ",
+      "logout": "Đăng xuất",
+      "settings": "Cài đặt",
+      "guestMode": "Bạn đang ở chế độ khách. Một số mục sẽ cần đăng nhập để sử dụng."
+    }
+  },
+  "settings": {
+    "language": {
+      "title": "Ngôn ngữ",
+      "vietnamese": "Tiếng Việt",
+      "english": "English",
+      "description": "Chọn ngôn ngữ hiển thị cho ứng dụng"
+    }
+  },
+  "route": {
+    "tabs": {
+      "official": "Chính thức",
+      "active": "Đang đi",
+      "groups": "Nhóm của tôi",
+      "completed": "Đã xong",
+      "bookmarked": "Đã lưu",
+      "plans": "Kế hoạch",
+      "journeys": "Hành trình của tôi",
+      "community": "Cộng đồng"
+    },
+    "header": {
+      "journey": "Hành trình",
+      "exploreNext": "Khám phá kế tiếp",
+      "leaderboard": "BXH"
+    },
+    "level": {
+      "level": "Cấp",
+      "remainingXP": "Còn {{xp}} XP để lên cấp {{level}}"
+    },
+    "progress": {
+      "inProgress": "Đang thực hiện",
+      "continueJourney": "Tiếp tục hành trình",
+      "abandonRoute": "Bỏ tuyến",
+      "abandoning": "Đang bỏ...",
+      "completed": "Hoàn thành",
+      "progress": "Tiến độ"
+    },
+    "empty": {
+      "noRoutes": "Bạn chưa tham gia tuyến nào",
+      "noCompleted": "Chưa hoàn thành tuyến nào",
+      "noBookmarked": "Bạn chưa lưu tuyến nào",
+      "noPlans": "Bạn chưa có Custom User Plan nào",
+      "noJourneys": "Bạn chưa ghi hành trình nào",
+      "noCommunity": "Chưa có hành trình cộng đồng nào",
+      "noGroups": "Bạn chưa có group route nào",
+      "loading": "Đang tải tuyến từ API..."
+    },
+    "actions": {
+      "continue": "Tiếp tục",
+      "unsave": "Bỏ lưu",
+      "unsaving": "Đang bỏ lưu...",
+      "viewDetails": "Xem chi tiết",
+      "viewGroup": "Xem nhóm",
+      "inviteFriends": "Mời thêm bạn"
+    },
+    "userPlan": {
+      "title": "Tạo kế hoạch hành trình mới",
+      "subtitle": "Chọn địa điểm, tối ưu thứ tự và bắt đầu khi bạn sẵn sàng.",
+      "continuePlan": "Tiếp tục kế hoạch"
+    },
+    "recordJourney": {
+      "title": "Ghi hành trình mới",
+      "subtitle": "Lưu các địa điểm đã check-in và hoàn thiện hành trình của riêng bạn.",
+      "recording": "Đang ghi",
+      "draft": "Bản nháp",
+      "trial": "Đang chờ duyệt",
+      "published": "Đã xuất bản",
+      "continueRecording": "Tiếp tục ghi",
+      "viewAndComplete": "Xem và hoàn thiện",
+      "viewStatus": "Xem trạng thái",
+      "viewJourney": "Xem hành trình"
+    },
+    "community": {
+      "title": "Khám phá hành trình đã xuất bản",
+      "subtitle": "Những route được cộng đồng chia sẻ sau khi hoàn tất quá trình xét duyệt.",
+      "topRoutes": "Tuyến được quan tâm nhiều nhất",
+      "fromCommunity": "Tuyến từ cộng đồng"
+    },
+    "leaderboard": {
+      "title": "Bảng xếp hạng",
+      "city": "TP.HCM",
+      "national": "Toàn quốc"
+    },
+    "stats": {
+      "points": "điểm",
+      "stops": "địa điểm",
+      "completed": "hoàn thành"
+    }
+  },
+  "hotspot": {
+    "search": {
+      "title": "Tìm hotspot hoặc địa chỉ",
+      "placeholder": "Tìm hotspot hoặc địa chỉ",
+      "cancel": "Hủy",
+      "noResults": "Không có hotspot phù hợp",
+      "noResultsSubtitle": "Hãy thử đổi từ khóa hoặc giảm điều kiện tìm kiếm để xem thêm hotspot.",
+      "searchByNameOrAddress": "Tìm kiếm theo tên hotspot hoặc địa chỉ.",
+      "filter": {
+        "title": "Bộ lọc hotspot",
+        "addFilter": "+ Thêm filter",
+        "remove": "Xóa",
+        "noFilters": "Chưa có filter nâng cao. Bạn có thể thêm filter theo tag, địa chỉ, mô tả, lịch sử, trạng thái, ngày tạo hoặc người tạo.",
+        "sortResults": "Sắp xếp kết quả",
+        "ascending": "Tăng dần",
+        "descending": "Giảm dần",
+        "apply": "Áp dụng bộ lọc"
+      },
+      "stats": {
+        "xp": "XP",
+        "points": "Điểm",
+        "createdDate": "Ngày tạo"
+      },
+      "pagination": {
+        "previous": "Trước",
+        "next": "Sau",
+        "page": "Trang"
+      },
+      "error": {
+        "cannotLoad": "Không thể tải dữ liệu hotspot.",
+        "retry": "Thử lại"
+      }
+    }
+  },
+  "tabs": {
+    "home": "Trang chủ",
+    "explore": "Khám phá",
+    "community": "Cộng đồng",
+    "journey": "Hành trình",
+    "profile": "Tài khoản"
+  },
+  "home": {
+    "greeting": "Chào {{name}}",
+    "readyToExplore": "Sẵn sàng khám phá",
+    "nearbyPlaces": "Địa điểm gần bạn",
+    "featuredRoutes": "Tuyến nổi bật",
+    "viewAll": "Xem tất cả",
+    "refreshing": "Đang cập nhật...",
+    "empty": {
+      "title": "Không có dữ liệu phù hợp",
+      "description": "Không có dữ liệu phù hợp."
+    },
+    "a11y": {
+      "openHotspots": "Mở danh sách địa danh",
+      "openNotifications": "Mở thông báo"
+    },
+    "guest": {
+      "greeting": "Xin chào bạn",
+      "loginToSave": "Đăng nhập để lưu hành trình",
+      "unlockTitle": "Mở khóa hành trình của bạn",
+      "notLoggedIn": "Chưa đăng nhập",
+      "benefitProgress": "Lưu tiến trình",
+      "benefitStories": "Mở khóa câu chuyện",
+      "benefitVouchers": "Nhận voucher",
+      "cta": "Trải nghiệm ngay"
+    },
+    "premium": {
+      "activeBadge": "PREMIUM EXPLORER",
+      "activeTitle": "Bạn đã mở khoá đầy đủ tính năng Premium",
+      "activeSubtitle": "AI Lập kế hoạch, Ghi hành trình Live & Audio Guide đã sẵn sàng ở trang Khám phá",
+      "upsellBadge": "CULTUREQUEST PREMIUM",
+      "upsellTitle": "Mở khóa AI Lập kế hoạch & Ghi hành trình Live",
+      "upsellSubtitle": "Trải nghiệm bộ tính năng Premium (User Plan & Record) tại trang Khám phá",
+      "upsellCta": "Khám phá ngay →"
+    },
+    "featured": {
+      "subtitle": "Những hành trình được cộng đồng khám phá nhiều nhất",
+      "emptyTitle": "Chưa có tuyến nổi bật",
+      "emptyDescription": "Không có dữ liệu tuyến phù hợp.",
+      "noPublishedRoutes": "Chưa có tuyến nào được xuất bản trên hệ thống.",
+      "loadError": "Không tải được tuyến nổi bật.",
+      "xpUpdating": "Đang cập nhật XP",
+      "tagFallback": "Khám phá",
+      "routeFallbackName": "Tuyến #{{id}}"
+    },
+    "activeJourney": {
+      "title": "Hành trình đang thực hiện",
+      "continue": "Tiếp tục hành trình",
+      "nextStop": "Điểm dừng tiếp theo",
+      "remainingStops": "Còn {{count}} điểm",
+      "distanceToNext": "Còn {{distance}} đến điểm kế tiếp",
+      "progress": "Tiến độ",
+      "emptyTitle": "Chưa có hành trình hoạt động",
+      "emptyDescription": "Bạn chưa có hành trình đang thực hiện. Chọn một tuyến để bắt đầu khám phá.",
+      "allStopsVisited": "Đã đi hết điểm dừng",
+      "remainingTime": "{{duration}} nữa",
+      "nextStopName": "Tiếp theo: {{name}}",
+      "nextStopWithDistance": "Tiếp theo: {{name}} · {{distance}}",
+      "checkedInStops": "{{current}}/{{total}} điểm dừng đã check-in",
+      "continueExploring": "Tiếp tục khám phá"
+    },
+    "suggestedRoutes": {
+      "title": "Đề xuất tuyến đường",
+      "emptyTitle": "Chưa có tuyến phù hợp",
+      "noLocation": "Không xác định được vị trí hiện tại nên chưa thể gợi ý tuyến đường phù hợp.",
+      "noRoutesNearby": "Không có dữ liệu tuyến đường phù hợp gần bạn.",
+      "loadFailed": "Không tải được tuyến gợi ý cho các địa điểm gần bạn.",
+      "loadError": "Không có dữ liệu tuyến đường phù hợp.",
+      "partialNote": "Đang hiển thị {{count}} tuyến từ các địa điểm gần bạn. {{failed}} địa điểm chưa tải được route.",
+      "devOverrideNote": "Đang hiển thị {{count}} tuyến gợi ý tổng hợp từ {{hotspots}} hotspot gần tọa độ test {{coordinate}}."
+    },
+    "community": {
+      "title": "Cộng đồng hôm nay",
+      "viewFullLeaderboard": "Xem bảng xếp hạng đầy đủ",
+      "guestMessage": "Đăng nhập để xem bảng xếp hạng cộng đồng",
+      "loadingTitle": "Đang tải bảng xếp hạng",
+      "loadingNote": "Hệ thống đang cập nhật cộng đồng hôm nay.",
+      "leaderLabel": "#{{rank}} {{name}} đang dẫn đầu",
+      "leaderNote": "Tổng {{xp}} trên bảng xếp hạng.",
+      "yourRank": "Bạn đang xếp hạng #{{rank}}",
+      "currentTotal": "Tổng {{xp}} hiện tại.",
+      "explorerFallback": "Explorer #{{id}}"
+    },
+    "stats": {
+      "distance": "{{value}} km",
+      "distanceMeters": "{{value}} m",
+      "duration": "{{value}} phút",
+      "durationHours": "{{hours}} giờ",
+      "durationHoursMinutes": "{{hours}} giờ {{minutes}} phút",
+      "stops": "{{count}} điểm dừng",
+      "updating": "Đang cập nhật"
+    },
+    "difficulty": {
+      "easy": "Dễ",
+      "medium": "Vừa",
+      "hard": "Khó"
+    },
+    "leaderboard": {
+      "title": "Bảng xếp hạng",
+      "viewAll": "Xem tất cả"
+    },
+    "vouchers": {
+      "title": "Ưu đãi đặc biệt",
+      "viewAll": "Xem tất cả voucher",
+      "points": "{{points}} điểm",
+      "loading": "Đang tải ưu đãi...",
+      "empty": "Chưa có ưu đãi nào đang mở. Chạm để tải lại.",
+      "error": "Không tải được ưu đãi. Chạm để thử lại.",
+      "guest": "Đăng nhập để xem ưu đãi từ đối tác",
+      "guestTitle": "Đăng nhập để mở ưu đãi đặc biệt",
+      "guestDescription": "Xem voucher đối tác, ưu đãi đổi điểm và quà gần bạn sau khi đăng nhập.",
+      "loginAction": "Đăng nhập"
+    },
+    "nearby": {
+      "title": "Gần bạn",
+      "rating": "Đánh giá",
+      "reviews": "đánh giá",
+      "nearYou": "Gần bạn",
+      "reviewCount": "{{value}} đánh giá",
+      "openingHoursUpdating": "Giờ cập nhật sau",
+      "noData": "Không có dữ liệu",
+      "checkedIn": "Đã check-in",
+      "viewStory": "Xem câu chuyện",
+      "emptyTitle": "Chưa có địa điểm phù hợp",
+      "enableGps": "Bật GPS để tải địa điểm gần bạn.",
+      "allowLocation": "Cho phép truy cập vị trí để tải địa điểm gần bạn.",
+      "unknownLocation": "Không xác định được vị trí hiện tại.",
+      "loadError": "Không có dữ liệu địa điểm phù hợp.",
+      "emptyRadius": "Không có dữ liệu phù hợp trong bán kính {{radius}} quanh vị trí hiện tại.",
+      "emptyRadiusDevOverride": "Không có dữ liệu phù hợp trong bán kính {{radius}} quanh tọa độ test {{coordinate}}.",
+      "devOverrideNote": "Đang hiển thị địa điểm trong bán kính {{radius}} quanh tọa độ test {{coordinate}}."
+    },
+    "themes": {
+      "title": "Khám phá theo chủ đề",
+      "viewAll": "Xem tất cả chủ đề",
+      "sectionTitle": "Chủ đề",
+      "empty": "Chưa có dữ liệu chủ đề phù hợp từ API."
+    }
+  },
+  "explore": {
+    "categories": {
+      "heritage": "Di sản"
+    },
+    "search": {
+      "placeholder": "Tìm điểm, tuyến, thử thách..."
+    },
+    "places": {
+      "checkedIn": "Đã đi",
+      "loadError": "Không thể tải địa điểm gần bạn."
+    },
+    "routes": {
+      "stops": "điểm",
+      "emptyTitle": "Chưa có tuyến nào",
+      "emptyDescription": "Hệ thống chưa có tuyến nào được xuất bản.",
+      "minutes": "phút",
+      "loadError": "Không thể tải tuyến từ máy chủ."
+    },
+    "a11y": {
+      "notifications": "Mở thông báo",
+      "recenter": "Về vị trí của tôi"
+    },
+    "filters": {
+      "radius": "{{value}} km",
+      "notVisited": "Chưa đi",
+      "allTags": "Tất cả"
+    },
+    "sheet": {
+      "placesCount": "{{count}} địa điểm",
+      "routesCount": "{{count}} tuyến",
+      "viewDetail": "Xem chi tiết",
+      "showingRoute": "Đang xem tuyến {{name}}",
+      "clearRoute": "Bỏ chọn",
+      "emptyPlacesTitle": "Chưa có địa điểm phù hợp",
+      "emptyPlacesDescription": "Không tìm thấy địa điểm nào trong bán kính {{radius}} km với bộ lọc hiện tại.",
+      "tab": {
+        "places": "Địa điểm",
+        "official": "Chính thức",
+        "community": "Cộng đồng"
+      }
+    },
+    "actions": {
+      "plan": "Kế hoạch",
+      "record": "Ghi hành trình",
+      "planPremiumFeature": "Tạo kế hoạch hành trình (User Plan)",
+      "recordPremiumFeature": "Ghi hành trình cá nhân (Record Journey)"
+    }
+  },
+  "community": {
+    "title": "Cộng đồng",
+    "posts": {
+      "create": "Tạo bài viết",
+      "edit": "Chỉnh sửa bài viết",
+      "delete": "Xóa bài viết",
+      "share": "Chia sẻ",
+      "like": "Thả tim",
+      "comment": "Bình luận",
+      "comments": "bình luận"
+    },
+    "status": {
+      "approved": "Đã duyệt",
+      "pending": "Chờ duyệt",
+      "rejected": "Bị từ chối",
+      "deleted": "Đã xóa"
+    },
+    "visibility": {
+      "public": "Công khai",
+      "private": "Riêng tư",
+      "friendsOnly": "Chỉ bạn bè"
+    },
+    "time": {
+      "justNow": "Vừa xong",
+      "minutesAgo": "{{count}} phút trước",
+      "hoursAgo": "{{count}} giờ trước",
+      "daysAgo": "{{count}} ngày trước"
+    },
+    "groups": {
+      "title": "Nhóm cộng đồng",
+      "create": "Tạo nhóm",
+      "viewAll": "Xem tất cả",
+      "loginRequiredTitle": "Đăng nhập để xem nhóm của tôi",
+      "loginRequiredDescription": "",
+      "loginAction": "Đăng nhập"
+    },
+    "empty": {
+      "noPosts": "Chưa có bài viết nào",
+      "noUpdates": "Chưa có cập nhật mới"
+    },
+    "leaderboard": {
+      "header": "Bảng xếp hạng",
+      "loading": "Đang tải bảng xếp hạng cộng đồng...",
+      "errorTitle": "Không tải được bảng xếp hạng",
+      "errorFallback": "Vui lòng thử lại sau.",
+      "loadError": "Không tải được bảng xếp hạng cộng đồng.",
+      "emptyNote": "Bảng xếp hạng sẽ hiển thị khi có hoạt động cộng đồng.",
+      "emptyTitle": "Chưa có dữ liệu bảng xếp hạng",
+      "xpLabel": "{{value}} XP",
+      "rankOneNote": "Tiếp tục giữ phong độ hôm nay!",
+      "rankOneTitle": "Bạn đang dẫn đầu bảng xếp hạng",
+      "gapNote": "Còn {{gap}} để vượt hạng #{{rank}}.",
+      "currentXpNote": "Bạn hiện có {{xp}}.",
+      "currentRankTitle": "Thứ hạng hiện tại của bạn",
+      "leaderNote": "{{name}} đang dẫn đầu với {{xp}}.",
+      "leaderTitle": "Người dẫn đầu cộng đồng hôm nay"
+    },
+    "joinGroup": {
+      "login": {
+        "actionLabel": "Đăng nhập",
+        "description": "Bạn cần đăng nhập để tham gia nhóm từ invite link này.",
+        "hint": "Sau khi đăng nhập xong, hệ thống sẽ tự thử tham gia nhóm lại.",
+        "title": "Cần đăng nhập"
+      },
+      "alreadyMember": {
+        "actionLabel": "Về cộng đồng",
+        "description": "Tài khoản này đã là thành viên của nhóm rồi.",
+        "hint": "Mở mục Cộng đồng để xem lại nhóm hiện tại.",
+        "title": "Bạn đã ở trong nhóm"
+      },
+      "expired": {
+        "description": "Invite link này đã hết hạn và không còn hiệu lực.",
+        "hint": "Hãy xin leader một link mới rồi thử tham gia lại.",
+        "title": "Link đã hết hạn"
+      },
+      "invalid": {
+        "description": "Invite link này không hợp lệ hoặc đã bị thay đổi.",
+        "hint": "Kiểm tra lại link được chia sẻ, sau đó thử lại.",
+        "title": "Link không hợp lệ"
+      },
+      "generic": {
+        "hint": "Vui lòng thử lại sau hoặc liên hệ quản trị viên để được hỗ trợ.",
+        "title": "Không thể tham gia nhóm"
+      },
+      "sessionExpiredError": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+      "saveGroupError": "Không thể lưu dữ liệu nhóm vừa tham gia.",
+      "genericJoinError": "Không thể tham gia nhóm từ invite link này.",
+      "pending": {
+        "title": "Đã gửi yêu cầu tham gia!",
+        "description": "Yêu cầu của bạn đã được gửi thành công.\nVui lòng chờ leader duyệt để tham gia nhóm.",
+        "statusLabel": "Đang chờ duyệt",
+        "statusHint": "Leader sẽ xem xét yêu cầu của bạn và phản hồi sớm nhất có thể.",
+        "backHome": "Quay lại trang chủ"
+      }
+    },
+    "groupsScreen": {
+      "headerTitle": "Tất cả nhóm",
+      "dateNew": "Mới",
+      "dateToday": "Hôm nay",
+      "status": {
+        "active": "Đang hoạt động",
+        "pending": "Đang chờ duyệt",
+        "inactive": "Tạm ngưng",
+        "default": "Nhóm cộng đồng"
+      },
+      "access": {
+        "approvalRequired": "Duyệt khi tham gia",
+        "openJoin": "Tham gia tự do"
+      },
+      "memberCountLabel": "{{count}} thành viên",
+      "heroTitle": "Nhóm của bạn",
+      "heroSubtitleReady": "{{count}} nhóm đang có sẵn trong tài khoản của bạn",
+      "heroSubtitlePending": "Danh sách nhóm sẽ được làm mới khi bạn mở màn này",
+      "createButton": "Tạo nhóm mới",
+      "searchPlaceholder": "Tìm kiếm nhóm...",
+      "emptyDescription": "Bạn chưa có nhóm nào. Hãy tạo nhóm đầu tiên để bắt đầu.",
+      "searchEmptyTitle": "Không tìm thấy nhóm",
+      "searchEmptyDescription": "Thử nhập tên nhóm khác để tìm lại danh sách phù hợp.",
+      "unnamedGroup": "Nhóm chưa đặt tên"
+    },
+    "groupsCommon": {
+      "openErrorTitle": "Không mở được nhóm",
+      "openErrorMessage": "Dữ liệu nhóm này chưa hợp lệ.",
+      "loadErrorTitle": "Không tải được nhóm",
+      "loadError": "Không tải được danh sách nhóm cộng đồng.",
+      "emptyTitle": "Chưa có nhóm",
+      "emptyDescription": "Hiện chưa có nhóm nào để hiển thị."
+    },
+    "feed": {
+      "menu": {
+        "editVisibility": "Chỉnh sửa quyền riêng tư",
+        "moveToTrash": "Chuyển vào thùng rác",
+        "reportPost": "Báo cáo bài viết",
+        "openOptionsA11y": "Mở tuỳ chọn bài viết",
+        "openReportA11y": "Báo cáo bài viết này"
+      },
+      "time": {
+        "minutes": "{{count}} phút",
+        "hours": "{{count}} giờ",
+        "days": "{{count}} ngày",
+        "weeks": "{{count}} tuần",
+        "months": "{{count}} tháng",
+        "years": "{{count}} năm"
+      },
+      "composerIdentity": {
+        "you": "Bạn",
+        "guest": "Khách"
+      },
+      "composerPlaceholder": {
+        "authenticated": "Chia sẻ trải nghiệm của bạn...",
+        "guest": "Đăng nhập để chia sẻ trải nghiệm..."
+      },
+      "location": {
+        "hotspotTagged": "{{count}} địa điểm được gắn",
+        "routeTagged": "{{count}} tuyến đường được gắn"
+      },
+      "defaultMood": "Cập nhật mới từ cộng đồng",
+      "badge": {
+        "location": "Địa điểm",
+        "route": "Tuyến đường",
+        "feed": "Bảng tin",
+        "shared": "Chia sẻ"
+      },
+      "routeEstimate": {
+        "days": "{{count}} ngày",
+        "hours": "{{count}} giờ",
+        "minutes": "{{count}} phút"
+      },
+      "fallbackUserName": "Người dùng",
+      "fallbackRole": "Cộng đồng khám phá",
+      "fallbackCaption": "Bài viết mới từ cộng đồng.",
+      "loadError": "Không tải được bảng tin cộng đồng.",
+      "refreshErrorTitle": "Không thể làm mới",
+      "refreshError": "Không thể làm mới bảng tin cộng đồng.",
+      "commentsLoadError": "Không tải được bình luận của bài viết cộng đồng.",
+      "missingContentTitle": "Thiếu nội dung",
+      "missingCommentMessage": "Hãy nhập nội dung trước khi gửi bình luận.",
+      "sessionExpiredTitle": "Phiên đăng nhập hết hạn",
+      "sessionExpiredComment": "Vui lòng đăng nhập lại trước khi gửi bình luận.",
+      "sessionExpiredLike": "Vui lòng đăng nhập lại trước khi thả tim bài viết cộng đồng.",
+      "sessionExpiredShare": "Vui lòng đăng nhập lại trước khi chia sẻ bài viết cộng đồng.",
+      "sessionExpiredTrash": "Vui lòng đăng nhập lại trước khi chuyển bài viết vào thùng rác.",
+      "commentSubmitErrorTitle": "Không thể gửi bình luận",
+      "commentSubmitErrorMessage": "Đã có lỗi xảy ra khi gửi bình luận cho bài viết cộng đồng.",
+      "loginRequiredTitle": "Cần đăng nhập",
+      "loginRequiredLike": "Bạn cần đăng nhập để thả tim bài viết cộng đồng.",
+      "loginRequiredShare": "Bạn cần đăng nhập để chia sẻ bài viết cộng đồng.",
+      "loginRequiredTrash": "Bạn cần đăng nhập để chuyển bài viết vào thùng rác.",
+      "likeErrorTitle": "Không thể thả tim",
+      "likeErrorMessage": "Đã có lỗi xảy ra khi thả tim bài viết cộng đồng.",
+      "shareErrorTitle": "Không thể chia sẻ",
+      "shareInvalidIdMessage": "Bài viết này chưa có mã hợp lệ để chia sẻ.",
+      "shareErrorMessage": "Đã có lỗi xảy ra khi chia sẻ bài viết cộng đồng.",
+      "editErrorTitle": "Không thể chỉnh sửa",
+      "editUnknownPostMessage": "Không xác định được bài viết cần chỉnh sửa.",
+      "editVisibilityUnknownPostMessage": "Không xác định được bài viết cần chỉnh sửa quyền riêng tư.",
+      "trashErrorTitle": "Không thể chuyển bài viết",
+      "trashInvalidIdMessage": "Bài viết này chưa có mã hợp lệ để chuyển vào thùng rác.",
+      "trashErrorMessage": "Đã có lỗi xảy ra khi chuyển bài viết vào thùng rác.",
+      "trashSuccessToast": "Đã xóa bài viết thành công",
+      "sharedPrivateToast": "Đã chia sẻ vào mục riêng tư trong hồ sơ của bạn",
+      "sharedPublicToast": "Đã chia sẻ bài viết lên cộng đồng",
+      "demoFallbackNotice": "Đang hiển thị bảng tin mẫu tạm thời để màn hình không bị trống.",
+      "emptyFeedDescription": "Feed cộng đồng hiện chưa có bài mới. Hãy quay lại sau để xem thêm hoạt động từ các explorer.",
+      "trashConfirmLabel": "Chuyển bài",
+      "trashConfirmDescription": "Bài viết và toàn bộ ảnh, video đính kèm sẽ được chuyển vào thùng rác của bạn.",
+      "trashConfirmTitle": "Chuyển bài viết vào thùng rác?",
+      "hotspotCountLabel": "{{count}} địa điểm",
+      "routeFallbackName": "Tuyến đường #{{id}}",
+      "hotspotFallbackName": "Địa điểm #{{id}}",
+      "hotspotMoreLabel": "{{first}}, {{second}} và {{count}} địa điểm khác",
+      "openProfileA11y": "Mở hồ sơ của {{name}}",
+      "showLess": "Thu gọn",
+      "showMore": "Xem thêm",
+      "defaultCommentText": "Đã gửi một bình luận.",
+      "sharePlaceholder": "Hãy nói gì đó về nội dung này...",
+      "shareNowButton": "Chia sẻ ngay",
+      "writeCommentTitle": "Viết bình luận",
+      "commentForAuthor": "Bình luận cho bài viết của {{author}}.",
+      "commentForPost": "Bình luận cho bài viết cộng đồng.",
+      "commentPlaceholder": "Chia sẻ cảm nhận của bạn về bài viết này...",
+      "commentPublicNotice": "Bình luận sẽ được gửi công khai.",
+      "submitCommentButton": "Gửi bình luận",
+      "commentCountLabel": "{{count}} mục",
+      "commentsPagePlaceholder": "Trang 1 / {{size}}",
+      "retryLoad": "Thử tải lại",
+      "noCommentsTitle": "Chưa có bình luận nào",
+      "noCommentsDescription": "Hãy là người đầu tiên để lại cảm nhận cho bài viết này.",
+      "report": {
+        "sheetTitle": "Lý do báo cáo",
+        "loginRequired": "Bạn cần đăng nhập để báo cáo bài viết.",
+        "sessionExpired": "Vui lòng đăng nhập lại trước khi báo cáo bài viết.",
+        "successToast": "Đã gửi báo cáo tới quản trị viên",
+        "failureTitle": "Không gửi được báo cáo",
+        "failureDescription": "Vui lòng thử lại sau ít phút.",
+        "reasons": {
+          "spam": "Spam hoặc quảng cáo",
+          "harassment": "Quấy rối, xúc phạm người khác",
+          "misinformation": "Thông tin sai sự thật",
+          "violence": "Bạo lực hoặc nguy hiểm",
+          "sensitiveContent": "Nội dung nhạy cảm, không phù hợp",
+          "other": "Lý do khác"
+        },
+        "draftPlaceholder": "Mô tả cụ thể vấn đề của bài viết này...",
+        "submit": "Gửi báo cáo",
+        "invalidPost": "Không xác định được bài viết cần báo cáo."
+      }
+    },
+    "explorerProfile": {
+      "tabs": {
+        "posts": "Bài viết",
+        "routes": "Tuyến đường"
+      },
+      "fallbackHeadline": "Explorer đang hoạt động trên cộng đồng Culture Quest.",
+      "statusUnknown": "Chưa rõ",
+      "loadingRoute": "Đang tải tuyến đường...",
+      "loadingLocation": "Đang tải địa điểm...",
+      "loadProfileError": "Không thể tải hồ sơ explorer.",
+      "loadPostsError": "Không thể tải bài viết của explorer.",
+      "sharedAlertTitle": "Đã chia sẻ",
+      "sharedPrivateMessage": "Bài viết đã được chia sẻ vào mục riêng tư trong hồ sơ của bạn.",
+      "sharedPublicMessage": "Bài viết đã được chia sẻ lên cộng đồng.",
+      "notFoundTitle": "Không tìm thấy explorer",
+      "notFoundMessage": "Hồ sơ cộng đồng này không còn khả dụng hoặc dữ liệu demo chưa được tạo.",
+      "backToCommunity": "Quay lại cộng đồng",
+      "followingStat": "Đang theo dõi",
+      "followerStat": "Người theo dõi",
+      "loginToFollowMessage": "Vui lòng đăng nhập để theo dõi explorer.",
+      "sessionExpiredFollowMessage": "Vui lòng đăng nhập lại để tiếp tục.",
+      "followErrorTitle": "Không thể cập nhật theo dõi",
+      "followErrorMessage": "Đã có lỗi xảy ra khi cập nhật theo dõi.",
+      "unfollowA11y": "Bỏ theo dõi explorer",
+      "followA11y": "Theo dõi explorer",
+      "processingLabel": "Đang xử lý...",
+      "followedLabel": "Đã follow",
+      "followLabel": "Follow",
+      "unfollowLabel": "Hủy follow",
+      "messageA11y": "Nhắn tin explorer",
+      "messageLabel": "Nhắn tin",
+      "noPublicPosts": "Explorer này chưa có bài viết công khai nào.",
+      "joinedDateLabel": "Ngày tham gia: {{date}}",
+      "levelLabel": "Cấp bậc : {{level}}",
+      "emailLabel": "Email: {{email}}",
+      "personalInfoTitle": "Thông tin cá nhân",
+      "defaultPostContent": "Chuyến đi hôm nay rất đáng nhớ.",
+      "sharingLabel": "Đang chia sẻ...",
+      "noPublicRoutes": "Explorer này chưa chia sẻ route công khai nào.",
+      "completedRoutesTitle": "Route đã hoàn thành",
+      "routeCountLabel": "{{count}} route",
+      "noCompletedRoutes": "Chưa có route hoàn thành được chia sẻ công khai.",
+      "favoriteRoutesTitle": "Route yêu thích",
+      "noFavoriteRoutes": "Chưa có route yêu thích được đánh dấu công khai.",
+      "favoriteLabel": "Yêu thích",
+      "noRoutesInPosts": "Explorer này chưa gắn route nào trong các bài viết.",
+      "apiRouteLabel": "Route #{{id}}",
+      "routePostCount": "{{count}} bài viết có gắn route này",
+      "sharedCountLabel": "{{count}} chia sẻ",
+      "detailsLabel": "Chi tiết",
+      "routeCardLabel": "Route",
+      "hotspotCountLabel": "{{count}} hotspot"
+    },
+    "groupCreate": {
+      "headerTitle": "Tạo nhóm tham gia",
+      "groupNameLabel": "Tên nhóm",
+      "groupNamePlaceholder": "Đặt tên nhóm",
+      "nameRequired": "Hãy đặt tên cho nhóm.",
+      "nameTooShort": "Tên nhóm cần ít nhất {{min}} ký tự.",
+      "nameTooLong": "Tên nhóm tối đa {{max}} ký tự.",
+      "inviteFriends": "Mời bạn bè",
+      "selectedCount": "Đã chọn: {{count}}",
+      "searchPlaceholder": "Tìm tên hoặc tài khoản",
+      "loadingFriends": "Đang tải danh sách bạn bè...",
+      "loginRequiredFriends": "Bạn cần đăng nhập để xem danh sách bạn bè.",
+      "loadFriendsError": "Không thể tải danh sách bạn bè lúc này.",
+      "loginAction": "Đăng nhập",
+      "noFriendsFound": "Không tìm thấy bạn bè phù hợp",
+      "noFriendsFoundSubtitle": "Hãy thử tìm bằng tên khác hoặc tài khoản khác.",
+      "loginRequiredSubmit": "Bạn cần đăng nhập để tạo nhóm mới.",
+      "saveError": "Không thể lưu dữ liệu nhóm vừa tạo.",
+      "createError": "Không thể tạo nhóm lúc này. Vui lòng thử lại.",
+      "submitButton": "Tạo nhóm",
+      "defaultUserAccount": "Tài khoản người dùng"
+    },
+    "groupCreated": {
+      "backToFeed": "Về bảng tin",
+      "missingTokenTitle": "Thiếu dữ liệu link mời",
+      "missingTokenDescription": "Không đọc được shareToken từ route hiện tại.",
+      "missingSessionTitle": "Không tìm thấy dữ liệu nhóm",
+      "missingSessionDescription": "Phiên tạo nhóm đã không còn trong bộ nhớ. Hãy tạo lại nhóm để lấy link mời mới nhất.",
+      "successTitle": "Tạo nhóm thành công!",
+      "successSubtitle": "Cộng đồng của bạn đã sẵn sàng. Hãy mời những người cùng sở thích tham gia nhé.",
+      "inviteLinkLabel": "Link mời",
+      "defaultGroupName": "Nhóm mới",
+      "viewDetails": "Xem chi tiết"
+    },
+    "groupDetail": {
+      "routeInvalidTitle": "Link nhóm không hợp lệ",
+      "routeInvalidDescription": "Không đọc được tham số nhóm từ đường dẫn hiện tại.",
+      "missingRouteError": "Không đọc được thông tin nhóm từ đường dẫn hiện tại.",
+      "missingGroupIdError": "Không xác định được ID nhóm để tải chi tiết.",
+      "loadError": "Không tải được chi tiết nhóm cộng đồng.",
+      "loadErrorTitle": "Không tải được nhóm",
+      "loadErrorFallbackDescription": "Không có dữ liệu chi tiết để hiển thị cho nhóm này.",
+      "missingGroupForMembers": "Không xác định được nhóm để mở danh sách thành viên.",
+      "missingGroupIdForLeave": "Không xác định được ID nhóm để rời nhóm.",
+      "loginRequiredLeave": "Bạn cần đăng nhập để rời nhóm.",
+      "leaveSuccess": "Đã rời nhóm.",
+      "leaveError": "Không thể rời nhóm lúc này.",
+      "leaveConfirmTitle": "Rời nhóm",
+      "leaveConfirmDescription": "Bạn có chắc muốn rời khỏi nhóm này không?",
+      "stayAction": "Ở lại",
+      "missingGroupIdForRefresh": "Không xác định được ID nhóm để làm mới link mời.",
+      "leaderOnlyRefresh": "Chỉ leader mới có thể làm mới link mời.",
+      "loginRequiredRefresh": "Bạn cần đăng nhập để làm mới link mời.",
+      "refreshSuccess": "Đã làm mới link mời.",
+      "refreshError": "Không thể làm mới link mời lúc này.",
+      "creatorFallback": "Explorer #{{id}}",
+      "notUpdated": "Chưa cập nhật",
+      "noDataYet": "Chưa có dữ liệu",
+      "requiredApprovalYes": "Duyệt khi tham gia",
+      "requiredApprovalNo": "Tham gia tự do",
+      "viewMembersAction": "Xem thành viên nhóm",
+      "leavingAction": "Đang rời nhóm...",
+      "infoSectionTitle": "Thông tin nhóm",
+      "creatorLabel": "Người tạo",
+      "totalMembersLabel": "Tổng số thành viên",
+      "requiredApprovalLabel": "Yêu cầu duyệt tham gia",
+      "createdAtLabel": "Ngày tạo",
+      "updatedAtLabel": "Cập nhật lần cuối",
+      "footerNote": "Nhóm được tạo và quản lý bởi CultureQuest Lite",
+      "defaultGroupName": "Nhóm cộng đồng",
+      "statusActive": "Đang hoạt động",
+      "inviteSectionTitle": "Mời thành viên tham gia",
+      "refreshLinkA11y": "Làm mới liên kết tham gia",
+      "refreshLinkAction": "Làm mới liên kết",
+      "copyLinkA11y": "Sao chép liên kết tham gia",
+      "linkCopied": "Đã sao chép liên kết",
+      "copyLink": "Sao chép liên kết",
+      "closeMenuA11y": "Đóng menu nhóm"
+    },
+    "groupInvite": {
+      "headerTitle": "Mời thành viên",
+      "invalidTokenTitle": "Link mời không hợp lệ",
+      "invalidTokenDescription": "Không đọc được shareToken để hiển thị link mời thành viên.",
+      "missingSessionTitle": "Chưa có dữ liệu nhóm",
+      "missingSessionDescription": "Không tìm thấy dữ liệu nhóm trong phiên hiện tại. Hãy quay lại Chi tiết nhóm hoặc tạo/tham gia nhóm lại.",
+      "defaultGroupName": "Nhóm du lịch",
+      "screenDescription": "Màn này không tự tạo thêm API. Toàn bộ link mời thành viên được suy ra trực tiếp từ shareToken mà backend trả về.",
+      "totalMembersLabel": "Tổng thành viên",
+      "shareTokenLabel": "Mã chia sẻ",
+      "shareErrorFallback": "Không thể mở chia sẻ hệ thống lúc này."
+    },
+    "groupManage": {
+      "headerTitle": "Quản lý nhóm",
+      "loadingMessage": "Đang tải quản lý nhóm",
+      "missingGroupIdError": "Không xác định được ID nhóm để tải giao diện quản lý.",
+      "loadError": "Không tải được giao diện quản lý nhóm.",
+      "loadErrorTitle": "Không tải được quản lý nhóm",
+      "loadErrorFallbackDescription": "Không có dữ liệu chi tiết để hiển thị giao diện quản lý.",
+      "missingGroupForPending": "Không xác định được nhóm để mở yêu cầu tham gia.",
+      "missingGroupForKicked": "Không xác định được nhóm để mở danh sách đã bị kích.",
+      "pendingRequestsScreenTitle": "Duyệt yêu cầu tham gia",
+      "kickedMembersLabel": "Thành viên đã bị kích",
+      "memberManagementTitle": "Quản lý thành viên",
+      "pendingRequestsDescription": "Xem danh sách chờ và phê duyệt thành viên mới.",
+      "pendingBadgeZero": "0 chờ",
+      "pendingBadgeOff": "Tắt duyệt",
+      "membersListLabel": "Danh sách thành viên",
+      "membersListDescription": "Xem toàn bộ thành viên, quyền hiện tại và vai trò.",
+      "kickedMembersDescription": "Xem danh sách thành viên đã bị kích để leader quản lý.",
+      "settingsTitle": "Cài đặt",
+      "groupSettingsLabel": "Cài đặt nhóm",
+      "groupSettingsDescription": "Quản lý tên nhóm và yêu cầu quyền tham gia."
+    },
+    "groupMembers": {
+      "justSentRequest": "Vừa gửi yêu cầu",
+      "roleLeader": "Trưởng nhóm",
+      "roleMember": "Thành viên",
+      "roleExplorer": "Explorer",
+      "kickAction": "Kích",
+      "kickingAction": "Đang kích...",
+      "kickMemberA11y": "Kích {{name}} khỏi nhóm",
+      "pendingEmptyTitle": "Chưa có yêu cầu tham gia",
+      "pendingEmptyDescription": "Khi có người gửi yêu cầu tham gia, danh sách sẽ hiện ở đây.",
+      "kickedEmptyTitle": "Chưa có thành viên nào bị kích",
+      "kickedEmptyDescription": "Khi leader kích thành viên khỏi nhóm, danh sách sẽ hiển thị tại đây.",
+      "kickModalTitle": "Kích thành viên",
+      "kickConfirmPrefix": "Bạn có chắc chắn muốn kích",
+      "kickConfirmDefaultName": "thành viên này",
+      "kickConfirmSuffix": "khỏi nhóm không?",
+      "kickWarningNote": "Thành viên bị kích sẽ không còn truy cập được nhóm và nội dung liên quan.",
+      "cancelActionUppercase": "HỦY",
+      "kickConfirmActionUppercase": "KÍCH THÀNH VIÊN",
+      "missingGroupIdForPendingError": "Không xác định được ID nhóm để tải yêu cầu tham gia.",
+      "missingGroupIdForKickedError": "Không xác định được ID nhóm để tải danh sách đã bị kích.",
+      "missingGroupIdForMembersError": "Không xác định được ID nhóm để tải thành viên.",
+      "loadPendingError": "Không tải được danh sách chờ duyệt.",
+      "loadKickedError": "Không tải được danh sách đã bị kích.",
+      "loadMembersError": "Không tải được danh sách thành viên.",
+      "missingGroupIdKickError": "Không xác định được ID nhóm để kích thành viên.",
+      "loginRequiredKick": "Bạn cần đăng nhập để kích thành viên.",
+      "kickSuccessToast": "Đã kích {{name}} khỏi nhóm.",
+      "kickErrorFallback": "Không thể kích thành viên lúc này.",
+      "loginRequiredReview": "Bạn cần đăng nhập để duyệt yêu cầu tham gia.",
+      "approveSuccessToast": "Đã duyệt {{name}} tham gia nhóm.",
+      "rejectSuccessToast": "Đã từ chối yêu cầu của {{name}}.",
+      "approveErrorFallback": "Không thể duyệt yêu cầu lúc này.",
+      "rejectErrorFallback": "Không thể từ chối yêu cầu lúc này.",
+      "pendingSectionTitle": "Yêu cầu đang chờ",
+      "kickedSectionTitle": "Danh sách đã bị kích",
+      "currentSectionTitle": "Thành viên hiện tại",
+      "pendingCountLabel": "{{count}} chờ duyệt",
+      "kickedCountLabel": "{{count}} đã bị kích",
+      "createdDateLabel": "Tạo ngày {{date}}",
+      "inviteLinkLabel": "Link mời tham gia",
+      "noInviteLinkInfo": "Nhóm này chưa có link mời.",
+      "copyLinkSuccess": "Đã sao chép link mời.",
+      "copyLinkErrorFallback": "Không sao chép được link mời.",
+      "loadPendingErrorDescription": "Không tải được danh sách yêu cầu tham gia của nhóm.",
+      "loadKickedErrorDescription": "Không tải được danh sách thành viên đã bị kích của nhóm.",
+      "loadMembersErrorDescription": "Không tải được danh sách thành viên của nhóm.",
+      "loadPendingErrorTitle": "Không tải được yêu cầu tham gia",
+      "loadKickedErrorTitle": "Không tải được danh sách đã bị kích",
+      "loadMembersErrorTitle": "Không tải được thành viên",
+      "emptyMembersTitle": "Chưa có thành viên",
+      "emptyMembersDescription": "Nhóm này chưa có thành viên nào để hiển thị."
+    },
+    "groupSettings": {
+      "missingGroupIdError": "Không xác định được ID nhóm để tải cài đặt.",
+      "loadError": "Không tải được cài đặt nhóm.",
+      "missingGroupIdSaveError": "Không tìm thấy ID nhóm hợp lệ để cập nhật.",
+      "nameRequiredInfo": "Vui lòng nhập tên nhóm trước khi lưu.",
+      "approvalRequiredInfo": "Vui lòng chọn yêu cầu quyền tham gia trước khi lưu.",
+      "loginRequiredSave": "Bạn cần đăng nhập để cập nhật cài đặt nhóm.",
+      "saveSuccessToast": "Cài đặt nhóm đã được cập nhật.",
+      "saveErrorFallback": "Không thể cập nhật cài đặt nhóm.",
+      "loadingMessage": "Đang tải cài đặt nhóm",
+      "noDataErrorDescription": "Không có dữ liệu để hiển thị cài đặt nhóm.",
+      "loadErrorTitle": "Không tải được cài đặt",
+      "headerTitle": "Chỉnh sửa nhóm",
+      "groupNamePlaceholder": "Nhập tên nhóm",
+      "groupNameHelperText": "Bạn chỉ có thể thay đổi tên nhóm khi cần thiết để giữ liên kết và nhận diện nhóm ổn định.",
+      "requiredApprovalLabel": "Yêu cầu quyền tham gia",
+      "approvalOnLabel": "Bật duyệt",
+      "approvalOffLabel": "Tắt duyệt"
+    },
+    "postComments": {
+      "viewProfileA11y": "Xem trang cá nhân của {{name}}",
+      "likeAction": "Thích",
+      "replyAction": "Trả lời",
+      "replyCountLabel": "{{count}} phản hồi",
+      "replyingIndicator": "Đang trả lời",
+      "likeCountLabel": "{{count}} thích",
+      "likedState": "Đã thích",
+      "notFoundTitle": "Không tìm thấy bài viết",
+      "notFoundDescription": "Hãy mở lại từ feed cộng đồng để xem đầy đủ nội dung và bình luận.",
+      "replyingToLabel": "Đang trả lời {{name}}",
+      "replyPlaceholder": "Trả lời {{name}}...",
+      "commentPlaceholder": "Viết bình luận...",
+      "loginRequiredCommentMessage": "Bạn cần đăng nhập để bình luận bài viết cộng đồng."
+    },
+    "postCompose": {
+      "addressPendingFallback": "Đang cập nhật địa chỉ",
+      "stopsCountLabel": "{{count}} điểm dừng",
+      "routeMetaFallback": "Tuyến đường văn hóa",
+      "routeDescriptionFallback": "Tuyến khám phá từ Culture Quest.",
+      "addMediaLabel": "Thêm ảnh/video",
+      "addMoreMediaLabel": "Thêm nữa",
+      "selectRouteTitle": "Chọn tuyến đường",
+      "searchRoutePlaceholder": "Tìm tuyến đường...",
+      "clearRouteSelection": "Bỏ chọn tuyến đường",
+      "loadingRoutes": "Đang tải tuyến đường...",
+      "noRoutesFound": "Không tìm thấy tuyến đường phù hợp.",
+      "loadRoutesErrorFallback": "Không thể tải danh sách tuyến đường.",
+      "selectHotspotTitle": "Chọn địa điểm",
+      "searchHotspotPlaceholder": "Tìm tên địa điểm...",
+      "searchingHotspots": "Đang tìm địa điểm...",
+      "loadingHotspots": "Đang tải địa điểm...",
+      "noHotspotsFoundSearch": "Không tìm thấy địa điểm phù hợp.",
+      "loadHotspotsErrorFallback": "Không thể tải danh sách địa điểm.",
+      "searchHotspotsErrorFallback": "Không thể tìm địa điểm.",
+      "noHotspotsAvailable": "Chưa có địa điểm để chọn.",
+      "selectedHotspotCountLabel": "Đã chọn {{count}} địa điểm",
+      "selectTagTitle": "Chọn thẻ",
+      "tagInputPlaceholder": "Nhập tag...",
+      "addTagAction": "Thêm",
+      "selectedLabel": "Đã chọn",
+      "suggestedLabel": "Gợi ý",
+      "noSuggestedTags": "Chưa có thẻ gợi ý.",
+      "selectedTagCountLabel": "Đã chọn {{count}} thẻ",
+      "maxMediaInfo": "Bạn chỉ thêm được tối đa {{count}} ảnh/video.",
+      "permissionRequiredTitle": "Cần cấp quyền",
+      "permissionRequiredMessage": "Hãy cho phép truy cập thư viện để thêm ảnh hoặc video vào bài viết.",
+      "loginRequiredSubmitMessage": "Bạn cần đăng nhập để đăng bài viết cộng đồng.",
+      "sessionExpiredSubmitMessage": "Vui lòng đăng nhập lại trước khi đăng bài viết cộng đồng.",
+      "submitErrorFallback": "Đã có lỗi xảy ra khi gửi bài viết cộng đồng.",
+      "contentRequiredError": "Hãy nhập nội dung cho bài viết.",
+      "contentTooShortError": "Nội dung cần ít nhất {{min}} ký tự (đang {{current}}).",
+      "contentTooLongError": "Nội dung kèm {{tagCount}} thẻ đang vượt {{max}} ký tự. Hãy rút gọn hoặc bỏ bớt thẻ.",
+      "selectHotspotSummary": "Chọn địa điểm liên quan",
+      "oneHotspotLabel": "1 địa điểm",
+      "hotspotSelectedCountLabel": "{{count}} địa điểm đã chọn",
+      "addTagSummary": "Thêm thẻ",
+      "tagSelectedCountLabel": "{{count}} thẻ",
+      "contentPlaceholder": "Bạn đang nghĩ gì?",
+      "mediaSectionTitle": "Ảnh / video",
+      "routeSubtitleFallback": "Gắn bài viết với một lộ trình",
+      "hotspotSubtitleFallback": "Chọn địa điểm liên quan đến bài viết",
+      "attachHotspotTitle": "Gắn địa điểm",
+      "tagSubtitleFallback": "Thêm các thẻ liên quan",
+      "submitButton": "Đăng bài",
+      "submitSummary": "Sẽ gắn {{routes}} tuyến đường, {{hotspots}} địa điểm và {{tags}} thẻ."
+    },
+    "postVisibility": {
+      "missingPostIdError": "Không xác định được bài viết cần cập nhật quyền riêng tư.",
+      "sessionExpiredLoadError": "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại trước khi chỉnh sửa quyền riêng tư.",
+      "loadErrorFallback": "Không thể tải bài viết để cập nhật quyền riêng tư.",
+      "loginRequiredMessage": "Bạn cần đăng nhập để chỉnh sửa quyền riêng tư bài viết.",
+      "cannotUpdateTitle": "Không thể cập nhật",
+      "missingPostIdSubmitError": "Không xác định được bài viết cần chỉnh sửa quyền riêng tư.",
+      "postDataNotReadyError": "Dữ liệu bài viết chưa sẵn sàng. Vui lòng thử lại.",
+      "sessionExpiredSubmitMessage": "Vui lòng đăng nhập lại trước khi chỉnh sửa quyền riêng tư bài viết.",
+      "updateErrorFallback": "Đã có lỗi xảy ra khi cập nhật quyền riêng tư bài viết.",
+      "titleEdit": "Ai có thể xem bài viết này?",
+      "titleCreate": "Ai có thể xem bài viết của bạn?",
+      "subtitleEdit": "Chọn đối tượng có thể xem bài viết này.",
+      "subtitleCreate": "Chọn đối tượng có thể xem bài viết bạn đang soạn trên cộng đồng.",
+      "loadingLabel": "Đang tải quyền riêng tư bài viết...",
+      "footerNoteEdit": "Thiết lập này sẽ cập nhật ngay cho bài viết.",
+      "footerNoteCreate": "Thiết lập này áp dụng cho bài viết bạn đang soạn."
+    }
+  },
+  "notifications": {
+    "title": "Thông báo",
+    "loading": "Đang tải thông báo...",
+    "empty": {
+      "title": "Chưa có thông báo",
+      "subtitle": "Những cập nhật về hành trình, điểm thưởng và đăng ký sẽ xuất hiện tại đây"
+    }
+  },
+  "vouchers": {
+    "title": "Kho voucher",
+    "myVouchers": "Voucher của tôi",
+    "available": "Có sẵn",
+    "used": "Đã dùng",
+    "expired": "Hết hạn",
+    "viewDetails": "Xem chi tiết",
+    "useNow": "Dùng ngay"
+  },
+  "subscription": {
+    "partner": {
+      "title": "Đăng ký Partner",
+      "subtitle": "Hiển thị shop lên bản đồ CultureQuest, phát hành voucher & thu hút khách du lịch",
+      "packageLabel": "Gói Partner",
+      "steps": {
+        "step": "Bước",
+        "information": "Thông tin đăng ký",
+        "payment": "Thanh toán ngân hàng"
+      },
+      "benefits": {
+        "title": "Quyền lợi Partner chính thức",
+        "showOnMap": "Đưa địa điểm/shop lên bản đồ du lịch",
+        "manageVouchers": "Tạo & quản lý voucher ưu đãi cho du khách",
+        "verifiedBadge": "Tích xanh Xác minh Partner chính thức"
+      },
+      "selectPlan": "Chọn gói Partner",
+      "billingCycle": {
+        "title": "Chu kỳ thanh toán",
+        "monthly": "Theo tháng",
+        "yearly": "Theo năm",
+        "yearlyNote": "Giá theo từng gói"
+      },
+      "shopInfo": {
+        "title": "Thông tin shop",
+        "shopName": "Tên shop / địa điểm *",
+        "shopNamePlaceholder": "Ví dụ: Cửa hàng Cà phê Heritage Quận 1",
+        "shopEmail": "Email quản lý shop *",
+        "shopEmailPlaceholder": "Ví dụ: shop.partner@gmail.com",
+        "address": "Địa chỉ shop *",
+        "addressPlaceholder": "Nhập tên đường, địa điểm hoặc tên shop",
+        "selectLocation": "Chọn vị trí shop",
+        "locationSelected": "Đã chọn vị trí shop",
+        "tapToSelect": "Chạm vào bản đồ để chọn vị trí shop",
+        "selectOnMap": "Chọn vị trí trên bản đồ",
+        "reselectLocation": "Chọn lại vị trí",
+        "saveLocation": "Lưu vị trí này",
+        "locationSaved": "Đã lưu vị trí"
+      },
+      "verification": {
+        "title": "Hồ sơ xác minh",
+        "selectDocument": "Chọn ảnh giấy tờ xác minh *",
+        "documentSelected": "Đã chọn: {{name}}",
+        "selectShopImages": "Chọn thêm ảnh shop (tuỳ chọn)",
+        "imagesSelected": "Đã chọn {{count}} ảnh shop"
+      },
+      "payment": {
+        "method": "Phương thức thanh toán",
+        "bankTransfer": "Chuyển khoản ngân hàng / QR",
+        "bankTransferNote": "Quét mã VietQR hoặc chuyển khoản qua ứng dụng ngân hàng bất kỳ.",
+        "summary": "Tóm tắt thanh toán",
+        "package": "Gói",
+        "cycle": "Chu kỳ",
+        "amount": "Số tiền",
+        "status": "Trạng thái",
+        "complete": "Hoàn tất thanh toán",
+        "completeNote": "Mở trang thanh toán an toàn để hoàn tất. Nếu trình duyệt không mở được, hãy quét mã QR bên dưới.",
+        "openPayment": "Mở trang thanh toán",
+        "scanQR": "Quét mã bằng ứng dụng ngân hàng hoặc ví hỗ trợ VietQR."
+      },
+      "actions": {
+        "continueToPayment": "Tiếp tục đến bước thanh toán",
+        "backToInfo": "Quay lại thông tin đăng ký",
+        "registerAndPay": "Đăng ký và thanh toán"
+      },
+      "status": {
+        "notRegistered": "Chưa đăng ký",
+        "paymentPending": "Chờ thanh toán",
+        "paymentFailed": "Thanh toán thất bại",
+        "pending": "Đã thanh toán, chờ Admin duyệt",
+        "active": "Đang hoạt động",
+        "rejected": "Bị từ chối",
+        "expired": "Đã hết hạn"
+      },
+      "errors": {
+        "needLogin": "Bạn cần đăng nhập trước khi đăng ký gói Partner.",
+        "missingInfo": "Thiếu thông tin",
+        "selectPlan": "Vui lòng chọn gói đăng ký.",
+        "enterShopName": "Vui lòng nhập tên shop.",
+        "invalidEmail": "Email shop không đúng định dạng.",
+        "enterAddress": "Vui lòng nhập địa chỉ shop.",
+        "selectLocationOnMap": "Vui lòng chọn vị trí shop trên bản đồ.",
+        "uploadDocument": "Vui lòng upload giấy tờ xác minh.",
+        "cannotLoadSuggestions": "Không tải được gợi ý địa chỉ.",
+        "cannotGetCoordinates": "Không lấy được tọa độ địa chỉ."
+      },
+      "permissions": {
+        "needPhotoAccess": "Thiếu quyền truy cập",
+        "grantPhotoPermission": "Vui lòng cấp quyền chọn ảnh giấy tờ xác minh.",
+        "grantShopPhotoPermission": "Vui lòng cấp quyền chọn ảnh shop."
+      }
+    }
+  }
+}

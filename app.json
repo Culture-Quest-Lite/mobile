@@ -1,40 +1,114 @@
 {
   "expo": {
-    "name": "Culture_quest_lite_mobile",
+    "name": "Culture Quest Lite",
     "slug": "Culture_quest_lite_mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "culturequestlitemobile",
+    "backgroundColor": "#FFFFFF",
+    "icon": "./assets/images/logo2-app-icon-v2.png",
+    "scheme": ["culturequestlitemobile", "culturequest"],
     "userInterfaceStyle": "automatic",
-    "ios": {
-      "icon": "./assets/expo.icon"
-    },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      "android": {
+        "googleServicesFile": "./google-services.json",
+        "package": "com.anonymous.Culture_quest_lite_mobile",
+        "icon": "./assets/images/logo2-app-icon-android-smaller.png",
+        "adaptiveIcon": {
+          "backgroundColor": "#FFFFFF",
+          "foregroundImage": "./assets/images/logo2-adaptive-foreground-smaller.png"
+        },
+        "intentFilters": [
+          {
+            "autoVerify": true,
+            "action": "VIEW",
+            "data": {
+              "host": "culturequest.app",
+              "pathPrefix": "/join",
+              "scheme": "https"
+            },
+            "category": ["BROWSABLE", "DEFAULT"]
+          },
+          {
+            "autoVerify": true,
+            "action": "VIEW",
+            "data": {
+              "host": "api.culturequestlite.com",
+              "pathPrefix": "/api/v1/groups/join",
+              "scheme": "https"
+            },
+            "category": ["BROWSABLE", "DEFAULT"]
+          },
+          {
+            "autoVerify": true,
+            "action": "VIEW",
+            "data": {
+              "host": "api.culturequestlite.com",
+              "pathPrefix": "/api/auth/reset-password",
+              "scheme": "https"
+            },
+            "category": ["BROWSABLE", "DEFAULT"]
+          },
+          {
+            "action": "VIEW",
+            "data": {
+              "scheme": "culturequest"
+            },
+            "category": ["BROWSABLE", "DEFAULT"]
+          }
+        ],
+        "predictiveBackGestureEnabled": false
       },
-      "predictiveBackGestureEnabled": false
-    },
+      "ios": {
+        "icon": "./assets/images/logo2-app-icon-v2.png",
+        "associatedDomains": [
+          "applinks:culturequest.app",
+          "applinks:api.culturequestlite.com"
+        ]
+      },
     "web": {
+      "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "splash": {
+        "backgroundColor": "#FFFFFF",
+        "image": "./assets/images/logo2-app-icon-v2.png",
+        "resizeMode": "contain"
+      }
     },
     "plugins": [
       "expo-router",
+      "./plugins/with-android-cleartext-traffic",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
-          }
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/images/logo2-app-icon-v2.png",
+          "imageWidth": 180,
+          "resizeMode": "contain"
         }
-      ]
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Xác định vị trí hiện tại được sử dụng để gợi ý địa điểm gần bạn, đề xuất tuyến đường phù hợp và xác minh check-in."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": false,
+          "microphonePermission": false,
+          "photosPermission": "Cho phép Culture Quest truy cập thư viện của bạn để thêm ảnh và video vào bài viết cộng đồng và bài đánh giá hotspot."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#F7F6F2",
+          "defaultChannel": "default"
+        }
+      ],
+      "expo-audio",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,
